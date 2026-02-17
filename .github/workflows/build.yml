@@ -9,7 +9,6 @@ on:
 
 env:
   SCHEME: HADashboard
-  BUNDLE_ID: ${{ vars.BUNDLE_ID }}
   TEAM_ID: ${{ vars.TEAM_ID }}
 
 jobs:
@@ -92,8 +91,7 @@ jobs:
 
       - name: Generate Xcode project
         run: |
-          # Inject Team ID and Bundle ID into project.yml before generation
-          sed -i '' "s/com.example.hadashboard/$BUNDLE_ID/g" project.yml
+          # Inject Team ID into project.yml before generation
           sed -i '' "s/DEVELOPMENT_TEAM: \"\"/DEVELOPMENT_TEAM: \"$TEAM_ID\"/" project.yml
           xcodegen generate --spec project.yml
 
