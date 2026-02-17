@@ -22,24 +22,34 @@ jobs:
           path: ~/.xcodes/Downloads
           key: xcode-13.2.1-xip
 
-      - name: Download Xcode 13.2.1 .xip (download only, no install)
+      - name: Install Xcode 13.2.1 and preserve .xip for cache
         if: steps.xcode-cache.outputs.cache-hit != 'true'
         env:
           FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
           XCODES_USERNAME: ${{ secrets.XCODES_USERNAME }}
         run: |
-          echo "Downloading Xcode 13.2.1 .xip to seed cache..."
+          echo "Installing Xcode 13.2.1 to seed cache on main..."
+          # Free disk space first
+          sudo rm -rf /Applications/Xcode_16.0.app \
+                      /Applications/Xcode_16.1.app \
+                      /Applications/Xcode_16.3.app \
+                      /Applications/Xcode_16.4.app 2>/dev/null || true
           mkdir -p ~/.xcodes/Downloads
-          xcodes download 13.2.1 --use-fastlane-auth --directory ~/.xcodes/Downloads
-          echo "Downloaded:"
-          ls -lh ~/.xcodes/Downloads/
-          echo "Cache will be saved post-job."
+          xcodes install 13.2.1 --use-fastlane-auth --experimental-unxip --no-superuser
+          # xcodes moves .xip to Trash after install — recover it for caching
+          XIP=$(find ~/.Trash -name "*Xcode*13*" -o -name "*Xcode*13*.xip" 2>/dev/null | head -1)
+          if [ -n "$XIP" ]; then
+            cp "$XIP" ~/.xcodes/Downloads/
+            echo "Recovered .xip from Trash for caching:"
+            ls -lh ~/.xcodes/Downloads/
+          else
+            echo "WARNING: Could not find .xip in Trash. Checking other locations..."
+            find /tmp ~/.xcodes -name "*Xcode*13*" 2>/dev/null || true
+          fi
 
       - name: Cache already exists
         if: steps.xcode-cache.outputs.cache-hit == 'true'
-        run: |
-          echo "Cache already seeded on main."
-          ls -lh ~/.xcodes/Downloads/ 2>/dev/null || echo "(cache contents will be available after restore)"
+        run: echo "Cache already seeded on main. Nothing to do."
 
   build-legacy:
     runs-on: macos-15
