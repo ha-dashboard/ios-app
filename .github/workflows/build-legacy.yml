@@ -92,7 +92,7 @@ jobs:
           elif [ "${{ steps.xcode-cache.outputs.cache-hit }}" == "true" ]; then
             echo "Cache hit — extracting from cached .xip..."
             ls -lh ~/.xcodes/Downloads/
-            xcodes install 13.2.1 --experimental-unxip --no-superuser
+            xcodes install 13.2.1 --use-fastlane-auth --experimental-unxip --no-superuser
             ls /Applications/Xcode*13* 2>/dev/null || true
             echo "Xcode 13.2.1 installed from cache."
           else
