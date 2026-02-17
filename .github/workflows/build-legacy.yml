@@ -22,20 +22,24 @@ jobs:
           path: ~/.xcodes/Downloads
           key: xcode-13.2.1-xip
 
-      - name: Download Xcode 13.2.1 .xip
+      - name: Download Xcode 13.2.1 .xip (download only, no install)
         if: steps.xcode-cache.outputs.cache-hit != 'true'
         env:
           FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
           XCODES_USERNAME: ${{ secrets.XCODES_USERNAME }}
         run: |
-          echo "Downloading Xcode 13.2.1 to seed cache on main branch..."
+          echo "Downloading Xcode 13.2.1 .xip to seed cache..."
           mkdir -p ~/.xcodes/Downloads
-          xcodes install 13.2.1 --use-fastlane-auth --experimental-unxip --no-superuser
-          echo "Cache seeded."
+          xcodes download 13.2.1 --use-fastlane-auth --directory ~/.xcodes/Downloads
+          echo "Downloaded:"
+          ls -lh ~/.xcodes/Downloads/
+          echo "Cache will be saved post-job."
 
       - name: Cache already exists
         if: steps.xcode-cache.outputs.cache-hit == 'true'
-        run: echo "Cache already seeded on main. Nothing to do."
+        run: |
+          echo "Cache already seeded on main."
+          ls -lh ~/.xcodes/Downloads/ 2>/dev/null || echo "(cache contents will be available after restore)"
 
   build-legacy:
     runs-on: macos-15
