@@ -22,13 +22,20 @@ jobs:
         run: |
           echo "Before cleanup:"
           df -h /
-          # Remove Xcodes we don't need (keep 26.3 for xcodegen)
+          # Remove Xcodes we don't need (keep 26.2 for xcodegen)
           sudo rm -rf /Applications/Xcode_16.0.app \
                       /Applications/Xcode_16.1.app \
                       /Applications/Xcode_16.3.app \
                       /Applications/Xcode_16.4.app 2>/dev/null || true
           echo "After cleanup:"
           df -h /
+
+      - name: Cache Xcode 13.2.1 .xip
+        id: xcode-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.xcodes/Downloads
+          key: xcode-13.2.1-xip
 
       - name: Install Xcode 13.2.1
         env:
@@ -37,11 +44,18 @@ jobs:
         run: |
           if [ -d "/Applications/Xcode-13.2.1.app" ]; then
             echo "Xcode 13.2.1 already installed."
+          elif [ "${{ steps.xcode-cache.outputs.cache-hit }}" == "true" ]; then
+            echo "Cache hit — extracting from cached .xip..."
+            ls -lh ~/.xcodes/Downloads/
+            xcodes install 13.2.1 --experimental-unxip --no-superuser
+            ls /Applications/Xcode*13* 2>/dev/null || true
+            echo "Xcode 13.2.1 installed from cache."
           else
-            echo "Installing Xcode 13.2.1 via Fastlane session auth..."
+            echo "No cache — downloading and installing Xcode 13.2.1..."
+            mkdir -p ~/.xcodes/Downloads
             xcodes install 13.2.1 --use-fastlane-auth --experimental-unxip --no-superuser
             ls /Applications/Xcode*13* 2>/dev/null || true
-            echo "Xcode 13.2.1 installed."
+            echo "Xcode 13.2.1 installed and .xip cached for next run."
           fi
 
       - name: Set version from tag
