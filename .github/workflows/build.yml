@@ -301,6 +301,14 @@ jobs:
           mv "$APP/HA Dashboard.tmp" "$APP/HA Dashboard"
           echo "Archs: $(lipo -archs "$APP/HA Dashboard")"
 
+          echo "=== Recompile LaunchScreen for iOS 9 ==="
+          # Xcode 26 compiles the storyboard for iOS 15+ — the NIBArchive format
+          # is incompatible with iOS 9's UIKit. Recompile targeting 9.0.
+          xcrun ibtool --compile "$APP/LaunchScreen.storyboardc" \
+              HADashboard/LaunchScreen.storyboard \
+              --minimum-deployment-target 9.0 \
+              --target-device ipad --target-device iphone
+
           echo "=== Patch Info.plist ==="
           PLIST="$APP/Info.plist"
           plutil -replace MinimumOSVersion -string "9.0" "$PLIST"

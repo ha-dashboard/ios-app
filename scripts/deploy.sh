@@ -423,6 +423,9 @@ case "$TARGET" in
             tar xzf /tmp/HADashboard.app.tar.gz
             rm /tmp/HADashboard.app.tar.gz
 
+            # Re-sign with ldid (jailbreak code signing)
+            which ldid >/dev/null 2>&1 && ldid -S 'HA Dashboard.app/HA Dashboard'
+
             # Refresh SpringBoard app cache
             uicache
 

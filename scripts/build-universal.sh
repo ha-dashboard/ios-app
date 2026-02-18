@@ -292,6 +292,19 @@ else
     echo "  ⚠ No dSYMs generated"
 fi
 
+# Recompile LaunchScreen.storyboard targeting iOS 9.0.
+# Xcode 26's xcodebuild compiles the storyboard for its deployment target (iOS 15),
+# producing a NIBArchive format that iOS 9's UIKit cannot load (causes watchdog hang).
+# Recompiling with --minimum-deployment-target 9.0 produces a backward-compatible NIB.
+IBTOOL="$XCODE26_DEV/usr/bin/ibtool"
+if [ -f "$PROJECT_DIR/HADashboard/LaunchScreen.storyboard" ] && [ -x "$IBTOOL" ]; then
+    DEVELOPER_DIR="$XCODE26_DEV" "$IBTOOL" --compile "$MERGED_APP/LaunchScreen.storyboardc" \
+        "$PROJECT_DIR/HADashboard/LaunchScreen.storyboard" \
+        --minimum-deployment-target 9.0 \
+        --target-device ipad --target-device iphone 2>/dev/null
+    echo "  ✓ LaunchScreen.storyboardc recompiled for iOS 9.0"
+fi
+
 # ── Step 4: Reconcile Info.plist ──────────────────────────────────────
 echo "━━ [4/5] Reconciling Info.plist..."
 
