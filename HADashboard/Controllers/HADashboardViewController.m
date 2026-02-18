@@ -328,11 +328,11 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     [self.viewPicker addTarget:self action:@selector(viewPickerChanged:) forControlEvents:UIControlEventValueChanged];
     [self.view addSubview:self.viewPicker];
 
-    // Pin just below the safe area top (tight to nav bar bottom)
+    // Pin below safe area with 16pt padding (matches side padding in kiosk mode)
     if (@available(iOS 11.0, *)) {
-        self.viewPickerTopConstraint = [self.viewPicker.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:0];
+        self.viewPickerTopConstraint = [self.viewPicker.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:16];
     } else {
-        self.viewPickerTopConstraint = [self.viewPicker.topAnchor constraintEqualToAnchor:self.topLayoutGuide.bottomAnchor constant:0];
+        self.viewPickerTopConstraint = [self.viewPicker.topAnchor constraintEqualToAnchor:self.topLayoutGuide.bottomAnchor constant:16];
     }
     [self.view addConstraint:self.viewPickerTopConstraint];
     [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.viewPicker attribute:NSLayoutAttributeLeading
@@ -371,7 +371,7 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 
     // Two competing top constraints: one below picker (normal), one at safe area top (kiosk)
     self.collectionViewTopToPickerConstraint = [NSLayoutConstraint constraintWithItem:self.collectionView attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:self.viewPicker attribute:NSLayoutAttributeBottom multiplier:1 constant:4];
+        relatedBy:NSLayoutRelationEqual toItem:self.viewPicker attribute:NSLayoutAttributeBottom multiplier:1 constant:12];
     // Kiosk: pin to safe area top. Section inset adds 4pt internally,
     // so use 12pt here for a total of 16pt (matching side padding).
     if (@available(iOS 11.0, *)) {
@@ -409,11 +409,14 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     self.collectionViewTopToViewConstraint.active = NO;
     self.collectionViewTopToSafeAreaConstraint.active = NO;
 
-    if (kiosk) {
-        self.collectionViewTopToViewConstraint.active = YES;
-    } else if (pickerVisible) {
+    if (pickerVisible) {
+        // Always position below picker when it's visible (including kiosk mode)
         self.collectionViewTopToPickerConstraint.active = YES;
+    } else if (kiosk) {
+        // Kiosk mode without picker: use view constraint (has 12pt padding)
+        self.collectionViewTopToViewConstraint.active = YES;
     } else {
+        // Normal mode without picker: pin to safe area
         self.collectionViewTopToSafeAreaConstraint.active = YES;
     }
 }
