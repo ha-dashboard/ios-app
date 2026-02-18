@@ -19,7 +19,7 @@ set -euo pipefail
 #   --no-kiosk    Disable kiosk mode
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-BUNDLE_ID="${BUNDLE_ID:-com.ashhopkins.hadashboard}"
+BUNDLE_ID="${BUNDLE_ID:-com.hadashboard.app}"
 
 # ── Load secrets from .env ────────────────────────────────────────────
 ENV_FILE="$PROJECT_DIR/.env"

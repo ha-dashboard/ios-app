@@ -2929,7 +2929,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.ashhopkins.hadashboard.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hadashboard.app.tests;
 				PRODUCT_NAME = HADashboardTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -3017,7 +3017,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.ashhopkins.hadashboard.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hadashboard.app.tests;
 				PRODUCT_NAME = HADashboardTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -3044,7 +3044,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ashhopkins.hadashboard;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hadashboard.app;
 				PRODUCT_NAME = "HA Dashboard";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -3141,7 +3141,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ashhopkins.hadashboard;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hadashboard.app;
 				PRODUCT_NAME = "HA Dashboard";
 				SDKROOT = iphoneos;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";

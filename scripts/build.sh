@@ -22,7 +22,7 @@ if [[ -f "$PROJECT_DIR/.env" ]]; then
     set -a; source "$PROJECT_DIR/.env"; set +a
 fi
 
-BUNDLE_ID="${BUNDLE_ID:-com.ashhopkins.hadashboard}"
+BUNDLE_ID="${BUNDLE_ID:-com.hadashboard.app}"
 APPLE_TEAM_ID="${APPLE_TEAM_ID:-}"
 
 # ── Parse args ────────────────────────────────────────────────────────

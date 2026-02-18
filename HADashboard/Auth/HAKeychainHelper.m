@@ -1,7 +1,7 @@
 #import "HAKeychainHelper.h"
 #import <Security/Security.h>
 
-static NSString *const kHAKeychainService = @"com.ashhopkins.hadashboard.keychain";
+static NSString *const kHAKeychainService = @"com.hadashboard.app.keychain";
 
 @implementation HAKeychainHelper
 

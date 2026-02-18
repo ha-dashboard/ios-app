@@ -1,6 +1,6 @@
 name: HADashboard
 options:
-  bundleIdPrefix: com.ashhopkins.hadashboard
+  bundleIdPrefix: com.hadashboard.app
   deploymentTarget:
     iOS: "15.0"
   xcodeVersion: "26.0"
@@ -67,7 +67,7 @@ targets:
     settings:
       base:
         INFOPLIST_FILE: HADashboard/Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: com.ashhopkins.hadashboard
+        PRODUCT_BUNDLE_IDENTIFIER: com.hadashboard.app
         PRODUCT_NAME: "HA Dashboard"
         TARGETED_DEVICE_FAMILY: "1,2"
         IPHONEOS_DEPLOYMENT_TARGET: "15.0"
@@ -124,7 +124,7 @@ targets:
       path: HADashboardTests/Info.plist
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.ashhopkins.hadashboard.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.hadashboard.app.tests
         PRODUCT_NAME: HADashboardTests
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/HA Dashboard.app/HA Dashboard"
         BUNDLE_LOADER: "$(TEST_HOST)"

@@ -353,7 +353,7 @@ jobs:
             MARKETING_VERSION=${{ steps.version.outputs.version }} \
             CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build_number }} \
             DEVELOPMENT_TEAM=$TEAM_ID \
-            "PRODUCT_BUNDLE_IDENTIFIER=com.ashhopkins.hadashboard" \
+            "PRODUCT_BUNDLE_IDENTIFIER=com.hadashboard.app" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Development" \
             PROVISIONING_PROFILE_SPECIFIER="HADashboard Development"
