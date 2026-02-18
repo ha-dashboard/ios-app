@@ -10,6 +10,8 @@ on:
 env:
   SCHEME: HADashboard
   TEAM_ID: ${{ vars.TEAM_ID }}
+  # Xcode 13 SDK stubs (21MB) — only the TBD files needed for armv7 linking
+  XCODE13_SDK_CACHE_KEY: xcode13-sdk-stubs-v1
 
 jobs:
   build-and-test:
@@ -55,11 +57,57 @@ jobs:
           # on iOS 17.4 and differ across iOS versions. Run locally with:
           #   scripts/test-snapshots.sh
 
+  # ── Seed Xcode 13 SDK stubs cache on main pushes ─────────────────────
+  # The armv7 link step needs TBD stubs from Xcode 13's iOS SDK (21MB).
+  # We cache these so tag-triggered release builds don't need to download
+  # the full 12GB Xcode 13.2.1.
+  seed-sdk-cache:
+    runs-on: macos-15
+    timeout-minutes: 60
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Check cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.xcode13-sdk-stubs
+          key: ${{ env.XCODE13_SDK_CACHE_KEY }}
+
+      - name: Extract SDK stubs from Xcode 13.2.1
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
+          XCODES_USERNAME: ${{ secrets.XCODES_USERNAME }}
+        run: |
+          echo "Installing Xcode 13.2.1 to extract SDK stubs..."
+          # Free disk space
+          sudo rm -rf /Applications/Xcode_16.0.app \
+                      /Applications/Xcode_16.1.app \
+                      /Applications/Xcode_16.3.app \
+                      /Applications/Xcode_16.4.app 2>/dev/null || true
+
+          xcodes install 13.2.1 --use-fastlane-auth --experimental-unxip --no-superuser
+
+          XCODE13=$(ls -d /Applications/Xcode*13.2.1* 2>/dev/null | head -1)
+          if [ -z "$XCODE13" ]; then
+            echo "❌ Xcode 13.2.1 not found after install"
+            exit 1
+          fi
+
+          # Extract just the iOS SDK (TBD stubs + SDKSettings)
+          SDK="$XCODE13/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk"
+          mkdir -p ~/.xcode13-sdk-stubs
+          tar czf ~/.xcode13-sdk-stubs/iPhoneOS-armv7-stubs.tar.gz \
+              -C "$(dirname "$SDK")" "$(basename "$SDK")"
+          ls -lh ~/.xcode13-sdk-stubs/iPhoneOS-armv7-stubs.tar.gz
+          echo "SDK stubs cached ($(du -sh ~/.xcode13-sdk-stubs | cut -f1))"
+
+  # ── Universal armv7+arm64 release ────────────────────────────────────
   archive-release:
     needs: build-and-test
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: write
     steps:
@@ -89,20 +137,137 @@ jobs:
           mkdir -p "$RUNNER_TEMP/private_keys"
           echo -n "$ASC_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/private_keys/AuthKey.p8"
 
+      - name: Restore Xcode 13 SDK stubs
+        id: sdk-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.xcode13-sdk-stubs
+          key: ${{ env.XCODE13_SDK_CACHE_KEY }}
+
+      - name: Install Xcode 13 SDK stubs
+        env:
+          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
+          XCODES_USERNAME: ${{ secrets.XCODES_USERNAME }}
+        run: |
+          STUBS_DIR="$RUNNER_TEMP/xcode13-sdk"
+          mkdir -p "$STUBS_DIR"
+
+          if [ -f ~/.xcode13-sdk-stubs/iPhoneOS-armv7-stubs.tar.gz ]; then
+            echo "Extracting cached SDK stubs..."
+            tar xzf ~/.xcode13-sdk-stubs/iPhoneOS-armv7-stubs.tar.gz -C "$STUBS_DIR"
+          else
+            echo "Cache miss — installing Xcode 13.2.1 for SDK stubs..."
+            sudo rm -rf /Applications/Xcode_16.0.app \
+                        /Applications/Xcode_16.1.app \
+                        /Applications/Xcode_16.3.app \
+                        /Applications/Xcode_16.4.app 2>/dev/null || true
+            xcodes install 13.2.1 --use-fastlane-auth --experimental-unxip --no-superuser
+            XCODE13=$(ls -d /Applications/Xcode*13.2.1* 2>/dev/null | head -1)
+            SDK="$XCODE13/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk"
+            cp -R "$SDK" "$STUBS_DIR/iPhoneOS.sdk"
+
+            # Cache for next time
+            mkdir -p ~/.xcode13-sdk-stubs
+            tar czf ~/.xcode13-sdk-stubs/iPhoneOS-armv7-stubs.tar.gz \
+                -C "$STUBS_DIR" "iPhoneOS.sdk"
+          fi
+
+          echo "SDK stubs at: $STUBS_DIR/iPhoneOS.sdk"
+          echo "XCODE13_SDK=$STUBS_DIR/iPhoneOS.sdk" >> "$GITHUB_ENV"
+
       - name: Generate Xcode project
         run: |
-          # Inject Team ID into project.yml before generation
           sed -i '' "s/DEVELOPMENT_TEAM: \"\"/DEVELOPMENT_TEAM: \"$TEAM_ID\"/" project.yml
           xcodegen generate --spec project.yml
 
       - name: Configure export plists
         run: |
-          # Inject Team ID into ExportOptions plists
           plutil -replace teamID -string "$TEAM_ID" ExportOptions-AppStore.plist
           plutil -replace teamID -string "$TEAM_ID" ExportOptions-AdHoc.plist
 
-      # --- App Store Archive ---
-      - name: Archive for App Store
+      # ── Step 1: Build armv7 slice with clang direct ──────────────────
+      - name: Build armv7 slice (clang direct, sdk=26.2)
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          BUILD_NUMBER=${{ steps.version.outputs.build_number }}
+          CLANG="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
+          XCODE26_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          SDK_VER=$(plutil -extract Version raw "$XCODE26_SDK/SDKSettings.plist")
+
+          echo "Compiling armv7 with Xcode 26 clang (sdk=$SDK_VER)..."
+
+          # Collect include directories
+          INCLUDE_FLAGS=()
+          while IFS= read -r dir; do
+            INCLUDE_FLAGS+=("-I$PWD/$dir")
+          done < <(find HADashboard Vendor -type d \
+              -not -path '*/iOSSnapshotTestCase/*' \
+              -not -path '*/MDI/*' \
+              -not -path '*/.git/*' \
+              -not -path '*/Assets.xcassets/*')
+
+          # Collect source files
+          SOURCES=()
+          while IFS= read -r src; do
+            SOURCES+=("$src")
+          done < <(find HADashboard Vendor -name '*.m' \
+              -not -path '*/iOSSnapshotTestCase/*' \
+              -not -path '*/MDI/*')
+
+          # Compile all .m files
+          mkdir -p build/armv7-obj
+          ERRORS=0
+          COMPILED=0
+          for src in "${SOURCES[@]}"; do
+            OBJ_NAME=$(echo "$src" | sed 's|/|_|g; s|\.m$|.o|')
+            if "$CLANG" \
+                --target=armv7-apple-ios9.0 \
+                -isysroot "$XCODE26_SDK" \
+                -x objective-c -fobjc-arc -fmodules -Os -DNDEBUG -g -w \
+                "${INCLUDE_FLAGS[@]}" \
+                -c "$src" -o "build/armv7-obj/$OBJ_NAME" 2>/dev/null; then
+              COMPILED=$((COMPILED + 1))
+            else
+              ERRORS=$((ERRORS + 1))
+              if [ $ERRORS -le 3 ]; then
+                echo "FAIL: $src"
+                "$CLANG" --target=armv7-apple-ios9.0 -isysroot "$XCODE26_SDK" \
+                    -x objective-c -fobjc-arc -fmodules -Os -DNDEBUG \
+                    "${INCLUDE_FLAGS[@]}" -c "$src" -o /dev/null 2>&1 | grep 'error:' | head -3
+              fi
+            fi
+          done
+
+          if [ $ERRORS -gt 0 ]; then
+            echo "❌ armv7 compile failed: $COMPILED/$((COMPILED + ERRORS)) files"
+            exit 1
+          fi
+          echo "✓ Compiled $COMPILED files"
+
+          # Link against Xcode 13 TBD stubs with platform_version override
+          "$CLANG" \
+              --target=armv7-apple-ios9.0 \
+              -isysroot "$XCODE13_SDK" \
+              -framework Foundation -framework UIKit -framework CoreFoundation \
+              -framework CoreGraphics -framework CoreText -framework QuartzCore \
+              -framework Security -framework CFNetwork \
+              -fobjc-arc -dead_strip \
+              -Xlinker -platform_version -Xlinker ios -Xlinker 9.0 -Xlinker "$SDK_VER" \
+              build/armv7-obj/*.o \
+              -o build/armv7-thin
+
+          # Generate dSYM
+          DSYMUTIL="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/bin/dsymutil"
+          "$DSYMUTIL" build/armv7-thin -o build/armv7.dSYM
+          # Rename DWARF to match app executable name
+          mv "build/armv7.dSYM/Contents/Resources/DWARF/armv7-thin" \
+             "build/armv7.dSYM/Contents/Resources/DWARF/HA Dashboard" 2>/dev/null || true
+
+          echo "✓ armv7 slice: $(du -h build/armv7-thin | cut -f1)"
+          otool -l build/armv7-thin | grep -A5 'LC_VERSION_MIN_IPHONEOS'
+
+      # ── Step 2: Archive arm64 with Xcode 26 ─────────────────────────
+      - name: Archive arm64
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -111,22 +276,82 @@ jobs:
             -scheme $SCHEME \
             -sdk iphoneos \
             -configuration Release \
-            -archivePath build/HADashboard-AppStore.xcarchive \
+            -archivePath build/HADashboard.xcarchive \
+            ARCHS=arm64 VALID_ARCHS=arm64 \
             MARKETING_VERSION=${{ steps.version.outputs.version }} \
             CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build_number }} \
             DEVELOPMENT_TEAM=$TEAM_ID \
+            "PRODUCT_BUNDLE_IDENTIFIER=com.ashhopkins.hadashboard" \
             -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             -allowProvisioningUpdates
 
-      - name: Export App Store IPA
+      # ── Step 3: Merge armv7+arm64 into archive ──────────────────────
+      - name: Merge universal binary into archive
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          BUILD_NUMBER=${{ steps.version.outputs.build_number }}
+          APP="build/HADashboard.xcarchive/Products/Applications/HA Dashboard.app"
+          SRC_ICON="HADashboard/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
+
+          echo "=== Swap in universal binary ==="
+          lipo -create build/armv7-thin "$APP/HA Dashboard" \
+              -output "$APP/HA Dashboard.tmp"
+          mv "$APP/HA Dashboard.tmp" "$APP/HA Dashboard"
+          echo "Archs: $(lipo -archs "$APP/HA Dashboard")"
+
+          echo "=== Patch Info.plist ==="
+          PLIST="$APP/Info.plist"
+          plutil -replace MinimumOSVersion -string "9.0" "$PLIST"
+          plutil -remove UIRequiredDeviceCapabilities "$PLIST" 2>/dev/null || true
+          plutil -insert UIRequiredDeviceCapabilities -json '["armv7"]' "$PLIST"
+          plutil -replace CFBundleShortVersionString -string "$VERSION" "$PLIST"
+          plutil -replace CFBundleVersion -string "$BUILD_NUMBER" "$PLIST"
+          plutil -remove UILaunchScreen "$PLIST" 2>/dev/null || true
+          plutil -replace UILaunchStoryboardName -string "LaunchScreen" "$PLIST" 2>/dev/null || \
+              plutil -insert UILaunchStoryboardName -string "LaunchScreen" "$PLIST"
+
+          # Add iPad Pro icon reference to plist
+          plutil -remove 'CFBundleIcons~ipad.CFBundlePrimaryIcon.CFBundleIconFiles' "$PLIST" 2>/dev/null || true
+          plutil -insert 'CFBundleIcons~ipad.CFBundlePrimaryIcon.CFBundleIconFiles' \
+              -json '["AppIcon60x60","AppIcon76x76","AppIcon83.5x83.5"]' "$PLIST"
+
+          echo "=== Add standalone icon PNGs ==="
+          sips -z 76 76 "$SRC_ICON" --out "$APP/AppIcon76x76~ipad.png" 2>/dev/null
+          sips -z 152 152 "$SRC_ICON" --out "$APP/AppIcon76x76@2x~ipad.png" 2>/dev/null
+          sips -z 167 167 "$SRC_ICON" --out "$APP/AppIcon83.5x83.5@2x~ipad.png" 2>/dev/null
+          sips -z 120 120 "$SRC_ICON" --out "$APP/AppIcon60x60@2x.png" 2>/dev/null
+          sips -z 180 180 "$SRC_ICON" --out "$APP/AppIcon60x60@3x.png" 2>/dev/null
+
+          echo "=== Merge dSYMs ==="
+          DSYM="build/HADashboard.xcarchive/dSYMs/HA Dashboard.app.dSYM"
+          ARM64_DWARF="$DSYM/Contents/Resources/DWARF/HA Dashboard"
+          ARMV7_DWARF="build/armv7.dSYM/Contents/Resources/DWARF/HA Dashboard"
+          if [ -f "$ARM64_DWARF" ] && [ -f "$ARMV7_DWARF" ]; then
+            lipo -create "$ARMV7_DWARF" "$ARM64_DWARF" -output "${ARM64_DWARF}.universal"
+            mv "${ARM64_DWARF}.universal" "$ARM64_DWARF"
+            echo "dSYM UUIDs:"
+            dwarfdump --uuid "$DSYM"
+          fi
+
+          echo "=== Re-sign ==="
+          IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | grep "Apple" | head -1 | sed 's/.*"\(.*\)"/\1/')
+          codesign --force --sign "$IDENTITY" --timestamp=none "$APP"
+
+          echo "=== Verify ==="
+          echo "Binary:    $(lipo -archs "$APP/HA Dashboard")"
+          echo "MinOS:     $(plutil -extract MinimumOSVersion raw "$PLIST")"
+          echo "Bundle ID: $(plutil -extract CFBundleIdentifier raw "$PLIST")"
+
+      # ── Step 4: Export for App Store ─────────────────────────────────
+      - name: Export App Store IPA (uploads to TestFlight)
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
           xcodebuild -exportArchive \
-            -archivePath build/HADashboard-AppStore.xcarchive \
+            -archivePath build/HADashboard.xcarchive \
             -exportPath build/appstore \
             -exportOptionsPlist ExportOptions-AppStore.plist \
             -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey.p8" \
@@ -134,32 +359,15 @@ jobs:
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             -allowProvisioningUpdates
 
-      # --- Ad Hoc Archive ---
-      - name: Archive for Ad Hoc
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          xcodebuild archive \
-            -scheme $SCHEME \
-            -sdk iphoneos \
-            -configuration Release \
-            -archivePath build/HADashboard-AdHoc.xcarchive \
-            MARKETING_VERSION=${{ steps.version.outputs.version }} \
-            CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build_number }} \
-            DEVELOPMENT_TEAM=$TEAM_ID \
-            -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            -allowProvisioningUpdates
-
+      # ── Step 5: Export Ad Hoc IPA ────────────────────────────────────
       - name: Export Ad Hoc IPA
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
+          # Re-archive for Ad Hoc (different signing)
           xcodebuild -exportArchive \
-            -archivePath build/HADashboard-AdHoc.xcarchive \
+            -archivePath build/HADashboard.xcarchive \
             -exportPath build/adhoc \
             -exportOptionsPlist ExportOptions-AdHoc.plist \
             -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey.p8" \
@@ -167,32 +375,30 @@ jobs:
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             -allowProvisioningUpdates
 
-      # App Store IPA was already uploaded to TestFlight by the export step
-      # (ExportOptions-AppStore.plist uses method: app-store-connect)
-
-      - name: Rename Ad Hoc IPA
+      - name: Rename IPAs
         run: |
           VERSION=${{ steps.version.outputs.version }}
           ADHOC_IPA=$(find build/adhoc -name "*.ipa" | head -1)
-          echo "Ad Hoc IPA: $ADHOC_IPA"
-          mv "$ADHOC_IPA" "build/HADashboard-${VERSION}-adhoc-arm64.ipa"
+          if [ -n "$ADHOC_IPA" ]; then
+            mv "$ADHOC_IPA" "build/HADashboard-${VERSION}-universal-armv7-arm64.ipa"
+          fi
 
-      - name: Upload Ad Hoc IPA artifact
+      - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: adhoc-ipa
-          path: build/HADashboard-*-adhoc-arm64.ipa
+          name: universal-ipa
+          path: build/HADashboard-*-universal-armv7-arm64.ipa
 
-      # --- GitHub Release ---
+      # ── GitHub Release ──────────────────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            build/HADashboard-*-adhoc-arm64.ipa
+            build/HADashboard-*-universal-armv7-arm64.ipa
           generate_release_notes: true
           draft: false
 
-      # --- Cleanup ---
+      # ── Cleanup ─────────────────────────────────────────────────────
       - name: Cleanup
         if: always()
         run: |
