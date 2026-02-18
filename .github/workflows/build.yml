@@ -15,7 +15,7 @@ env:
 
 jobs:
   build-and-test:
-    runs-on: macos-15
+    runs-on: macos-latest-xlarge
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -23,7 +23,15 @@ jobs:
           fetch-depth: 0
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.2.app
+        run: |
+          # Find the latest Xcode 26.x (year-based naming from WWDC 2025)
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then
+            # Fall back to default Xcode
+            XCODE=$(ls -d /Applications/Xcode.app /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          fi
+          echo "Using: $XCODE ($(${XCODE}/Contents/Developer/usr/bin/xcodebuild -version | head -1))"
+          sudo xcode-select -s "$XCODE"
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -62,7 +70,7 @@ jobs:
   # We cache these so tag-triggered release builds don't need to download
   # the full 12GB Xcode 13.2.1.
   seed-sdk-cache:
-    runs-on: macos-15
+    runs-on: macos-latest-xlarge
     timeout-minutes: 60
     if: github.ref == 'refs/heads/main'
     steps:
@@ -72,6 +80,10 @@ jobs:
         with:
           path: ~/.xcode13-sdk-stubs
           key: ${{ env.XCODE13_SDK_CACHE_KEY }}
+
+      - name: Install xcodes
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: brew install xcodes
 
       - name: Extract SDK stubs from Xcode 13.2.1
         if: steps.cache.outputs.cache-hit != 'true'
@@ -106,7 +118,7 @@ jobs:
   archive-release:
     needs: build-and-test
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: macos-15
+    runs-on: macos-latest-xlarge
     timeout-minutes: 45
     permissions:
       contents: write
@@ -116,7 +128,13 @@ jobs:
           fetch-depth: 0
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.2.app
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then
+            XCODE=$(ls -d /Applications/Xcode.app /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          fi
+          echo "Using: $XCODE ($(${XCODE}/Contents/Developer/usr/bin/xcodebuild -version | head -1))"
+          sudo xcode-select -s "$XCODE"
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -157,6 +175,7 @@ jobs:
             tar xzf ~/.xcode13-sdk-stubs/iPhoneOS-armv7-stubs.tar.gz -C "$STUBS_DIR"
           else
             echo "Cache miss — installing Xcode 13.2.1 for SDK stubs..."
+            command -v xcodes >/dev/null 2>&1 || brew install xcodes
             sudo rm -rf /Applications/Xcode_16.0.app \
                         /Applications/Xcode_16.1.app \
                         /Applications/Xcode_16.3.app \
