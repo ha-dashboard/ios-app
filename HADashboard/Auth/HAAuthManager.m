@@ -11,6 +11,7 @@ static NSString *const kRefreshTokenKey  = @"ha_refresh_token";
 static NSString *const kTokenExpiryKey   = @"ha_token_expiry";
 static NSString *const kSelectedDashboardKey = @"ha_selected_dashboard";
 static NSString *const kKioskModeKey     = @"ha_kiosk_mode";
+static NSString *const kDemoModeKey      = @"ha_demo_mode";
 
 @interface HAAuthManager ()
 @property (nonatomic, copy, readwrite) NSString *serverURL;
@@ -20,6 +21,7 @@ static NSString *const kKioskModeKey     = @"ha_kiosk_mode";
 @property (nonatomic, copy, readwrite) NSDate *tokenExpiresAt;
 @property (nonatomic, copy, readwrite) NSString *selectedDashboardPath;
 @property (nonatomic, assign, readwrite, getter=isKioskMode) BOOL kioskMode;
+@property (nonatomic, assign, readwrite, getter=isDemoMode) BOOL demoMode;
 @property (nonatomic, strong) NSTimer *refreshTimer;
 @property (nonatomic, assign) BOOL isRefreshing;
 @end
@@ -43,6 +45,7 @@ static NSString *const kKioskModeKey     = @"ha_kiosk_mode";
         _refreshToken = [HAKeychainHelper stringForKey:kRefreshTokenKey];
         _selectedDashboardPath = [[NSUserDefaults standardUserDefaults] stringForKey:kSelectedDashboardKey];
         _kioskMode = [[NSUserDefaults standardUserDefaults] boolForKey:kKioskModeKey];
+        _demoMode = [[NSUserDefaults standardUserDefaults] boolForKey:kDemoModeKey];
 
         // Restore auth mode
         NSString *modeStr = [HAKeychainHelper stringForKey:kAuthModeKey];
@@ -63,6 +66,7 @@ static NSString *const kKioskModeKey     = @"ha_kiosk_mode";
 }
 
 - (BOOL)isConfigured {
+    if (self.demoMode) return YES;
     return self.serverURL.length > 0 && self.accessToken.length > 0;
 }
 
@@ -226,6 +230,13 @@ static NSString *const kKioskModeKey     = @"ha_kiosk_mode";
 - (void)setKioskMode:(BOOL)enabled {
     _kioskMode = enabled;
     [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:kKioskModeKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    [[NSNotificationCenter defaultCenter] postNotificationName:HAAuthManagerDidUpdateNotification object:self];
+}
+
+- (void)setDemoMode:(BOOL)enabled {
+    _demoMode = enabled;
+    [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:kDemoModeKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
     [[NSNotificationCenter defaultCenter] postNotificationName:HAAuthManagerDidUpdateNotification object:self];
 }

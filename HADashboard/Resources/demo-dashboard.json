@@ -1,0 +1,232 @@
+{
+  "title": "Test Harness",
+  "views": [
+    {
+      "title": "Lighting & Controls",
+      "path": "lighting",
+      "type": "sections",
+      "max_columns": 3,
+      "sections": [
+        {
+          "title": "Lights",
+          "cards": [
+            {"type": "tile", "entity": "light.bed_light", "name": "Bed Light"},
+            {"type": "tile", "entity": "light.ceiling_lights", "name": "Ceiling Lights"},
+            {"type": "tile", "entity": "light.kitchen_lights", "name": "Kitchen Lights (Color)"},
+            {"type": "tile", "entity": "light.office_rgbw_lights", "name": "Office RGBW"}
+          ]
+        },
+        {
+          "title": "Switches",
+          "cards": [
+            {"type": "tile", "entity": "switch.decorative_lights", "name": "Decorative Lights"},
+            {"type": "tile", "entity": "switch.ac", "name": "AC"},
+            {"type": "tile", "entity": "input_boolean.in_meeting", "name": "In Meeting"}
+          ]
+        },
+        {
+          "title": "Buttons & Scenes",
+          "cards": [
+            {"type": "tile", "entity": "scene.movie_night", "name": "Movie Night"},
+            {"type": "tile", "entity": "scene.good_morning", "name": "Good Morning"}
+          ]
+        },
+        {
+          "title": "Fans",
+          "cards": [
+            {"type": "tile", "entity": "fan.living_room_fan", "name": "Living Room Fan"},
+            {"type": "tile", "entity": "fan.ceiling_fan", "name": "Ceiling Fan"}
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Climate & Weather",
+      "path": "climate",
+      "type": "sections",
+      "max_columns": 3,
+      "sections": [
+        {
+          "title": "Climate",
+          "cards": [
+            {"type": "thermostat", "entity": "climate.hvac"},
+            {"type": "tile", "entity": "climate.ecobee", "name": "Ecobee"},
+            {"type": "tile", "entity": "climate.heatpump", "name": "Heat Pump"}
+          ]
+        },
+        {
+          "title": "Humidifiers",
+          "cards": [
+            {"type": "tile", "entity": "humidifier.humidifier", "name": "Humidifier"},
+            {"type": "tile", "entity": "humidifier.dehumidifier", "name": "Dehumidifier"}
+          ]
+        },
+        {
+          "title": "Weather",
+          "cards": [
+            {"type": "weather-forecast", "entity": "weather.demo_weather_south", "name": "South Weather", "show_forecast": true, "forecast_type": "daily"},
+            {"type": "weather-forecast", "entity": "weather.demo_weather_north", "name": "North Weather", "show_forecast": true, "forecast_type": "daily"}
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Sensors",
+      "path": "sensors",
+      "type": "sections",
+      "max_columns": 3,
+      "sections": [
+        {
+          "title": "Environment",
+          "cards": [
+            {"type": "tile", "entity": "sensor.outside_temperature", "name": "Temperature"},
+            {"type": "tile", "entity": "sensor.outside_humidity", "name": "Humidity"},
+            {"type": "tile", "entity": "sensor.power_consumption", "name": "Power"},
+            {"type": "tile", "entity": "sensor.carbon_dioxide", "name": "CO2"}
+          ]
+        },
+        {
+          "title": "Gauges",
+          "cards": [
+            {"type": "gauge", "entity": "sensor.outside_humidity", "name": "Humidity Gauge", "min": 0, "max": 100, "severity": {"green": 30, "yellow": 60, "red": 80}},
+            {"type": "gauge", "entity": "sensor.outside_temperature", "name": "Temperature Gauge", "min": -20, "max": 50}
+          ]
+        },
+        {
+          "title": "Counters & Timers",
+          "cards": [
+            {"type": "tile", "entity": "counter.litterbox_visits", "name": "Litterbox Visits"},
+            {"type": "tile", "entity": "counter.page_views", "name": "Page Views"},
+            {"type": "tile", "entity": "timer.laundry", "name": "Laundry Timer"},
+            {"type": "tile", "entity": "timer.oven", "name": "Oven Timer"}
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Security",
+      "path": "security",
+      "type": "sections",
+      "max_columns": 3,
+      "sections": [
+        {
+          "title": "Locks",
+          "cards": [
+            {"type": "tile", "entity": "lock.front_door", "name": "Front Door"},
+            {"type": "tile", "entity": "lock.kitchen_door", "name": "Kitchen Door"},
+            {"type": "tile", "entity": "lock.poorly_installed_door", "name": "Jammed Lock"}
+          ]
+        },
+        {
+          "title": "Alarm",
+          "cards": [
+            {"type": "alarm-panel", "entity": "alarm_control_panel.security", "name": "Security System"}
+          ]
+        },
+        {
+          "title": "Covers",
+          "cards": [
+            {"type": "tile", "entity": "cover.kitchen_window", "name": "Kitchen Window"},
+            {"type": "tile", "entity": "cover.hall_window", "name": "Hall Window"},
+            {"type": "tile", "entity": "cover.living_room_window", "name": "Living Room Window"},
+            {"type": "tile", "entity": "cover.garage_door", "name": "Garage Door"}
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Media",
+      "path": "media",
+      "type": "sections",
+      "max_columns": 3,
+      "sections": [
+        {
+          "title": "Media Players",
+          "cards": [
+            {"type": "media-control", "entity": "media_player.living_room"},
+            {"type": "media-control", "entity": "media_player.bedroom"},
+            {"type": "media-control", "entity": "media_player.lounge_room"}
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Vacuums",
+      "path": "vacuums",
+      "type": "sections",
+      "max_columns": 3,
+      "sections": [
+        {
+          "title": "Robot Vacuums",
+          "cards": [
+            {"type": "tile", "entity": "vacuum.demo_vacuum_0_ground_floor", "name": "Ground Floor"},
+            {"type": "tile", "entity": "vacuum.demo_vacuum_1_first_floor", "name": "First Floor"}
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Inputs",
+      "path": "inputs",
+      "type": "sections",
+      "max_columns": 3,
+      "sections": [
+        {
+          "title": "Sliders & Numbers",
+          "cards": [
+            {"type": "tile", "entity": "input_number.target_temperature", "name": "Target Temperature"},
+            {"type": "tile", "entity": "input_number.standing_desk_height", "name": "Desk Height"}
+          ]
+        },
+        {
+          "title": "Dropdowns",
+          "cards": [
+            {"type": "tile", "entity": "input_select.media_source", "name": "Media Source"},
+            {"type": "tile", "entity": "input_select.living_room_app", "name": "Living Room App"}
+          ]
+        },
+        {
+          "title": "Text Fields",
+          "cards": [
+            {"type": "tile", "entity": "input_text.greeting", "name": "Greeting"},
+            {"type": "tile", "entity": "input_text.notes", "name": "Notes"}
+          ]
+        },
+        {
+          "title": "Date & Time",
+          "cards": [
+            {"type": "tile", "entity": "input_datetime.vacation_start", "name": "Vacation Start"},
+            {"type": "tile", "entity": "input_datetime.morning_alarm", "name": "Morning Alarm"},
+            {"type": "tile", "entity": "input_datetime.appointment", "name": "Appointment"}
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Entities Cards",
+      "path": "entities",
+      "type": "sections",
+      "max_columns": 3,
+      "sections": [
+        {
+          "title": "Light Group",
+          "cards": [
+            {"type": "entities", "title": "All Lights", "entities": ["light.bed_light", "light.ceiling_lights", "light.kitchen_lights", "light.office_rgbw_lights"]}
+          ]
+        },
+        {
+          "title": "Sensor Group",
+          "cards": [
+            {"type": "entities", "title": "Environment", "entities": ["sensor.outside_temperature", "sensor.outside_humidity", "sensor.power_consumption", "sensor.carbon_dioxide", "sensor.carbon_monoxide"]}
+          ]
+        },
+        {
+          "title": "Mixed Group",
+          "cards": [
+            {"type": "entities", "title": "Mixed Controls", "entities": ["switch.decorative_lights", "lock.front_door", "cover.garage_door", "input_boolean.in_meeting", "input_number.target_temperature"]}
+          ]
+        }
+      ]
+    }
+  ]
+}

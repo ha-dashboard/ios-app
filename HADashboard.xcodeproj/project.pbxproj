@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DEMO1234567890ABCDEF03 /* HADemoDataProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = DEMO1234567890ABCDEF02 /* HADemoDataProvider.m */; };
+		DEMO1234567890ABCDEF05 /* demo-dashboard.json in Resources */ = {isa = PBXBuildFile; fileRef = DEMO1234567890ABCDEF04 /* demo-dashboard.json */; };
 		00038949C342C959E2F667B0 /* testTimerSectionPaused_timerSectionPaused_light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = D407B92D07874BD95496B151 /* testTimerSectionPaused_timerSectionPaused_light@2x.png */; };
 		0060BB5F41A3B5CBE84329E2 /* testFanOnHalf__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 3AE0C66BC316A824370BAB26 /* testFanOnHalf__light@2x.png */; };
 		00F6BEAC1F208FB42761E818 /* testClimateHeat__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 300B7387E4AFDBF6D36F9120 /* testClimateHeat__light@2x.png */; };
@@ -576,6 +578,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		DEMO1234567890ABCDEF01 /* HADemoDataProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HADemoDataProvider.h; sourceTree = "<group>"; };
+		DEMO1234567890ABCDEF02 /* HADemoDataProvider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HADemoDataProvider.m; sourceTree = "<group>"; };
+		DEMO1234567890ABCDEF04 /* demo-dashboard.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "demo-dashboard.json"; sourceTree = "<group>"; };
 		003CB58637360AC680F25FFB /* HATopAlignedFlowLayout.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HATopAlignedFlowLayout.m; sourceTree = "<group>"; };
 		012C5223BB10779E0DE3032E /* testAttributeRowLongValue_attributeRowLong_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testAttributeRowLongValue_attributeRowLong_gradient@2x.png"; sourceTree = "<group>"; };
 		014B99BB5FF5AFF17E3A39C5 /* CGGeometry+LOTAdditions.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "CGGeometry+LOTAdditions.m"; sourceTree = "<group>"; };
@@ -1475,6 +1480,7 @@
 			children = (
 				EC75A7BF5865FBEC141224F0 /* Auth */,
 				73EE29F0DCE21B757B1C9B80 /* Controllers */,
+				DEMO1234567890ABCDEF06 /* Demo */,
 				E1D57968CA6A9F084ED526A7 /* Models */,
 				A556514053D652530987DEB3 /* Networking */,
 				46887388C1A18E9AC7CF7300 /* Resources */,
@@ -1488,6 +1494,15 @@
 				8B7330389B39D40E70CDC883 /* main.m */,
 			);
 			path = HADashboard;
+			sourceTree = "<group>";
+		};
+		DEMO1234567890ABCDEF06 /* Demo */ = {
+			isa = PBXGroup;
+			children = (
+				DEMO1234567890ABCDEF01 /* HADemoDataProvider.h */,
+				DEMO1234567890ABCDEF02 /* HADemoDataProvider.m */,
+			);
+			path = Demo;
 			sourceTree = "<group>";
 		};
 		380FA7816ABC7A6AF51A0A2D /* Private */ = {
@@ -1512,6 +1527,7 @@
 		46887388C1A18E9AC7CF7300 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				DEMO1234567890ABCDEF04 /* demo-dashboard.json */,
 				23F112178E22B1DC5565A408 /* WeatherIcons */,
 			);
 			path = Resources;
@@ -2299,6 +2315,7 @@
 			files = (
 				03ADFFB7B8D96DD4D8F97BD6 /* Assets.xcassets in Resources */,
 				2881B660189B8CE69CB29C2E /* LaunchScreen.storyboard in Resources */,
+				DEMO1234567890ABCDEF05 /* demo-dashboard.json in Resources */,
 				9D654F59705D8BA87D556140 /* clear-day.json in Resources */,
 				459C9635019F7A6AA2BBBAB7 /* clear-night.json in Resources */,
 				D6A561D7E2EE7EA799AE8208 /* cloudy.json in Resources */,
@@ -2686,6 +2703,7 @@
 				98D03C1230A2C4C015DB5F30 /* HAColorWheelView.m in Sources */,
 				0BE750FD2213FCDCE6552861 /* HAColumnarLayout.m in Sources */,
 				D08E33405107540E344C5FE9 /* HAConnectionManager.m in Sources */,
+				DEMO1234567890ABCDEF03 /* HADemoDataProvider.m in Sources */,
 				DBE80703E961AE93F94D292C /* HACounterEntityCell.m in Sources */,
 				13C55734761CA75E85224105 /* HACoverEntityCell.m in Sources */,
 				AC79EE2F196228ED2CE37001 /* HADashboardConfig.m in Sources */,

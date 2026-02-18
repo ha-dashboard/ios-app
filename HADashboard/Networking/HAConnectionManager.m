@@ -6,6 +6,7 @@
 #import "HAFloor.h"
 #import "HALovelaceParser.h"
 #import "HAStrategyResolver.h"
+#import "HADemoDataProvider.h"
 
 NSString *const HAConnectionManagerDidConnectNotification           = @"HAConnectionManagerDidConnect";
 NSString *const HAConnectionManagerDidDisconnectNotification        = @"HAConnectionManagerDidDisconnect";
@@ -74,6 +75,13 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 
 - (void)connect {
     HAAuthManager *auth = [HAAuthManager sharedManager];
+
+    // Demo mode: load bundled demo data instead of connecting to a real server
+    if (auth.isDemoMode) {
+        [self loadDemoData];
+        return;
+    }
+
     if (!auth.isConfigured) {
         NSLog(@"[HAConnection] Cannot connect — not configured");
         return;
@@ -91,7 +99,65 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     [self.wsClient connect];
 }
 
+- (void)loadDemoData {
+    NSLog(@"[HAConnection] Loading demo data");
+
+    HADemoDataProvider *demo = [HADemoDataProvider sharedProvider];
+
+    // Populate entity store with demo entities
+    @synchronized(self.entityStore) {
+        [self.entityStore removeAllObjects];
+        [self.entityStore addEntriesFromDictionary:demo.allEntities];
+    }
+
+    // Set demo dashboard
+    self.lovelaceDashboard = demo.demoDashboard;
+    self.availableDashboards = demo.availableDashboards;
+
+    // Mark as connected (for UI purposes)
+    self.connected = YES;
+    self.registriesLoaded = YES;
+
+    // Start state simulation
+    [demo startSimulation];
+
+    // Post notifications to update UI
+    [self.delegate connectionManagerDidConnect:self];
+    [[NSNotificationCenter defaultCenter]
+        postNotificationName:HAConnectionManagerDidConnectNotification
+                      object:self];
+
+    NSDictionary *entities = [self allEntities];
+    [self.delegate connectionManager:self didReceiveAllStates:entities];
+    [[NSNotificationCenter defaultCenter]
+        postNotificationName:HAConnectionManagerDidReceiveAllStatesNotification
+                      object:self
+                    userInfo:@{@"entities": entities}];
+
+    if (self.lovelaceDashboard) {
+        [self.delegate connectionManager:self didReceiveLovelaceDashboard:self.lovelaceDashboard];
+        [[NSNotificationCenter defaultCenter]
+            postNotificationName:HAConnectionManagerDidReceiveLovelaceNotification
+                          object:self
+                        userInfo:@{@"dashboard": self.lovelaceDashboard}];
+    }
+
+    [[NSNotificationCenter defaultCenter]
+        postNotificationName:HAConnectionManagerDidReceiveDashboardListNotification
+                      object:self
+                    userInfo:@{@"dashboards": self.availableDashboards}];
+
+    [[NSNotificationCenter defaultCenter]
+        postNotificationName:HAConnectionManagerDidReceiveRegistriesNotification
+                      object:self];
+}
+
 - (void)disconnect {
+    // Stop demo simulation if running
+    if ([[HAAuthManager sharedManager] isDemoMode]) {
+        [[HADemoDataProvider sharedProvider] stopSimulation];
+    }
+
     self.intentionalDisconnect = YES;
     [self cancelReconnect];
     [self.wsClient disconnect];
@@ -197,6 +263,12 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     // Apply optimistic state update before sending — UI refreshes immediately
     [self applyOptimisticUpdateForService:service domain:domain data:serviceData entityId:entityId];
 
+    // In demo mode, just log and return (no actual service call)
+    if ([[HAAuthManager sharedManager] isDemoMode]) {
+        NSLog(@"[HAConnection] Demo mode: simulated %@.%@ for %@", domain, service, entityId);
+        return;
+    }
+
     // Prefer WebSocket if connected
     if (self.wsClient.isAuthenticated) {
         [self.wsClient callService:service inDomain:domain withData:serviceData];
@@ -257,7 +329,9 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     } else if ([service isEqualToString:@"set_hvac_mode"] &&
                [domain isEqualToString:HAEntityDomainClimate]) {
         id mode = data[@"hvac_mode"];
-        if ([mode isKindOfClass:[NSString class]]) optimisticState = mode;
+        if ([mode isKindOfClass:[NSString class]]) {
+            optimisticState = mode;
+        }
     }
     // --- Cover ---
     else if ([service isEqualToString:@"open_cover"]) {
@@ -313,6 +387,11 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 
     @synchronized(self.entityStore) {
         [entity applyOptimisticState:optimisticState attributeOverrides:attrOverrides];
+    }
+
+    // Debug: verify state was applied for climate entities
+    if ([domain isEqualToString:HAEntityDomainClimate] && optimisticState) {
+        NSLog(@"[HAConnection] Climate after optimistic: state=%@, hvacMode=%@", entity.state, [entity hvacMode]);
     }
 
     // Dispatch the standard entity update notification — existing reload pipeline handles the rest

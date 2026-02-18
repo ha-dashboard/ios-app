@@ -56,6 +56,10 @@
     if ([defaults objectForKey:@"HAThemeMode"]) {
         [HATheme setCurrentMode:(HAThemeMode)[defaults integerForKey:@"HAThemeMode"]];
     }
+    // -HADemoMode YES/NO — override demo mode from launch arguments
+    if ([defaults objectForKey:@"HADemoMode"]) {
+        [[HAAuthManager sharedManager] setDemoMode:[defaults boolForKey:@"HADemoMode"]];
+    }
 
     UIViewController *rootVC;
     if ([[HAAuthManager sharedManager] isConfigured]) {

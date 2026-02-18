@@ -25,6 +25,9 @@ typedef NS_ENUM(NSInteger, HAAuthMode) {
 /// Kiosk mode: hides nav bar, disables screen sleep
 @property (nonatomic, readonly, getter=isKioskMode) BOOL kioskMode;
 
+/// Demo mode: uses bundled demo data instead of connecting to a real server
+@property (nonatomic, readonly, getter=isDemoMode) BOOL demoMode;
+
 /// Save long-lived access token (existing flow)
 - (void)saveServerURL:(NSString *)url token:(NSString *)token;
 
@@ -46,6 +49,7 @@ typedef NS_ENUM(NSInteger, HAAuthMode) {
 
 - (void)saveSelectedDashboardPath:(NSString *)urlPath;
 - (void)setKioskMode:(BOOL)enabled;
+- (void)setDemoMode:(BOOL)enabled;
 - (void)clearCredentials;
 
 /// Returns full base URL for REST API, e.g. http://192.168.1.100:8123/api

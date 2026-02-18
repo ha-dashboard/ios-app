@@ -1,5 +1,6 @@
 #import "HAHistoryManager.h"
 #import "HAAuthManager.h"
+#import "HADemoDataProvider.h"
 
 @interface HAHistoryManager ()
 @property (nonatomic, strong) NSCache *cache;
@@ -60,6 +61,17 @@
                      completion:(void (^)(NSArray *, NSError *))completion {
     if (!entityId || !completion) return;
 
+    // In demo mode, return fake history data
+    if ([[HAAuthManager sharedManager] isDemoMode]) {
+        NSInteger hours = (NSInteger)([endDate timeIntervalSinceDate:startDate] / 3600.0);
+        if (hours < 1) hours = 24;
+        NSArray *fakePoints = [[HADemoDataProvider sharedProvider] historyPointsForEntityId:entityId hoursBack:hours];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(fakePoints, nil);
+        });
+        return;
+    }
+
     NSUInteger effectiveMax = (maxPoints == 0) ? 100 : maxPoints;
     long startEpoch = (long)[startDate timeIntervalSince1970];
     long endEpoch = (long)[endDate timeIntervalSince1970];
@@ -108,6 +120,17 @@
                          endDate:(NSDate *)endDate
                       completion:(void (^)(NSArray *, NSError *))completion {
     if (!entityId || !completion) return;
+
+    // In demo mode, return fake timeline data
+    if ([[HAAuthManager sharedManager] isDemoMode]) {
+        NSInteger hours = (NSInteger)([endDate timeIntervalSinceDate:startDate] / 3600.0);
+        if (hours < 1) hours = 24;
+        NSArray *fakeSegments = [[HADemoDataProvider sharedProvider] timelineSegmentsForEntityId:entityId hoursBack:hours];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(fakeSegments, nil);
+        });
+        return;
+    }
 
     long startEpoch = (long)[startDate timeIntervalSince1970];
     long endEpoch = (long)[endDate timeIntervalSince1970];

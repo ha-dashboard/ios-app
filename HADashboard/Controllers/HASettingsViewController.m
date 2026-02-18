@@ -51,6 +51,10 @@
 @property (nonatomic, strong) UIView *kioskSection;
 @property (nonatomic, strong) UISwitch *kioskSwitch;
 
+// Demo mode
+@property (nonatomic, strong) UIView *demoSection;
+@property (nonatomic, strong) UISwitch *demoSwitch;
+
 // Help text
 @property (nonatomic, strong) UILabel *helpLabel;
 @end
@@ -438,6 +442,45 @@
     [self.kioskSection addConstraint:[NSLayoutConstraint constraintWithItem:self.kioskSwitch attribute:NSLayoutAttributeCenterY
         relatedBy:NSLayoutRelationEqual toItem:kioskLabel attribute:NSLayoutAttributeCenterY multiplier:1 constant:0]];
 
+    // ── Demo mode section ─────────────────────────────────────────────
+    self.demoSection = [[UIView alloc] init];
+    self.demoSection.translatesAutoresizingMaskIntoConstraints = NO;
+    [container addSubview:self.demoSection];
+
+    UILabel *demoLabel = [[UILabel alloc] init];
+    demoLabel.text = @"Demo Mode";
+    demoLabel.font = [UIFont systemFontOfSize:16];
+    demoLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.demoSection addSubview:demoLabel];
+
+    self.demoSwitch = [[UISwitch alloc] init];
+    self.demoSwitch.on = [[HAAuthManager sharedManager] isDemoMode];
+    [self.demoSwitch addTarget:self action:@selector(demoSwitchToggled:) forControlEvents:UIControlEventValueChanged];
+    self.demoSwitch.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.demoSection addSubview:self.demoSwitch];
+
+    UILabel *demoHelp = [[UILabel alloc] init];
+    demoHelp.text = @"Shows the app with demo data instead of connecting to a Home Assistant server. Useful for demonstrating the app's capabilities.";
+    demoHelp.font = [UIFont systemFontOfSize:12];
+    demoHelp.textColor = [HATheme secondaryTextColor];
+    demoHelp.numberOfLines = 0;
+    demoHelp.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.demoSection addSubview:demoHelp];
+
+    NSDictionary *dViews = @{@"lbl": demoLabel, @"sw": self.demoSwitch, @"help": demoHelp};
+    [self.demoSection addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
+        @"V:|[lbl]-8-[help]|" options:0 metrics:nil views:dViews]];
+    [self.demoSection addConstraint:[NSLayoutConstraint constraintWithItem:demoHelp attribute:NSLayoutAttributeLeading
+        relatedBy:NSLayoutRelationEqual toItem:self.demoSection attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
+    [self.demoSection addConstraint:[NSLayoutConstraint constraintWithItem:demoHelp attribute:NSLayoutAttributeTrailing
+        relatedBy:NSLayoutRelationEqual toItem:self.demoSection attribute:NSLayoutAttributeTrailing multiplier:1 constant:0]];
+    [self.demoSection addConstraint:[NSLayoutConstraint constraintWithItem:demoLabel attribute:NSLayoutAttributeLeading
+        relatedBy:NSLayoutRelationEqual toItem:self.demoSection attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
+    [self.demoSection addConstraint:[NSLayoutConstraint constraintWithItem:self.demoSwitch attribute:NSLayoutAttributeTrailing
+        relatedBy:NSLayoutRelationEqual toItem:self.demoSection attribute:NSLayoutAttributeTrailing multiplier:1 constant:0]];
+    [self.demoSection addConstraint:[NSLayoutConstraint constraintWithItem:self.demoSwitch attribute:NSLayoutAttributeCenterY
+        relatedBy:NSLayoutRelationEqual toItem:demoLabel attribute:NSLayoutAttributeCenterY multiplier:1 constant:0]];
+
     // ── Help text ──────────────────────────────────────────────────────
     self.helpLabel = [[UILabel alloc] init];
     self.helpLabel.text = @"Generate a Long-Lived Access Token in your Home Assistant profile:\nSettings > People > [Your User] > Long-Lived Access Tokens";
@@ -464,15 +507,16 @@
         @"themeSection": self.themeSection,
         @"dispHdr": self.displaySectionHeader,
         @"kioskSection": self.kioskSection,
+        @"demoSection": self.demoSection,
         @"help": self.helpLabel,
     };
     NSDictionary *metrics = @{@"p": @(padding), @"fh": @(fieldHeight), @"sh": @24};
 
     [container addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[connHdr]-12-[disc]-p-[urlLabel]-4-[urlField(fh)]-p-[authSeg]-p-[tokenC][loginC]-p-[button(fh)]-p-[status]-8-[spinner]-sh-[appHdr]-12-[themeSection]-sh-[dispHdr]-12-[kioskSection]-p-[help]|"
+        @"V:|[connHdr]-12-[disc]-p-[urlLabel]-4-[urlField(fh)]-p-[authSeg]-p-[tokenC][loginC]-p-[button(fh)]-p-[status]-8-[spinner]-sh-[appHdr]-12-[themeSection]-sh-[dispHdr]-12-[kioskSection]-p-[demoSection]-p-[help]|"
         options:0 metrics:metrics views:views]];
 
-    for (NSString *name in @[@"connHdr", @"disc", @"urlLabel", @"urlField", @"authSeg", @"tokenC", @"loginC", @"button", @"status", @"appHdr", @"themeSection", @"dispHdr", @"kioskSection", @"help"]) {
+    for (NSString *name in @[@"connHdr", @"disc", @"urlLabel", @"urlField", @"authSeg", @"tokenC", @"loginC", @"button", @"status", @"appHdr", @"themeSection", @"dispHdr", @"kioskSection", @"demoSection", @"help"]) {
         UIView *v = views[name];
         [container addConstraint:[NSLayoutConstraint constraintWithItem:v attribute:NSLayoutAttributeLeading
             relatedBy:NSLayoutRelationEqual toItem:container attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
@@ -698,6 +742,14 @@
 
 - (void)kioskSwitchToggled:(UISwitch *)sender {
     [[HAAuthManager sharedManager] setKioskMode:sender.isOn];
+}
+
+- (void)demoSwitchToggled:(UISwitch *)sender {
+    [[HAAuthManager sharedManager] setDemoMode:sender.isOn];
+    if (sender.isOn) {
+        // Navigate back to dashboard to show demo mode
+        [self.navigationController popViewControllerAnimated:YES];
+    }
 }
 
 #pragma mark - Theme
