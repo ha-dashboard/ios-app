@@ -21,11 +21,14 @@
 
 #pragma mark - Dashboard Data
 
-/// The demo dashboard parsed from bundled JSON
+/// The default demo dashboard (Home)
 @property (nonatomic, readonly) HALovelaceDashboard *demoDashboard;
 
-/// List of available dashboards (single entry for demo)
+/// List of available demo dashboards
 @property (nonatomic, readonly) NSArray<NSDictionary *> *availableDashboards;
+
+/// Get a specific demo dashboard by URL path (e.g., @"demo-home", @"demo-monitoring")
+- (HALovelaceDashboard *)dashboardForPath:(NSString *)urlPath;
 
 #pragma mark - Fake History
 

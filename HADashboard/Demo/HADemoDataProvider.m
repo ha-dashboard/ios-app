@@ -7,6 +7,7 @@
 @property (nonatomic, strong) NSMutableDictionary<NSString *, HAEntity *> *entityStore;
 @property (nonatomic, strong) HALovelaceDashboard *demoDashboard;
 @property (nonatomic, strong) NSArray<NSDictionary *> *availableDashboards;
+@property (nonatomic, strong) NSDictionary<NSString *, HALovelaceDashboard *> *dashboards;
 @property (nonatomic, strong) NSTimer *simulationTimer;
 @property (nonatomic, assign, getter=isSimulating) BOOL simulating;
 @end
@@ -36,11 +37,16 @@
 
 - (void)loadDemoData {
     [self loadDemoEntities];
-    [self loadDemoDashboard];
+    [self loadDemoDashboards];
 
     _availableDashboards = @[
-        @{@"title": @"Demo Dashboard", @"url_path": @"demo"}
+        @{@"title": @"Home",       @"url_path": @"demo-home"},
+        @{@"title": @"Monitoring", @"url_path": @"demo-monitoring"},
+        @{@"title": @"Media",      @"url_path": @"demo-media"}
     ];
+
+    // Default dashboard is Home
+    _demoDashboard = _dashboards[@"demo-home"];
 }
 
 - (void)reloadDemoData {
@@ -1002,281 +1008,273 @@
 
 #pragma mark - Dashboard Loading
 
-- (void)loadDemoDashboard {
-    // Try to load from bundled JSON first
-    NSString *jsonPath = [[NSBundle mainBundle] pathForResource:@"demo-dashboard" ofType:@"json"];
-    if (jsonPath) {
-        NSData *data = [NSData dataWithContentsOfFile:jsonPath];
-        if (data) {
-            NSError *error = nil;
-            NSDictionary *dict = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
-            if (dict && !error) {
-                _demoDashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
-                NSLog(@"[HADemo] Loaded demo dashboard from JSON bundle");
-                return;
-            }
-        }
-    }
+- (void)loadDemoDashboards {
+    NSMutableDictionary *dashMap = [NSMutableDictionary dictionary];
 
-    // Fallback: create a basic programmatic dashboard
-    [self createProgrammaticDashboard];
+    dashMap[@"demo-home"]       = [self createHomeDashboard];
+    dashMap[@"demo-monitoring"] = [self createMonitoringDashboard];
+    dashMap[@"demo-media"]      = [self createMediaDashboard];
+
+    _dashboards = [dashMap copy];
+    NSLog(@"[HADemo] Created %lu demo dashboards", (unsigned long)_dashboards.count);
 }
 
-- (void)createProgrammaticDashboard {
-    // Create a simple demo dashboard programmatically
-    NSMutableArray *views = [NSMutableArray array];
+- (HALovelaceDashboard *)dashboardForPath:(NSString *)urlPath {
+    HALovelaceDashboard *dash = _dashboards[urlPath];
+    return dash ?: _dashboards[@"demo-home"];
+}
 
-    // View 1: Lighting & Controls
-    NSDictionary *view1 = @{
-        @"title": @"Lighting & Controls",
-        @"path": @"lighting",
-        @"type": @"sections",
-        @"max_columns": @3,
-        @"sections": @[
-            @{
-                @"title": @"Lights",
-                @"cards": @[
-                    @{@"type": @"tile", @"entity": @"light.kitchen"},
-                    @{@"type": @"tile", @"entity": @"light.living_room_accent"},
-                    @{@"type": @"tile", @"entity": @"light.bedroom"},
-                    @{@"type": @"tile", @"entity": @"light.hallway"}
-                ]
-            },
-            @{
-                @"title": @"Switches",
-                @"cards": @[
-                    @{@"type": @"tile", @"entity": @"switch.in_meeting"},
-                    @{@"type": @"tile", @"entity": @"switch.driveway"},
-                    @{@"type": @"tile", @"entity": @"switch.decorative_lights"}
-                ]
-            },
-            @{
-                @"title": @"Scenes",
-                @"cards": @[
-                    @{@"type": @"tile", @"entity": @"scene.movie_night"},
-                    @{@"type": @"tile", @"entity": @"scene.good_morning"}
-                ]
-            },
-            @{
-                @"title": @"Fans",
-                @"cards": @[
-                    @{@"type": @"tile", @"entity": @"fan.living_room"},
-                    @{@"type": @"tile", @"entity": @"fan.bedroom"}
-                ]
-            }
-        ]
-    };
-    [views addObject:view1];
+#pragma mark - Dashboard Builders
 
-    // View 2: Climate & Weather
-    NSDictionary *view2 = @{
-        @"title": @"Climate & Weather",
-        @"path": @"climate",
-        @"type": @"sections",
-        @"max_columns": @3,
-        @"sections": @[
-            @{
-                @"title": @"Thermostats",
-                @"cards": @[
-                    @{@"type": @"thermostat", @"entity": @"climate.living_room"},
-                    @{@"type": @"thermostat", @"entity": @"climate.office"},
-                    @{@"type": @"thermostat", @"entity": @"climate.bedroom"}
-                ]
-            },
-            @{
-                @"title": @"Humidifiers",
-                @"cards": @[
-                    @{@"type": @"tile", @"entity": @"humidifier.bedroom"}
-                ]
-            },
-            @{
-                @"title": @"Weather",
-                @"cards": @[
-                    @{@"type": @"weather-forecast", @"entity": @"weather.home", @"forecast_type": @"daily"},
-                    @{@"type": @"weather-forecast", @"entity": @"weather.office", @"forecast_type": @"daily"}
-                ]
-            }
-        ]
-    };
-    [views addObject:view2];
+- (HALovelaceDashboard *)createHomeDashboard {
+    NSArray *views = @[
+        // Lighting & Controls
+        @{
+            @"title": @"Lighting & Controls",
+            @"path": @"lighting",
+            @"type": @"sections",
+            @"max_columns": @3,
+            @"sections": @[
+                @{
+                    @"title": @"Lights",
+                    @"cards": @[
+                        @{@"type": @"tile", @"entity": @"light.kitchen"},
+                        @{@"type": @"tile", @"entity": @"light.living_room_accent"},
+                        @{@"type": @"tile", @"entity": @"light.bedroom"},
+                        @{@"type": @"tile", @"entity": @"light.hallway"}
+                    ]
+                },
+                @{
+                    @"title": @"Switches",
+                    @"cards": @[
+                        @{@"type": @"tile", @"entity": @"switch.in_meeting"},
+                        @{@"type": @"tile", @"entity": @"switch.driveway"},
+                        @{@"type": @"tile", @"entity": @"switch.decorative_lights"}
+                    ]
+                },
+                @{
+                    @"title": @"Scenes",
+                    @"cards": @[
+                        @{@"type": @"tile", @"entity": @"scene.movie_night"},
+                        @{@"type": @"tile", @"entity": @"scene.good_morning"}
+                    ]
+                },
+                @{
+                    @"title": @"Fans",
+                    @"cards": @[
+                        @{@"type": @"tile", @"entity": @"fan.living_room"},
+                        @{@"type": @"tile", @"entity": @"fan.bedroom"}
+                    ]
+                }
+            ]
+        },
+        // Climate & Weather
+        @{
+            @"title": @"Climate & Weather",
+            @"path": @"climate",
+            @"type": @"sections",
+            @"max_columns": @3,
+            @"sections": @[
+                @{
+                    @"title": @"Thermostats",
+                    @"cards": @[
+                        @{@"type": @"thermostat", @"entity": @"climate.living_room"},
+                        @{@"type": @"thermostat", @"entity": @"climate.office"},
+                        @{@"type": @"thermostat", @"entity": @"climate.bedroom"}
+                    ]
+                },
+                @{
+                    @"title": @"Humidifiers",
+                    @"cards": @[
+                        @{@"type": @"tile", @"entity": @"humidifier.bedroom"}
+                    ]
+                },
+                @{
+                    @"title": @"Weather",
+                    @"cards": @[
+                        @{@"type": @"weather-forecast", @"entity": @"weather.home", @"forecast_type": @"daily"},
+                        @{@"type": @"weather-forecast", @"entity": @"weather.office", @"forecast_type": @"daily"}
+                    ]
+                }
+            ]
+        },
+        // Security & Access
+        @{
+            @"title": @"Security & Access",
+            @"path": @"security",
+            @"type": @"sections",
+            @"max_columns": @3,
+            @"sections": @[
+                @{
+                    @"title": @"Locks",
+                    @"cards": @[
+                        @{@"type": @"tile", @"entity": @"lock.frontdoor"},
+                        @{@"type": @"tile", @"entity": @"lock.back_door"},
+                        @{@"type": @"tile", @"entity": @"lock.garage"}
+                    ]
+                },
+                @{
+                    @"title": @"Alarm",
+                    @"cards": @[
+                        @{@"type": @"alarm-panel", @"entity": @"alarm_control_panel.home_alarm"}
+                    ]
+                },
+                @{
+                    @"title": @"Covers",
+                    @"cards": @[
+                        @{@"type": @"tile", @"entity": @"cover.living_room_shutter"},
+                        @{@"type": @"tile", @"entity": @"cover.garage_door"},
+                        @{@"type": @"tile", @"entity": @"cover.office_blinds"}
+                    ]
+                }
+            ]
+        }
+    ];
 
-    // View 3: Sensors & Monitoring
-    NSDictionary *view3 = @{
-        @"title": @"Sensors & Monitoring",
-        @"path": @"sensors",
-        @"type": @"sections",
-        @"max_columns": @3,
-        @"sections": @[
-            @{
-                @"title": @"Environment",
-                @"cards": @[
-                    @{@"type": @"sensor", @"entity": @"sensor.living_room_temperature", @"graph": @"line", @"hours_to_show": @24},
-                    @{@"type": @"sensor", @"entity": @"sensor.living_room_humidity", @"graph": @"line", @"hours_to_show": @24},
-                    @{@"type": @"sensor", @"entity": @"sensor.power_consumption", @"graph": @"line", @"hours_to_show": @24}
-                ]
-            },
-            @{
-                @"title": @"Gauges",
-                @"cards": @[
-                    @{@"type": @"gauge", @"entity": @"sensor.living_room_humidity", @"min": @0, @"max": @100, @"name": @"Humidity"},
-                    @{@"type": @"gauge", @"entity": @"sensor.cpu_temperature", @"min": @0, @"max": @100, @"name": @"CPU Temp",
-                      @"severity": @{@"green": @40, @"yellow": @70, @"red": @90}}
-                ]
-            },
-            @{
-                @"title": @"Counters & Timers",
-                @"cards": @[
-                    @{@"type": @"tile", @"entity": @"counter.litterbox_visits"},
-                    @{@"type": @"tile", @"entity": @"timer.laundry"},
-                    @{@"type": @"tile", @"entity": @"timer.oven"}
-                ]
-            }
-        ]
-    };
-    [views addObject:view3];
+    NSDictionary *dict = @{@"title": @"Home", @"views": views};
+    return [[HALovelaceDashboard alloc] initWithDictionary:dict];
+}
 
-    // View 4: Security & Access
-    NSDictionary *view4 = @{
-        @"title": @"Security & Access",
-        @"path": @"security",
-        @"type": @"sections",
-        @"max_columns": @3,
-        @"sections": @[
-            @{
-                @"title": @"Locks",
-                @"cards": @[
-                    @{@"type": @"tile", @"entity": @"lock.frontdoor"},
-                    @{@"type": @"tile", @"entity": @"lock.back_door"},
-                    @{@"type": @"tile", @"entity": @"lock.garage"}
-                ]
-            },
-            @{
-                @"title": @"Alarm",
-                @"cards": @[
-                    @{@"type": @"alarm-panel", @"entity": @"alarm_control_panel.home_alarm"}
-                ]
-            },
-            @{
-                @"title": @"Covers",
-                @"cards": @[
-                    @{@"type": @"tile", @"entity": @"cover.living_room_shutter"},
-                    @{@"type": @"tile", @"entity": @"cover.garage_door"},
-                    @{@"type": @"tile", @"entity": @"cover.office_blinds"}
-                ]
-            }
-        ]
-    };
-    [views addObject:view4];
+- (HALovelaceDashboard *)createMonitoringDashboard {
+    NSArray *views = @[
+        // Sensors & Monitoring
+        @{
+            @"title": @"Sensors",
+            @"path": @"sensors",
+            @"type": @"sections",
+            @"max_columns": @3,
+            @"sections": @[
+                @{
+                    @"title": @"Environment",
+                    @"cards": @[
+                        @{@"type": @"sensor", @"entity": @"sensor.living_room_temperature", @"graph": @"line", @"hours_to_show": @24},
+                        @{@"type": @"sensor", @"entity": @"sensor.living_room_humidity", @"graph": @"line", @"hours_to_show": @24},
+                        @{@"type": @"sensor", @"entity": @"sensor.power_consumption", @"graph": @"line", @"hours_to_show": @24}
+                    ]
+                },
+                @{
+                    @"title": @"Gauges",
+                    @"cards": @[
+                        @{@"type": @"gauge", @"entity": @"sensor.living_room_humidity", @"min": @0, @"max": @100, @"name": @"Humidity"},
+                        @{@"type": @"gauge", @"entity": @"sensor.cpu_temperature", @"min": @0, @"max": @100, @"name": @"CPU Temp",
+                          @"severity": @{@"green": @40, @"yellow": @70, @"red": @90}}
+                    ]
+                },
+                @{
+                    @"title": @"Counters & Timers",
+                    @"cards": @[
+                        @{@"type": @"tile", @"entity": @"counter.litterbox_visits"},
+                        @{@"type": @"tile", @"entity": @"timer.laundry"},
+                        @{@"type": @"tile", @"entity": @"timer.oven"}
+                    ]
+                }
+            ]
+        },
+        // Inputs
+        @{
+            @"title": @"Inputs",
+            @"path": @"inputs",
+            @"type": @"sections",
+            @"max_columns": @3,
+            @"sections": @[
+                @{
+                    @"title": @"Selects",
+                    @"cards": @[
+                        @{@"type": @"tile", @"entity": @"input_select.media_source"},
+                        @{@"type": @"tile", @"entity": @"input_select.living_room_app"}
+                    ]
+                },
+                @{
+                    @"title": @"Numbers & Text",
+                    @"cards": @[
+                        @{@"type": @"tile", @"entity": @"input_number.target_temperature"},
+                        @{@"type": @"tile", @"entity": @"input_text.greeting"},
+                        @{@"type": @"tile", @"entity": @"input_datetime.morning_alarm"}
+                    ]
+                },
+                @{
+                    @"title": @"Booleans",
+                    @"cards": @[
+                        @{@"type": @"tile", @"entity": @"input_boolean.vacation_mode"}
+                    ]
+                }
+            ]
+        },
+        // All Entities
+        @{
+            @"title": @"All Entities",
+            @"path": @"entities",
+            @"type": @"sections",
+            @"max_columns": @3,
+            @"sections": @[
+                @{
+                    @"title": @"People",
+                    @"cards": @[
+                        @{@"type": @"tile", @"entity": @"person.james"},
+                        @{@"type": @"tile", @"entity": @"person.olivia"}
+                    ]
+                },
+                @{
+                    @"title": @"Binary Sensors",
+                    @"cards": @[
+                        @{@"type": @"tile", @"entity": @"binary_sensor.hallway_motion"},
+                        @{@"type": @"tile", @"entity": @"binary_sensor.front_door"},
+                        @{@"type": @"tile", @"entity": @"binary_sensor.kitchen_leak"}
+                    ]
+                },
+                @{
+                    @"title": @"Updates",
+                    @"cards": @[
+                        @{@"type": @"tile", @"entity": @"update.home_assistant_core"}
+                    ]
+                }
+            ]
+        }
+    ];
 
-    // View 5: Media & Entertainment
-    NSDictionary *view5 = @{
-        @"title": @"Media & Entertainment",
-        @"path": @"media",
-        @"type": @"sections",
-        @"max_columns": @3,
-        @"sections": @[
-            @{
-                @"title": @"Media Players",
-                @"cards": @[
-                    @{@"type": @"media-control", @"entity": @"media_player.living_room_speaker"},
-                    @{@"type": @"media-control", @"entity": @"media_player.bedroom_speaker"},
-                    @{@"type": @"media-control", @"entity": @"media_player.study_speaker"}
-                ]
-            }
-        ]
-    };
-    [views addObject:view5];
+    NSDictionary *dict = @{@"title": @"Monitoring", @"views": views};
+    return [[HALovelaceDashboard alloc] initWithDictionary:dict];
+}
 
-    // View 6: Vacuums
-    NSDictionary *view6 = @{
-        @"title": @"Vacuums",
-        @"path": @"vacuums",
-        @"type": @"sections",
-        @"max_columns": @3,
-        @"sections": @[
-            @{
-                @"title": @"Robot Vacuums",
-                @"cards": @[
-                    @{@"type": @"tile", @"entity": @"vacuum.roborock"},
-                    @{@"type": @"tile", @"entity": @"vacuum.saros_10"}
-                ]
-            }
-        ]
-    };
-    [views addObject:view6];
+- (HALovelaceDashboard *)createMediaDashboard {
+    NSArray *views = @[
+        // Media & Entertainment
+        @{
+            @"title": @"Media Players",
+            @"path": @"media",
+            @"type": @"sections",
+            @"max_columns": @3,
+            @"sections": @[
+                @{
+                    @"title": @"Media Players",
+                    @"cards": @[
+                        @{@"type": @"media-control", @"entity": @"media_player.living_room_speaker"},
+                        @{@"type": @"media-control", @"entity": @"media_player.bedroom_speaker"},
+                        @{@"type": @"media-control", @"entity": @"media_player.study_speaker"}
+                    ]
+                }
+            ]
+        },
+        // Vacuums
+        @{
+            @"title": @"Vacuums",
+            @"path": @"vacuums",
+            @"type": @"sections",
+            @"max_columns": @3,
+            @"sections": @[
+                @{
+                    @"title": @"Robot Vacuums",
+                    @"cards": @[
+                        @{@"type": @"tile", @"entity": @"vacuum.roborock"},
+                        @{@"type": @"tile", @"entity": @"vacuum.saros_10"}
+                    ]
+                }
+            ]
+        }
+    ];
 
-    // View 7: Inputs
-    NSDictionary *view7 = @{
-        @"title": @"Inputs",
-        @"path": @"inputs",
-        @"type": @"sections",
-        @"max_columns": @3,
-        @"sections": @[
-            @{
-                @"title": @"Selects",
-                @"cards": @[
-                    @{@"type": @"tile", @"entity": @"input_select.media_source"},
-                    @{@"type": @"tile", @"entity": @"input_select.living_room_app"}
-                ]
-            },
-            @{
-                @"title": @"Numbers & Text",
-                @"cards": @[
-                    @{@"type": @"tile", @"entity": @"input_number.target_temperature"},
-                    @{@"type": @"tile", @"entity": @"input_text.greeting"},
-                    @{@"type": @"tile", @"entity": @"input_datetime.morning_alarm"}
-                ]
-            },
-            @{
-                @"title": @"Booleans",
-                @"cards": @[
-                    @{@"type": @"tile", @"entity": @"input_boolean.vacation_mode"}
-                ]
-            }
-        ]
-    };
-    [views addObject:view7];
-
-    // View 8: All Entities
-    NSDictionary *view8 = @{
-        @"title": @"All Entities",
-        @"path": @"entities",
-        @"type": @"sections",
-        @"max_columns": @3,
-        @"sections": @[
-            @{
-                @"title": @"People",
-                @"cards": @[
-                    @{@"type": @"tile", @"entity": @"person.james"},
-                    @{@"type": @"tile", @"entity": @"person.olivia"}
-                ]
-            },
-            @{
-                @"title": @"Binary Sensors",
-                @"cards": @[
-                    @{@"type": @"tile", @"entity": @"binary_sensor.hallway_motion"},
-                    @{@"type": @"tile", @"entity": @"binary_sensor.front_door"},
-                    @{@"type": @"tile", @"entity": @"binary_sensor.kitchen_leak"}
-                ]
-            },
-            @{
-                @"title": @"Updates",
-                @"cards": @[
-                    @{@"type": @"tile", @"entity": @"update.home_assistant_core"}
-                ]
-            }
-        ]
-    };
-    [views addObject:view8];
-
-    // Build the full dashboard dictionary
-    NSDictionary *dashboardDict = @{
-        @"title": @"Demo Dashboard",
-        @"views": views
-    };
-
-    _demoDashboard = [[HALovelaceDashboard alloc] initWithDictionary:dashboardDict];
-    NSLog(@"[HADemo] Created programmatic demo dashboard with %lu views", (unsigned long)views.count);
+    NSDictionary *dict = @{@"title": @"Media", @"views": views};
+    return [[HALovelaceDashboard alloc] initWithDictionary:dict];
 }
 
 #pragma mark - Entity Access

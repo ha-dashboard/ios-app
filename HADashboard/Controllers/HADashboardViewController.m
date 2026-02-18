@@ -899,9 +899,15 @@ static const CGFloat kRowUnitHeight = 56.0;
     HALovelaceView *view = [self.lovelaceDashboard viewAtIndex:self.selectedViewIndex];
     if (!view) return;
 
-    // Update title button with dashboard/view name
-    NSString *viewTitle = view.title ?: self.lovelaceDashboard.title ?: @"Dashboard";
-    [self updateTitleButtonText:viewTitle];
+    // Update title button: show dashboard name when multiple dashboards are available
+    // (view name is already shown in the segmented control), otherwise show view title
+    if (self.availableDashboards.count > 1) {
+        NSString *dashName = self.lovelaceDashboard.title ?: @"Dashboard";
+        [self updateTitleButtonText:dashName];
+    } else {
+        NSString *viewTitle = view.title ?: self.lovelaceDashboard.title ?: @"Dashboard";
+        [self updateTitleButtonText:viewTitle];
+    }
 
     // Route layout based on viewType
     BOOL isSections = [view.viewType isEqualToString:@"sections"];

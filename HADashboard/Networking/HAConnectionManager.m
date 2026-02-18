@@ -110,8 +110,13 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
         [self.entityStore addEntriesFromDictionary:demo.allEntities];
     }
 
-    // Set demo dashboard
-    self.lovelaceDashboard = demo.demoDashboard;
+    // Set demo dashboard — respect previously selected path if available
+    NSString *selectedPath = [[HAAuthManager sharedManager] selectedDashboardPath];
+    if (selectedPath) {
+        self.lovelaceDashboard = [demo dashboardForPath:selectedPath];
+    } else {
+        self.lovelaceDashboard = demo.demoDashboard;
+    }
     self.availableDashboards = demo.availableDashboards;
 
     // Mark as connected (for UI purposes)
@@ -238,6 +243,20 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 }
 
 - (void)fetchLovelaceConfig:(NSString *)urlPath {
+    // Demo mode: look up dashboard from demo provider and deliver via standard pipeline
+    if ([[HAAuthManager sharedManager] isDemoMode]) {
+        HALovelaceDashboard *dash = [[HADemoDataProvider sharedProvider] dashboardForPath:urlPath];
+        if (dash) {
+            self.lovelaceDashboard = dash;
+            [self.delegate connectionManager:self didReceiveLovelaceDashboard:dash];
+            [[NSNotificationCenter defaultCenter]
+                postNotificationName:HAConnectionManagerDidReceiveLovelaceNotification
+                              object:self
+                            userInfo:@{@"dashboard": dash}];
+        }
+        return;
+    }
+
     if (self.wsClient.isAuthenticated) {
         self.lovelaceMessageId = [self.wsClient fetchLovelaceConfigForDashboard:urlPath];
     } else {
