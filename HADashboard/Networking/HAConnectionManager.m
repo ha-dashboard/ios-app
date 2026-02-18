@@ -331,6 +331,25 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
         id mode = data[@"hvac_mode"];
         if ([mode isKindOfClass:[NSString class]]) {
             optimisticState = mode;
+            // Also update hvac_action to match the new mode for UI consistency
+            // In real HA, hvac_action reflects actual HVAC activity and may differ
+            // from mode (e.g., mode=heat but action=idle when target reached).
+            // For optimistic UI, assume the unit is actively working in new mode.
+            NSString *action;
+            if ([mode isEqualToString:@"heat"]) {
+                action = @"heating";
+            } else if ([mode isEqualToString:@"cool"]) {
+                action = @"cooling";
+            } else if ([mode isEqualToString:@"dry"]) {
+                action = @"drying";
+            } else if ([mode isEqualToString:@"fan_only"]) {
+                action = @"fan";
+            } else if ([mode isEqualToString:@"off"]) {
+                action = @"off";
+            } else {
+                action = @"idle"; // auto, heat_cool, or unknown
+            }
+            attrOverrides = @{@"hvac_action": action};
         }
     }
     // --- Cover ---
@@ -387,11 +406,6 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 
     @synchronized(self.entityStore) {
         [entity applyOptimisticState:optimisticState attributeOverrides:attrOverrides];
-    }
-
-    // Debug: verify state was applied for climate entities
-    if ([domain isEqualToString:HAEntityDomainClimate] && optimisticState) {
-        NSLog(@"[HAConnection] Climate after optimistic: state=%@, hvacMode=%@", entity.state, [entity hvacMode]);
     }
 
     // Dispatch the standard entity update notification — existing reload pipeline handles the rest
