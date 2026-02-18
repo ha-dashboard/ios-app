@@ -129,6 +129,7 @@ for src in "${SOURCES[@]}"; do
         -fmodules \
         -Os \
         -DNDEBUG \
+        -g \
         -w \
         "${INCLUDE_FLAGS[@]}" \
         -c "$PROJECT_DIR/$src" \
@@ -186,6 +187,15 @@ if ! file "$ARMV7_THIN" | grep -q "arm_v7"; then
     file "$ARMV7_THIN"
     exit 1
 fi
+# Generate dSYM for armv7 slice (rename DWARF to match the final executable name)
+DSYMUTIL="$XCODE26_DEV/Toolchains/XcodeDefault.xctoolchain/usr/bin/dsymutil"
+"$DSYMUTIL" "$ARMV7_THIN" -o "$BUILD_DIR/armv7.dSYM" 2>/dev/null
+# dsymutil names the DWARF file after the input ("armv7-thin"); rename to match the app
+ARMV7_DWARF_DIR="$BUILD_DIR/armv7.dSYM/Contents/Resources/DWARF"
+if [ -f "$ARMV7_DWARF_DIR/armv7-thin" ]; then
+    mv "$ARMV7_DWARF_DIR/armv7-thin" "$ARMV7_DWARF_DIR/$EXEC"
+fi
+
 echo "  ✓ armv7 slice: $(du -h "$ARMV7_THIN" | cut -f1) (sdk=$SDK_VER)"
 
 # ── Step 2: Build arm64 slice with Xcode 26 ──────────────────────────
@@ -261,6 +271,26 @@ if [[ "$ARCHS" != *"armv7"* ]] || [[ "$ARCHS" != *"arm64"* ]]; then
     exit 1
 fi
 echo "  ✓ Universal binary: $ARCHS ($(du -h "$MERGED_APP/$EXEC" | cut -f1))"
+
+# Merge dSYMs: combine armv7 and arm64 DWARF files into a universal dSYM
+DSYM_DIR="$BUILD_DIR/dSYMs"
+DSYM="$DSYM_DIR/$EXEC.app.dSYM"
+mkdir -p "$DSYM/Contents/Resources/DWARF"
+cp "$BUILD_DIR/armv7.dSYM/Contents/Info.plist" "$DSYM/Contents/Info.plist" 2>/dev/null || true
+
+ARM64_DSYM=$(find "$BUILD_DIR/dd-arm64" -name "$EXEC.app.dSYM" -type d 2>/dev/null | head -1)
+if [[ -n "$ARM64_DSYM" && -f "$BUILD_DIR/armv7.dSYM/Contents/Resources/DWARF/$EXEC" ]]; then
+    lipo -create \
+        "$BUILD_DIR/armv7.dSYM/Contents/Resources/DWARF/$EXEC" \
+        "$ARM64_DSYM/Contents/Resources/DWARF/$EXEC" \
+        -output "$DSYM/Contents/Resources/DWARF/$EXEC" 2>/dev/null
+    echo "  ✓ dSYMs merged ($(dwarfdump --uuid "$DSYM/Contents/Resources/DWARF/$EXEC" 2>/dev/null | wc -l | tr -d ' ') UUIDs)"
+elif [[ -f "$BUILD_DIR/armv7.dSYM/Contents/Resources/DWARF/$EXEC" ]]; then
+    cp "$BUILD_DIR/armv7.dSYM/Contents/Resources/DWARF/$EXEC" "$DSYM/Contents/Resources/DWARF/$EXEC"
+    echo "  ⚠ armv7 dSYM only (arm64 dSYM not found)"
+else
+    echo "  ⚠ No dSYMs generated"
+fi
 
 # ── Step 4: Reconcile Info.plist ──────────────────────────────────────
 echo "━━ [4/5] Reconciling Info.plist..."
@@ -386,13 +416,14 @@ IPA_NAME="HADashboard-${VERSION}-universal-armv7-arm64.ipa"
 IPA="$BUILD_DIR/$IPA_NAME"
 
 # ── Cleanup intermediates (keep .app + .ipa) ─────────────────────────
-rm -rf "$BUILD_DIR/armv7-obj" "$BUILD_DIR/dd-arm64" "$BUILD_DIR/ipa-staging" "$ARMV7_THIN"
+rm -rf "$BUILD_DIR/armv7-obj" "$BUILD_DIR/armv7.dSYM" "$BUILD_DIR/dd-arm64" "$BUILD_DIR/ipa-staging" "$ARMV7_THIN"
 
 # ── Results ───────────────────────────────────────────────────────────
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  IPA:    $IPA"
 echo "  App:    $MERGED_APP"
+echo "  dSYMs:  $DSYM_DIR"
 echo "  Size:   $(du -h "$IPA" | cut -f1)"
 echo "  Archs:  $ARCHS"
 echo "  Signed: $SIGN"
