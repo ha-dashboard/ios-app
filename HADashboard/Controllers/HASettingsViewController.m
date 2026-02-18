@@ -18,6 +18,7 @@
 
 // Login mode
 @property (nonatomic, strong) UIView *loginContainer;
+@property (nonatomic, strong) UIStackView *authFieldsStack; // Holds token/login containers
 @property (nonatomic, strong) UITextField *usernameField;
 @property (nonatomic, strong) UITextField *passwordField;
 
@@ -37,7 +38,7 @@
 @property (nonatomic, strong) UILabel *displaySectionHeader;
 
 // Theme
-@property (nonatomic, strong) UIView *themeSection;
+@property (nonatomic, strong) UIStackView *themeStack; // Holds theme mode segment + gradient options
 @property (nonatomic, strong) UISegmentedControl *themeModeSegment;
 @property (nonatomic, strong) UIView *gradientOptionsContainer;
 @property (nonatomic, strong) UISegmentedControl *gradientPresetSegment;
@@ -162,10 +163,17 @@
     self.authModeSegment.translatesAutoresizingMaskIntoConstraints = NO;
     [container addSubview:self.authModeSegment];
 
+    // ── Auth fields stack (holds token/login containers, collapses hidden views) ──
+    self.authFieldsStack = [[UIStackView alloc] init];
+    self.authFieldsStack.axis = UILayoutConstraintAxisVertical;
+    self.authFieldsStack.spacing = 0;
+    self.authFieldsStack.translatesAutoresizingMaskIntoConstraints = NO;
+    [container addSubview:self.authFieldsStack];
+
     // ── Token mode container ───────────────────────────────────────────
     self.tokenContainer = [[UIView alloc] init];
     self.tokenContainer.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:self.tokenContainer];
+    [self.authFieldsStack addArrangedSubview:self.tokenContainer];
 
     UILabel *tokenLabel = [[UILabel alloc] init];
     tokenLabel.text = @"Long-Lived Access Token";
@@ -200,7 +208,7 @@
     self.loginContainer = [[UIView alloc] init];
     self.loginContainer.translatesAutoresizingMaskIntoConstraints = NO;
     self.loginContainer.hidden = YES;
-    [container addSubview:self.loginContainer];
+    [self.authFieldsStack addArrangedSubview:self.loginContainer];
 
     UILabel *userLabel = [[UILabel alloc] init];
     userLabel.text = @"Username";
@@ -280,22 +288,24 @@
     self.appearanceSectionHeader = [self createSectionHeaderWithText:@"APPEARANCE"];
     [container addSubview:self.appearanceSectionHeader];
 
-    // ── Theme section ────────────────────────────────────────────────
-    self.themeSection = [[UIView alloc] init];
-    self.themeSection.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:self.themeSection];
+    // ── Theme section (stack view for proper collapse of gradient options) ──
+    self.themeStack = [[UIStackView alloc] init];
+    self.themeStack.axis = UILayoutConstraintAxisVertical;
+    self.themeStack.spacing = 8;
+    self.themeStack.translatesAutoresizingMaskIntoConstraints = NO;
+    [container addSubview:self.themeStack];
 
     self.themeModeSegment = [[UISegmentedControl alloc] initWithItems:@[@"Auto", @"Gradient", @"Dark", @"Light"]];
     self.themeModeSegment.selectedSegmentIndex = (NSInteger)[HATheme currentMode];
     [self.themeModeSegment addTarget:self action:@selector(themeModeChanged:) forControlEvents:UIControlEventValueChanged];
     self.themeModeSegment.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.themeSection addSubview:self.themeModeSegment];
+    [self.themeStack addArrangedSubview:self.themeModeSegment];
 
     // Gradient options (shown when Gradient selected)
     self.gradientOptionsContainer = [[UIView alloc] init];
     self.gradientOptionsContainer.translatesAutoresizingMaskIntoConstraints = NO;
     self.gradientOptionsContainer.hidden = ([HATheme currentMode] != HAThemeModeGradient);
-    [self.themeSection addSubview:self.gradientOptionsContainer];
+    [self.themeStack addArrangedSubview:self.gradientOptionsContainer];
 
     UILabel *presetLabel = [[UILabel alloc] init];
     presetLabel.text = @"Gradient Preset";
@@ -388,16 +398,8 @@
         [self.gradientPreview.bottomAnchor constraintEqualToAnchor:self.gradientOptionsContainer.bottomAnchor],
     ]];
 
-    // Theme section vertical layout
-    NSDictionary *tViews = @{@"seg": self.themeModeSegment, @"opts": self.gradientOptionsContainer};
-    [self.themeSection addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[seg]-8-[opts]|" options:0 metrics:nil views:tViews]];
-    for (UIView *v in @[self.themeModeSegment, self.gradientOptionsContainer]) {
-        [self.themeSection addConstraint:[NSLayoutConstraint constraintWithItem:v attribute:NSLayoutAttributeLeading
-            relatedBy:NSLayoutRelationEqual toItem:self.themeSection attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
-        [self.themeSection addConstraint:[NSLayoutConstraint constraintWithItem:v attribute:NSLayoutAttributeTrailing
-            relatedBy:NSLayoutRelationEqual toItem:self.themeSection attribute:NSLayoutAttributeTrailing multiplier:1 constant:0]];
-    }
+    // Theme section uses UIStackView - no additional VFL constraints needed
+    // The stack automatically handles showing/hiding gradient options
 
     // ── DISPLAY section header ─────────────────────────────────────────
     self.displaySectionHeader = [self createSectionHeaderWithText:@"DISPLAY"];
@@ -498,25 +500,24 @@
         @"urlLabel": urlLabel,
         @"urlField": self.serverURLField,
         @"authSeg": self.authModeSegment,
-        @"tokenC": self.tokenContainer,
-        @"loginC": self.loginContainer,
+        @"authStack": self.authFieldsStack,
         @"button": self.connectButton,
         @"status": self.statusLabel,
         @"spinner": self.spinner,
         @"appHdr": self.appearanceSectionHeader,
-        @"themeSection": self.themeSection,
+        @"themeStack": self.themeStack,
         @"dispHdr": self.displaySectionHeader,
         @"kioskSection": self.kioskSection,
         @"demoSection": self.demoSection,
         @"help": self.helpLabel,
     };
-    NSDictionary *metrics = @{@"p": @(padding), @"fh": @(fieldHeight), @"sh": @24};
+    NSDictionary *metrics = @{@"p": @8, @"fh": @(fieldHeight), @"sh": @12};
 
     [container addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[connHdr]-12-[disc]-p-[urlLabel]-4-[urlField(fh)]-p-[authSeg]-p-[tokenC][loginC]-p-[button(fh)]-p-[status]-8-[spinner]-sh-[appHdr]-12-[themeSection]-sh-[dispHdr]-12-[kioskSection]-p-[demoSection]-p-[help]|"
+        @"V:|[connHdr]-4-[disc]-p-[urlLabel]-4-[urlField(fh)]-p-[authSeg]-p-[authStack]-p-[button(fh)]-8-[status]-4-[spinner]-sh-[appHdr]-4-[themeStack]-sh-[dispHdr]-4-[kioskSection]-p-[demoSection]-p-[help]|"
         options:0 metrics:metrics views:views]];
 
-    for (NSString *name in @[@"connHdr", @"disc", @"urlLabel", @"urlField", @"authSeg", @"tokenC", @"loginC", @"button", @"status", @"appHdr", @"themeSection", @"dispHdr", @"kioskSection", @"demoSection", @"help"]) {
+    for (NSString *name in @[@"connHdr", @"disc", @"urlLabel", @"urlField", @"authSeg", @"authStack", @"button", @"status", @"appHdr", @"themeStack", @"dispHdr", @"kioskSection", @"demoSection", @"help"]) {
         UIView *v = views[name];
         [container addConstraint:[NSLayoutConstraint constraintWithItem:v attribute:NSLayoutAttributeLeading
             relatedBy:NSLayoutRelationEqual toItem:container attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
@@ -529,7 +530,7 @@
 
     // Vertical: pin to scroll view content edges (defines scrollable content size)
     [scrollView addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:scrollView attribute:NSLayoutAttributeTop multiplier:1 constant:40]];
+        relatedBy:NSLayoutRelationEqual toItem:scrollView attribute:NSLayoutAttributeTop multiplier:1 constant:16]];
     [scrollView addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeBottom
         relatedBy:NSLayoutRelationEqual toItem:scrollView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
 
