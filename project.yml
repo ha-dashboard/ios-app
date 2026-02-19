@@ -43,6 +43,8 @@ targets:
     info:
       path: HADashboard/Info.plist
       properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDisplayName: "HA Dashboard"
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
@@ -74,8 +76,8 @@ targets:
         CODE_SIGN_IDENTITY: "Apple Development"
         CODE_SIGN_STYLE: "Automatic"
         DEVELOPMENT_TEAM: ""
-        MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "0.0.0"
+        CURRENT_PROJECT_VERSION: "0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF: NO
         GCC_WARN_INHIBIT_ALL_WARNINGS: NO

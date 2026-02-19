@@ -25,6 +25,16 @@ fi
 BUNDLE_ID="${BUNDLE_ID:-com.hadashboard.app}"
 APPLE_TEAM_ID="${APPLE_TEAM_ID:-}"
 
+# ── Derive version from git tags ─────────────────────────────────────
+TAG=$(git -C "$PROJECT_DIR" describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo "")
+if [[ -n "$TAG" ]]; then
+    APP_VERSION="${TAG#v}"
+else
+    APP_VERSION="0.0.0-dev"
+fi
+BUILD_NUMBER=$(git -C "$PROJECT_DIR" rev-list --count HEAD)
+echo "Version: $APP_VERSION ($BUILD_NUMBER)" >&2
+
 # ── Parse args ────────────────────────────────────────────────────────
 TARGET="${1:-}"
 if [[ -z "$TARGET" ]]; then
@@ -59,6 +69,8 @@ build_simulator() {
         ONLY_ACTIVE_ARCH=NO \
         IPHONEOS_DEPLOYMENT_TARGET=15.0 \
         "PRODUCT_BUNDLE_IDENTIFIER=$BUNDLE_ID" \
+        "MARKETING_VERSION=$APP_VERSION" \
+        "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" \
         CODE_SIGNING_ALLOWED=NO \
         CODE_SIGN_IDENTITY="" \
         build 2>&1 | grep -E '(error:|BUILD)' | tail -5 >&2
@@ -191,6 +203,8 @@ build_device() {
         ONLY_ACTIVE_ARCH=NO \
         IPHONEOS_DEPLOYMENT_TARGET=15.0 \
         "PRODUCT_BUNDLE_IDENTIFIER=$BUNDLE_ID" \
+        "MARKETING_VERSION=$APP_VERSION" \
+        "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" \
         "${SIGNING_FLAGS[@]}" \
         build 2>&1 | grep -E '(error:|BUILD)' | tail -5 >&2
 

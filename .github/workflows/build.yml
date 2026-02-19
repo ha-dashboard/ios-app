@@ -385,8 +385,6 @@ jobs:
           plutil -replace MinimumOSVersion -string "9.0" "$PLIST"
           plutil -remove UIRequiredDeviceCapabilities "$PLIST" 2>/dev/null || true
           plutil -insert UIRequiredDeviceCapabilities -json '["armv7"]' "$PLIST"
-          plutil -replace CFBundleShortVersionString -string "$VERSION" "$PLIST"
-          plutil -replace CFBundleVersion -string "$BUILD_NUMBER" "$PLIST"
           plutil -remove UILaunchScreen "$PLIST" 2>/dev/null || true
           plutil -replace UILaunchStoryboardName -string "LaunchScreen" "$PLIST" 2>/dev/null || \
               plutil -insert UILaunchStoryboardName -string "LaunchScreen" "$PLIST"
