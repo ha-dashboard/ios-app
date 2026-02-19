@@ -96,7 +96,7 @@
 
     self.themeStack = [[UIStackView alloc] init];
     self.themeStack.axis = UILayoutConstraintAxisVertical;
-    self.themeStack.spacing = 8;
+    self.themeStack.spacing = 12;
     self.themeStack.translatesAutoresizingMaskIntoConstraints = NO;
     [container addSubview:self.themeStack];
 
@@ -190,7 +190,7 @@
     [NSLayoutConstraint activateConstraints:@[
         [presetLabel.topAnchor constraintEqualToAnchor:self.gradientOptionsContainer.topAnchor],
         [presetLabel.leadingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.leadingAnchor],
-        [self.gradientPresetSegment.topAnchor constraintEqualToAnchor:presetLabel.bottomAnchor constant:4],
+        [self.gradientPresetSegment.topAnchor constraintEqualToAnchor:presetLabel.bottomAnchor constant:8],
         [self.gradientPresetSegment.leadingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.leadingAnchor],
         [self.gradientPresetSegment.trailingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.trailingAnchor],
         [self.customHexContainer.topAnchor constraintEqualToAnchor:self.gradientPresetSegment.bottomAnchor constant:8],
@@ -256,10 +256,10 @@
         @"about":     self.aboutSection,
         @"logout":    self.logoutButton,
     };
-    NSDictionary *metrics = @{@"p": @8, @"sh": @16, @"fh": @44};
+    NSDictionary *metrics = @{@"p": @16, @"sh": @32, @"hg": @10, @"fh": @44};
 
     [container addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[connHdr]-4-[form]-sh-[appHdr]-4-[themeStack]-sh-[dispHdr]-4-[kiosk]-p-[demo]-sh-[aboutHdr]-4-[about]-sh-[logout(fh)]|"
+        @"V:|[connHdr]-hg-[form]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[demo]-sh-[aboutHdr]-hg-[about]-sh-[logout(fh)]|"
         options:0 metrics:metrics views:views]];
 
     for (NSString *name in views) {
@@ -272,7 +272,7 @@
 
     // ScrollView content constraints
     [scrollView addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:scrollView attribute:NSLayoutAttributeTop multiplier:1 constant:16]];
+        relatedBy:NSLayoutRelationEqual toItem:scrollView attribute:NSLayoutAttributeTop multiplier:1 constant:24]];
     [scrollView addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeBottom
         relatedBy:NSLayoutRelationEqual toItem:scrollView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
 
@@ -342,7 +342,7 @@
 - (UIView *)createAboutSection {
     UIStackView *stack = [[UIStackView alloc] init];
     stack.axis = UILayoutConstraintAxisVertical;
-    stack.spacing = 12;
+    stack.spacing = 16;
     stack.translatesAutoresizingMaskIntoConstraints = NO;
 
     // Version + build
