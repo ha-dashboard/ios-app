@@ -1,4 +1,5 @@
 #import "HAIconMapper.h"
+#import "HAStartupLog.h"
 #import <CoreText/CoreText.h>
 
 static NSString *_mdiFontName = nil;
@@ -9,36 +10,50 @@ static NSDictionary<NSString *, NSString *> *_domainIconMap = nil;
 
 + (void)initialize {
     if (self != [HAIconMapper class]) return;
+    [HAStartupLog log:@"HAIconMapper +initialize BEGIN"];
+    [HAStartupLog log:@"  loadFont BEGIN"];
     [self loadFont];
+    [HAStartupLog log:@"  loadFont END"];
+    [HAStartupLog log:@"  loadCodepoints BEGIN"];
     [self loadCodepoints];
+    [HAStartupLog log:@"  loadCodepoints END"];
+    [HAStartupLog log:@"  buildDomainMap BEGIN"];
     [self buildDomainMap];
+    [HAStartupLog log:@"  buildDomainMap END"];
+    [HAStartupLog log:@"HAIconMapper +initialize END"];
 }
 
 + (void)loadFont {
-    NSString *fontPath = [[NSBundle mainBundle] pathForResource:@"materialdesignicons-webfont" ofType:@"ttf"];
-    if (!fontPath) {
-        NSLog(@"[HAIconMapper] MDI font file not found in bundle");
+    // The font file is declared in Info.plist UIAppFonts, so iOS registers it
+    // automatically at launch. We must NOT use CGFontCreateWithDataProvider or
+    // CTFontManagerRegisterGraphicsFont here — both make IPC calls to the font
+    // daemon that block the main thread indefinitely on jailbroken iOS 9,
+    // causing a watchdog kill (0x8badf00d).
+    //
+    // Instead, look up the PostScript name from the already-registered font
+    // by scanning the font family list. This is pure in-process work.
+    [HAStartupLog log:@"    loadFont: scanning registered font families"];
+    for (NSString *family in [UIFont familyNames]) {
+        for (NSString *name in [UIFont fontNamesForFamilyName:family]) {
+            // MDI font PostScript name contains "materialdesignicons"
+            if ([name.lowercaseString containsString:@"materialdesignicons"]) {
+                _mdiFontName = name;
+                [HAStartupLog log:[NSString stringWithFormat:@"    loadFont: found name=%@", _mdiFontName]];
+                return;
+            }
+        }
+    }
+
+    // Fallback: if UIAppFonts didn't register the font (shouldn't happen),
+    // try the known PostScript name directly
+    if ([UIFont fontWithName:@"materialdesignicons-webfont" size:12]) {
+        _mdiFontName = @"materialdesignicons-webfont";
+        [HAStartupLog log:@"    loadFont: using fallback name"];
         return;
     }
 
-    NSData *fontData = [NSData dataWithContentsOfFile:fontPath];
-    if (!fontData) return;
-
-    CGDataProviderRef provider = CGDataProviderCreateWithCFData((__bridge CFDataRef)fontData);
-    CGFontRef cgFont = CGFontCreateWithDataProvider(provider);
-    CGDataProviderRelease(provider);
-    if (!cgFont) return;
-
-    CFErrorRef error = NULL;
-    if (!CTFontManagerRegisterGraphicsFont(cgFont, &error)) {
-        if (error) CFRelease(error);
-    }
-
-    CFStringRef psName = CGFontCopyPostScriptName(cgFont);
-    if (psName) {
-        _mdiFontName = (__bridge_transfer NSString *)psName;
-    }
-    CGFontRelease(cgFont);
+    [HAStartupLog log:@"    loadFont: MDI font NOT FOUND in registered fonts"];
+    NSLog(@"[HAIconMapper] MDI font not found — is it listed in UIAppFonts?");
 }
 
 + (void)loadCodepoints {

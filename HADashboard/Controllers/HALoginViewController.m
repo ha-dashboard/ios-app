@@ -5,6 +5,7 @@
 #import "HAAuthManager.h"
 #import "HAConnectionManager.h"
 #import "HATheme.h"
+#import "HAStartupLog.h"
 
 @interface HALoginViewController () <HAConnectionFormDelegate>
 @property (nonatomic, strong) HAConnectionFormView *connectionForm;
@@ -16,20 +17,32 @@
 @implementation HALoginViewController
 
 - (void)viewDidLoad {
+    [HAStartupLog log:@"HALoginVC viewDidLoad BEGIN"];
     [super viewDidLoad];
     self.title = @"HA Dashboard";
     self.view.backgroundColor = [HATheme backgroundColor];
     self.navigationController.navigationBarHidden = YES;
 
+    [HAStartupLog log:@"HALoginVC setupUI BEGIN"];
     [self setupUI];
+    [HAStartupLog log:@"HALoginVC setupUI END"];
+    [HAStartupLog log:@"HALoginVC viewDidLoad END"];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
+    [HAStartupLog log:@"HALoginVC viewWillAppear BEGIN"];
     [super viewWillAppear:animated];
     self.navigationController.navigationBarHidden = YES;
+    [HAStartupLog log:@"  loadExistingCredentials BEGIN"];
     [self.connectionForm loadExistingCredentials];
+    [HAStartupLog log:@"  loadExistingCredentials END"];
+    [HAStartupLog log:@"  startDiscovery BEGIN"];
     [self.connectionForm startDiscovery];
+    [HAStartupLog log:@"  startDiscovery END"];
+    [HAStartupLog log:@"  constellation startAnimating BEGIN"];
     [self.constellationView startAnimating];
+    [HAStartupLog log:@"  constellation startAnimating END"];
+    [HAStartupLog log:@"HALoginVC viewWillAppear END"];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -55,21 +68,72 @@
     self.constellationView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [self.view addSubview:self.constellationView];
 
-    // ── Scroll view (uses same iOS 9-safe VFL pattern as HASettingsViewController) ──
+    // ── Scroll view ────────────────────────────────────────────────────
     UIScrollView *scrollView = [[UIScrollView alloc] init];
     scrollView.translatesAutoresizingMaskIntoConstraints = NO;
     scrollView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
     [self.view addSubview:scrollView];
-    [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[sv]|"
-        options:0 metrics:nil views:@{@"sv": scrollView}]];
-    [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[sv]|"
-        options:0 metrics:nil views:@{@"sv": scrollView}]];
+    [NSLayoutConstraint activateConstraints:@[
+        [scrollView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [scrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        [scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+    ]];
 
-    UIView *container = [[UIView alloc] init];
-    container.translatesAutoresizingMaskIntoConstraints = NO;
-    [scrollView addSubview:container];
+    // ── Outer wrapper (scroll content, at least screen-height for centering) ──
+    UIView *wrapper = [[UIView alloc] init];
+    wrapper.translatesAutoresizingMaskIntoConstraints = NO;
+    [scrollView addSubview:wrapper];
+    // contentLayoutGuide/frameLayoutGuide are iOS 11+. On iOS 9-10, pin the
+    // wrapper directly to the scroll view (which acts as the content guide)
+    // and use an equal-width constraint to the scroll view itself.
+    if (@available(iOS 11.0, *)) {
+        [NSLayoutConstraint activateConstraints:@[
+            [wrapper.topAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.topAnchor],
+            [wrapper.bottomAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.bottomAnchor],
+            [wrapper.leadingAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.leadingAnchor],
+            [wrapper.trailingAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.trailingAnchor],
+            [wrapper.widthAnchor constraintEqualToAnchor:scrollView.frameLayoutGuide.widthAnchor],
+        ]];
+        [wrapper.heightAnchor constraintGreaterThanOrEqualToAnchor:scrollView.frameLayoutGuide.heightAnchor].active = YES;
+    } else {
+        [NSLayoutConstraint activateConstraints:@[
+            [wrapper.topAnchor constraintEqualToAnchor:scrollView.topAnchor],
+            [wrapper.bottomAnchor constraintEqualToAnchor:scrollView.bottomAnchor],
+            [wrapper.leadingAnchor constraintEqualToAnchor:scrollView.leadingAnchor],
+            [wrapper.trailingAnchor constraintEqualToAnchor:scrollView.trailingAnchor],
+            [wrapper.widthAnchor constraintEqualToAnchor:scrollView.widthAnchor],
+        ]];
+        [wrapper.heightAnchor constraintGreaterThanOrEqualToAnchor:scrollView.heightAnchor].active = YES;
+    }
 
-    // ── App icon (loaded from bundle icon files) ──────────────────────
+    // ── Column (centered content holder) ───────────────────────────────
+    UIView *column = [[UIView alloc] init];
+    column.translatesAutoresizingMaskIntoConstraints = NO;
+    [wrapper addSubview:column];
+
+    // Center column horizontally with max width
+    [NSLayoutConstraint activateConstraints:@[
+        [column.centerXAnchor constraintEqualToAnchor:wrapper.centerXAnchor],
+        [column.widthAnchor constraintLessThanOrEqualToConstant:maxWidth],
+        [column.leadingAnchor constraintGreaterThanOrEqualToAnchor:wrapper.leadingAnchor constant:padding],
+        [column.trailingAnchor constraintLessThanOrEqualToAnchor:wrapper.trailingAnchor constant:-padding],
+    ]];
+    NSLayoutConstraint *preferWidth = [column.widthAnchor constraintEqualToConstant:maxWidth];
+    preferWidth.priority = UILayoutPriorityDefaultHigh;
+    preferWidth.active = YES;
+
+    // Center column vertically (low priority so it yields when content > screen)
+    NSLayoutConstraint *centerY = [column.centerYAnchor constraintEqualToAnchor:wrapper.centerYAnchor];
+    centerY.priority = UILayoutPriorityDefaultLow;
+    centerY.active = YES;
+    // Hard constraints: don't let it escape the wrapper
+    [NSLayoutConstraint activateConstraints:@[
+        [column.topAnchor constraintGreaterThanOrEqualToAnchor:wrapper.topAnchor constant:40],
+        [column.bottomAnchor constraintLessThanOrEqualToAnchor:wrapper.bottomAnchor constant:-20],
+    ]];
+
+    // ── App icon ───────────────────────────────────────────────────────
     UIImageView *iconView = [[UIImageView alloc] init];
     iconView.translatesAutoresizingMaskIntoConstraints = NO;
     iconView.contentMode = UIViewContentModeScaleAspectFit;
@@ -80,9 +144,9 @@
     }
     iconView.layer.cornerRadius = 20;
     iconView.layer.masksToBounds = YES;
-    [container addSubview:iconView];
+    [column addSubview:iconView];
 
-    // ── Card container ─────────────────────────────────────────────────
+    // ── Card ───────────────────────────────────────────────────────────
     self.cardView = [[UIView alloc] init];
     self.cardView.translatesAutoresizingMaskIntoConstraints = NO;
     self.cardView.backgroundColor = [HATheme cellBackgroundColor];
@@ -91,9 +155,9 @@
     self.cardView.layer.shadowOpacity = [HATheme effectiveDarkMode] ? 0.4f : 0.12f;
     self.cardView.layer.shadowRadius = 20;
     self.cardView.layer.shadowOffset = CGSizeMake(0, 4);
-    [container addSubview:self.cardView];
+    [column addSubview:self.cardView];
 
-    // ── "Connect to server" header inside card ─────────────────────────
+    // Card title
     UILabel *cardTitle = [[UILabel alloc] init];
     cardTitle.text = @"Connect to your server";
     cardTitle.font = [UIFont systemFontOfSize:20 weight:UIFontWeightSemibold];
@@ -102,7 +166,7 @@
     cardTitle.translatesAutoresizingMaskIntoConstraints = NO;
     [self.cardView addSubview:cardTitle];
 
-    // ── Connection form ────────────────────────────────────────────────
+    // Connection form
     self.connectionForm = [[HAConnectionFormView alloc] initWithFrame:CGRectZero];
     self.connectionForm.delegate = self;
     self.connectionForm.translatesAutoresizingMaskIntoConstraints = NO;
@@ -113,16 +177,16 @@
         [cardTitle.topAnchor constraintEqualToAnchor:self.cardView.topAnchor constant:cardPadding],
         [cardTitle.leadingAnchor constraintEqualToAnchor:self.cardView.leadingAnchor constant:cardPadding],
         [cardTitle.trailingAnchor constraintEqualToAnchor:self.cardView.trailingAnchor constant:-cardPadding],
-        [self.connectionForm.topAnchor constraintEqualToAnchor:cardTitle.bottomAnchor constant:20],
+        [self.connectionForm.topAnchor constraintEqualToAnchor:cardTitle.bottomAnchor constant:24],
         [self.connectionForm.leadingAnchor constraintEqualToAnchor:self.cardView.leadingAnchor constant:cardPadding],
         [self.connectionForm.trailingAnchor constraintEqualToAnchor:self.cardView.trailingAnchor constant:-cardPadding],
         [self.connectionForm.bottomAnchor constraintEqualToAnchor:self.cardView.bottomAnchor constant:-cardPadding],
     ]];
 
-    // ── Demo mode section (below card) ─────────────────────────────────
+    // ── Demo mode (below card) ─────────────────────────────────────────
     UIView *demoRow = [[UIView alloc] init];
     demoRow.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:demoRow];
+    [column addSubview:demoRow];
 
     UILabel *demoLabel = [[UILabel alloc] init];
     demoLabel.text = @"Try Demo Mode";
@@ -145,48 +209,20 @@
         [self.demoSwitch.centerYAnchor constraintEqualToAnchor:demoLabel.centerYAnchor],
     ]];
 
-    // ── Icon constraints ───────────────────────────────────────────────
+    // ── Column vertical layout: icon → card → demo ─────────────────────
     [NSLayoutConstraint activateConstraints:@[
-        [iconView.topAnchor constraintEqualToAnchor:container.topAnchor constant:8],
-        [iconView.centerXAnchor constraintEqualToAnchor:container.centerXAnchor],
+        [iconView.topAnchor constraintEqualToAnchor:column.topAnchor],
+        [iconView.centerXAnchor constraintEqualToAnchor:column.centerXAnchor],
         [iconView.widthAnchor constraintEqualToConstant:88],
         [iconView.heightAnchor constraintEqualToConstant:88],
+        [self.cardView.topAnchor constraintEqualToAnchor:iconView.bottomAnchor constant:24],
+        [self.cardView.leadingAnchor constraintEqualToAnchor:column.leadingAnchor],
+        [self.cardView.trailingAnchor constraintEqualToAnchor:column.trailingAnchor],
+        [demoRow.topAnchor constraintEqualToAnchor:self.cardView.bottomAnchor constant:24],
+        [demoRow.leadingAnchor constraintEqualToAnchor:column.leadingAnchor constant:4],
+        [demoRow.trailingAnchor constraintEqualToAnchor:column.trailingAnchor constant:-4],
+        [demoRow.bottomAnchor constraintEqualToAnchor:column.bottomAnchor],
     ]];
-
-    // ── Vertical chain: icon → card → demo → bottom (VFL) ─────────────
-    NSDictionary *views = @{
-        @"icon": iconView,
-        @"card": self.cardView,
-        @"demo": demoRow,
-    };
-    [container addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:[icon]-24-[card]-20-[demo]-20-|"
-        options:0 metrics:nil views:views]];
-
-    // Pin card + demo to container edges
-    for (NSString *name in @[@"card", @"demo"]) {
-        UIView *v = views[name];
-        [container addConstraint:[NSLayoutConstraint constraintWithItem:v attribute:NSLayoutAttributeLeading
-            relatedBy:NSLayoutRelationEqual toItem:container attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
-        [container addConstraint:[NSLayoutConstraint constraintWithItem:v attribute:NSLayoutAttributeTrailing
-            relatedBy:NSLayoutRelationEqual toItem:container attribute:NSLayoutAttributeTrailing multiplier:1 constant:0]];
-    }
-
-    // ── ScrollView content (proven iOS 9-safe pattern from settings VC) ──
-    [scrollView addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:scrollView attribute:NSLayoutAttributeTop multiplier:1 constant:40]];
-    [scrollView addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeBottom
-        relatedBy:NSLayoutRelationEqual toItem:scrollView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
-
-    // Horizontal: centered with max width (same as settings VC)
-    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationGreaterThanOrEqual toItem:self.view attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationLessThanOrEqual toItem:self.view attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeCenterX
-        relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeCenterX multiplier:1 constant:0]];
-    [container addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeWidth
-        relatedBy:NSLayoutRelationLessThanOrEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:maxWidth]];
 }
 
 #pragma mark - HAConnectionFormDelegate

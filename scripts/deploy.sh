@@ -358,10 +358,24 @@ PLISTEOF
             chmod 644 \$PREFS
             chown mobile:mobile \$PREFS
 
+            # Clear any previous startup log
+            rm -f /tmp/ha-launch.log
+
+            # Give SpringBoard time to finish processing uicache
+            sleep 2
+
             # Launch the app
             open $BUNDLE_ID
         "
 
+        # Wait for app to start (or crash) then fetch startup log
+        echo "   Waiting for startup log..."
+        sleep 8
+        echo ""
+        echo "── /tmp/ha-launch.log ──────────────────────────────────"
+        $IPAD_SSH "cat /tmp/ha-launch.log 2>/dev/null || echo '(no log file found)'"
+        echo "────────────────────────────────────────────────────────"
+        echo ""
         echo "✅ Deployed to iPad 2 (WiFi)"
         ;;
 

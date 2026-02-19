@@ -7,6 +7,7 @@
 #import "HATheme.h"
 #import "HAIconMapper.h"
 #import "HAPerfMonitor.h"
+#import "HAStartupLog.h"
 
 /// Nav controller that defers status bar appearance to the visible child VC.
 /// Required because UINavigationController controls the status bar by default,
@@ -29,20 +30,40 @@
 @implementation HAAppDelegate
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    [HAStartupLog log:@"didFinishLaunching START"];
+
     // Preload fonts before any UI is created — shifts ~350ms of first-cell
     // font loading cost out of the render path on iPad 2.
+    [HAStartupLog log:@"warmFonts BEGIN"];
     [HAIconMapper warmFonts];
+    [HAStartupLog log:@"warmFonts END"];
 
+    [HAStartupLog log:@"UIWindow alloc BEGIN"];
     self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
     self.window.backgroundColor = [UIColor whiteColor];
+    [HAStartupLog log:@"UIWindow alloc END"];
 
     // Bootstrap credentials from launch arguments (for simulator/testing):
     //   -HAServerURL http://... -HAAccessToken eyJ... -HADashboard office
+    //   -HAClearCredentials YES — wipe keychain + prefs (force login screen)
+    [HAStartupLog log:@"NSUserDefaults read BEGIN"];
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+
+    if ([defaults boolForKey:@"HAClearCredentials"]) {
+        [HAStartupLog log:@"HAClearCredentials=YES — wiping keychain"];
+        [[HAAuthManager sharedManager] clearCredentials];
+    }
+
     NSString *bootURL = [defaults stringForKey:@"HAServerURL"];
     NSString *bootToken = [defaults stringForKey:@"HAAccessToken"];
+    [HAStartupLog log:[NSString stringWithFormat:@"NSUserDefaults read END (url=%@, token=%@)",
+        bootURL.length > 0 ? @"YES" : @"NO",
+        bootToken.length > 0 ? @"YES" : @"NO"]];
+
     if (bootURL.length > 0 && bootToken.length > 0) {
+        [HAStartupLog log:@"saveServerURL BEGIN"];
         [[HAAuthManager sharedManager] saveServerURL:bootURL token:bootToken];
+        [HAStartupLog log:@"saveServerURL END"];
     }
     NSString *bootDashboard = [defaults stringForKey:@"HADashboard"];
     if (bootDashboard) {
@@ -62,19 +83,30 @@
         [[HAAuthManager sharedManager] setDemoMode:[defaults boolForKey:@"HADemoMode"]];
     }
 
+    [HAStartupLog log:@"isConfigured check BEGIN"];
+    BOOL configured = [[HAAuthManager sharedManager] isConfigured];
+    [HAStartupLog log:[NSString stringWithFormat:@"isConfigured=%@", configured ? @"YES" : @"NO"]];
+
     UIViewController *rootVC;
-    if ([[HAAuthManager sharedManager] isConfigured]) {
+    if (configured) {
+        [HAStartupLog log:@"Creating HADashboardViewController"];
         rootVC = [[HADashboardViewController alloc] init];
     } else {
+        [HAStartupLog log:@"Creating HALoginViewController"];
         rootVC = [[HALoginViewController alloc] init];
     }
+    [HAStartupLog log:@"Root VC created"];
 
+    [HAStartupLog log:@"NavController + setRoot BEGIN"];
     HAStatusBarNavigationController *navController = [[HAStatusBarNavigationController alloc] initWithRootViewController:rootVC];
     self.window.rootViewController = navController;
+    [HAStartupLog log:@"makeKeyAndVisible BEGIN"];
     [self.window makeKeyAndVisible];
+    [HAStartupLog log:@"makeKeyAndVisible END"];
 
     [[HAPerfMonitor sharedMonitor] start];
 
+    [HAStartupLog log:@"didFinishLaunching END"];
     return YES;
 }
 

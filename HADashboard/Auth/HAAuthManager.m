@@ -1,6 +1,7 @@
 #import "HAAuthManager.h"
 #import "HAKeychainHelper.h"
 #import "HAOAuthClient.h"
+#import "HAStartupLog.h"
 
 NSString *const HAAuthManagerDidUpdateNotification = @"HAAuthManagerDidUpdateNotification";
 
@@ -40,22 +41,30 @@ static NSString *const kDemoModeKey      = @"ha_demo_mode";
 - (instancetype)init {
     self = [super init];
     if (self) {
+        [HAStartupLog log:@"HAAuthManager init BEGIN — keychain reads"];
         _serverURL = [HAKeychainHelper stringForKey:kServerURLKey];
+        [HAStartupLog log:@"  keychain: serverURL done"];
         _accessToken = [HAKeychainHelper stringForKey:kAccessTokenKey];
+        [HAStartupLog log:@"  keychain: accessToken done"];
         _refreshToken = [HAKeychainHelper stringForKey:kRefreshTokenKey];
+        [HAStartupLog log:@"  keychain: refreshToken done"];
         _selectedDashboardPath = [[NSUserDefaults standardUserDefaults] stringForKey:kSelectedDashboardKey];
         _kioskMode = [[NSUserDefaults standardUserDefaults] boolForKey:kKioskModeKey];
         _demoMode = [[NSUserDefaults standardUserDefaults] boolForKey:kDemoModeKey];
 
         // Restore auth mode
         NSString *modeStr = [HAKeychainHelper stringForKey:kAuthModeKey];
+        [HAStartupLog log:@"  keychain: authMode done"];
         _authMode = [modeStr integerValue]; // 0 (token) if nil
 
         // Restore token expiry
         NSString *expiryStr = [HAKeychainHelper stringForKey:kTokenExpiryKey];
+        [HAStartupLog log:@"  keychain: tokenExpiry done"];
         if (expiryStr) {
             _tokenExpiresAt = [NSDate dateWithTimeIntervalSince1970:[expiryStr doubleValue]];
         }
+
+        [HAStartupLog log:@"HAAuthManager init END"];
 
         // Schedule refresh if needed
         if (_authMode == HAAuthModeOAuth && _refreshToken.length > 0) {

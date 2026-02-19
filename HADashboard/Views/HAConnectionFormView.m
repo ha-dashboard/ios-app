@@ -209,17 +209,17 @@ static NSString *const kModeToken   = @"token";
     [NSLayoutConstraint activateConstraints:@[
         [userLabel.topAnchor constraintEqualToAnchor:self.loginContainer.topAnchor],
         [userLabel.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor],
-        [self.usernameField.topAnchor constraintEqualToAnchor:userLabel.bottomAnchor constant:4],
+        [self.usernameField.topAnchor constraintEqualToAnchor:userLabel.bottomAnchor constant:6],
         [self.usernameField.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor],
         [self.usernameField.trailingAnchor constraintEqualToAnchor:self.loginContainer.trailingAnchor],
         [self.usernameField.heightAnchor constraintEqualToConstant:fieldHeight],
-        [passLabel.topAnchor constraintEqualToAnchor:self.usernameField.bottomAnchor constant:12],
+        [passLabel.topAnchor constraintEqualToAnchor:self.usernameField.bottomAnchor constant:16],
         [passLabel.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor],
-        [self.passwordField.topAnchor constraintEqualToAnchor:passLabel.bottomAnchor constant:4],
+        [self.passwordField.topAnchor constraintEqualToAnchor:passLabel.bottomAnchor constant:6],
         [self.passwordField.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor],
         [self.passwordField.trailingAnchor constraintEqualToAnchor:self.loginContainer.trailingAnchor],
         [self.passwordField.heightAnchor constraintEqualToConstant:fieldHeight],
-        [loginHint.topAnchor constraintEqualToAnchor:self.passwordField.bottomAnchor constant:4],
+        [loginHint.topAnchor constraintEqualToAnchor:self.passwordField.bottomAnchor constant:8],
         [loginHint.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor],
         [loginHint.trailingAnchor constraintEqualToAnchor:self.loginContainer.trailingAnchor],
         [loginHint.bottomAnchor constraintEqualToAnchor:self.loginContainer.bottomAnchor],
@@ -261,11 +261,11 @@ static NSString *const kModeToken   = @"token";
         [tokenLabel.topAnchor constraintEqualToAnchor:self.tokenContainer.topAnchor],
         [tokenLabel.leadingAnchor constraintEqualToAnchor:self.tokenContainer.leadingAnchor],
         [tokenLabel.trailingAnchor constraintEqualToAnchor:self.tokenContainer.trailingAnchor],
-        [self.tokenField.topAnchor constraintEqualToAnchor:tokenLabel.bottomAnchor constant:4],
+        [self.tokenField.topAnchor constraintEqualToAnchor:tokenLabel.bottomAnchor constant:6],
         [self.tokenField.leadingAnchor constraintEqualToAnchor:self.tokenContainer.leadingAnchor],
         [self.tokenField.trailingAnchor constraintEqualToAnchor:self.tokenContainer.trailingAnchor],
         [self.tokenField.heightAnchor constraintEqualToConstant:fieldHeight],
-        [tokenHint.topAnchor constraintEqualToAnchor:self.tokenField.bottomAnchor constant:4],
+        [tokenHint.topAnchor constraintEqualToAnchor:self.tokenField.bottomAnchor constant:8],
         [tokenHint.leadingAnchor constraintEqualToAnchor:self.tokenContainer.leadingAnchor],
         [tokenHint.trailingAnchor constraintEqualToAnchor:self.tokenContainer.trailingAnchor],
         [tokenHint.bottomAnchor constraintEqualToAnchor:self.tokenContainer.bottomAnchor],
@@ -295,7 +295,8 @@ static NSString *const kModeToken   = @"token";
     [self addSubview:self.spinner];
 
     // ── Main vertical layout ───────────────────────────────────────────
-    CGFloat p = 8.0;
+    CGFloat sectionGap = 20.0;  // Between major sections
+    CGFloat labelGap = 6.0;     // Between label and its field
 
     NSArray *fullWidthViews = @[
         self.discoverySection, urlLabel, self.serverURLField,
@@ -309,19 +310,22 @@ static NSString *const kModeToken   = @"token";
         ]];
     }
 
+    // Status + spinner sit below the connect button but collapse when empty.
+    // The bottom of the form is pinned to the connect button; the status area
+    // hangs below and only takes space when populated.
     [NSLayoutConstraint activateConstraints:@[
         [self.discoverySection.topAnchor constraintEqualToAnchor:self.topAnchor],
-        [urlLabel.topAnchor constraintEqualToAnchor:self.discoverySection.bottomAnchor constant:p],
-        [self.serverURLField.topAnchor constraintEqualToAnchor:urlLabel.bottomAnchor constant:4],
+        [urlLabel.topAnchor constraintEqualToAnchor:self.discoverySection.bottomAnchor constant:sectionGap],
+        [self.serverURLField.topAnchor constraintEqualToAnchor:urlLabel.bottomAnchor constant:labelGap],
         [self.serverURLField.heightAnchor constraintEqualToConstant:fieldHeight],
-        [self.authModeSegment.topAnchor constraintEqualToAnchor:self.serverURLField.bottomAnchor constant:p],
-        [self.authFieldsStack.topAnchor constraintEqualToAnchor:self.authModeSegment.bottomAnchor constant:p],
-        [self.connectButton.topAnchor constraintEqualToAnchor:self.authFieldsStack.bottomAnchor constant:p],
+        [self.authModeSegment.topAnchor constraintEqualToAnchor:self.serverURLField.bottomAnchor constant:sectionGap],
+        [self.authFieldsStack.topAnchor constraintEqualToAnchor:self.authModeSegment.bottomAnchor constant:sectionGap],
+        [self.connectButton.topAnchor constraintEqualToAnchor:self.authFieldsStack.bottomAnchor constant:24],
         [self.connectButton.heightAnchor constraintEqualToConstant:fieldHeight],
-        [self.statusLabel.topAnchor constraintEqualToAnchor:self.connectButton.bottomAnchor constant:8],
-        [self.spinner.topAnchor constraintEqualToAnchor:self.statusLabel.bottomAnchor constant:4],
+        [self.connectButton.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+        [self.statusLabel.topAnchor constraintEqualToAnchor:self.connectButton.bottomAnchor constant:12],
+        [self.spinner.topAnchor constraintEqualToAnchor:self.statusLabel.bottomAnchor constant:6],
         [self.spinner.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
-        [self.spinner.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
     ]];
 }
 

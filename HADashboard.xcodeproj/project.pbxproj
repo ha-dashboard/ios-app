@@ -79,6 +79,7 @@
 		1ACCA3C3F488078A30F696C7 /* testMixedWidths_8plus4_8plus4_entities_sensor_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = D1F597CB12F7F75A2BB6900B /* testMixedWidths_8plus4_8plus4_entities_sensor_gradient@2x.png */; };
 		1B59D940AF6B5B07060E1268 /* LOTAnimationView.h in Sources */ = {isa = PBXBuildFile; fileRef = 44388FE190CB88F3CA393625 /* LOTAnimationView.h */; };
 		1CADB4BB4295EE8F20E838C4 /* testMediaPlayerSectionOff_mediaPlayerSectionOff_light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = FA06FC50874EDF4BCE92C84C /* testMediaPlayerSectionOff_mediaPlayerSectionOff_light@2x.png */; };
+		1D58438D68B1C72543F7A602 /* HAStartupLog.m in Sources */ = {isa = PBXBuildFile; fileRef = 0C3299442FCD40AD79EBE71D /* HAStartupLog.m */; };
 		1DD5FAC4D9FC0098257C46A1 /* HAEntity+MediaPlayer.m in Sources */ = {isa = PBXBuildFile; fileRef = E13CFCFE92F1ABFB023FA078 /* HAEntity+MediaPlayer.m */; };
 		1DF16C8C26C86BF16CB12BA7 /* testToggleSectionOff_toggleSectionOff_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 49E51D8FCC33DFC54C8BA163 /* testToggleSectionOff_toggleSectionOff_gradient@2x.png */; };
 		1F776D6EC79DC69F42C8DEF2 /* LOTValueDelegate.h in Sources */ = {isa = PBXBuildFile; fileRef = 7E810A0BD6779C5C2606CCFA /* LOTValueDelegate.h */; };
@@ -602,6 +603,7 @@
 		0B3D1167314B6091EC4C0907 /* HADashboardTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = HADashboardTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0B3DE0F4B9518869D0895D79 /* testGraphSingleWithAxisLabels__gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testGraphSingleWithAxisLabels__gradient@2x.png"; sourceTree = "<group>"; };
 		0BE48790F76DB46FC2667283 /* testDetailViewTimer_detailViewTimer_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testDetailViewTimer_detailViewTimer_gradient@2x.png"; sourceTree = "<group>"; };
+		0C3299442FCD40AD79EBE71D /* HAStartupLog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAStartupLog.m; sourceTree = "<group>"; };
 		0C8324D25CB2D3386626D507 /* HAButtonEntityCell.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAButtonEntityCell.h; sourceTree = "<group>"; };
 		0CB32E887A0CEB511F34ED50 /* HAEntity+Light.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "HAEntity+Light.h"; sourceTree = "<group>"; };
 		0D90FC832BB51A26ABCF00CF /* HADiscoveryService.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HADiscoveryService.h; sourceTree = "<group>"; };
@@ -889,6 +891,7 @@
 		777D0C085C2BC96E190284B9 /* testGraphMultiAxis__gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testGraphMultiAxis__gradient@2x.png"; sourceTree = "<group>"; };
 		77826F7302568903ACB2F089 /* testClimateSectionCool_climateSectionCool_light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testClimateSectionCool_climateSectionCool_light@2x.png"; sourceTree = "<group>"; };
 		7814BF867ABFEF5D8712426D /* testLightSectionDimmed_lightSectionDimmed_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testLightSectionDimmed_lightSectionDimmed_gradient@2x.png"; sourceTree = "<group>"; };
+		78593ECBD79EB7228DE52CE3 /* HAStartupLog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAStartupLog.h; sourceTree = "<group>"; };
 		790C44CADFFF8AC00332767C /* LOTCircleAnimator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LOTCircleAnimator.h; sourceTree = "<group>"; };
 		7991C088C3CF9E6A59B5D09C /* testSideBySide_9plus3_Thermostat_Vacuum_9plus3_thermostat_vacuum_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testSideBySide_9plus3_Thermostat_Vacuum_9plus3_thermostat_vacuum_gradient@2x.png"; sourceTree = "<group>"; };
 		7A266A691389688F5FA70541 /* HAEntity+Update.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "HAEntity+Update.h"; sourceTree = "<group>"; };
@@ -1502,6 +1505,8 @@
 				5F3977C0C20957C49DC162F6 /* Assets.xcassets */,
 				33A3AE6EE74FF884AA4B075D /* HAAppDelegate.h */,
 				A813193370856C9C1CCEAD9E /* HAAppDelegate.m */,
+				78593ECBD79EB7228DE52CE3 /* HAStartupLog.h */,
+				0C3299442FCD40AD79EBE71D /* HAStartupLog.m */,
 				F51D788749A749C34A4EF8FE /* Info.plist */,
 				40B14EFB95D338A8FAABC4B7 /* LaunchScreen.storyboard */,
 				8B7330389B39D40E70CDC883 /* main.m */,
@@ -2777,6 +2782,7 @@
 				AFAB9EA86E4781A32E2D24FD /* HASettingsViewController.m in Sources */,
 				D4BE3D17E74A8DFFAE07B003 /* HASidebarLayout.m in Sources */,
 				59622F0708EDCA897EAB6670 /* HASkeletonView.m in Sources */,
+				1D58438D68B1C72543F7A602 /* HAStartupLog.m in Sources */,
 				453227D0A2E07614B5548333 /* HAStrategyResolver.m in Sources */,
 				CA152CB0C67CEBC6E0D702FD /* HASwitchEntityCell.m in Sources */,
 				4BD790017C2CB65373465838 /* HATheme.m in Sources */,
