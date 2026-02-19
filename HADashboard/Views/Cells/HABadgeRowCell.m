@@ -138,7 +138,7 @@ static const CGFloat kArcNameLabelHeight = 16.0;
         badge.backgroundColor = [HATheme cellBackgroundColor];
         badge.layer.cornerRadius = badgeH / 2.0;
         badge.layer.borderWidth = kBadgeBorderWidth;
-        badge.layer.borderColor = [HATheme cellBorderColor].CGColor;
+        badge.layer.borderColor = [self resolvedBorderColor];
         badge.clipsToBounds = YES;
 
         // Icon on the left
@@ -478,7 +478,7 @@ static const CGFloat kArcNameLabelHeight = 16.0;
     badge.backgroundColor = [HATheme cellBackgroundColor];
     badge.layer.cornerRadius = kBadgeHeight / 2.0;
     badge.layer.borderWidth = kBadgeBorderWidth;
-    badge.layer.borderColor = [HATheme cellBorderColor].CGColor;
+    badge.layer.borderColor = [self resolvedBorderColor];
     badge.clipsToBounds = YES;
 
     UILabel *iconLabel = [[UILabel alloc] init];
@@ -556,6 +556,32 @@ static const CGFloat kArcNameLabelHeight = 16.0;
     NSInteger idx = gesture.view.tag;
     if (idx >= 0 && idx < (NSInteger)self.badgeEntities.count && self.entityTapBlock) {
         self.entityTapBlock(self.badgeEntities[idx]);
+    }
+}
+
+#pragma mark - Border Color
+
+/// Resolve cellBorderColor to a static CGColorRef using the cell's own trait collection.
+/// CALayer.borderColor is a CGColorRef — it does NOT auto-update with dynamic UIColors.
+/// Without explicit resolution, the dynamic color can resolve against the wrong trait
+/// when badges are created off-hierarchy during entity update reconfiguration.
+- (CGColorRef)resolvedBorderColor {
+    UIColor *color = [HATheme cellBorderColor];
+    if (@available(iOS 13.0, *)) {
+        return [color resolvedColorWithTraitCollection:self.traitCollection].CGColor;
+    }
+    return color.CGColor;
+}
+
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+    if (@available(iOS 13.0, *)) {
+        if ([previousTraitCollection hasDifferentColorAppearanceComparedToTraitCollection:self.traitCollection]) {
+            CGColorRef border = [self resolvedBorderColor];
+            for (UIView *badge in self.badgeViews) {
+                badge.layer.borderColor = border;
+            }
+        }
     }
 }
 
