@@ -18,6 +18,7 @@ static NSString *const kCustomHex2Key     = @"ha_grad_custom_hex2";
 + (void)setCurrentMode:(HAThemeMode)mode {
     [[NSUserDefaults standardUserDefaults] setInteger:mode forKey:kThemeModeKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
+    [self applyInterfaceStyle];
     [[NSNotificationCenter defaultCenter] postNotificationName:HAThemeDidChangeNotification object:nil];
 }
 
@@ -79,6 +80,45 @@ static NSString *const kCustomHex2Key     = @"ha_grad_custom_hex2";
 
 + (NSString *)customGradientHex2 {
     return [[NSUserDefaults standardUserDefaults] stringForKey:kCustomHex2Key];
+}
+
+#pragma mark - Interface Style
+
++ (void)applyInterfaceStyle {
+    if (@available(iOS 13.0, *)) {
+        UIWindow *window = nil;
+        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+            if ([scene isKindOfClass:[UIWindowScene class]]) {
+                for (UIWindow *w in ((UIWindowScene *)scene).windows) {
+                    if (w.isKeyWindow) { window = w; break; }
+                }
+                if (window) break;
+            }
+        }
+        if (!window) {
+            // Fallback for early launch or iOS 13.0-13.3
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            window = [UIApplication sharedApplication].keyWindow;
+#pragma clang diagnostic pop
+        }
+        if (!window) return;
+
+        HAThemeMode mode = [self currentMode];
+        switch (mode) {
+            case HAThemeModeLight:
+                window.overrideUserInterfaceStyle = UIUserInterfaceStyleLight;
+                break;
+            case HAThemeModeDark:
+            case HAThemeModeGradient:
+                window.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
+                break;
+            case HAThemeModeAuto:
+            default:
+                window.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;
+                break;
+        }
+    }
 }
 
 #pragma mark - Dark Mode Detection
@@ -154,22 +194,18 @@ static NSString *const kCustomHex2Key     = @"ha_grad_custom_hex2";
 /// Auto: iOS 13+ dynamic provider, light on iOS 9-12.
 /// Light: always light. Dark/Gradient: always dark.
 + (UIColor *)colorWithLight:(UIColor *)light dark:(UIColor *)dark {
-    HAThemeMode mode = [self currentMode];
-    switch (mode) {
-        case HAThemeModeLight:
-            return light;
-        case HAThemeModeDark:
-        case HAThemeModeGradient:
-            return dark;
-        case HAThemeModeAuto:
-        default:
-            if (@available(iOS 13.0, *)) {
-                return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *tc) {
-                    return tc.userInterfaceStyle == UIUserInterfaceStyleDark ? dark : light;
-                }];
-            }
-            return light;
+    // Always return a dynamic color on iOS 13+ so that changing
+    // overrideUserInterfaceStyle on the window automatically re-resolves
+    // every color across all views — no manual refresh needed.
+    if (@available(iOS 13.0, *)) {
+        return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *tc) {
+            return tc.userInterfaceStyle == UIUserInterfaceStyleDark ? dark : light;
+        }];
     }
+    // iOS 9-12 fallback: resolve based on current mode
+    HAThemeMode mode = [self currentMode];
+    if (mode == HAThemeModeDark || mode == HAThemeModeGradient) return dark;
+    return light;
 }
 
 /// Three-arg variant: gradient mode gets a special color (e.g. semi-transparent).

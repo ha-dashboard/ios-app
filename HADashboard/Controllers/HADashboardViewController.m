@@ -9,6 +9,7 @@
 #import "HASettingsViewController.h"
 #import "HALovelaceParser.h"
 #import "HATheme.h"
+#import "HAIconMapper.h"
 #import "HAHaptics.h"
 #import "HAEntityDetailViewController.h"
 #import "HABottomSheetTransitioningDelegate.h"
@@ -111,8 +112,15 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
         settingsButton = [[UIBarButtonItem alloc] initWithImage:gearImage style:UIBarButtonItemStylePlain
             target:self action:@selector(settingsTapped)];
     } else {
-        settingsButton = [[UIBarButtonItem alloc] initWithTitle:@"\u2699\uFE0F"
-            style:UIBarButtonItemStylePlain target:self action:@selector(settingsTapped)];
+        // Render MDI cog glyph as a template image for a clean monochrome icon on iOS 9-12
+        UIImage *cogImage = [self renderMDIIcon:@"cog" size:22];
+        if (cogImage) {
+            settingsButton = [[UIBarButtonItem alloc] initWithImage:cogImage style:UIBarButtonItemStylePlain
+                target:self action:@selector(settingsTapped)];
+        } else {
+            settingsButton = [[UIBarButtonItem alloc] initWithTitle:@"Settings"
+                style:UIBarButtonItemStylePlain target:self action:@selector(settingsTapped)];
+        }
     }
     settingsButton.tintColor = [HATheme primaryTextColor];
     self.navigationItem.rightBarButtonItem = settingsButton;
@@ -170,6 +178,11 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+
+    // Re-apply theme when returning from Settings (or any pushed VC)
+    // to pick up gradient background and cell opacity changes that
+    // dynamic colors alone don't cover.
+    [self applyTheme];
 
     [self applyKioskMode];
 
@@ -256,6 +269,20 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     self.statusLabel.textColor = [HATheme secondaryTextColor];
     self.titleButton.tintColor = [HATheme primaryTextColor];
     self.navigationItem.rightBarButtonItem.tintColor = [HATheme primaryTextColor];
+
+    // On iOS 9-12, manually style the navigation bar since there is no
+    // overrideUserInterfaceStyle to drive appearance automatically.
+    if (@available(iOS 13.0, *)) {
+        // Handled by overrideUserInterfaceStyle set in [HATheme applyInterfaceStyle]
+    } else {
+        UINavigationBar *navBar = self.navigationController.navigationBar;
+        BOOL dark = [HATheme isDarkMode];
+        navBar.barStyle = dark ? UIBarStyleBlack : UIBarStyleDefault;
+        navBar.barTintColor = dark
+            ? [UIColor colorWithRed:0.11 green:0.11 blue:0.13 alpha:1.0]
+            : nil;
+        navBar.tintColor = [HATheme primaryTextColor];
+    }
 }
 
 - (void)themeDidChange:(NSNotification *)notification {
@@ -267,10 +294,10 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     [super traitCollectionDidChange:previousTraitCollection];
     if (@available(iOS 13.0, *)) {
         if ([previousTraitCollection hasDifferentColorAppearanceComparedToTraitCollection:self.traitCollection]) {
-            if ([HATheme currentMode] == HAThemeModeAuto) {
-                [self applyTheme];
-                [self.collectionView reloadData];
-            }
+            // Handle trait changes from system appearance (Auto mode) AND from
+            // overrideUserInterfaceStyle updates when user switches themes.
+            [self applyTheme];
+            [self.collectionView reloadData];
         }
     }
 }
@@ -1182,6 +1209,21 @@ static const CGFloat kRowUnitHeight = 56.0;
 
 - (void)authDidUpdate:(NSNotification *)notification {
     [self applyKioskMode];
+}
+
+/// Renders an MDI glyph as a template UIImage suitable for UIBarButtonItem.
+- (UIImage *)renderMDIIcon:(NSString *)name size:(CGFloat)size {
+    NSString *glyph = [HAIconMapper glyphForIconName:name];
+    if (!glyph) return nil;
+    UIFont *font = [HAIconMapper mdiFontOfSize:size];
+    NSDictionary *attrs = @{NSFontAttributeName: font,
+                            NSForegroundColorAttributeName: [UIColor blackColor]};
+    CGSize textSize = [glyph sizeWithAttributes:attrs];
+    UIGraphicsBeginImageContextWithOptions(textSize, NO, 0);
+    [glyph drawAtPoint:CGPointZero withAttributes:attrs];
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
 }
 
 #pragma mark - Actions

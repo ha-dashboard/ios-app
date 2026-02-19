@@ -34,6 +34,10 @@ extern NSString *const HAThemeDidChangeNotification;
 + (NSString *)customGradientHex1;
 + (NSString *)customGradientHex2;
 
+// Apply the theme's interface style to the key window (iOS 13+).
+// Call once after the window is visible and again whenever the mode changes.
++ (void)applyInterfaceStyle;
+
 // Effective dark mode (accounts for manual override)
 + (BOOL)effectiveDarkMode;
 + (BOOL)isDarkMode;

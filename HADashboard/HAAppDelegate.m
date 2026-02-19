@@ -104,6 +104,10 @@
     [self.window makeKeyAndVisible];
     [HAStartupLog log:@"makeKeyAndVisible END"];
 
+    // Apply the saved theme's interface style to the window so the nav bar,
+    // status bar, and all dynamic colors match the selected theme from launch.
+    [HATheme applyInterfaceStyle];
+
     [[HAPerfMonitor sharedMonitor] start];
 
     [HAStartupLog log:@"didFinishLaunching END"];
