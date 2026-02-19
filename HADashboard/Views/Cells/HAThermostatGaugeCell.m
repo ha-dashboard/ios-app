@@ -907,6 +907,22 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
     self.coloredArcLayer.strokeColor = modeColor.CGColor;
     self.fgArcLayer.strokeColor = modeColor.CGColor;
 
+    // Update the glow layer color to match the new mode immediately
+    if (self.glowLayer) {
+        if (@available(iOS 12.0, *)) {
+            if ([self.glowLayer isKindOfClass:[CAGradientLayer class]]) {
+                ((CAGradientLayer *)self.glowLayer).colors = @[
+                    (id)[modeColor colorWithAlphaComponent:1.0].CGColor,
+                    (id)[UIColor clearColor].CGColor,
+                ];
+            }
+        } else {
+            // Pre-iOS 12 bitmap path: invalidate cache so next layout redraws
+            self.cachedGlowColor = nil;
+            [self setNeedsLayout];
+        }
+    }
+
     // Temperature display -- respect show_current_as_primary
     NSString *tempIcon = [HAIconMapper glyphForIconName:@"home-thermometer-outline"]
                       ?: [HAIconMapper glyphForIconName:@"thermometer"]
