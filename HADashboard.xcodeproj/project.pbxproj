@@ -451,6 +451,7 @@
 		CC5C9F367EC71BC0A253A388 /* testClimateCool__gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 248B0DA499BEF8544E782A8C /* testClimateCool__gradient@2x.png */; };
 		CC7A78808F6E49B569905D38 /* testSceneActivated_sceneActivated_light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = DF8DC3E30056EC1B0591DFF9 /* testSceneActivated_sceneActivated_light@2x.png */; };
 		CC92B0F819DD1E0584E214FB /* testSideBySide_6plus6_TwoLights_6plus6_two_lights_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 4703B07623EEA65F960FBF03 /* testSideBySide_6plus6_TwoLights_6plus6_two_lights_gradient@2x.png */; };
+		CD039A9186FBEDA5991E65B1 /* HAConnectionSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = A42B45A0140A63B3B4A70A9E /* HAConnectionSettingsViewController.m */; };
 		CD905B17D43E3F3C57FA5597 /* testMediaPlayerSectionPlaying_mediaPlayerSectionPlaying_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 5BE0A7FD2E276AF101384635 /* testMediaPlayerSectionPlaying_mediaPlayerSectionPlaying_gradient@2x.png */; };
 		CDFAE2082DA65D08C7DF39DF /* testDetailViewTimer_detailViewTimer_light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 774AB2ADA1329907A3D636B5 /* testDetailViewTimer_detailViewTimer_light@2x.png */; };
 		CE249B0A09104EDC2FF23AF8 /* LOTShapeRepeater.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A3F5BEBDC9B0C4F3785691D /* LOTShapeRepeater.m */; };
@@ -652,6 +653,7 @@
 		1E0A9DD5C65D9BF494C0AA0D /* LOTShapeFill.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LOTShapeFill.h; sourceTree = "<group>"; };
 		1ED7786E0E762840EEE5DA90 /* testHeadingWithIcon__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testHeadingWithIcon__light@2x.png"; sourceTree = "<group>"; };
 		1F33698AAB4041ED812932F3 /* LOTBezierPath.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LOTBezierPath.h; sourceTree = "<group>"; };
+		2008ECA3266F4394EFFFB70C /* HAConnectionSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAConnectionSettingsViewController.h; sourceTree = "<group>"; };
 		20552480DD284DA9EFF120ED /* testLongNameSwitch__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testLongNameSwitch__light@2x.png"; sourceTree = "<group>"; };
 		2089499F0F347B1B8AE8C5FF /* LOTNumberInterpolator.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = LOTNumberInterpolator.m; sourceTree = "<group>"; };
 		209A47DEE8A9F30A5BD3E31B /* HAIconMapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAIconMapper.h; sourceTree = "<group>"; };
@@ -1009,6 +1011,7 @@
 		A264F155F20460835D5D0708 /* HAGraphView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAGraphView.h; sourceTree = "<group>"; };
 		A29D81C5B8FE103951E4F59F /* testCoverSectionClosed_coverSectionClosed_light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testCoverSectionClosed_coverSectionClosed_light@2x.png"; sourceTree = "<group>"; };
 		A3D0DE3B817C4D80B6DB76EC /* HAButtonEntityCell.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAButtonEntityCell.m; sourceTree = "<group>"; };
+		A42B45A0140A63B3B4A70A9E /* HAConnectionSettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAConnectionSettingsViewController.m; sourceTree = "<group>"; };
 		A46B231714C70442F1E1CCC4 /* testClimateOff__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testClimateOff__light@2x.png"; sourceTree = "<group>"; };
 		A4FAAFCBE840BFC7AC819B2B /* HAEntity+Alarm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "HAEntity+Alarm.h"; sourceTree = "<group>"; };
 		A557DB1393BD4876B131C987 /* testLightOff__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testLightOff__light@2x.png"; sourceTree = "<group>"; };
@@ -1745,6 +1748,8 @@
 		73EE29F0DCE21B757B1C9B80 /* Controllers */ = {
 			isa = PBXGroup;
 			children = (
+				2008ECA3266F4394EFFFB70C /* HAConnectionSettingsViewController.h */,
+				A42B45A0140A63B3B4A70A9E /* HAConnectionSettingsViewController.m */,
 				7547022F4046BC17139EC99C /* HADashboardViewController.h */,
 				E72B17ABE3FEA7BED654D98B /* HADashboardViewController.m */,
 				233B95AC17779B1A64AADAAF /* HAEntityDetailViewController.h */,
@@ -2724,6 +2729,7 @@
 				0BE750FD2213FCDCE6552861 /* HAColumnarLayout.m in Sources */,
 				BDB88EBCB6894731E6FDB3CC /* HAConnectionFormView.m in Sources */,
 				D08E33405107540E344C5FE9 /* HAConnectionManager.m in Sources */,
+				CD039A9186FBEDA5991E65B1 /* HAConnectionSettingsViewController.m in Sources */,
 				F433EC8C4D59C72BA0A065F4 /* HAConstellationView.m in Sources */,
 				DBE80703E961AE93F94D292C /* HACounterEntityCell.m in Sources */,
 				13C55734761CA75E85224105 /* HACoverEntityCell.m in Sources */,

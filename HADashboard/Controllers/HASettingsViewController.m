@@ -1,14 +1,16 @@
 #import "HASettingsViewController.h"
 #import "HAAuthManager.h"
 #import "HAConnectionManager.h"
-#import "HAConnectionFormView.h"
+#import "HAConnectionSettingsViewController.h"
 #import "HADashboardViewController.h"
 #import "HALoginViewController.h"
 #import "HATheme.h"
 
-@interface HASettingsViewController () <HAConnectionFormDelegate>
-// Connection
-@property (nonatomic, strong) HAConnectionFormView *connectionForm;
+@interface HASettingsViewController ()
+// Connection summary
+@property (nonatomic, strong) UIView *connectionRow;
+@property (nonatomic, strong) UILabel *connectionServerLabel;
+@property (nonatomic, strong) UILabel *connectionModeLabel;
 
 // Section headers
 @property (nonatomic, strong) UILabel *connectionSectionHeader;
@@ -50,17 +52,11 @@
     self.view.backgroundColor = [HATheme backgroundColor];
 
     [self setupUI];
-    [self.connectionForm loadExistingCredentials];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    [self.connectionForm startDiscovery];
-}
-
-- (void)viewWillDisappear:(BOOL)animated {
-    [super viewWillDisappear:animated];
-    [self.connectionForm stopDiscovery];
+    [self updateConnectionSummary];
 }
 
 - (void)setupUI {
@@ -85,10 +81,8 @@
     self.connectionSectionHeader = [self createSectionHeaderWithText:@"CONNECTION"];
     [container addSubview:self.connectionSectionHeader];
 
-    self.connectionForm = [[HAConnectionFormView alloc] initWithFrame:CGRectZero];
-    self.connectionForm.delegate = self;
-    self.connectionForm.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:self.connectionForm];
+    self.connectionRow = [self createConnectionSummaryRow];
+    [container addSubview:self.connectionRow];
 
     // ── APPEARANCE section ────────────────────────────────────────────
     self.appearanceSectionHeader = [self createSectionHeaderWithText:@"APPEARANCE"];
@@ -246,7 +240,7 @@
     // ── Main vertical layout ───────────────────────────────────────────
     NSDictionary *views = @{
         @"connHdr":   self.connectionSectionHeader,
-        @"form":      self.connectionForm,
+        @"connRow":   self.connectionRow,
         @"appHdr":    self.appearanceSectionHeader,
         @"themeStack":self.themeStack,
         @"dispHdr":   self.displaySectionHeader,
@@ -259,7 +253,7 @@
     NSDictionary *metrics = @{@"p": @16, @"sh": @32, @"hg": @10, @"fh": @44};
 
     [container addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[connHdr]-hg-[form]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[demo]-sh-[aboutHdr]-hg-[about]-sh-[logout(fh)]|"
+        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[demo]-sh-[aboutHdr]-hg-[about]-sh-[logout(fh)]|"
         options:0 metrics:metrics views:views]];
 
     for (NSString *name in views) {
@@ -437,20 +431,99 @@
     }
 }
 
-#pragma mark - HAConnectionFormDelegate
+#pragma mark - Connection Summary
 
-- (void)connectionFormDidConnect:(HAConnectionFormView *)form {
-    [self navigateToDashboard];
+- (UIView *)createConnectionSummaryRow {
+    UIButton *row = [UIButton buttonWithType:UIButtonTypeCustom];
+    row.translatesAutoresizingMaskIntoConstraints = NO;
+    row.backgroundColor = [HATheme controlBackgroundColor];
+    row.layer.cornerRadius = 10.0;
+    [row addTarget:self action:@selector(connectionRowTapped) forControlEvents:UIControlEventTouchUpInside];
+
+    // Server icon
+    UIImageView *icon = [[UIImageView alloc] init];
+    icon.translatesAutoresizingMaskIntoConstraints = NO;
+    icon.contentMode = UIViewContentModeScaleAspectFit;
+    icon.tintColor = [HATheme accentColor];
+    if (@available(iOS 13.0, *)) {
+        UIImageSymbolConfiguration *config = [UIImageSymbolConfiguration configurationWithPointSize:18 weight:UIImageSymbolWeightMedium];
+        icon.image = [UIImage systemImageNamed:@"server.rack" withConfiguration:config];
+    }
+    icon.userInteractionEnabled = NO;
+    [row addSubview:icon];
+
+    // Server URL label
+    self.connectionServerLabel = [[UILabel alloc] init];
+    self.connectionServerLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
+    self.connectionServerLabel.textColor = [HATheme primaryTextColor];
+    self.connectionServerLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    self.connectionServerLabel.userInteractionEnabled = NO;
+    [row addSubview:self.connectionServerLabel];
+
+    // Auth mode label
+    self.connectionModeLabel = [[UILabel alloc] init];
+    self.connectionModeLabel.font = [UIFont systemFontOfSize:12];
+    self.connectionModeLabel.textColor = [HATheme secondaryTextColor];
+    self.connectionModeLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    self.connectionModeLabel.userInteractionEnabled = NO;
+    [row addSubview:self.connectionModeLabel];
+
+    // Chevron
+    UIImageView *chevron = [[UIImageView alloc] init];
+    chevron.translatesAutoresizingMaskIntoConstraints = NO;
+    chevron.contentMode = UIViewContentModeScaleAspectFit;
+    chevron.tintColor = [HATheme secondaryTextColor];
+    if (@available(iOS 13.0, *)) {
+        UIImageSymbolConfiguration *config = [UIImageSymbolConfiguration configurationWithPointSize:13 weight:UIImageSymbolWeightMedium];
+        chevron.image = [UIImage systemImageNamed:@"chevron.right" withConfiguration:config];
+    }
+    chevron.userInteractionEnabled = NO;
+    [row addSubview:chevron];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [row.heightAnchor constraintEqualToConstant:56],
+        [icon.leadingAnchor constraintEqualToAnchor:row.leadingAnchor constant:14],
+        [icon.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+        [icon.widthAnchor constraintEqualToConstant:24],
+        [self.connectionServerLabel.leadingAnchor constraintEqualToAnchor:icon.trailingAnchor constant:12],
+        [self.connectionServerLabel.topAnchor constraintEqualToAnchor:row.topAnchor constant:10],
+        [self.connectionServerLabel.trailingAnchor constraintLessThanOrEqualToAnchor:chevron.leadingAnchor constant:-8],
+        [self.connectionModeLabel.leadingAnchor constraintEqualToAnchor:self.connectionServerLabel.leadingAnchor],
+        [self.connectionModeLabel.topAnchor constraintEqualToAnchor:self.connectionServerLabel.bottomAnchor constant:2],
+        [self.connectionModeLabel.trailingAnchor constraintLessThanOrEqualToAnchor:chevron.leadingAnchor constant:-8],
+        [chevron.trailingAnchor constraintEqualToAnchor:row.trailingAnchor constant:-14],
+        [chevron.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+        [chevron.widthAnchor constraintEqualToConstant:12],
+    ]];
+
+    return row;
 }
 
-#pragma mark - Navigation
+- (void)updateConnectionSummary {
+    HAAuthManager *auth = [HAAuthManager sharedManager];
 
-- (void)navigateToDashboard {
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        HADashboardViewController *dashVC = [[HADashboardViewController alloc] init];
-        UINavigationController *nav = self.navigationController;
-        [nav setViewControllers:@[dashVC] animated:YES];
-    });
+    if (auth.isDemoMode) {
+        self.connectionServerLabel.text = @"Demo Mode";
+        self.connectionModeLabel.text = @"Using sample data";
+    } else if (auth.isConfigured) {
+        self.connectionServerLabel.text = auth.serverURL ?: @"Connected";
+        switch (auth.authMode) {
+            case HAAuthModeOAuth:
+                self.connectionModeLabel.text = @"Username/Password";
+                break;
+            case HAAuthModeToken:
+                self.connectionModeLabel.text = @"Access Token";
+                break;
+        }
+    } else {
+        self.connectionServerLabel.text = @"Not connected";
+        self.connectionModeLabel.text = @"Tap to configure";
+    }
+}
+
+- (void)connectionRowTapped {
+    HAConnectionSettingsViewController *connVC = [[HAConnectionSettingsViewController alloc] init];
+    [self.navigationController pushViewController:connVC animated:YES];
 }
 
 #pragma mark - Toggle Actions
@@ -463,8 +536,13 @@
     [[HAAuthManager sharedManager] setDemoMode:sender.isOn];
     if (sender.isOn) {
         [[HAConnectionManager sharedManager] disconnect];
-        [self navigateToDashboard];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            HADashboardViewController *dashVC = [[HADashboardViewController alloc] init];
+            UINavigationController *nav = self.navigationController;
+            [nav setViewControllers:@[dashVC] animated:YES];
+        });
     }
+    [self updateConnectionSummary];
 }
 
 #pragma mark - Logout
