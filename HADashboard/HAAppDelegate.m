@@ -3,6 +3,7 @@
 #import "HAConnectionManager.h"
 #import "HADashboardViewController.h"
 #import "HASettingsViewController.h"
+#import "HALoginViewController.h"
 #import "HATheme.h"
 #import "HAIconMapper.h"
 #import "HAPerfMonitor.h"
@@ -65,7 +66,7 @@
     if ([[HAAuthManager sharedManager] isConfigured]) {
         rootVC = [[HADashboardViewController alloc] init];
     } else {
-        rootVC = [[HASettingsViewController alloc] init];
+        rootVC = [[HALoginViewController alloc] init];
     }
 
     HAStatusBarNavigationController *navController = [[HAStatusBarNavigationController alloc] initWithRootViewController:rootVC];

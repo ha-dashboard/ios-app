@@ -1,44 +1,23 @@
 #import "HASettingsViewController.h"
 #import "HAAuthManager.h"
-#import "HAOAuthClient.h"
-#import "HAAPIClient.h"
 #import "HAConnectionManager.h"
+#import "HAConnectionFormView.h"
 #import "HADashboardViewController.h"
-#import "HADiscoveryService.h"
-#import "HADiscoveredServer.h"
+#import "HALoginViewController.h"
 #import "HATheme.h"
 
-@interface HASettingsViewController () <UITextFieldDelegate, HADiscoveryServiceDelegate>
-@property (nonatomic, strong) UITextField *serverURLField;
-@property (nonatomic, strong) UISegmentedControl *authModeSegment;
-
-// Token mode
-@property (nonatomic, strong) UIView *tokenContainer;
-@property (nonatomic, strong) UITextField *tokenField;
-
-// Login mode
-@property (nonatomic, strong) UIView *loginContainer;
-@property (nonatomic, strong) UIStackView *authFieldsStack; // Holds token/login containers
-@property (nonatomic, strong) UITextField *usernameField;
-@property (nonatomic, strong) UITextField *passwordField;
-
-@property (nonatomic, strong) UIButton *connectButton;
-@property (nonatomic, strong) UILabel *statusLabel;
-@property (nonatomic, strong) UIActivityIndicatorView *spinner;
-
-// Discovery
-@property (nonatomic, strong) HADiscoveryService *discoveryService;
-@property (nonatomic, strong) UIView *discoverySection;
-@property (nonatomic, strong) UIStackView *discoveryStack;
-@property (nonatomic, strong) UILabel *discoveryLabel;
+@interface HASettingsViewController () <HAConnectionFormDelegate>
+// Connection
+@property (nonatomic, strong) HAConnectionFormView *connectionForm;
 
 // Section headers
 @property (nonatomic, strong) UILabel *connectionSectionHeader;
 @property (nonatomic, strong) UILabel *appearanceSectionHeader;
 @property (nonatomic, strong) UILabel *displaySectionHeader;
+@property (nonatomic, strong) UILabel *aboutSectionHeader;
 
 // Theme
-@property (nonatomic, strong) UIStackView *themeStack; // Holds theme mode segment + gradient options
+@property (nonatomic, strong) UIStackView *themeStack;
 @property (nonatomic, strong) UISegmentedControl *themeModeSegment;
 @property (nonatomic, strong) UIView *gradientOptionsContainer;
 @property (nonatomic, strong) UISegmentedControl *gradientPresetSegment;
@@ -56,6 +35,9 @@
 @property (nonatomic, strong) UIView *demoSection;
 @property (nonatomic, strong) UISwitch *demoSwitch;
 
+// About
+@property (nonatomic, strong) UIView *aboutSection;
+
 // Logout
 @property (nonatomic, strong) UIButton *logoutButton;
 @end
@@ -68,249 +50,50 @@
     self.view.backgroundColor = [HATheme backgroundColor];
 
     [self setupUI];
-    [self loadExistingCredentials];
+    [self.connectionForm loadExistingCredentials];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-
-    // Start server discovery
-    self.discoveryService = [[HADiscoveryService alloc] init];
-    self.discoveryService.delegate = self;
-    [self.discoveryService startSearching];
-
-    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [self.connectionForm startDiscovery];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
-    [self.discoveryService stopSearching];
-    self.discoveryService = nil;
+    [self.connectionForm stopDiscovery];
 }
 
 - (void)setupUI {
     CGFloat padding = 20.0;
-    CGFloat fieldHeight = 44.0;
     CGFloat maxWidth = 500.0;
 
     UIScrollView *scrollView = [[UIScrollView alloc] init];
     scrollView.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:scrollView];
-    [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[sv]|"
-        options:0 metrics:nil views:@{@"sv": scrollView}]];
-    [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[sv]|"
-        options:0 metrics:nil views:@{@"sv": scrollView}]];
+    [NSLayoutConstraint activateConstraints:@[
+        [scrollView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [scrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        [scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+    ]];
 
     UIView *container = [[UIView alloc] init];
     container.translatesAutoresizingMaskIntoConstraints = NO;
     [scrollView addSubview:container];
 
-    // ── CONNECTION section header ──────────────────────────────────────
+    // ── CONNECTION section ─────────────────────────────────────────────
     self.connectionSectionHeader = [self createSectionHeaderWithText:@"CONNECTION"];
     [container addSubview:self.connectionSectionHeader];
 
-    // ── Discovery section ──────────────────────────────────────────────
-    self.discoverySection = [[UIView alloc] init];
-    self.discoverySection.translatesAutoresizingMaskIntoConstraints = NO;
-    self.discoverySection.hidden = YES;
-    [container addSubview:self.discoverySection];
+    self.connectionForm = [[HAConnectionFormView alloc] initWithFrame:CGRectZero];
+    self.connectionForm.delegate = self;
+    self.connectionForm.translatesAutoresizingMaskIntoConstraints = NO;
+    [container addSubview:self.connectionForm];
 
-    self.discoveryLabel = [[UILabel alloc] init];
-    self.discoveryLabel.text = @"Discovered Servers";
-    self.discoveryLabel.font = [UIFont systemFontOfSize:14];
-    self.discoveryLabel.textColor = [HATheme secondaryTextColor];
-    self.discoveryLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.discoverySection addSubview:self.discoveryLabel];
-
-    self.discoveryStack = [[UIStackView alloc] init];
-    self.discoveryStack.axis = UILayoutConstraintAxisVertical;
-    self.discoveryStack.spacing = 8;
-    self.discoveryStack.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.discoverySection addSubview:self.discoveryStack];
-
-    [NSLayoutConstraint activateConstraints:@[
-        [self.discoveryLabel.topAnchor constraintEqualToAnchor:self.discoverySection.topAnchor],
-        [self.discoveryLabel.leadingAnchor constraintEqualToAnchor:self.discoverySection.leadingAnchor],
-        [self.discoveryStack.topAnchor constraintEqualToAnchor:self.discoveryLabel.bottomAnchor constant:8],
-        [self.discoveryStack.leadingAnchor constraintEqualToAnchor:self.discoverySection.leadingAnchor],
-        [self.discoveryStack.trailingAnchor constraintEqualToAnchor:self.discoverySection.trailingAnchor],
-        [self.discoveryStack.bottomAnchor constraintEqualToAnchor:self.discoverySection.bottomAnchor],
-    ]];
-
-    // ── Server URL ─────────────────────────────────────────────────────
-    UILabel *urlLabel = [[UILabel alloc] init];
-    urlLabel.text = @"Server URL";
-    urlLabel.font = [UIFont systemFontOfSize:14];
-    urlLabel.textColor = [HATheme secondaryTextColor];
-    urlLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:urlLabel];
-
-    self.serverURLField = [[UITextField alloc] init];
-    self.serverURLField.placeholder = @"http://192.168.1.100:8123";
-    self.serverURLField.borderStyle = UITextBorderStyleRoundedRect;
-    self.serverURLField.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    self.serverURLField.autocorrectionType = UITextAutocorrectionTypeNo;
-    self.serverURLField.keyboardType = UIKeyboardTypeURL;
-    self.serverURLField.returnKeyType = UIReturnKeyNext;
-    self.serverURLField.delegate = self;
-    self.serverURLField.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:self.serverURLField];
-
-    // ── Auth mode segmented control ────────────────────────────────────
-    self.authModeSegment = [[UISegmentedControl alloc] initWithItems:@[@"Access Token", @"Username/Password"]];
-    self.authModeSegment.selectedSegmentIndex = 0;
-    [self.authModeSegment addTarget:self action:@selector(authModeChanged:) forControlEvents:UIControlEventValueChanged];
-    self.authModeSegment.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:self.authModeSegment];
-
-    // ── Auth fields stack (holds token/login containers, collapses hidden views) ──
-    self.authFieldsStack = [[UIStackView alloc] init];
-    self.authFieldsStack.axis = UILayoutConstraintAxisVertical;
-    self.authFieldsStack.spacing = 0;
-    self.authFieldsStack.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:self.authFieldsStack];
-
-    // ── Token mode container ───────────────────────────────────────────
-    self.tokenContainer = [[UIView alloc] init];
-    self.tokenContainer.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.authFieldsStack addArrangedSubview:self.tokenContainer];
-
-    UILabel *tokenLabel = [[UILabel alloc] init];
-    tokenLabel.text = @"Long-Lived Access Token";
-    tokenLabel.font = [UIFont systemFontOfSize:14];
-    tokenLabel.textColor = [HATheme secondaryTextColor];
-    tokenLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.tokenContainer addSubview:tokenLabel];
-
-    self.tokenField = [[UITextField alloc] init];
-    self.tokenField.placeholder = @"Paste your access token here";
-    self.tokenField.borderStyle = UITextBorderStyleRoundedRect;
-    self.tokenField.secureTextEntry = YES;
-    self.tokenField.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    self.tokenField.autocorrectionType = UITextAutocorrectionTypeNo;
-    self.tokenField.returnKeyType = UIReturnKeyDone;
-    self.tokenField.delegate = self;
-    self.tokenField.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.tokenContainer addSubview:self.tokenField];
-
-    UILabel *tokenHint = [[UILabel alloc] init];
-    tokenHint.text = @"Generate a Long-Lived Access Token in your HA profile:\nSettings \u2192 People \u2192 [Your User] \u2192 Long-Lived Access Tokens";
-    tokenHint.font = [UIFont systemFontOfSize:11];
-    tokenHint.textColor = [HATheme secondaryTextColor];
-    tokenHint.numberOfLines = 0;
-    tokenHint.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.tokenContainer addSubview:tokenHint];
-
-    [NSLayoutConstraint activateConstraints:@[
-        [tokenLabel.topAnchor constraintEqualToAnchor:self.tokenContainer.topAnchor],
-        [tokenLabel.leadingAnchor constraintEqualToAnchor:self.tokenContainer.leadingAnchor],
-        [tokenLabel.trailingAnchor constraintEqualToAnchor:self.tokenContainer.trailingAnchor],
-        [self.tokenField.topAnchor constraintEqualToAnchor:tokenLabel.bottomAnchor constant:4],
-        [self.tokenField.leadingAnchor constraintEqualToAnchor:self.tokenContainer.leadingAnchor],
-        [self.tokenField.trailingAnchor constraintEqualToAnchor:self.tokenContainer.trailingAnchor],
-        [self.tokenField.heightAnchor constraintEqualToConstant:fieldHeight],
-        [tokenHint.topAnchor constraintEqualToAnchor:self.tokenField.bottomAnchor constant:4],
-        [tokenHint.leadingAnchor constraintEqualToAnchor:self.tokenContainer.leadingAnchor],
-        [tokenHint.trailingAnchor constraintEqualToAnchor:self.tokenContainer.trailingAnchor],
-        [tokenHint.bottomAnchor constraintEqualToAnchor:self.tokenContainer.bottomAnchor],
-    ]];
-
-    // ── Login mode container ───────────────────────────────────────────
-    self.loginContainer = [[UIView alloc] init];
-    self.loginContainer.translatesAutoresizingMaskIntoConstraints = NO;
-    self.loginContainer.hidden = YES;
-    [self.authFieldsStack addArrangedSubview:self.loginContainer];
-
-    UILabel *userLabel = [[UILabel alloc] init];
-    userLabel.text = @"Username";
-    userLabel.font = [UIFont systemFontOfSize:14];
-    userLabel.textColor = [HATheme secondaryTextColor];
-    userLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.loginContainer addSubview:userLabel];
-
-    self.usernameField = [[UITextField alloc] init];
-    self.usernameField.placeholder = @"Home Assistant username";
-    self.usernameField.borderStyle = UITextBorderStyleRoundedRect;
-    self.usernameField.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    self.usernameField.autocorrectionType = UITextAutocorrectionTypeNo;
-    self.usernameField.returnKeyType = UIReturnKeyNext;
-    self.usernameField.delegate = self;
-    self.usernameField.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.loginContainer addSubview:self.usernameField];
-
-    UILabel *passLabel = [[UILabel alloc] init];
-    passLabel.text = @"Password";
-    passLabel.font = [UIFont systemFontOfSize:14];
-    passLabel.textColor = [HATheme secondaryTextColor];
-    passLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.loginContainer addSubview:passLabel];
-
-    self.passwordField = [[UITextField alloc] init];
-    self.passwordField.placeholder = @"Password";
-    self.passwordField.borderStyle = UITextBorderStyleRoundedRect;
-    self.passwordField.secureTextEntry = YES;
-    self.passwordField.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    self.passwordField.autocorrectionType = UITextAutocorrectionTypeNo;
-    self.passwordField.returnKeyType = UIReturnKeyDone;
-    self.passwordField.delegate = self;
-    self.passwordField.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.loginContainer addSubview:self.passwordField];
-
-    UILabel *loginHint = [[UILabel alloc] init];
-    loginHint.text = @"Enter your Home Assistant username and password.\nThe app will securely obtain and refresh access tokens.";
-    loginHint.font = [UIFont systemFontOfSize:11];
-    loginHint.textColor = [HATheme secondaryTextColor];
-    loginHint.numberOfLines = 0;
-    loginHint.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.loginContainer addSubview:loginHint];
-
-    [NSLayoutConstraint activateConstraints:@[
-        [userLabel.topAnchor constraintEqualToAnchor:self.loginContainer.topAnchor],
-        [userLabel.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor],
-        [self.usernameField.topAnchor constraintEqualToAnchor:userLabel.bottomAnchor constant:4],
-        [self.usernameField.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor],
-        [self.usernameField.trailingAnchor constraintEqualToAnchor:self.loginContainer.trailingAnchor],
-        [self.usernameField.heightAnchor constraintEqualToConstant:fieldHeight],
-        [passLabel.topAnchor constraintEqualToAnchor:self.usernameField.bottomAnchor constant:12],
-        [passLabel.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor],
-        [self.passwordField.topAnchor constraintEqualToAnchor:passLabel.bottomAnchor constant:4],
-        [self.passwordField.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor],
-        [self.passwordField.trailingAnchor constraintEqualToAnchor:self.loginContainer.trailingAnchor],
-        [self.passwordField.heightAnchor constraintEqualToConstant:fieldHeight],
-        [loginHint.topAnchor constraintEqualToAnchor:self.passwordField.bottomAnchor constant:4],
-        [loginHint.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor],
-        [loginHint.trailingAnchor constraintEqualToAnchor:self.loginContainer.trailingAnchor],
-        [loginHint.bottomAnchor constraintEqualToAnchor:self.loginContainer.bottomAnchor],
-    ]];
-
-    // ── Connect button ─────────────────────────────────────────────────
-    self.connectButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.connectButton setTitle:@"Connect" forState:UIControlStateNormal];
-    self.connectButton.titleLabel.font = [UIFont boldSystemFontOfSize:18];
-    self.connectButton.backgroundColor = [HATheme accentColor];
-    [self.connectButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    self.connectButton.layer.cornerRadius = 8.0;
-    [self.connectButton addTarget:self action:@selector(connectTapped) forControlEvents:UIControlEventTouchUpInside];
-    self.connectButton.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:self.connectButton];
-
-    self.statusLabel = [[UILabel alloc] init];
-    self.statusLabel.textAlignment = NSTextAlignmentCenter;
-    self.statusLabel.font = [UIFont systemFontOfSize:14];
-    self.statusLabel.numberOfLines = 0;
-    self.statusLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:self.statusLabel];
-
-    self.spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
-    self.spinner.hidesWhenStopped = YES;
-    self.spinner.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:self.spinner];
-
-    // ── APPEARANCE section header ────────────────────────────────────
+    // ── APPEARANCE section ────────────────────────────────────────────
     self.appearanceSectionHeader = [self createSectionHeaderWithText:@"APPEARANCE"];
     [container addSubview:self.appearanceSectionHeader];
 
-    // ── Theme section (stack view for proper collapse of gradient options) ──
     self.themeStack = [[UIStackView alloc] init];
     self.themeStack.axis = UILayoutConstraintAxisVertical;
     self.themeStack.spacing = 8;
@@ -323,7 +106,7 @@
     self.themeModeSegment.translatesAutoresizingMaskIntoConstraints = NO;
     [self.themeStack addArrangedSubview:self.themeModeSegment];
 
-    // Gradient options (shown when Gradient selected)
+    // Gradient options
     self.gradientOptionsContainer = [[UIView alloc] init];
     self.gradientOptionsContainer.translatesAutoresizingMaskIntoConstraints = NO;
     self.gradientOptionsContainer.hidden = ([HATheme currentMode] != HAThemeModeGradient);
@@ -420,125 +203,66 @@
         [self.gradientPreview.bottomAnchor constraintEqualToAnchor:self.gradientOptionsContainer.bottomAnchor],
     ]];
 
-    // Theme section uses UIStackView - no additional VFL constraints needed
-    // The stack automatically handles showing/hiding gradient options
-
-    // ── DISPLAY section header ─────────────────────────────────────────
+    // ── DISPLAY section ───────────────────────────────────────────────
     self.displaySectionHeader = [self createSectionHeaderWithText:@"DISPLAY"];
     [container addSubview:self.displaySectionHeader];
 
-    // ── Kiosk mode section ─────────────────────────────────────────────
-    self.kioskSection = [[UIView alloc] init];
-    self.kioskSection.translatesAutoresizingMaskIntoConstraints = NO;
+    // Kiosk mode
+    UISwitch *kioskSw = nil;
+    self.kioskSection = [self createToggleSection:@"Kiosk Mode"
+        helpText:@"Hides navigation bar and prevents screen sleep. Triple-tap the top of the screen to temporarily show controls.\n\nFor full lockdown, enable Guided Access in iPad Settings \u2192 Accessibility \u2192 Guided Access, then triple-click the Home button while in the app."
+        isOn:[[HAAuthManager sharedManager] isKioskMode]
+        target:self action:@selector(kioskSwitchToggled:)
+        switchOut:&kioskSw];
+    self.kioskSwitch = kioskSw;
     [container addSubview:self.kioskSection];
 
-    UILabel *kioskLabel = [[UILabel alloc] init];
-    kioskLabel.text = @"Kiosk Mode";
-    kioskLabel.font = [UIFont systemFontOfSize:16];
-    kioskLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.kioskSection addSubview:kioskLabel];
-
-    self.kioskSwitch = [[UISwitch alloc] init];
-    self.kioskSwitch.on = [[HAAuthManager sharedManager] isKioskMode];
-    [self.kioskSwitch addTarget:self action:@selector(kioskSwitchToggled:) forControlEvents:UIControlEventValueChanged];
-    self.kioskSwitch.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.kioskSection addSubview:self.kioskSwitch];
-
-    UILabel *kioskHelp = [[UILabel alloc] init];
-    kioskHelp.text = @"Hides navigation bar and prevents screen sleep. Triple-tap the top of the screen to temporarily show controls.\n\nFor full lockdown, enable Guided Access in iPad Settings \u2192 Accessibility \u2192 Guided Access, then triple-click the Home button while in the app.";
-    kioskHelp.font = [UIFont systemFontOfSize:12];
-    kioskHelp.textColor = [HATheme secondaryTextColor];
-    kioskHelp.numberOfLines = 0;
-    kioskHelp.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.kioskSection addSubview:kioskHelp];
-
-    NSDictionary *kViews = @{@"lbl": kioskLabel, @"sw": self.kioskSwitch, @"help": kioskHelp};
-    [self.kioskSection addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[lbl]-8-[help]|" options:0 metrics:nil views:kViews]];
-    [self.kioskSection addConstraint:[NSLayoutConstraint constraintWithItem:kioskHelp attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.kioskSection attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
-    [self.kioskSection addConstraint:[NSLayoutConstraint constraintWithItem:kioskHelp attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.kioskSection attribute:NSLayoutAttributeTrailing multiplier:1 constant:0]];
-    [self.kioskSection addConstraint:[NSLayoutConstraint constraintWithItem:kioskLabel attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.kioskSection attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
-    [self.kioskSection addConstraint:[NSLayoutConstraint constraintWithItem:self.kioskSwitch attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.kioskSection attribute:NSLayoutAttributeTrailing multiplier:1 constant:0]];
-    [self.kioskSection addConstraint:[NSLayoutConstraint constraintWithItem:self.kioskSwitch attribute:NSLayoutAttributeCenterY
-        relatedBy:NSLayoutRelationEqual toItem:kioskLabel attribute:NSLayoutAttributeCenterY multiplier:1 constant:0]];
-
-    // ── Demo mode section ─────────────────────────────────────────────
-    self.demoSection = [[UIView alloc] init];
-    self.demoSection.translatesAutoresizingMaskIntoConstraints = NO;
+    // Demo mode
+    UISwitch *demoSw = nil;
+    self.demoSection = [self createToggleSection:@"Demo Mode"
+        helpText:@"Shows the app with demo data instead of connecting to a Home Assistant server. Useful for demonstrating the app's capabilities."
+        isOn:[[HAAuthManager sharedManager] isDemoMode]
+        target:self action:@selector(demoSwitchToggled:)
+        switchOut:&demoSw];
+    self.demoSwitch = demoSw;
     [container addSubview:self.demoSection];
 
-    UILabel *demoLabel = [[UILabel alloc] init];
-    demoLabel.text = @"Demo Mode";
-    demoLabel.font = [UIFont systemFontOfSize:16];
-    demoLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.demoSection addSubview:demoLabel];
+    // ── ABOUT section ─────────────────────────────────────────────────
+    self.aboutSectionHeader = [self createSectionHeaderWithText:@"ABOUT"];
+    [container addSubview:self.aboutSectionHeader];
 
-    self.demoSwitch = [[UISwitch alloc] init];
-    self.demoSwitch.on = [[HAAuthManager sharedManager] isDemoMode];
-    [self.demoSwitch addTarget:self action:@selector(demoSwitchToggled:) forControlEvents:UIControlEventValueChanged];
-    self.demoSwitch.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.demoSection addSubview:self.demoSwitch];
+    self.aboutSection = [self createAboutSection];
+    [container addSubview:self.aboutSection];
 
-    UILabel *demoHelp = [[UILabel alloc] init];
-    demoHelp.text = @"Shows the app with demo data instead of connecting to a Home Assistant server. Useful for demonstrating the app's capabilities.";
-    demoHelp.font = [UIFont systemFontOfSize:12];
-    demoHelp.textColor = [HATheme secondaryTextColor];
-    demoHelp.numberOfLines = 0;
-    demoHelp.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.demoSection addSubview:demoHelp];
-
-    NSDictionary *dViews = @{@"lbl": demoLabel, @"sw": self.demoSwitch, @"help": demoHelp};
-    [self.demoSection addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[lbl]-8-[help]|" options:0 metrics:nil views:dViews]];
-    [self.demoSection addConstraint:[NSLayoutConstraint constraintWithItem:demoHelp attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.demoSection attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
-    [self.demoSection addConstraint:[NSLayoutConstraint constraintWithItem:demoHelp attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.demoSection attribute:NSLayoutAttributeTrailing multiplier:1 constant:0]];
-    [self.demoSection addConstraint:[NSLayoutConstraint constraintWithItem:demoLabel attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.demoSection attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
-    [self.demoSection addConstraint:[NSLayoutConstraint constraintWithItem:self.demoSwitch attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.demoSection attribute:NSLayoutAttributeTrailing multiplier:1 constant:0]];
-    [self.demoSection addConstraint:[NSLayoutConstraint constraintWithItem:self.demoSwitch attribute:NSLayoutAttributeCenterY
-        relatedBy:NSLayoutRelationEqual toItem:demoLabel attribute:NSLayoutAttributeCenterY multiplier:1 constant:0]];
-
-    // ── Logout / Reset button ─────────────────────────────────────────
+    // ── Log Out & Reset ───────────────────────────────────────────────
     self.logoutButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.logoutButton setTitle:@"Log Out & Reset" forState:UIControlStateNormal];
     self.logoutButton.titleLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightMedium];
-    [self.logoutButton setTitleColor:[UIColor redColor] forState:UIControlStateNormal];
+    [self.logoutButton setTitleColor:[HATheme destructiveColor] forState:UIControlStateNormal];
     self.logoutButton.translatesAutoresizingMaskIntoConstraints = NO;
     [self.logoutButton addTarget:self action:@selector(logoutTapped) forControlEvents:UIControlEventTouchUpInside];
     [container addSubview:self.logoutButton];
 
     // ── Main vertical layout ───────────────────────────────────────────
     NSDictionary *views = @{
-        @"connHdr": self.connectionSectionHeader,
-        @"disc": self.discoverySection,
-        @"urlLabel": urlLabel,
-        @"urlField": self.serverURLField,
-        @"authSeg": self.authModeSegment,
-        @"authStack": self.authFieldsStack,
-        @"button": self.connectButton,
-        @"status": self.statusLabel,
-        @"spinner": self.spinner,
-        @"appHdr": self.appearanceSectionHeader,
-        @"themeStack": self.themeStack,
-        @"dispHdr": self.displaySectionHeader,
-        @"kioskSection": self.kioskSection,
-        @"demoSection": self.demoSection,
-        @"logout": self.logoutButton,
+        @"connHdr":   self.connectionSectionHeader,
+        @"form":      self.connectionForm,
+        @"appHdr":    self.appearanceSectionHeader,
+        @"themeStack":self.themeStack,
+        @"dispHdr":   self.displaySectionHeader,
+        @"kiosk":     self.kioskSection,
+        @"demo":      self.demoSection,
+        @"aboutHdr":  self.aboutSectionHeader,
+        @"about":     self.aboutSection,
+        @"logout":    self.logoutButton,
     };
-    NSDictionary *metrics = @{@"p": @8, @"fh": @(fieldHeight), @"sh": @12};
+    NSDictionary *metrics = @{@"p": @8, @"sh": @16, @"fh": @44};
 
     [container addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[connHdr]-4-[disc]-p-[urlLabel]-4-[urlField(fh)]-p-[authSeg]-p-[authStack]-p-[button(fh)]-8-[status]-4-[spinner]-sh-[appHdr]-4-[themeStack]-sh-[dispHdr]-4-[kioskSection]-p-[demoSection]-sh-[logout(fh)]|"
+        @"V:|[connHdr]-4-[form]-sh-[appHdr]-4-[themeStack]-sh-[dispHdr]-4-[kiosk]-p-[demo]-sh-[aboutHdr]-4-[about]-sh-[logout(fh)]|"
         options:0 metrics:metrics views:views]];
 
-    for (NSString *name in @[@"connHdr", @"disc", @"urlLabel", @"urlField", @"authSeg", @"authStack", @"button", @"status", @"appHdr", @"themeStack", @"dispHdr", @"kioskSection", @"demoSection", @"logout"]) {
+    for (NSString *name in views) {
         UIView *v = views[name];
         [container addConstraint:[NSLayoutConstraint constraintWithItem:v attribute:NSLayoutAttributeLeading
             relatedBy:NSLayoutRelationEqual toItem:container attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
@@ -546,16 +270,13 @@
             relatedBy:NSLayoutRelationEqual toItem:container attribute:NSLayoutAttributeTrailing multiplier:1 constant:0]];
     }
 
-    [container addConstraint:[NSLayoutConstraint constraintWithItem:self.spinner attribute:NSLayoutAttributeCenterX
-        relatedBy:NSLayoutRelationEqual toItem:container attribute:NSLayoutAttributeCenterX multiplier:1 constant:0]];
-
-    // Vertical: pin to scroll view content edges (defines scrollable content size)
+    // ScrollView content constraints
     [scrollView addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeTop
         relatedBy:NSLayoutRelationEqual toItem:scrollView attribute:NSLayoutAttributeTop multiplier:1 constant:16]];
     [scrollView addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeBottom
         relatedBy:NSLayoutRelationEqual toItem:scrollView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
 
-    // Horizontal: pin leading/trailing to self.view with padding, max width for iPad
+    // Horizontal: centered with max width
     [self.view addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeLeading
         relatedBy:NSLayoutRelationGreaterThanOrEqual toItem:self.view attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
     [self.view addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeTrailing
@@ -566,6 +287,8 @@
         relatedBy:NSLayoutRelationLessThanOrEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:maxWidth]];
 }
 
+#pragma mark - Section Helpers
+
 - (UILabel *)createSectionHeaderWithText:(NSString *)text {
     UILabel *label = [[UILabel alloc] init];
     label.text = text;
@@ -575,178 +298,152 @@
     return label;
 }
 
-- (void)loadExistingCredentials {
-    HAAuthManager *auth = [HAAuthManager sharedManager];
-    if (auth.serverURL) {
-        self.serverURLField.text = auth.serverURL;
-    }
+- (UIView *)createToggleSection:(NSString *)title helpText:(NSString *)helpText isOn:(BOOL)isOn
+                         target:(id)target action:(SEL)action switchOut:(UISwitch **)outSwitch {
+    UIView *section = [[UIView alloc] init];
+    section.translatesAutoresizingMaskIntoConstraints = NO;
 
-    if (auth.authMode == HAAuthModeOAuth) {
-        self.authModeSegment.selectedSegmentIndex = 1;
-        [self authModeChanged:self.authModeSegment];
-    } else {
-        if (auth.accessToken) {
-            self.tokenField.text = auth.accessToken;
-        }
-    }
+    UILabel *label = [[UILabel alloc] init];
+    label.text = title;
+    label.font = [UIFont systemFontOfSize:16];
+    label.textColor = [HATheme primaryTextColor];
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    [section addSubview:label];
 
+    UISwitch *sw = [[UISwitch alloc] init];
+    sw.on = isOn;
+    [sw addTarget:target action:action forControlEvents:UIControlEventValueChanged];
+    sw.translatesAutoresizingMaskIntoConstraints = NO;
+    [section addSubview:sw];
+    if (outSwitch) *outSwitch = sw;
+
+    UILabel *help = [[UILabel alloc] init];
+    help.text = helpText;
+    help.font = [UIFont systemFontOfSize:12];
+    help.textColor = [HATheme secondaryTextColor];
+    help.numberOfLines = 0;
+    help.translatesAutoresizingMaskIntoConstraints = NO;
+    [section addSubview:help];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [label.topAnchor constraintEqualToAnchor:section.topAnchor],
+        [label.leadingAnchor constraintEqualToAnchor:section.leadingAnchor],
+        [sw.trailingAnchor constraintEqualToAnchor:section.trailingAnchor],
+        [sw.centerYAnchor constraintEqualToAnchor:label.centerYAnchor],
+        [help.topAnchor constraintEqualToAnchor:label.bottomAnchor constant:8],
+        [help.leadingAnchor constraintEqualToAnchor:section.leadingAnchor],
+        [help.trailingAnchor constraintEqualToAnchor:section.trailingAnchor],
+        [help.bottomAnchor constraintEqualToAnchor:section.bottomAnchor],
+    ]];
+
+    return section;
 }
 
-#pragma mark - Auth Mode Switching
+- (UIView *)createAboutSection {
+    UIStackView *stack = [[UIStackView alloc] init];
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = 12;
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
 
-- (void)authModeChanged:(UISegmentedControl *)sender {
-    BOOL isTokenMode = (sender.selectedSegmentIndex == 0);
-    self.tokenContainer.hidden = !isTokenMode;
-    self.loginContainer.hidden = isTokenMode;
+    // Version + build
+    NSDictionary *info = [[NSBundle mainBundle] infoDictionary];
+    NSString *version = info[@"CFBundleShortVersionString"] ?: @"0.0.0";
+    NSString *build = info[@"CFBundleVersion"] ?: @"0";
+    [stack addArrangedSubview:[self aboutRow:@"Version" value:[NSString stringWithFormat:@"%@ (%@)", version, build]]];
+
+    // Connected server
+    NSString *serverURL = [[HAAuthManager sharedManager] serverURL] ?: @"Not connected";
+    [stack addArrangedSubview:[self aboutRow:@"Server" value:serverURL]];
+
+    // GitHub
+    UIButton *githubButton = [self aboutLinkButton:@"GitHub Repository" url:@"https://github.com/ha-dashboard/ios-app"];
+    [stack addArrangedSubview:githubButton];
+
+    // License
+    UIButton *licenseButton = [self aboutLinkButton:@"License: Apache 2.0" url:@"https://github.com/ha-dashboard/ios-app/blob/main/LICENSE"];
+    [stack addArrangedSubview:licenseButton];
+
+    // Privacy
+    UIButton *privacyButton = [self aboutLinkButton:@"Privacy Policy" url:@"https://github.com/ha-dashboard/ios-app/blob/main/PRIVACY.md"];
+    [stack addArrangedSubview:privacyButton];
+
+    // Open source acknowledgements
+    UILabel *oss = [[UILabel alloc] init];
+    oss.text = @"Built with SocketRocket, Lottie, and Material Design Icons.";
+    oss.font = [UIFont systemFontOfSize:12];
+    oss.textColor = [HATheme tertiaryTextColor];
+    oss.numberOfLines = 0;
+    oss.translatesAutoresizingMaskIntoConstraints = NO;
+    [stack addArrangedSubview:oss];
+
+    return stack;
 }
 
-#pragma mark - Discovery
+- (UIView *)aboutRow:(NSString *)label value:(NSString *)value {
+    UIView *row = [[UIView alloc] init];
+    row.translatesAutoresizingMaskIntoConstraints = NO;
 
-- (void)discoveryService:(HADiscoveryService *)service didDiscoverServer:(HADiscoveredServer *)server {
-    self.discoverySection.hidden = NO;
+    UILabel *lbl = [[UILabel alloc] init];
+    lbl.text = label;
+    lbl.font = [UIFont systemFontOfSize:14];
+    lbl.textColor = [HATheme secondaryTextColor];
+    lbl.translatesAutoresizingMaskIntoConstraints = NO;
+    [row addSubview:lbl];
 
+    UILabel *val = [[UILabel alloc] init];
+    val.text = value;
+    val.font = [UIFont systemFontOfSize:14];
+    val.textColor = [HATheme primaryTextColor];
+    val.textAlignment = NSTextAlignmentRight;
+    val.numberOfLines = 1;
+    val.lineBreakMode = NSLineBreakByTruncatingMiddle;
+    val.translatesAutoresizingMaskIntoConstraints = NO;
+    [row addSubview:val];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [lbl.topAnchor constraintEqualToAnchor:row.topAnchor],
+        [lbl.leadingAnchor constraintEqualToAnchor:row.leadingAnchor],
+        [lbl.bottomAnchor constraintEqualToAnchor:row.bottomAnchor],
+        [val.topAnchor constraintEqualToAnchor:row.topAnchor],
+        [val.trailingAnchor constraintEqualToAnchor:row.trailingAnchor],
+        [val.bottomAnchor constraintEqualToAnchor:row.bottomAnchor],
+        [val.leadingAnchor constraintGreaterThanOrEqualToAnchor:lbl.trailingAnchor constant:12],
+    ]];
+    // Give value label higher compression resistance
+    [lbl setContentHuggingPriority:UILayoutPriorityDefaultHigh forAxis:UILayoutConstraintAxisHorizontal];
+    [val setContentCompressionResistancePriority:UILayoutPriorityDefaultLow forAxis:UILayoutConstraintAxisHorizontal];
+
+    return row;
+}
+
+- (UIButton *)aboutLinkButton:(NSString *)title url:(NSString *)urlString {
     UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
-    NSString *title = server.name ?: @"Home Assistant";
-    if (server.version) {
-        title = [NSString stringWithFormat:@"%@ (v%@)", title, server.version];
-    }
     [btn setTitle:title forState:UIControlStateNormal];
-    btn.titleLabel.font = [UIFont systemFontOfSize:15];
+    btn.titleLabel.font = [UIFont systemFontOfSize:14];
     btn.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
-    btn.backgroundColor = [HATheme controlBackgroundColor];
-    btn.layer.cornerRadius = 8.0;
-    btn.contentEdgeInsets = UIEdgeInsetsMake(10, 12, 10, 12);
-    btn.tag = self.discoveryService.discoveredServers.count - 1;
-    [btn addTarget:self action:@selector(discoveredServerTapped:) forControlEvents:UIControlEventTouchUpInside];
-
-    [self.discoveryStack addArrangedSubview:btn];
+    btn.translatesAutoresizingMaskIntoConstraints = NO;
+    // Store URL in accessibility hint (simple approach without subclassing)
+    btn.accessibilityHint = urlString;
+    [btn addTarget:self action:@selector(aboutLinkTapped:) forControlEvents:UIControlEventTouchUpInside];
+    return btn;
 }
 
-- (void)discoveryService:(HADiscoveryService *)service didRemoveServer:(HADiscoveredServer *)server {
-    for (UIView *v in self.discoveryStack.arrangedSubviews) {
-        [self.discoveryStack removeArrangedSubview:v];
-        [v removeFromSuperview];
-    }
-    for (NSUInteger i = 0; i < service.discoveredServers.count; i++) {
-        [self discoveryService:service didDiscoverServer:service.discoveredServers[i]];
-    }
-    self.discoverySection.hidden = (service.discoveredServers.count == 0);
-}
-
-- (void)discoveredServerTapped:(UIButton *)sender {
-    NSUInteger idx = (NSUInteger)sender.tag;
-    NSArray *servers = self.discoveryService.discoveredServers;
-    if (idx >= servers.count) return;
-
-    HADiscoveredServer *server = servers[idx];
-    self.serverURLField.text = server.baseURL;
-}
-
-#pragma mark - Connect
-
-- (void)connectTapped {
-    NSString *urlString = [self.serverURLField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-
-    if (urlString.length == 0) {
-        [self showStatus:@"Please enter a server URL" isError:YES];
-        return;
-    }
-
-    while ([urlString hasSuffix:@"/"]) {
-        urlString = [urlString substringToIndex:urlString.length - 1];
-    }
-
-    BOOL isTokenMode = (self.authModeSegment.selectedSegmentIndex == 0);
-
-    if (isTokenMode) {
-        [self connectWithToken:urlString];
-    } else {
-        [self connectWithLogin:urlString];
+- (void)aboutLinkTapped:(UIButton *)sender {
+    NSString *urlString = sender.accessibilityHint;
+    if (!urlString) return;
+    NSURL *url = [NSURL URLWithString:urlString];
+    if (url) {
+        [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
     }
 }
 
-- (void)connectWithToken:(NSString *)urlString {
-    NSString *token = [self.tokenField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if (token.length == 0) {
-        [self showStatus:@"Please enter an access token" isError:YES];
-        return;
-    }
+#pragma mark - HAConnectionFormDelegate
 
-    self.connectButton.enabled = NO;
-    [self.spinner startAnimating];
-    [self showStatus:@"Testing connection..." isError:NO];
-
-    NSURL *baseURL = [NSURL URLWithString:[NSString stringWithFormat:@"%@/api", urlString]];
-    HAAPIClient *testClient = [[HAAPIClient alloc] initWithBaseURL:baseURL token:token];
-
-    [testClient checkAPIWithCompletion:^(id response, NSError *error) {
-        self.connectButton.enabled = YES;
-        [self.spinner stopAnimating];
-
-        if (error) {
-            [self showStatus:[NSString stringWithFormat:@"Connection failed: %@", error.localizedDescription] isError:YES];
-            return;
-        }
-
-        [[HAAuthManager sharedManager] saveServerURL:urlString token:token];
-        [self showStatus:@"Connected!" isError:NO];
-        [self navigateToDashboard];
-    }];
+- (void)connectionFormDidConnect:(HAConnectionFormView *)form {
+    [self navigateToDashboard];
 }
 
-- (void)connectWithLogin:(NSString *)urlString {
-    NSString *username = [self.usernameField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    NSString *password = self.passwordField.text;
-
-    if (username.length == 0) {
-        [self showStatus:@"Please enter a username" isError:YES];
-        return;
-    }
-    if (password.length == 0) {
-        [self showStatus:@"Please enter a password" isError:YES];
-        return;
-    }
-
-    self.connectButton.enabled = NO;
-    [self.spinner startAnimating];
-    [self showStatus:@"Logging in..." isError:NO];
-
-    HAOAuthClient *oauth = [[HAOAuthClient alloc] initWithServerURL:urlString];
-
-    [oauth loginWithUsername:username password:password completion:^(NSString *authCode, NSError *loginError) {
-        if (loginError) {
-            self.connectButton.enabled = YES;
-            [self.spinner stopAnimating];
-            [self showStatus:[NSString stringWithFormat:@"Login failed: %@", loginError.localizedDescription] isError:YES];
-            return;
-        }
-
-        [self showStatus:@"Obtaining token..." isError:NO];
-
-        [oauth exchangeAuthCode:authCode completion:^(NSDictionary *tokenResponse, NSError *tokenError) {
-            self.connectButton.enabled = YES;
-            [self.spinner stopAnimating];
-
-            if (tokenError || !tokenResponse[@"access_token"]) {
-                [self showStatus:[NSString stringWithFormat:@"Token exchange failed: %@",
-                    tokenError.localizedDescription ?: @"no access token"] isError:YES];
-                return;
-            }
-
-            NSString *accessToken = tokenResponse[@"access_token"];
-            NSString *refreshToken = tokenResponse[@"refresh_token"];
-            NSTimeInterval expiresIn = [tokenResponse[@"expires_in"] doubleValue];
-            if (expiresIn <= 0) expiresIn = 1800;
-
-            [[HAAuthManager sharedManager] saveOAuthCredentials:urlString
-                                                   accessToken:accessToken
-                                                  refreshToken:refreshToken
-                                                     expiresIn:expiresIn];
-            [self showStatus:@"Connected!" isError:NO];
-            [self navigateToDashboard];
-        }];
-    }];
-}
+#pragma mark - Navigation
 
 - (void)navigateToDashboard {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -756,6 +453,8 @@
     });
 }
 
+#pragma mark - Toggle Actions
+
 - (void)kioskSwitchToggled:(UISwitch *)sender {
     [[HAAuthManager sharedManager] setKioskMode:sender.isOn];
 }
@@ -763,11 +462,12 @@
 - (void)demoSwitchToggled:(UISwitch *)sender {
     [[HAAuthManager sharedManager] setDemoMode:sender.isOn];
     if (sender.isOn) {
-        // Disconnect first so dashboard VC will call connect (which loads demo data)
         [[HAConnectionManager sharedManager] disconnect];
         [self navigateToDashboard];
     }
 }
+
+#pragma mark - Logout
 
 - (void)logoutTapped {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Log Out & Reset"
@@ -775,18 +475,13 @@
         preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"Log Out" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
-        // Disconnect and clear everything
         [[HAConnectionManager sharedManager] disconnect];
         [[HAAuthManager sharedManager] clearCredentials];
 
-        // Reset UI fields
-        self.serverURLField.text = @"";
-        self.tokenField.text = @"";
-        self.usernameField.text = @"";
-        self.passwordField.text = @"";
-        self.kioskSwitch.on = NO;
-        self.demoSwitch.on = NO;
-        [self showStatus:@"Logged out. All data cleared." isError:NO];
+        // Navigate to login screen
+        HALoginViewController *loginVC = [[HALoginViewController alloc] init];
+        UINavigationController *nav = self.navigationController;
+        [nav setViewControllers:@[loginVC] animated:YES];
     }]];
     [self presentViewController:alert animated:YES completion:nil];
 }
@@ -840,29 +535,6 @@
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     self.previewGradientLayer.frame = self.gradientPreview.bounds;
-}
-
-- (void)showStatus:(NSString *)text isError:(BOOL)isError {
-    self.statusLabel.text = text;
-    self.statusLabel.textColor = isError ? [HATheme destructiveColor] : [HATheme primaryTextColor];
-}
-
-#pragma mark - UITextFieldDelegate
-
-- (BOOL)textFieldShouldReturn:(UITextField *)textField {
-    if (textField == self.serverURLField) {
-        if (self.authModeSegment.selectedSegmentIndex == 0) {
-            [self.tokenField becomeFirstResponder];
-        } else {
-            [self.usernameField becomeFirstResponder];
-        }
-    } else if (textField == self.usernameField) {
-        [self.passwordField becomeFirstResponder];
-    } else if (textField == self.tokenField || textField == self.passwordField) {
-        [textField resignFirstResponder];
-        [self connectTapped];
-    }
-    return YES;
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
