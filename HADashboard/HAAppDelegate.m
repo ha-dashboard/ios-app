@@ -82,13 +82,19 @@
         [[HAConnectionManager sharedManager] connect];
     }
 
-    // Request Guided Access if kiosk mode is on and not already in Guided Access
-    if ([[HAAuthManager sharedManager] isKioskMode] && !UIAccessibilityIsGuidedAccessEnabled()) {
-        UIAccessibilityRequestGuidedAccessSession(YES, ^(BOOL didSucceed) {
-            if (didSucceed) {
-                NSLog(@"[HAApp] Guided Access enabled for kiosk mode");
-            }
-        });
+    // Request Guided Access if kiosk mode is on and not already in Guided Access.
+    // Guard entire block to iOS 12.2+: both UIAccessibilityIsGuidedAccessEnabled()
+    // and UIAccessibilityRequestGuidedAccessSession() can block the main thread on
+    // jailbroken iOS 9 devices, causing a watchdog kill (0x8badf00d). Kiosk features
+    // (hidden nav bar, disabled idle timer) still work without Guided Access.
+    if (@available(iOS 12.2, *)) {
+        if ([[HAAuthManager sharedManager] isKioskMode] && !UIAccessibilityIsGuidedAccessEnabled()) {
+            UIAccessibilityRequestGuidedAccessSession(YES, ^(BOOL didSucceed) {
+                if (didSucceed) {
+                    NSLog(@"[HAApp] Guided Access enabled for kiosk mode");
+                }
+            });
+        }
     }
 }
 
@@ -97,12 +103,14 @@
     [[HAConnectionManager sharedManager] disconnect];
 
     // Exit Guided Access when app goes to background (if we initiated it)
-    if (UIAccessibilityIsGuidedAccessEnabled()) {
-        UIAccessibilityRequestGuidedAccessSession(NO, ^(BOOL didSucceed) {
-            if (didSucceed) {
-                NSLog(@"[HAApp] Guided Access disabled");
-            }
-        });
+    if (@available(iOS 12.2, *)) {
+        if (UIAccessibilityIsGuidedAccessEnabled()) {
+            UIAccessibilityRequestGuidedAccessSession(NO, ^(BOOL didSucceed) {
+                if (didSucceed) {
+                    NSLog(@"[HAApp] Guided Access disabled");
+                }
+            });
+        }
     }
 }
 
