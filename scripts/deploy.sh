@@ -121,7 +121,26 @@ if [[ -z "$TARGET" ]]; then
     exit 1
 fi
 
-# ── "all" target: build once, deploy to every target ─────────────────
+# ── Retry helper ─────────────────────────────────────────────────────
+SELF="$0"
+deploy_with_retry() {
+    local max_retries=3
+    local attempt=1
+    while [[ $attempt -le $max_retries ]]; do
+        # shellcheck disable=SC2086
+        if "$SELF" "$@" 2>&1; then
+            return 0
+        fi
+        if [[ $attempt -lt $max_retries ]]; then
+            echo "⚠️  Attempt $attempt/$max_retries failed, retrying..."
+            sleep 2
+        fi
+        attempt=$((attempt + 1))
+    done
+    return 1
+}
+
+# ── "all" target: build all first, then deploy in parallel ───────────
 if [[ "$TARGET" == "all" ]]; then
     # Collect pass-through options (exclude target and --no-build)
     OPTS=()
@@ -133,15 +152,58 @@ if [[ "$TARGET" == "all" ]]; then
     echo "🚀 Deploying to ALL targets..."
     echo ""
 
-    # Deploy to each target; continue on failure so one target doesn't block the rest
-    # Build order: sim first, then universal once for all physical devices
+    # ── Phase 1: Build all variants ──────────────────────────────────
+    echo "── Phase 1: Building ──────────────────────────────────────"
+    echo "   Building simulator (arm64)..."
+    "$PROJECT_DIR/scripts/build.sh" sim > /dev/null
+    echo "   ✅ Simulator build complete"
+
+    echo "   Building device (universal armv7+arm64)..."
+    "$PROJECT_DIR/scripts/build.sh" device > /dev/null
+    echo "   ✅ Device build complete"
+    echo ""
+
+    # ── Phase 2: Deploy in parallel with retries ─────────────────────
+    echo "── Phase 2: Deploying (parallel, up to 3 retries) ───────"
+    LOGDIR=$(mktemp -d)
+    PIDS=()
+    LABELS=()
+
+    deploy_bg() {
+        local label="$1"; shift
+        deploy_with_retry "$@" > "$LOGDIR/$label.log" 2>&1 &
+        PIDS+=($!)
+        LABELS+=("$label")
+    }
+
+    deploy_bg "sim"         sim         --no-build ${OPTS[@]+"${OPTS[@]}"}
+    deploy_bg "sim-iphone"  sim iphone  --no-build ${OPTS[@]+"${OPTS[@]}"}
+    deploy_bg "iphone"      iphone      --no-build ${OPTS[@]+"${OPTS[@]}"}
+    deploy_bg "mini5"       mini5       --no-build ${OPTS[@]+"${OPTS[@]}"}
+    deploy_bg "mini4"       mini4       --no-build ${OPTS[@]+"${OPTS[@]}"}
+    deploy_bg "ipad2"       ipad2       --no-build ${OPTS[@]+"${OPTS[@]}"}
+
+    # Wait for all deploys and collect results
     FAILURES=()
-    for DEPLOY_TARGET in "sim" "sim iphone --no-build" "iphone" "mini5 --no-build" "mini4 --no-build" "ipad2 --no-build"; do
-        # shellcheck disable=SC2086
-        "$0" $DEPLOY_TARGET ${OPTS[@]+"${OPTS[@]}"} 2>&1 || FAILURES+=("${DEPLOY_TARGET%% *}")
-        echo ""
+    for i in "${!LABELS[@]}"; do
+        if wait "${PIDS[$i]}"; then
+            echo "   ✅ ${LABELS[$i]}"
+        else
+            echo "   ❌ ${LABELS[$i]} (see log below)"
+            FAILURES+=("${LABELS[$i]}")
+        fi
     done
 
+    # Print logs for failures
+    for label in "${FAILURES[@]}"; do
+        echo ""
+        echo "── $label deploy log ──────────────────────────────────"
+        cat "$LOGDIR/$label.log"
+        echo "────────────────────────────────────────────────────────"
+    done
+    rm -rf "$LOGDIR"
+
+    echo ""
     if [[ ${#FAILURES[@]} -eq 0 ]]; then
         echo "✅ All targets deployed"
     else
