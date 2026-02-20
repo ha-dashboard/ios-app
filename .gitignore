@@ -59,7 +59,16 @@ com.apple.appstored/
 HADashboardTests/FailureDiffs/
 
 # Documentation (local working files, not committed)
-docs/
+docs/*
+# ...except GitHub Pages site files
+!docs/index.html
+!docs/privacy.html
+!docs/screenshots
+docs/screenshots/*
+!docs/screenshots/*.png
+!docs/icon-concepts
+docs/icon-concepts/*
+!docs/icon-concepts/had-icon-v1.png
 
 # Test harness runtime data and generated screenshots
 test-harness/ha-config/.ha_run.lock

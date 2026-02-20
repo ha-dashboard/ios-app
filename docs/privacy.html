@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - HA Dashboard</title>
+  <meta name="description" content="Privacy Policy for HA Dashboard, a native iOS app for Home Assistant.">
+  <style>
+    :root {
+      --blue: #039BE5;
+      --blue-dark: #0277BD;
+      --gray-200: #e5e7eb;
+      --gray-500: #6b7280;
+      --gray-900: #111827;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: var(--gray-900);
+      line-height: 1.7;
+      background: #fff;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    header {
+      background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+      color: #fff;
+      padding: 36px 0;
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+    }
+
+    header p {
+      margin-top: 4px;
+      opacity: 0.85;
+      font-size: 0.95rem;
+    }
+
+    main {
+      padding: 40px 0 60px;
+    }
+
+    h2 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-top: 32px;
+      margin-bottom: 10px;
+    }
+
+    p {
+      margin-bottom: 12px;
+    }
+
+    ul {
+      padding-left: 20px;
+      margin-bottom: 12px;
+    }
+
+    ul li {
+      margin-bottom: 6px;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: 24px;
+      font-size: 0.95rem;
+    }
+
+    footer {
+      border-top: 1px solid var(--gray-200);
+      padding: 24px 0;
+      text-align: center;
+      color: var(--gray-500);
+      font-size: 0.85rem;
+    }
+
+    footer a {
+      color: var(--gray-500);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="container">
+      <h1>Privacy Policy</h1>
+      <p>HA Dashboard for iOS</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <a href="index.html" class="back-link">&larr; Back to HA Dashboard</a>
+
+    <p><strong>Last updated:</strong> February 2026</p>
+
+    <p>HA Dashboard is a native iOS app that connects to your self-hosted Home Assistant server. This policy explains how the app handles your data.</p>
+
+    <h2>Data Collection</h2>
+    <p>HA Dashboard does <strong>not</strong> collect, store, or transmit any personal data to the developer or any third party. The app contains no analytics, tracking, advertising, or telemetry SDKs.</p>
+
+    <h2>How the App Works</h2>
+    <ul>
+      <li>The app connects directly to a Home Assistant server URL that <strong>you</strong> configure.</li>
+      <li>All communication occurs between your device and your Home Assistant server.</li>
+      <li>No data passes through any intermediary servers.</li>
+    </ul>
+
+    <h2>Credentials</h2>
+    <ul>
+      <li>Your Home Assistant access token or OAuth credentials are stored locally in the iOS Keychain on your device.</li>
+      <li>Credentials are never transmitted to the developer or any third party.</li>
+      <li>Credentials are only sent to your configured Home Assistant server for authentication.</li>
+    </ul>
+
+    <h2>Local Network Access</h2>
+    <p>The app uses local network access (mDNS/Bonjour) to discover Home Assistant servers on your network. This requires the Local Network permission on iOS. The discovery data does not leave your device.</p>
+
+    <h2>Cookies and Web Tracking</h2>
+    <p>The app does not use cookies, web views, or any form of web-based tracking.</p>
+
+    <h2>Data Storage</h2>
+    <p>All app data (server configuration, dashboard preferences, cached entity states) is stored locally on your device. No data is synced to cloud services.</p>
+
+    <h2>Third-Party Services</h2>
+    <p>The app does not integrate with any third-party services, SDKs, or APIs beyond your own Home Assistant server.</p>
+
+    <h2>Children's Privacy</h2>
+    <p>The app does not knowingly collect any data from anyone, including children.</p>
+
+    <h2>Changes to This Policy</h2>
+    <p>If this policy changes, the updated version will be published at this URL.</p>
+
+    <h2>Contact</h2>
+    <p>For questions about this privacy policy, <a href="https://github.com/ha-dashboard/ios-app/issues/new?labels=question">open an issue</a> on the GitHub repository.</p>
+  </main>
+
+  <footer>
+    <div class="container">
+      <a href="index.html">HA Dashboard</a> &middot; <a href="https://github.com/ha-dashboard/ios-app">GitHub</a>
+    </div>
+  </footer>
+
+</body>
+</html>

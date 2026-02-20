@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HA Dashboard - Native Home Assistant Dashboard for iOS</title>
+  <meta name="description" content="A native iOS app that renders your Home Assistant Lovelace dashboards natively. No web views.">
+  <style>
+    :root {
+      --blue: #039BE5;
+      --blue-dark: #0277BD;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-500: #6b7280;
+      --gray-700: #374151;
+      --gray-900: #111827;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: var(--gray-900);
+      line-height: 1.6;
+      background: #fff;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Header */
+    header {
+      background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+      color: #fff;
+      padding: 48px 0 56px;
+      text-align: center;
+    }
+
+    header .icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 18px;
+      margin-bottom: 16px;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    header p {
+      font-size: 1.1rem;
+      opacity: 0.9;
+      max-width: 540px;
+      margin: 0 auto;
+    }
+
+    /* App Store badge */
+    .app-store-section {
+      text-align: center;
+      margin-top: 24px;
+    }
+
+    .app-store-badge {
+      display: inline-block;
+      background: #000;
+      color: #fff;
+      text-decoration: none;
+      padding: 10px 24px;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: opacity 0.2s;
+    }
+
+    .app-store-badge:hover { opacity: 0.85; }
+
+    .app-store-badge small {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 400;
+      opacity: 0.8;
+    }
+
+    /* Sections */
+    section {
+      padding: 48px 0;
+    }
+
+    section + section {
+      border-top: 1px solid var(--gray-200);
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    p + p, p + ul, ul + p { margin-top: 12px; }
+
+    ul {
+      padding-left: 20px;
+    }
+
+    ul li {
+      margin-bottom: 6px;
+    }
+
+    /* Screenshots */
+    .screenshots {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .screenshots img {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--gray-200);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .screenshots-phone {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+      max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .screenshots-phone img {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--gray-200);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    @media (max-width: 640px) {
+      .screenshots {
+        grid-template-columns: 1fr;
+      }
+      .screenshots-phone {
+        max-width: 100%;
+      }
+    }
+
+    /* Support */
+    .support-options {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    @media (max-width: 640px) {
+      .support-options {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .support-card {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .support-card h3 {
+      margin-bottom: 8px;
+    }
+
+    .support-card p {
+      color: var(--gray-500);
+      font-size: 0.95rem;
+      margin-bottom: 12px;
+    }
+
+    .support-card a {
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .support-card a:hover {
+      text-decoration: underline;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--gray-200);
+      padding: 32px 0;
+      text-align: center;
+      color: var(--gray-500);
+      font-size: 0.85rem;
+    }
+
+    footer a {
+      color: var(--gray-500);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    .footer-links {
+      margin-bottom: 8px;
+    }
+
+    .footer-links a + a::before {
+      content: " \00b7 ";
+      margin: 0 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="container">
+      <img src="icon-concepts/had-icon-v1.png" alt="HA Dashboard icon" class="icon">
+      <h1>HA Dashboard</h1>
+      <p>A native iOS app that renders your Home Assistant Lovelace dashboards. No web views.</p>
+      <div class="app-store-section">
+        <!-- Update this href with your App Store link after approval -->
+        <a href="#" class="app-store-badge">
+          <small>Download on the</small>
+          App Store
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <section id="features">
+      <h2>Features</h2>
+      <ul>
+        <li><strong>Native rendering</strong> of HA Lovelace sections-layout dashboards</li>
+        <li><strong>Real-time updates</strong> via WebSocket &mdash; entity states update live</li>
+        <li><strong>33 cell types</strong> &mdash; controls, inputs, composite cards, entity detail views</li>
+        <li><strong>Themes</strong> &mdash; Auto, Dark, Light, and Gradient modes</li>
+        <li><strong>Kiosk mode</strong> &mdash; hides navigation, prevents sleep, ideal for wall-mounted tablets</li>
+        <li><strong>Demo mode</strong> &mdash; 3 built-in dashboards with simulated entities, no server needed</li>
+        <li><strong>Dashboard switcher</strong> &mdash; switch between multiple HA dashboards</li>
+        <li><strong>mDNS discovery</strong> &mdash; finds Home Assistant servers on your local network</li>
+        <li><strong>Dual auth</strong> &mdash; long-lived access token or full OAuth login flow</li>
+      </ul>
+
+      <div class="screenshots">
+        <img src="screenshots/ipad-light-1.png" alt="HA Dashboard on iPad - Light mode with lighting controls, switches, and scenes">
+        <img src="screenshots/ipad-dark-1.png" alt="HA Dashboard on iPad - Dark mode with climate controls and weather">
+      </div>
+      <div class="screenshots-phone">
+        <img src="screenshots/iphone-light-1.png" alt="HA Dashboard on iPhone - Light mode">
+        <img src="screenshots/iphone-dark-1.png" alt="HA Dashboard on iPhone - Dark mode with thermostat">
+      </div>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <p>HA Dashboard connects directly to your <a href="https://www.home-assistant.io/" rel="noopener">Home Assistant</a> server. You need:</p>
+      <ul>
+        <li>A running Home Assistant instance (local network or remote via HTTPS)</li>
+        <li>At least one Lovelace dashboard configured</li>
+        <li>An iPad or iPhone running iOS 12 or later</li>
+      </ul>
+      <p>No Home Assistant server? Use <strong>Demo Mode</strong> to explore the app with built-in sample dashboards.</p>
+    </section>
+
+    <section id="support">
+      <h2>Support</h2>
+      <p>Need help or found a bug? Here's how to get support:</p>
+
+      <div class="support-options">
+        <div class="support-card">
+          <h3>Report a Bug</h3>
+          <p>Found something that isn't working? Open a bug report and we'll look into it.</p>
+          <a href="https://github.com/ha-dashboard/ios-app/issues/new?labels=bug&template=bug_report.md">Open a Bug Report &rarr;</a>
+        </div>
+        <div class="support-card">
+          <h3>Request a Feature</h3>
+          <p>Have an idea for something the app should do? Let us know.</p>
+          <a href="https://github.com/ha-dashboard/ios-app/issues/new?labels=enhancement&template=feature_request.md">Request a Feature &rarr;</a>
+        </div>
+        <div class="support-card">
+          <h3>Ask a Question</h3>
+          <p>Need help setting up the app or connecting to your server?</p>
+          <a href="https://github.com/ha-dashboard/ios-app/issues/new?labels=question">Ask a Question &rarr;</a>
+        </div>
+        <div class="support-card">
+          <h3>Browse Issues</h3>
+          <p>See existing reports, known issues, and ongoing discussions.</p>
+          <a href="https://github.com/ha-dashboard/ios-app/issues">View All Issues &rarr;</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="privacy">
+      <h2>Privacy</h2>
+      <p>HA Dashboard does <strong>not</strong> collect, store, or transmit any personal data. The app contains no analytics, tracking, advertising, or telemetry. All communication is directly between your device and your Home Assistant server.</p>
+      <p><a href="privacy.html">Read the full Privacy Policy &rarr;</a></p>
+    </section>
+
+  </main>
+
+  <footer>
+    <div class="container">
+      <div class="footer-links">
+        <a href="#support">Support</a>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="https://github.com/ha-dashboard/ios-app">GitHub</a>
+      </div>
+      <p>HA Dashboard is an open-source project. Not affiliated with Home Assistant or Nabu Casa.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
