@@ -1,5 +1,7 @@
 # HA Dashboard
 
+[![Download on the App Store](https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83&releaseDate=1740009600)](https://apps.apple.com/gb/app/ha-dash/id6759347912)
+
 A native iOS app that renders your [Home Assistant](https://www.home-assistant.io/) Lovelace dashboards natively — no web views.
 
 Built to run on everything from a jailbroken iPad 2 (iOS 9.3.5, armv7) wall-mounted as a kiosk, to an iPhone 17 Pro Max running iOS 26.
@@ -20,7 +22,7 @@ Built to run on everything from a jailbroken iPad 2 (iOS 9.3.5, armv7) wall-moun
 
 ## Screenshots
 
-*Coming soon*
+See the [landing page](https://ha-dashboard.github.io/ios-app/) for screenshots.
 
 ## Requirements
 
@@ -98,6 +100,13 @@ scripts/             Build, deploy, test, project generation
 project.yml          XcodeGen project definition
 .env.example         Environment variable template
 ```
+
+## Links
+
+- [App Store](https://apps.apple.com/gb/app/ha-dash/id6759347912)
+- [Landing Page](https://ha-dashboard.github.io/ios-app/)
+- [Support](https://ha-dashboard.github.io/ios-app/support.html)
+- [Privacy Policy](https://ha-dashboard.github.io/ios-app/privacy.html)
 
 ## Privacy
 

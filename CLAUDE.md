@@ -2,6 +2,14 @@
 
 Native iOS Home Assistant dashboard app. Renders HA Lovelace dashboards natively across iOS 9.3.5 (iPad 2, armv7) through iOS 18+ (iPhone 16 Pro Max, arm64), providing a kiosk-friendly wall-mounted display experience on old iPads while also working as a mobile dashboard on modern devices.
 
+## Published Links
+
+- **App Store**: https://apps.apple.com/gb/app/ha-dash/id6759347912
+- **Landing Page**: https://ha-dashboard.github.io/ios-app/
+- **Support Page**: https://ha-dashboard.github.io/ios-app/support.html
+- **Privacy Policy**: https://ha-dashboard.github.io/ios-app/privacy.html
+- **GitHub**: https://github.com/ha-dashboard/ios-app
+
 ## Project Goals
 
 - Render the user's HA Lovelace dashboard natively — not a web view
