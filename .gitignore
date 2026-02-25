@@ -34,7 +34,18 @@ Pods/
 .env
 private_keys/
 *.p12
+*.pem
 *.mobileprovision
+
+# Demo server infra (lives in ha-dashboard/demo-server)
+deploy/
+
+# Generated screenshots
+screenshots/
+
+# Node (screenshot scripts)
+scripts/node_modules/
+scripts/package-lock.json
 
 # Temporary files
 *.swp

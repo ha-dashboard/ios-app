@@ -23,14 +23,14 @@ import pixelmatch from 'pixelmatch';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const SCREENSHOTS_DIR = path.join(__dirname, 'screenshots', 'ha-web');
+const SCREENSHOTS_DIR = path.join(__dirname, '..', 'screenshots', 'ha-web');
 const BASELINE_DIR = process.argv.includes('--baseline')
   ? process.argv[process.argv.indexOf('--baseline') + 1]
-  : path.join(__dirname, 'screenshots', 'baseline');
+  : path.join(__dirname, '..', 'screenshots', 'baseline');
 const APP_REFS_DIR = process.argv.includes('--app-refs')
   ? process.argv[process.argv.indexOf('--app-refs') + 1]
   : path.join(__dirname, '..', 'HADashboardTests', 'ReferenceImages_64');
-const DIFF_DIR = path.join(__dirname, 'screenshots', 'diffs');
+const DIFF_DIR = path.join(__dirname, '..', 'screenshots', 'diffs');
 
 function loadPNG(filepath) {
   const data = readFileSync(filepath);
@@ -191,7 +191,7 @@ function compareAppParity() {
 }
 
 function generateReport(regressionResults, parityResults) {
-  const reportPath = path.join(__dirname, 'screenshots', 'comparison-report.md');
+  const reportPath = path.join(__dirname, '..', 'screenshots', 'comparison-report.md');
 
   const lines = [
     '# Visual Comparison Report',

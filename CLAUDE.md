@@ -154,19 +154,18 @@ scripts/test-snapshots.sh
 - `HADashboardTests/ReferenceImages_64/` — 190 reference images (committed, source of truth)
 - To re-record: set `self.recordMode = YES` in `HABaseSnapshotTestCase.m`, run tests, set back to `NO`
 
-### Visual Parity Test Harness
+### Visual Parity Screenshots
 
-Isolated HA 2026.2 Docker instance with a test dashboard for side-by-side comparison.
+Uses the demo server at https://demo.ha-dash.app for side-by-side comparison.
 
 ```bash
-cd test-harness
-./run.sh setup        # Install deps + Playwright chromium (one-time)
-./run.sh full         # Start HA Docker -> capture screenshots -> stop
-./run.sh baseline     # Save captures as regression baseline
-./run.sh compare      # Generate comparison report
+cd scripts && npm install   # One-time: install deps
+npm run capture             # Capture HA web screenshots
+npm run compare             # Generate comparison report
 ```
 
-Screenshots are generated (git-ignored) and can be regenerated with the above commands.
+Screenshots are saved to `screenshots/` (git-ignored) and can be regenerated with the above commands.
+Demo server infra lives in the private repo `ha-dashboard/demo-server`.
 
 ### Launch Arguments (for testing)
 - `-HAServerURL http://...` — HA server URL
@@ -194,8 +193,8 @@ HADashboard/
 └── main.m
 Vendor/             # SocketRocket (SRWebSocket), MDI icon font, iOSSnapshotTestCase
 HADashboardTests/   # 96 snapshot regression tests + reference images
-test-harness/       # Docker-based visual parity testing
-scripts/            # Build, deploy, test, and project generation scripts
+scripts/            # Build, deploy, test, screenshot capture
+screenshots/        # HA web + app screenshot captures (git-ignored)
 project.yml         # XcodeGen project definition (placeholders — .env fills real values)
 .env.example        # Template for required environment variables
 PRIVACY.md          # Privacy policy

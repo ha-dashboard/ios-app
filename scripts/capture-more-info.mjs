@@ -3,7 +3,7 @@
  * Captures HA web more-info dialog screenshots for each entity domain.
  * Uses REST API auth + localStorage injection (same approach as capture-screenshots.mjs).
  *
- * Usage: node capture-more-info.mjs [--url http://localhost:8124]
+ * Usage: node scripts/capture-more-info.mjs [--url https://demo.ha-dash.app]
  */
 import { chromium } from 'playwright';
 import { mkdirSync } from 'fs';
@@ -13,9 +13,10 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const HA_URL = process.argv.includes('--url')
   ? process.argv[process.argv.indexOf('--url') + 1]
-  : 'http://localhost:8124';
+  : 'https://demo.ha-dash.app';
 
-const OUTPUT_DIR = path.join(__dirname, 'screenshots', 'more-info');
+const PROJECT_ROOT = path.join(__dirname, '..');
+const OUTPUT_DIR = path.join(PROJECT_ROOT, 'screenshots', 'more-info');
 mkdirSync(OUTPUT_DIR, { recursive: true });
 
 // Representative entities per domain — covers all domains with more-info dialogs

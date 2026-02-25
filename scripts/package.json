@@ -1,0 +1,14 @@
+{
+  "name": "ha-dashboard-scripts",
+  "private": true,
+  "scripts": {
+    "capture": "node capture-screenshots.mjs",
+    "capture:more-info": "node capture-more-info.mjs",
+    "compare": "node compare-screenshots.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.50.0",
+    "pixelmatch": "^6.0.0",
+    "pngjs": "^7.0.0"
+  }
+}

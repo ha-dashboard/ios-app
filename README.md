@@ -83,10 +83,9 @@ See `.env.example` for the device UDIDs and credentials needed for each target.
 # Run 165 snapshot regression tests
 scripts/test-snapshots.sh
 
-# Visual parity test harness (requires Docker)
-cd test-harness
-./run.sh setup    # One-time: install deps
-./run.sh full     # Capture HA web screenshots for comparison
+# Visual parity screenshots (uses demo.ha-dash.app)
+cd scripts && npm install   # One-time: install deps
+npm run capture             # Capture HA web screenshots for comparison
 ```
 
 ## Project Structure
@@ -95,8 +94,8 @@ cd test-harness
 HADashboard/         Source code (Auth, Controllers, Models, Networking, Theme, Views)
 HADashboardTests/    165 snapshot tests + 291 reference images
 Vendor/              SocketRocket, MDI icon font, iOSSnapshotTestCase
-test-harness/        Docker-based visual parity testing
-scripts/             Build, deploy, test, project generation
+scripts/             Build, deploy, test, screenshot capture
+screenshots/         HA web + app screenshot captures
 project.yml          XcodeGen project definition
 .env.example         Environment variable template
 ```

@@ -66,7 +66,7 @@ xcrun simctl install "$SIM_ID" "$APP_PATH" 2>&1
 for theme_pair in "${THEMES[@]}"; do
     THEME_NAME="${theme_pair%%:*}"
     THEME_MODE="${theme_pair##*:}"
-    OUTPUT_DIR="$SCRIPT_DIR/screenshots/app/$THEME_NAME"
+    OUTPUT_DIR="$SCRIPT_DIR/../screenshots/app/$THEME_NAME"
     mkdir -p "$OUTPUT_DIR"
 
     echo ""

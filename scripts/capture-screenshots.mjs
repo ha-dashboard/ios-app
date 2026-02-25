@@ -3,7 +3,7 @@
  * Captures screenshots of each view in the HA test-harness dashboard.
  * Produces one PNG per view + individual section crops for granular comparison.
  *
- * Usage: node capture-screenshots.mjs [--url http://localhost:8124]
+ * Usage: node scripts/capture-screenshots.mjs [--url https://demo.ha-dash.app]
  */
 import { chromium } from 'playwright';
 import { mkdir } from 'fs/promises';
@@ -14,7 +14,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const HA_URL = process.argv.includes('--url')
   ? process.argv[process.argv.indexOf('--url') + 1]
-  : 'http://localhost:8124';
+  : 'https://demo.ha-dash.app';
 
 // --theme dark|light|both (default: both)
 const THEME_ARG = process.argv.includes('--theme')
@@ -201,7 +201,7 @@ async function main() {
   const browser = await chromium.launch({ headless: true });
 
   for (const theme of THEMES) {
-    const outputDir = path.join(__dirname, 'screenshots', 'ha-web', theme);
+    const outputDir = path.join(__dirname, '..', 'screenshots', 'ha-web', theme);
     await mkdir(outputDir, { recursive: true });
 
     console.log(`\n--- Theme: ${theme} ---`);

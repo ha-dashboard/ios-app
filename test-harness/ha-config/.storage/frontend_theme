@@ -1,9 +1,0 @@
-{
-  "version": 1,
-  "minor_version": 1,
-  "key": "frontend_theme",
-  "data": {
-    "frontend_default_theme": "default",
-    "frontend_default_dark_theme": "default"
-  }
-}
