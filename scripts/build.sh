@@ -84,6 +84,47 @@ build_simulator() {
     echo "$APP"
 }
 
+# ── RosettaSim build (x86_64 simulator for legacy iOS 9–14 runtimes) ──
+# Uses standard xcodebuild with MERGED_BINARY_TYPE=none to avoid the
+# debug dylib pattern that crashes on legacy runtimes' libdispatch.
+build_rosettasim() {
+    echo "Building for RosettaSim (x86_64, no mergeable libraries)..." >&2
+
+    if [ ! -d "$XCODE26" ]; then
+        echo "Xcode 26 not found at $XCODE26" >&2
+        exit 1
+    fi
+    export DEVELOPER_DIR="$XCODE26/Contents/Developer"
+
+    local BUILD_DIR="$PROJECT_DIR/build/rosettasim"
+
+    xcodebuild \
+        -project "$PROJECT_DIR/HADashboard.xcodeproj" \
+        -scheme HADashboard \
+        -sdk iphonesimulator \
+        -configuration Debug \
+        -derivedDataPath "$BUILD_DIR" \
+        ARCHS=x86_64 \
+        VALID_ARCHS=x86_64 \
+        ONLY_ACTIVE_ARCH=NO \
+        IPHONEOS_DEPLOYMENT_TARGET=9.0 \
+        "PRODUCT_BUNDLE_IDENTIFIER=$BUNDLE_ID" \
+        "MARKETING_VERSION=$APP_VERSION" \
+        "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" \
+        MERGED_BINARY_TYPE=none \
+        CODE_SIGNING_ALLOWED=NO \
+        CODE_SIGN_IDENTITY="" \
+        build 2>&1 | grep -E '(error:|BUILD)' | tail -5 >&2
+
+    local APP="$BUILD_DIR/Build/Products/Debug-iphonesimulator/HA Dashboard.app"
+    if [ ! -d "$APP" ]; then
+        echo "Build failed" >&2
+        exit 1
+    fi
+
+    echo "$APP"
+}
+
 # ── Universal device build (armv7+arm64) ──────────────────────────────
 build_device() {
     echo "Building universal armv7+arm64 (Xcode 26 clang + Xcode 13 SDK)..." >&2
@@ -302,12 +343,15 @@ case "$TARGET" in
     sim|simulator)
         build_simulator
         ;;
+    rosettasim)
+        build_rosettasim
+        ;;
     device|universal)
         build_device
         ;;
     *)
         echo "Unknown target: $TARGET" >&2
-        echo "Use 'sim' or 'device'" >&2
+        echo "Use 'sim', 'rosettasim', or 'device'" >&2
         exit 1
         ;;
 esac
