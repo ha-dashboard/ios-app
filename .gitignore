@@ -75,6 +75,7 @@ docs/*
 !docs/index.html
 !docs/privacy.html
 !docs/support.html
+!docs/rosettasim-deployment.md
 !docs/screenshots
 docs/screenshots/*
 !docs/screenshots/*.png
