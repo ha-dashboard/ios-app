@@ -56,8 +56,9 @@ Key variables:
 | iPad Mini 4 | arm64 | 15.x | WiFi via ios-deploy + pymobiledevice3 |
 | iPad Mini 5 | arm64 | 26.x | WiFi via devicectl |
 | iPhone 16 Pro Max | arm64 | 18.x | WiFi via devicectl |
-| iPad Simulator | arm64 | latest | simctl (auto-discovered) |
-| iPhone Simulator | arm64 | latest | simctl (auto-discovered) |
+| iPad Simulator | arm64 | 16.4+ | `xcrun simctl install/launch` |
+| iPhone Simulator | arm64 | 16.4+ | `xcrun simctl install/launch` |
+| Legacy Simulator | x86_64 | 9.3–14.x | `rosettasim-ctl install/launch` (via RosettaSim) |
 
 ## Versioning
 
@@ -77,8 +78,8 @@ git push --tags
 ## Build & Deploy
 
 ```bash
-scripts/deploy.sh sim              # iPad simulator
-scripts/deploy.sh sim iphone       # iPhone simulator
+scripts/deploy.sh sim              # iPad simulator (arm64, iOS 16+)
+scripts/deploy.sh sim iphone       # iPhone simulator (arm64, iOS 16+)
 scripts/deploy.sh iphone           # Physical iPhone via devicectl
 scripts/deploy.sh mini5            # iPad Mini 5 via devicectl (WiFi)
 scripts/deploy.sh mini4            # iPad Mini 4 via ios-deploy (WiFi)
@@ -88,6 +89,56 @@ scripts/deploy.sh all --kiosk      # Deploy to all targets in kiosk mode
 ```
 
 Options: `--no-build`, `--dashboard X`, `--default`, `--server URL`, `--kiosk`, `--no-kiosk`
+
+### RosettaSim (Legacy Simulators — iOS 9.3–14.x)
+
+Legacy iOS simulators run x86_64 under RosettaSim. Standard `xcrun simctl install/launch` **hangs** on these runtimes — use `rosettasim-ctl` instead.
+
+**Binary**: `/Users/ashhopkins/Projects/rosetta/src/build/rosettasim-ctl`
+
+**Build:**
+```bash
+scripts/build.sh rosettasim        # x86_64 sim build with MERGED_BINARY_TYPE=none
+```
+
+The `MERGED_BINARY_TYPE=none` flag is critical — without it, Xcode 26's default Debug configuration produces a stub binary + debug dylib (mergeable libraries) that crashes on legacy runtimes' libdispatch.
+
+**Deploy:**
+```bash
+RSCTL=/Users/ashhopkins/Projects/rosetta/src/build/rosettasim-ctl
+
+$RSCTL install <UDID> "build/rosettasim/Build/Products/Debug-iphonesimulator/HA Dashboard.app"
+$RSCTL launch <UDID> com.hadashboard.app
+$RSCTL terminate <UDID> com.hadashboard.app
+$RSCTL screenshot <UDID> output.png
+```
+
+**All rosettasim-ctl commands:**
+
+| Command | Description |
+|---------|-------------|
+| `list` | List all devices with status (marks legacy runtimes) |
+| `boot <UDID>` | Boot device |
+| `shutdown <UDID\|all>` | Shutdown device(s) |
+| `install <UDID> <path.app>` | Install app (MobileInstallation for legacy) |
+| `launch <UDID> <bundle-id>` | Launch app (SpringBoard injection for legacy) |
+| `terminate <UDID> <bundle-id>` | Kill running app |
+| `screenshot <UDID> <output>` | Screenshot from daemon framebuffer |
+| `listapps <UDID>` | List installed apps |
+| `appinfo <UDID> <bundle-id>` | JSON app info |
+| `status <UDID>` | Full device status with daemon/IO info |
+| `privacy <UDID> grant <service> <bundle-id>` | Grant TCC permissions |
+
+For native runtimes (iOS 16+), `rosettasim-ctl` transparently passes through to `xcrun simctl`.
+
+**Known legacy simulator UDIDs:**
+
+| Device | iOS | UDID |
+|--------|-----|------|
+| iPad Pro | 9.3 | `D9DCA298-C3D2-4B68-9501-E5279A1B96B6` |
+| iPad (5th gen) | 10.3 | `261D4B19-BE81-42F2-A646-3EF6F668DD84` |
+| iPad (10th gen) | 16.4 | `87E82E85-7B26-480C-B5A2-6D68403CF920` |
+| iPad (A16) | 26.2 | `6937E3CC-604A-4E46-A356-17E82351093A` |
 
 ## Architecture
 
