@@ -113,23 +113,34 @@ $RSCTL terminate <UDID> com.hadashboard.app
 $RSCTL screenshot <UDID> output.png
 ```
 
-**All rosettasim-ctl commands:**
+**rosettasim-ctl commands** (full simctl parity for legacy runtimes):
 
 | Command | Description |
 |---------|-------------|
 | `list` | List all devices with status (marks legacy runtimes) |
 | `boot <UDID>` | Boot device |
 | `shutdown <UDID\|all>` | Shutdown device(s) |
-| `install <UDID> <path.app>` | Install app (MobileInstallation for legacy) |
-| `launch <UDID> <bundle-id>` | Launch app (SpringBoard injection for legacy) |
-| `terminate <UDID> <bundle-id>` | Kill running app |
-| `screenshot <UDID> <output>` | Screenshot from daemon framebuffer |
+| `install <UDID> <path.app>` | Install app (darwin notify + MobileInstallation) |
+| `launch <UDID> <bundle-id>` | Launch app (SpringBoard injection) |
+| `terminate <UDID> <bundle-id>` | Kill app process |
+| `screenshot <UDID> <output.png>` | Screenshot from daemon framebuffer |
 | `listapps <UDID>` | List installed apps |
 | `appinfo <UDID> <bundle-id>` | JSON app info |
 | `status <UDID>` | Full device status with daemon/IO info |
-| `privacy <UDID> grant <service> <bundle-id>` | Grant TCC permissions |
+| `privacy <UDID> grant <service> <bundle-id>` | TCC permissions |
+| `touch <UDID> <x> <y>` | Simulated touch input |
+| `location <UDID> set <lat>,<lon>` | GPS simulation |
+| `push <UDID> <bundle-id> <payload.json>` | Push notification |
+| `ui <UDID> content_size <size>` | Accessibility text size |
+| `keychain <UDID> reset` | Reset keychain |
+| `addmedia <UDID> <file>` | Add photos/videos |
+| `getenv <UDID> <var>` | Read environment variable |
+| `pbcopy <UDID>` | Copy to pasteboard (pipe stdin) |
+| `pbpaste <UDID>` | Paste from pasteboard |
 
-For native runtimes (iOS 16+), `rosettasim-ctl` transparently passes through to `xcrun simctl`.
+For native runtimes (iOS 16+), all commands transparently pass through to `xcrun simctl`.
+
+**Rebuild rosettasim-ctl**: `cd ~/Projects/rosetta/src && make ctl`
 
 **Known legacy simulator UDIDs:**
 
