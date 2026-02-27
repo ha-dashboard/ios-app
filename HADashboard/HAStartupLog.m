@@ -20,13 +20,18 @@ static mach_timebase_info_data_t _timebase;
     [[NSFileManager defaultManager] createFileAtPath:path contents:nil attributes:nil];
     _logHandle = [NSFileHandle fileHandleForWritingAtPath:path];
 
-    // Header
-    NSString *header = [NSString stringWithFormat:@"=== HA Dashboard startup log ===\nDevice: %@ / iOS %@\nDate: %@\n\n",
-        [[UIDevice currentDevice] model],
-        [[UIDevice currentDevice] systemVersion],
-        [NSDate date]];
-    [_logHandle writeData:[header dataUsingEncoding:NSUTF8StringEncoding]];
-    [_logHandle synchronizeFile];
+    // Header — wrapped in @try to survive "No space left on device" on legacy sims
+    @try {
+        NSString *header = [NSString stringWithFormat:@"=== HA Dashboard startup log ===\nDevice: %@ / iOS %@\nDate: %@\n\n",
+            [[UIDevice currentDevice] model],
+            [[UIDevice currentDevice] systemVersion],
+            [NSDate date]];
+        [_logHandle writeData:[header dataUsingEncoding:NSUTF8StringEncoding]];
+        [_logHandle synchronizeFile];
+    } @catch (NSException *e) {
+        NSLog(@"[HAStartupLog] Log file write failed: %@", e.reason);
+        _logHandle = nil;
+    }
 }
 
 + (NSString *)logPath {
@@ -50,8 +55,13 @@ static mach_timebase_info_data_t _timebase;
     NSString *line = [NSString stringWithFormat:@"+%8.1fms  %@\n", ms, message];
 
     // Write + flush immediately (survives watchdog kill)
-    [_logHandle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-    [_logHandle synchronizeFile];
+    @try {
+        [_logHandle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+        [_logHandle synchronizeFile];
+    } @catch (NSException *e) {
+        // Disk full or log file gone — disable file logging, keep NSLog
+        _logHandle = nil;
+    }
 
     // Also NSLog for syslog/console visibility
     NSLog(@"[HAStartup] +%.0fms %@", ms, message);
