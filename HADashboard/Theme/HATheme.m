@@ -1,4 +1,5 @@
 #import "HATheme.h"
+#import "HASunBasedTheme.h"
 
 NSString *const HAThemeDidChangeNotification = @"HAThemeDidChangeNotification";
 
@@ -131,11 +132,15 @@ static NSString *const kCustomHex2Key     = @"ha_grad_custom_hex2";
     HAThemeMode mode = [self currentMode];
     if (mode == HAThemeModeDark || mode == HAThemeModeGradient) return YES;
     if (mode == HAThemeModeLight) return NO;
-    // Auto — follow system on iOS 13+, light on iOS 9-12
-    if (@available(iOS 13.0, *)) {
-        return [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
+    // Auto — follow system on iOS 13+, sun entity on iOS 9-12.
+    // Use NSProcessInfo instead of @available because @available checks the
+    // SDK version on RosettaSim x86_64 simulators, returning YES on iOS 9.3.
+    if ([NSProcessInfo processInfo].operatingSystemVersion.majorVersion >= 13) {
+        if (@available(iOS 13.0, *)) {
+            return [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
+        }
     }
-    return NO;
+    return [HASunBasedTheme sharedInstance].isSunBelowHorizon;
 }
 
 #pragma mark - Utility
@@ -194,18 +199,19 @@ static NSString *const kCustomHex2Key     = @"ha_grad_custom_hex2";
 /// Auto: iOS 13+ dynamic provider, light on iOS 9-12.
 /// Light: always light. Dark/Gradient: always dark.
 + (UIColor *)colorWithLight:(UIColor *)light dark:(UIColor *)dark {
-    // Always return a dynamic color on iOS 13+ so that changing
-    // overrideUserInterfaceStyle on the window automatically re-resolves
-    // every color across all views — no manual refresh needed.
-    if (@available(iOS 13.0, *)) {
-        return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *tc) {
-            return tc.userInterfaceStyle == UIUserInterfaceStyleDark ? dark : light;
-        }];
+    // On real iOS 13+, return dynamic colors that auto-resolve on trait
+    // changes.  On iOS 9-12 (including RosettaSim), resolve statically —
+    // the sun-based theme posts HAThemeDidChangeNotification to trigger
+    // manual refreshes.  Use NSProcessInfo instead of @available because
+    // @available misreports on RosettaSim legacy simulators.
+    if ([NSProcessInfo processInfo].operatingSystemVersion.majorVersion >= 13) {
+        if (@available(iOS 13.0, *)) {
+            return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *tc) {
+                return tc.userInterfaceStyle == UIUserInterfaceStyleDark ? dark : light;
+            }];
+        }
     }
-    // iOS 9-12 fallback: resolve based on current mode
-    HAThemeMode mode = [self currentMode];
-    if (mode == HAThemeModeDark || mode == HAThemeModeGradient) return dark;
-    return light;
+    return [self effectiveDarkMode] ? dark : light;
 }
 
 /// Three-arg variant: gradient mode gets a special color (e.g. semi-transparent).
