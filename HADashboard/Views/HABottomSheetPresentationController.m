@@ -56,9 +56,18 @@ static const CGFloat kDismissVelocity = 800.0;
         return;
     }
 
-    // Apply corner radius
+    // Apply corner radius — skip layer.mask on iOS 9-10 as it blocks
+    // touch delivery.  Use simple cornerRadius (rounds all 4 corners)
+    // as a visual compromise.
     UIView *presented = self.presentedView;
-    [self applyCornerRadius:presented];
+    presented.clipsToBounds = YES;
+    if (@available(iOS 11.0, *)) {
+        presented.layer.cornerRadius = kCornerRadius;
+        presented.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
+    } else {
+        presented.layer.cornerRadius = kCornerRadius;
+        // No layer.mask — it breaks hit testing on iOS 9.
+    }
 
     // Pan-to-dismiss gesture
     self.panGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
@@ -81,6 +90,15 @@ static const CGFloat kDismissVelocity = 800.0;
     if (completed) {
         [self.dimmingView removeFromSuperview];
         self.dimmingView = nil;
+
+        // iOS 9-10: UIKit may leave the container view (UITransitionView)
+        // in the hierarchy after custom-presentation dismissal, blocking
+        // all touches to the presenting view controller underneath.
+        // Force-remove it so the app is interactive again.
+        UIView *container = self.containerView;
+        if (container && container.subviews.count == 0) {
+            [container removeFromSuperview];
+        }
     }
 }
 
@@ -88,26 +106,6 @@ static const CGFloat kDismissVelocity = 800.0;
     [super containerViewWillLayoutSubviews];
     self.presentedView.frame = [self frameOfPresentedViewInContainerView];
     self.dimmingView.frame = self.containerView.bounds;
-}
-
-#pragma mark - Corner Radius
-
-- (void)applyCornerRadius:(UIView *)view {
-    view.clipsToBounds = YES;
-
-    if (@available(iOS 11.0, *)) {
-        view.layer.cornerRadius = kCornerRadius;
-        view.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
-    } else {
-        // iOS 9-10: UIBezierPath mask for top corners only
-        CGRect bounds = view.bounds;
-        UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:bounds
-                                                   byRoundingCorners:UIRectCornerTopLeft | UIRectCornerTopRight
-                                                         cornerRadii:CGSizeMake(kCornerRadius, kCornerRadius)];
-        CAShapeLayer *mask = [CAShapeLayer layer];
-        mask.path = path.CGPath;
-        view.layer.mask = mask;
-    }
 }
 
 #pragma mark - Tap to Dismiss
