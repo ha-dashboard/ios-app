@@ -36,6 +36,7 @@
 #import "HACalendarCardCell.h"
 #import "HATopAlignedFlowLayout.h"
 #import "HAHistoryManager.h"
+#import "HASunBasedTheme.h"
 #import <QuartzCore/QuartzCore.h>
 
 static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
@@ -300,17 +301,8 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     [self.collectionView reloadData];
 }
 
-- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
-    [super traitCollectionDidChange:previousTraitCollection];
-    if (@available(iOS 13.0, *)) {
-        if ([previousTraitCollection hasDifferentColorAppearanceComparedToTraitCollection:self.traitCollection]) {
-            // Handle trait changes from system appearance (Auto mode) AND from
-            // overrideUserInterfaceStyle updates when user switches themes.
-            [self applyTheme];
-            [self.collectionView reloadData];
-        }
-    }
-}
+// System appearance changes are now handled globally by HAThemeAwareWindow,
+// which posts HAThemeDidChangeNotification — caught by themeDidChange: above.
 
 #pragma mark - UI Setup
 
@@ -1947,6 +1939,7 @@ heightForHeaderInSection:(NSInteger)section {
 
 - (void)connectionManager:(HAConnectionManager *)manager didReceiveAllStates:(NSDictionary<NSString *, HAEntity *> *)entities {
     self.statesLoaded = YES;
+    [[HASunBasedTheme sharedInstance] start];
     [self rebuildDashboard];
 }
 
