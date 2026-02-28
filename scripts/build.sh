@@ -116,6 +116,7 @@ build_rosettasim() {
         "MARKETING_VERSION=$APP_VERSION" \
         "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" \
         MERGED_BINARY_TYPE=none \
+        ENABLE_DEBUG_DYLIB=NO \
         CODE_SIGNING_ALLOWED=NO \
         CODE_SIGN_IDENTITY="" \
         build 2>&1 | grep -E '(error:|BUILD)' | tail -5 >&2
