@@ -23,8 +23,16 @@ Two Xcode versions are required:
 
 | Xcode | Path | Purpose |
 |-------|------|---------|
-| **13.2.1** | `/Applications/Xcode-13.2.1.app` | Builds armv7+arm64 universal binary for iOS 9.0. Required for iPad 2. |
-| **26** | `/Applications/Xcode.app` | Builds arm64 for iOS 15+. Used for simulator, iPhone, and newer iPads. |
+| **13.2.1** | `/Applications/Xcode-13.2.1.app` | Provides armv7 SDK stubs for linking the universal device build (iPad 2). |
+| **26** | `/Applications/Xcode.app` | Builds all targets: arm64 sim, x86_64 legacy sim (RosettaSim), and device. |
+
+### Build Targets
+
+| Target | Command | Arch | iOS Min | SDK | Notes |
+|--------|---------|------|---------|-----|-------|
+| Simulator | `scripts/build.sh sim` | arm64 | 15.0 | Xcode 26 | Native arm64 sim for iOS 16+ |
+| RosettaSim | `scripts/build.sh rosettasim` | x86_64 | 9.0 | Xcode 26 | Legacy sim for iOS 9–14 via RosettaSim. Uses `MERGED_BINARY_TYPE=none` to disable mergeable libraries — the default Debug stub+dylib pattern crashes on legacy runtimes' libdispatch. |
+| Device | `scripts/build.sh device` | armv7+arm64 | 9.0 | Xcode 26 clang + Xcode 13 link stubs | Universal binary. armv7 compiled with Xcode 26 clang, linked against Xcode 13 SDK. arm64 via xcodebuild. |
 
 - **XcodeGen** generates `HADashboard.xcodeproj` from `project.yml` — run `scripts/regen.sh` after changing project.yml
 - `regen.sh` sources `.env` to inject your Team ID and Bundle ID into the project before generation

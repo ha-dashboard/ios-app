@@ -3,12 +3,16 @@ set -euo pipefail
 
 # HA Dashboard Build Script
 #
-# Builds the app for simulator (arm64) or device (universal armv7+arm64).
-# Device builds match CI exactly: Xcode 26 clang + Xcode 13 SDK stubs.
+# Builds the app for simulator or device.
 #
 # Usage:
-#   scripts/build.sh sim        # Simulator build (arm64)
-#   scripts/build.sh device     # Universal device build (armv7+arm64)
+#   scripts/build.sh sim           # Simulator build (arm64, iOS 15+)
+#   scripts/build.sh rosettasim    # Legacy simulator build (x86_64, iOS 9.0+, RosettaSim)
+#   scripts/build.sh device        # Universal device build (armv7+arm64)
+#
+# The rosettasim target builds with Xcode 26 xcodebuild but sets
+# MERGED_BINARY_TYPE=none to disable mergeable libraries — the default
+# Debug stub+dylib pattern crashes on legacy runtimes' libdispatch.
 #
 # Output:
 #   Prints the path to the built .app on success
