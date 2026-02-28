@@ -53,11 +53,12 @@ UNRAID_HOST="${UNRAID_HOST:-}"
 UNRAID_USER="${UNRAID_USER:-root}"
 
 # Simulator UDIDs — looked up dynamically by name if not set in .env
-SIM_IPAD_NAME="${SIM_IPAD_NAME:-iPad (10th generation)}"
+SIM_IPAD_NAME="${SIM_IPAD_NAME:-iPad Pro 11 M4}"
 SIM_IPHONE_NAME="${SIM_IPHONE_NAME:-iPhone 15 Pro}"
 SIM_IPAD_UDID="${SIM_IPAD_UDID:-}"
 SIM_IPHONE_UDID="${SIM_IPHONE_UDID:-}"
 SIM_IOS93_UDID="${SIM_IOS93_UDID:-D9DCA298-C3D2-4B68-9501-E5279A1B96B6}"
+SIM_IOS103_UDID="${SIM_IOS103_UDID:-1197AD51-2DD7-48B4-B1E5-2EFC3DCAD610}"
 
 # ── Xcode path (for devicectl/simctl commands) ────────────────────────
 XCODE26="/Applications/Xcode.app"
@@ -72,7 +73,7 @@ TOKEN_OVERRIDE=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        sim|sim-ios93|iphone|mini5|mini4|ipad2|ipad2-usb|all)
+        sim|sim-ios93|sim-ios103|iphone|mini5|mini4|ipad2|ipad2-usb|all)
             if [[ -z "$TARGET" ]]; then
                 TARGET="$1"
             else
@@ -102,6 +103,7 @@ if [[ -z "$TARGET" ]]; then
     echo "  sim            iPad simulator (iPad 10th gen)"
     echo "  sim iphone     iPhone simulator (iPhone 15 Pro)"
     echo "  sim-ios93      iOS 9.3 iPad Pro simulator (RosettaSim, x86_64)"
+    echo "  sim-ios103     iOS 10.3 iPad Pro 10.5\" simulator (RosettaSim, x86_64)"
     echo "  iphone         Physical iPhone (via devicectl)"
     echo "  mini5          iPad Mini 5 — iPadOS 26 (devicectl, WiFi)"
     echo "  mini4          iPad Mini 4 — iPadOS 15 (ios-deploy, WiFi)"
@@ -185,6 +187,7 @@ if [[ "$TARGET" == "all" ]]; then
     deploy_bg "sim"         sim         --no-build ${OPTS[@]+"${OPTS[@]}"}
     deploy_bg "sim-iphone"  sim iphone  --no-build ${OPTS[@]+"${OPTS[@]}"}
     deploy_bg "sim-ios93"   sim-ios93   --no-build ${OPTS[@]+"${OPTS[@]}"}
+    deploy_bg "sim-ios103"  sim-ios103  --no-build ${OPTS[@]+"${OPTS[@]}"}
     deploy_bg "iphone"      iphone      --no-build ${OPTS[@]+"${OPTS[@]}"}
     deploy_bg "mini5"       mini5       --no-build ${OPTS[@]+"${OPTS[@]}"}
     deploy_bg "mini4"       mini4       --no-build ${OPTS[@]+"${OPTS[@]}"}
@@ -230,7 +233,7 @@ case "$TARGET" in
             APP="$PROJECT_DIR/build/sim/Build/Products/Debug-iphonesimulator/HA Dashboard.app"
         fi
         ;;
-    sim-ios93)
+    sim-ios93|sim-ios103)
         if [[ "$NO_BUILD" == false ]]; then
             APP="$("$PROJECT_DIR/scripts/build.sh" rosettasim)"
         else
@@ -329,43 +332,47 @@ case "$TARGET" in
         echo "✅ Running on $SIM_NAME"
         ;;
 
-    sim-ios93)
-        # iOS 9.3 iPad Pro simulator via RosettaSim (x86_64)
+    sim-ios93|sim-ios103)
+        # Legacy iOS simulator via RosettaSim (x86_64)
         RSCTL="$HOME/Projects/rosetta/src/build/rosettasim-ctl"
-        SIM_IOS93_UDID="${SIM_IOS93_UDID:-D9DCA298-C3D2-4B68-9501-E5279A1B96B6}"
+
+        if [[ "$TARGET" == "sim-ios93" ]]; then
+            LEGACY_UDID="$SIM_IOS93_UDID"
+            LEGACY_LABEL="iOS 9.3"
+        else
+            LEGACY_UDID="$SIM_IOS103_UDID"
+            LEGACY_LABEL="iOS 10.3"
+        fi
 
         if [[ ! -x "$RSCTL" ]]; then
             echo "❌ rosettasim-ctl not found at $RSCTL"
             exit 1
         fi
 
-        echo "📱 Deploying to iOS 9.3 simulator ($SIM_IOS93_UDID)"
+        echo "📱 Deploying to $LEGACY_LABEL simulator ($LEGACY_UDID)"
 
         # Boot if needed
-        BOOT_STATE=$("$RSCTL" list 2>/dev/null | grep "$SIM_IOS93_UDID" | grep -o "Booted\|Shutdown" || echo "Unknown")
+        BOOT_STATE=$("$RSCTL" list 2>/dev/null | grep "$LEGACY_UDID" | grep -o "Booted\|Shutdown" || echo "Unknown")
         if [[ "$BOOT_STATE" != "Booted" ]]; then
             echo "   Booting..."
-            "$RSCTL" boot "$SIM_IOS93_UDID"
+            "$RSCTL" boot "$LEGACY_UDID"
             open -a Simulator
             sleep 5
         fi
 
         echo "   Installing..."
-        "$RSCTL" terminate "$SIM_IOS93_UDID" "$BUNDLE_ID" 2>/dev/null || true
-        "$RSCTL" install "$SIM_IOS93_UDID" "$APP" 2>&1 | tail -1
+        "$RSCTL" terminate "$LEGACY_UDID" "$BUNDLE_ID" 2>/dev/null || true
+        "$RSCTL" install "$LEGACY_UDID" "$APP" 2>&1 | tail -1
 
         # Write credentials to the app's NSUserDefaults plist on disk
         # (rosettasim-ctl launch doesn't support launch args)
-        DEVICE_DIR="$HOME/Library/Developer/CoreSimulator/Devices/$SIM_IOS93_UDID"
-        # Find the app's data container
-        DATA_CONTAINER=$("$RSCTL" appinfo "$SIM_IOS93_UDID" "$BUNDLE_ID" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('dataContainer',''))" 2>/dev/null || true)
+        DEVICE_DIR="$HOME/Library/Developer/CoreSimulator/Devices/$LEGACY_UDID"
+        DATA_CONTAINER=$("$RSCTL" appinfo "$LEGACY_UDID" "$BUNDLE_ID" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('dataContainer',''))" 2>/dev/null || true)
         if [[ -n "$DATA_CONTAINER" ]]; then
             PREFS_DIR="$DATA_CONTAINER/Library/Preferences"
         else
-            # Fallback: find by searching for the plist
             PREFS_DIR=$(find "$DEVICE_DIR/data/Containers/Data/Application" -name "$BUNDLE_ID.plist" -path "*/Preferences/*" -exec dirname {} \; 2>/dev/null | head -1)
             if [[ -z "$PREFS_DIR" ]]; then
-                # No existing plist — create in the most recent data container
                 LATEST_CONTAINER=$(ls -td "$DEVICE_DIR/data/Containers/Data/Application/"*/ 2>/dev/null | head -1)
                 if [[ -n "$LATEST_CONTAINER" ]]; then
                     PREFS_DIR="$LATEST_CONTAINER/Library/Preferences"
@@ -388,9 +395,9 @@ case "$TARGET" in
         fi
 
         echo "   Launching..."
-        "$RSCTL" launch "$SIM_IOS93_UDID" "$BUNDLE_ID" 2>&1 | tail -1
+        "$RSCTL" launch "$LEGACY_UDID" "$BUNDLE_ID" 2>&1 | tail -1
 
-        echo "✅ Running on iOS 9.3 simulator"
+        echo "✅ Running on $LEGACY_LABEL simulator"
         ;;
 
     iphone)
