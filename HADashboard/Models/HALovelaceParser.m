@@ -762,6 +762,12 @@
             if ([card[@"icon"] isKindOfClass:[NSString class]]) props[@"icon"] = card[@"icon"];
             // Card-level color override
             if ([card[@"color"] isKindOfClass:[NSString class]]) props[@"color"] = card[@"color"];
+            // Button/tile card visibility flags — always set if present in card config.
+            // JSON false → @NO (a valid NSNumber, not nil).
+            for (NSString *visKey in @[@"show_name", @"show_state", @"show_icon"]) {
+                id val = card[visKey];
+                if (val) props[visKey] = val;
+            }
 
             // Clock-weather card: extract sensor overrides and display config
             if ([cardType containsString:@"clock-weather"]) {

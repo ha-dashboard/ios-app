@@ -650,10 +650,12 @@
             : [HATheme secondaryTextColor];
     }
 
-    // ── Scene / Script: accent when available ──
+    // ── Scene / Script / Button: gradient-derived tint when available ──
     if ([domain isEqualToString:HAEntityDomainScene] ||
-        [domain isEqualToString:HAEntityDomainScript]) {
-        return [HATheme accentColor];
+        [domain isEqualToString:HAEntityDomainScript] ||
+        [domain isEqualToString:HAEntityDomainButton] ||
+        [domain isEqualToString:HAEntityDomainInputButton]) {
+        return [HATheme switchTintColor];
     }
 
     // ── Update: orange when update available ──
