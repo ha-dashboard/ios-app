@@ -23,12 +23,14 @@ static NSString *const kSunEntityId = @"sun.sun";
 }
 
 - (void)start {
-    // iOS 13+ has native dark mode — don't interfere.
+    // iOS 13+ has native dark mode — only run the sun entity tracker if
+    // the user has explicitly opted in via "Use Sun Entity" in settings.
     // Use NSProcessInfo version check instead of @available because
     // @available checks the SDK version on x86_64 simulators running
     // legacy runtimes under RosettaSim, causing it to return YES even
     // on iOS 9.3.
-    if ([NSProcessInfo processInfo].operatingSystemVersion.majorVersion >= 13) {
+    if ([NSProcessInfo processInfo].operatingSystemVersion.majorVersion >= 13
+        && ![HATheme forceSunEntity]) {
         return;
     }
 
@@ -72,6 +74,9 @@ static NSString *const kSunEntityId = @"sun.sun";
         NSLog(@"[HASunBasedTheme] Sun is now %@ — switching to %@ mode",
               belowHorizon ? @"below horizon" : @"above horizon",
               belowHorizon ? @"dark" : @"light");
+        // Update the window's overrideUserInterfaceStyle so dynamic colors
+        // resolve correctly on iOS 13+ when forceSunEntity is enabled.
+        [HATheme applyInterfaceStyle];
         [[NSNotificationCenter defaultCenter] postNotificationName:HAThemeDidChangeNotification object:nil];
     }
 

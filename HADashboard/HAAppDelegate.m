@@ -58,6 +58,9 @@
     [HAIconMapper warmFonts];
     [HAStartupLog log:@"warmFonts END"];
 
+    // Global switch tint — derived from gradient preset accent
+    [[UISwitch appearance] setOnTintColor:[HATheme switchTintColor]];
+
     [HAStartupLog log:@"UIWindow alloc BEGIN"];
     self.window = [[HAThemeAwareWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
     self.window.backgroundColor = [UIColor whiteColor];
@@ -94,9 +97,13 @@
     if ([defaults objectForKey:@"HAKioskMode"]) {
         [[HAAuthManager sharedManager] setKioskMode:[defaults boolForKey:@"HAKioskMode"]];
     }
-    // -HAThemeMode 0-3 — override theme (0=auto, 1=gradient, 2=dark, 3=light)
+    // -HAThemeMode 0-2 — override theme (0=auto, 1=dark, 2=light)
     if ([defaults objectForKey:@"HAThemeMode"]) {
         [HATheme setCurrentMode:(HAThemeMode)[defaults integerForKey:@"HAThemeMode"]];
+    }
+    // -HAGradientEnabled YES/NO — override gradient background
+    if ([defaults objectForKey:@"HAGradientEnabled"]) {
+        [HATheme setGradientEnabled:[defaults boolForKey:@"HAGradientEnabled"]];
     }
     // -HADemoMode YES/NO — override demo mode from launch arguments
     if ([defaults objectForKey:@"HADemoMode"]) {

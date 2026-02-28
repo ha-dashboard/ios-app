@@ -21,6 +21,10 @@
 // Theme
 @property (nonatomic, strong) UIStackView *themeStack;
 @property (nonatomic, strong) UISegmentedControl *themeModeSegment;
+@property (nonatomic, strong) UIView *sunEntityToggleRow;
+@property (nonatomic, strong) UISwitch *sunEntitySwitch;
+@property (nonatomic, strong) UIView *gradientToggleRow;
+@property (nonatomic, strong) UISwitch *gradientSwitch;
 @property (nonatomic, strong) UIView *gradientOptionsContainer;
 @property (nonatomic, strong) UISegmentedControl *gradientPresetSegment;
 @property (nonatomic, strong) UIView *customHexContainer;
@@ -98,16 +102,57 @@
     self.themeStack.translatesAutoresizingMaskIntoConstraints = NO;
     [container addSubview:self.themeStack];
 
-    self.themeModeSegment = [[UISegmentedControl alloc] initWithItems:@[@"Auto", @"Gradient", @"Dark", @"Light"]];
+    self.themeModeSegment = [[UISegmentedControl alloc] initWithItems:@[@"Auto", @"Dark", @"Light"]];
     self.themeModeSegment.selectedSegmentIndex = (NSInteger)[HATheme currentMode];
     [self.themeModeSegment addTarget:self action:@selector(themeModeChanged:) forControlEvents:UIControlEventValueChanged];
     self.themeModeSegment.translatesAutoresizingMaskIntoConstraints = NO;
     [self.themeStack addArrangedSubview:self.themeModeSegment];
 
-    // Gradient options
+    // Sun entity toggle (use HA sun.sun instead of system dark mode)
+    UISwitch *sunSw = nil;
+    self.sunEntityToggleRow = [self createToggleSection:@"Use Sun Entity"
+        helpText:@"Use Home Assistant sun.sun entity for auto dark mode instead of system appearance."
+        isOn:[HATheme forceSunEntity]
+        target:self action:@selector(sunEntitySwitchToggled:)
+        switchOut:&sunSw];
+    self.sunEntitySwitch = sunSw;
+    // Only visible when Auto mode is selected and device supports system appearance
+    BOOL showSunToggle = ([HATheme currentMode] == HAThemeModeAuto
+                          && [NSProcessInfo processInfo].operatingSystemVersion.majorVersion >= 13);
+    self.sunEntityToggleRow.hidden = !showSunToggle;
+    [self.themeStack addArrangedSubview:self.sunEntityToggleRow];
+
+    // Gradient background toggle row
+    self.gradientToggleRow = [[UIView alloc] init];
+    self.gradientToggleRow.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.themeStack addArrangedSubview:self.gradientToggleRow];
+
+    UILabel *gradientLabel = [[UILabel alloc] init];
+    gradientLabel.text = @"Gradient Background";
+    gradientLabel.font = [UIFont systemFontOfSize:16];
+    gradientLabel.textColor = [HATheme primaryTextColor];
+    gradientLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.gradientToggleRow addSubview:gradientLabel];
+
+    self.gradientSwitch = [[UISwitch alloc] init];
+    self.gradientSwitch.on = [HATheme isGradientEnabled];
+    self.gradientSwitch.onTintColor = [HATheme switchTintColor];
+    [self.gradientSwitch addTarget:self action:@selector(gradientSwitchToggled:) forControlEvents:UIControlEventValueChanged];
+    self.gradientSwitch.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.gradientToggleRow addSubview:self.gradientSwitch];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [gradientLabel.topAnchor constraintEqualToAnchor:self.gradientToggleRow.topAnchor],
+        [gradientLabel.leadingAnchor constraintEqualToAnchor:self.gradientToggleRow.leadingAnchor],
+        [gradientLabel.bottomAnchor constraintEqualToAnchor:self.gradientToggleRow.bottomAnchor],
+        [self.gradientSwitch.trailingAnchor constraintEqualToAnchor:self.gradientToggleRow.trailingAnchor],
+        [self.gradientSwitch.centerYAnchor constraintEqualToAnchor:gradientLabel.centerYAnchor],
+    ]];
+
+    // Gradient options (preset picker, custom hex, preview)
     self.gradientOptionsContainer = [[UIView alloc] init];
     self.gradientOptionsContainer.translatesAutoresizingMaskIntoConstraints = NO;
-    self.gradientOptionsContainer.hidden = ([HATheme currentMode] != HAThemeModeGradient);
+    self.gradientOptionsContainer.hidden = ![HATheme isGradientEnabled];
     [self.themeStack addArrangedSubview:self.gradientOptionsContainer];
 
     UILabel *presetLabel = [[UILabel alloc] init];
@@ -321,6 +366,7 @@
 
     UISwitch *sw = [[UISwitch alloc] init];
     sw.on = isOn;
+    sw.onTintColor = [HATheme switchTintColor];
     [sw addTarget:target action:action forControlEvents:UIControlEventValueChanged];
     sw.translatesAutoresizingMaskIntoConstraints = NO;
     [section addSubview:sw];
@@ -588,11 +634,70 @@
 - (void)themeModeChanged:(UISegmentedControl *)sender {
     HAThemeMode mode = (HAThemeMode)sender.selectedSegmentIndex;
     [HATheme setCurrentMode:mode];
+    [self refreshThemeColors];
 
-    BOOL showGradient = (mode == HAThemeModeGradient);
+    // Show sun entity toggle only in Auto mode on iOS 13+
+    BOOL showSun = (mode == HAThemeModeAuto
+                    && [NSProcessInfo processInfo].operatingSystemVersion.majorVersion >= 13);
     [UIView animateWithDuration:0.25 animations:^{
-        self.gradientOptionsContainer.hidden = !showGradient;
-        self.gradientOptionsContainer.alpha = showGradient ? 1.0 : 0.0;
+        self.sunEntityToggleRow.hidden = !showSun;
+    }];
+}
+
+- (void)sunEntitySwitchToggled:(UISwitch *)sender {
+    [HATheme setForceSunEntity:sender.isOn];
+    [self refreshThemeColors];
+}
+
+/// Re-apply theme colors to all labels and backgrounds in the settings page.
+/// Needed on iOS 9-12 where there's no system trait-based color resolution.
+- (void)refreshThemeColors {
+    self.view.backgroundColor = [HATheme backgroundColor];
+    self.connectionRow.backgroundColor = [HATheme controlBackgroundColor];
+    [self updateGradientPreview];
+
+    // Navigation bar (iOS 9-12 needs manual styling)
+    if (@available(iOS 13.0, *)) {
+        // Handled by overrideUserInterfaceStyle
+    } else {
+        UINavigationBar *navBar = self.navigationController.navigationBar;
+        BOOL dark = [HATheme isDarkMode];
+        navBar.barStyle = dark ? UIBarStyleBlack : UIBarStyleDefault;
+        navBar.barTintColor = dark
+            ? [UIColor colorWithRed:0.11 green:0.11 blue:0.13 alpha:1.0]
+            : nil;
+        navBar.tintColor = [HATheme primaryTextColor];
+    }
+
+    // Walk all labels and re-apply text colors based on font size convention:
+    // 16pt = primary, 12pt/11pt = secondary, 10pt = tertiary
+    [self applyThemeColorsToSubviewsOf:self.view];
+}
+
+- (void)applyThemeColorsToSubviewsOf:(UIView *)view {
+    for (UIView *sub in view.subviews) {
+        if ([sub isKindOfClass:[UISwitch class]]) {
+            ((UISwitch *)sub).onTintColor = [HATheme switchTintColor];
+        } else if ([sub isKindOfClass:[UILabel class]]) {
+            UILabel *label = (UILabel *)sub;
+            CGFloat size = label.font.pointSize;
+            if (size >= 15) {
+                label.textColor = [HATheme primaryTextColor];
+            } else if (size >= 11) {
+                label.textColor = [HATheme secondaryTextColor];
+            } else {
+                label.textColor = [HATheme tertiaryTextColor];
+            }
+        }
+        [self applyThemeColorsToSubviewsOf:sub];
+    }
+}
+
+- (void)gradientSwitchToggled:(UISwitch *)sender {
+    [HATheme setGradientEnabled:sender.isOn];
+    [UIView animateWithDuration:0.25 animations:^{
+        self.gradientOptionsContainer.hidden = !sender.isOn;
+        self.gradientOptionsContainer.alpha = sender.isOn ? 1.0 : 0.0;
     }];
     self.view.backgroundColor = [HATheme backgroundColor];
 }

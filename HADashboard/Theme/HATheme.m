@@ -3,17 +3,44 @@
 
 NSString *const HAThemeDidChangeNotification = @"HAThemeDidChangeNotification";
 
-static NSString *const kThemeModeKey      = @"ha_theme_mode";
-static NSString *const kGradientPresetKey = @"ha_gradient_preset";
-static NSString *const kCustomHex1Key     = @"ha_grad_custom_hex1";
-static NSString *const kCustomHex2Key     = @"ha_grad_custom_hex2";
+static NSString *const kThemeModeKey       = @"ha_theme_mode";
+static NSString *const kGradientEnabledKey = @"ha_gradient_enabled";
+static NSString *const kGradientPresetKey  = @"ha_gradient_preset";
+static NSString *const kCustomHex1Key      = @"ha_grad_custom_hex1";
+static NSString *const kCustomHex2Key      = @"ha_grad_custom_hex2";
+static NSString *const kMigratedV2Key      = @"ha_theme_migrated_v2";
+static NSString *const kForceSunEntityKey  = @"ha_force_sun_entity";
 
 @implementation HATheme
 
 #pragma mark - Theme Mode
 
 + (HAThemeMode)currentMode {
-    return (HAThemeMode)[[NSUserDefaults standardUserDefaults] integerForKey:kThemeModeKey];
+    NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
+
+    // One-time migration from old 4-value enum (Auto=0, Gradient=1, Dark=2, Light=3)
+    // to new 3-value enum (Auto=0, Dark=1, Light=2) + separate gradient bool.
+    if (![ud boolForKey:kMigratedV2Key]) {
+        NSInteger stored = [ud integerForKey:kThemeModeKey];
+        switch (stored) {
+            case 1: // old HAThemeModeGradient → Dark + gradient on
+                [ud setInteger:1 forKey:kThemeModeKey]; // new HAThemeModeDark
+                [ud setBool:YES forKey:kGradientEnabledKey];
+                break;
+            case 2: // old HAThemeModeDark → new HAThemeModeDark (1)
+                [ud setInteger:1 forKey:kThemeModeKey];
+                break;
+            case 3: // old HAThemeModeLight → new HAThemeModeLight (2)
+                [ud setInteger:2 forKey:kThemeModeKey];
+                break;
+            default: // 0 = Auto, unchanged
+                break;
+        }
+        [ud setBool:YES forKey:kMigratedV2Key];
+        [ud synchronize];
+    }
+
+    return (HAThemeMode)[ud integerForKey:kThemeModeKey];
 }
 
 + (void)setCurrentMode:(HAThemeMode)mode {
@@ -21,6 +48,38 @@ static NSString *const kCustomHex2Key     = @"ha_grad_custom_hex2";
     [[NSUserDefaults standardUserDefaults] synchronize];
     [self applyInterfaceStyle];
     [[NSNotificationCenter defaultCenter] postNotificationName:HAThemeDidChangeNotification object:nil];
+}
+
++ (BOOL)forceSunEntity {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:kForceSunEntityKey];
+}
+
++ (void)setForceSunEntity:(BOOL)force {
+    [[NSUserDefaults standardUserDefaults] setBool:force forKey:kForceSunEntityKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    // Start the sun entity tracker if it wasn't already running (it no-ops on
+    // iOS 13+ unless forceSunEntity is enabled, so needs a kick here).
+    if (force) {
+        [[HASunBasedTheme sharedInstance] start];
+    }
+    [self applyInterfaceStyle];
+    [[NSNotificationCenter defaultCenter] postNotificationName:HAThemeDidChangeNotification object:nil];
+}
+
+#pragma mark - Gradient Enabled
+
++ (BOOL)isGradientEnabled {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:kGradientEnabledKey];
+}
+
++ (void)setGradientEnabled:(BOOL)enabled {
+    [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:kGradientEnabledKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    [[NSNotificationCenter defaultCenter] postNotificationName:HAThemeDidChangeNotification object:nil];
+}
+
++ (UIBlurEffectStyle)gradientBlurStyle {
+    return [self effectiveDarkMode] ? UIBlurEffectStyleDark : UIBlurEffectStyleLight;
 }
 
 #pragma mark - Gradient Presets
@@ -36,35 +95,38 @@ static NSString *const kCustomHex2Key     = @"ha_grad_custom_hex2";
 }
 
 + (NSArray<UIColor *> *)gradientColors {
+    BOOL dark = [self effectiveDarkMode];
     HAGradientPreset preset = [self gradientPreset];
     switch (preset) {
         case HAGradientPresetPurpleDream:
-            return @[[self colorFromHex:@"1a0533"],
-                     [self colorFromHex:@"2d1b69"],
-                     [self colorFromHex:@"0f0f2e"]];
+            return dark
+                ? @[[self colorFromHex:@"1a0533"], [self colorFromHex:@"2d1b69"], [self colorFromHex:@"0f0f2e"]]
+                : @[[self colorFromHex:@"f0e6ff"], [self colorFromHex:@"e0d0f5"], [self colorFromHex:@"f5f0ff"]];
         case HAGradientPresetOceanBlue:
-            return @[[self colorFromHex:@"0c2340"],
-                     [self colorFromHex:@"1a4a7a"],
-                     [self colorFromHex:@"0a1628"]];
+            return dark
+                ? @[[self colorFromHex:@"0c2340"], [self colorFromHex:@"1a4a7a"], [self colorFromHex:@"0a1628"]]
+                : @[[self colorFromHex:@"e0f0ff"], [self colorFromHex:@"c8e0f5"], [self colorFromHex:@"f0f5ff"]];
         case HAGradientPresetSunset:
-            return @[[self colorFromHex:@"2d1f3d"],
-                     [self colorFromHex:@"6b2f4a"],
-                     [self colorFromHex:@"1a1020"]];
+            return dark
+                ? @[[self colorFromHex:@"2d1f3d"], [self colorFromHex:@"6b2f4a"], [self colorFromHex:@"1a1020"]]
+                : @[[self colorFromHex:@"fff0e6"], [self colorFromHex:@"ffe0d0"], [self colorFromHex:@"fff5f0"]];
         case HAGradientPresetForest:
-            return @[[self colorFromHex:@"0d2818"],
-                     [self colorFromHex:@"1a4a2e"],
-                     [self colorFromHex:@"0a1a10"]];
+            return dark
+                ? @[[self colorFromHex:@"0d2818"], [self colorFromHex:@"1a4a2e"], [self colorFromHex:@"0a1a10"]]
+                : @[[self colorFromHex:@"e6ffe0"], [self colorFromHex:@"d0f5c8"], [self colorFromHex:@"f0fff0"]];
         case HAGradientPresetMidnight:
-            return @[[self colorFromHex:@"0a0a1a"],
-                     [self colorFromHex:@"1a1a2e"],
-                     [self colorFromHex:@"050510"]];
+            return dark
+                ? @[[self colorFromHex:@"0a0a1a"], [self colorFromHex:@"1a1a2e"], [self colorFromHex:@"050510"]]
+                : @[[self colorFromHex:@"f0f0ff"], [self colorFromHex:@"e8e8f5"], [self colorFromHex:@"f5f5ff"]];
         case HAGradientPresetCustom: {
             NSString *h1 = [self customGradientHex1] ?: @"1a0533";
             NSString *h2 = [self customGradientHex2] ?: @"0f0f2e";
             return @[[self colorFromHex:h1], [self colorFromHex:h2]];
         }
     }
-    return @[[self colorFromHex:@"1a0533"], [self colorFromHex:@"0f0f2e"]];
+    return dark
+        ? @[[self colorFromHex:@"1a0533"], [self colorFromHex:@"0f0f2e"]]
+        : @[[self colorFromHex:@"f0e6ff"], [self colorFromHex:@"f5f0ff"]];
 }
 
 + (void)setCustomGradientHex1:(NSString *)hex1 hex2:(NSString *)hex2 {
@@ -111,12 +173,18 @@ static NSString *const kCustomHex2Key     = @"ha_grad_custom_hex2";
                 window.overrideUserInterfaceStyle = UIUserInterfaceStyleLight;
                 break;
             case HAThemeModeDark:
-            case HAThemeModeGradient:
                 window.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
                 break;
             case HAThemeModeAuto:
             default:
-                window.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;
+                if ([self forceSunEntity]) {
+                    // Override window style to match sun entity state so UIKit
+                    // controls (status bar, switches) stay consistent.
+                    window.overrideUserInterfaceStyle = [self effectiveDarkMode]
+                        ? UIUserInterfaceStyleDark : UIUserInterfaceStyleLight;
+                } else {
+                    window.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;
+                }
                 break;
         }
     }
@@ -130,12 +198,15 @@ static NSString *const kCustomHex2Key     = @"ha_grad_custom_hex2";
 
 + (BOOL)effectiveDarkMode {
     HAThemeMode mode = [self currentMode];
-    if (mode == HAThemeModeDark || mode == HAThemeModeGradient) return YES;
+    if (mode == HAThemeModeDark) return YES;
     if (mode == HAThemeModeLight) return NO;
     // Auto — follow system on iOS 13+, sun entity on iOS 9-12.
+    // "Force Sun Entity" overrides system dark mode with HA sun.sun state,
+    // useful when the device doesn't respect system appearance settings.
     // Use NSProcessInfo instead of @available because @available checks the
     // SDK version on RosettaSim x86_64 simulators, returning YES on iOS 9.3.
-    if ([NSProcessInfo processInfo].operatingSystemVersion.majorVersion >= 13) {
+    if ([NSProcessInfo processInfo].operatingSystemVersion.majorVersion >= 13
+        && ![self forceSunEntity]) {
         if (@available(iOS 13.0, *)) {
             return [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
         }
@@ -214,10 +285,27 @@ static NSString *const kCustomHex2Key     = @"ha_grad_custom_hex2";
     return [self effectiveDarkMode] ? dark : light;
 }
 
-/// Three-arg variant: gradient mode gets a special color (e.g. semi-transparent).
+/// Three-arg variant: when gradient is enabled, uses a special color (e.g. semi-transparent).
+/// The gradient color adapts to the effective appearance (caller provides dark gradient variant;
+/// light variant is derived automatically or caller can provide both).
 + (UIColor *)colorWithLight:(UIColor *)light dark:(UIColor *)dark gradient:(UIColor *)gradient {
-    if ([self currentMode] == HAThemeModeGradient) return gradient;
-    return [self colorWithLight:light dark:dark];
+    return [self colorWithLight:light dark:dark gradientLight:gradient gradientDark:gradient];
+}
+
+/// Four-arg variant: separate gradient colors for light and dark appearance.
++ (UIColor *)colorWithLight:(UIColor *)light dark:(UIColor *)dark
+               gradientLight:(UIColor *)gradientLight gradientDark:(UIColor *)gradientDark {
+    if (![self isGradientEnabled]) return [self colorWithLight:light dark:dark];
+    UIColor *gColor = [self effectiveDarkMode] ? gradientDark : gradientLight;
+    // On iOS 13+, wrap in dynamic provider so trait changes resolve correctly
+    if ([NSProcessInfo processInfo].operatingSystemVersion.majorVersion >= 13) {
+        if (@available(iOS 13.0, *)) {
+            return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *tc) {
+                return tc.userInterfaceStyle == UIUserInterfaceStyleDark ? gradientDark : gradientLight;
+            }];
+        }
+    }
+    return gColor;
 }
 
 #pragma mark - Backgrounds
@@ -228,9 +316,19 @@ static NSString *const kCustomHex2Key     = @"ha_grad_custom_hex2";
 }
 
 + (UIColor *)cellBackgroundColor {
-    return [self colorWithLight:[UIColor whiteColor]
-                           dark:[UIColor colorWithRed:0.12 green:0.13 blue:0.16 alpha:1.0]
-                       gradient:[UIColor colorWithRed:0.12 green:0.13 blue:0.16 alpha:0.65]];
+    // Cells always use UIVisualEffectView blur as backgroundView,
+    // so the contentView background is clear (content renders over the blur).
+    return [UIColor clearColor];
+}
+
+/// Badge pill background — semi-transparent to match the frosted blur appearance of card cells.
+/// Card cells use UIVisualEffectView (set by willDisplayCell), but individual badge views inside
+/// HABadgeRowCell can't reliably host blur views across iOS 9-26. A matched alpha color gives
+/// the same visual result on small pill shapes.
++ (UIColor *)badgeBackgroundColor {
+    return [self effectiveDarkMode]
+        ? [UIColor colorWithWhite:0.12 alpha:0.65]
+        : [UIColor colorWithWhite:1.0 alpha:0.65];
 }
 
 + (UIColor *)cellBorderColor {
@@ -260,6 +358,26 @@ static NSString *const kCustomHex2Key     = @"ha_grad_custom_hex2";
 + (UIColor *)accentColor {
     return [self colorWithLight:[UIColor colorWithRed:0.0 green:0.48 blue:1.0 alpha:1.0]
                            dark:[UIColor colorWithRed:0.35 green:0.6 blue:1.0 alpha:1.0]];
+}
+
++ (UIColor *)switchTintColor {
+    if (![self isGradientEnabled]) {
+        return [self accentColor];
+    }
+    // Brighter accent derived from each gradient preset
+    switch ([self gradientPreset]) {
+        case HAGradientPresetPurpleDream: return [self colorFromHex:@"9b6dff"];
+        case HAGradientPresetOceanBlue:   return [self colorFromHex:@"4d9de0"];
+        case HAGradientPresetSunset:      return [self colorFromHex:@"e07850"];
+        case HAGradientPresetForest:      return [self colorFromHex:@"4dbd6a"];
+        case HAGradientPresetMidnight:    return [self colorFromHex:@"7070cc"];
+        case HAGradientPresetCustom: {
+            // Use the first custom gradient color brightened
+            NSArray<UIColor *> *colors = [self gradientColors];
+            return colors.count > 0 ? colors[0] : [self accentColor];
+        }
+    }
+    return [self accentColor];
 }
 
 + (UIColor *)destructiveColor {

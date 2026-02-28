@@ -16,11 +16,10 @@ static const CGFloat kHeadingGap = 2.0;
 - (instancetype)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (self) {
-        self.contentView.backgroundColor = [HATheme cellBackgroundColor];
         self.contentView.layer.cornerRadius = 14.0;
         self.contentView.layer.masksToBounds = YES;
-        self.contentView.opaque = ([HATheme currentMode] != HAThemeModeGradient);
         self.contentView.layer.borderWidth = 0.0;
+        [self applyGradientBackground];
 
         // Heading label: added to the CELL (self), not contentView.
         // When visible, layoutSubviews pushes contentView down below it.
@@ -79,6 +78,12 @@ static const CGFloat kHeadingGap = 2.0;
             self.bounds.size.width, self.bounds.size.height - headingH);
     } else {
         self.contentView.frame = self.bounds;
+    }
+
+    // Sync backgroundView (blur) with contentView frame so it doesn't cover headings.
+    // UICollectionViewCell auto-sizes backgroundView to cell bounds; override here.
+    if (self.backgroundView) {
+        self.backgroundView.frame = self.contentView.frame;
     }
 }
 
@@ -143,6 +148,13 @@ static const CGFloat kHeadingGap = 2.0;
     return kHeadingHeight + kHeadingGap;
 }
 
+/// Configures the cell background color and opacity.
+/// Blur backgroundView is applied externally by HADashboardViewController willDisplayCell.
+- (void)applyGradientBackground {
+    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
+    self.contentView.opaque = NO;
+}
+
 - (void)prepareForReuse {
     [super prepareForReuse];
     self.entity = nil;
@@ -153,8 +165,7 @@ static const CGFloat kHeadingGap = 2.0;
     self.headingLabel.hidden = YES;
     self.showsHeading = NO;
     self.contentView.alpha = 1.0;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
-    self.contentView.opaque = ([HATheme currentMode] != HAThemeModeGradient);
+    [self applyGradientBackground];
     // Refresh theme-dependent colors (labels set once in setupSubviews)
     self.nameLabel.textColor = [HATheme secondaryTextColor];
     self.stateLabel.textColor = [HATheme primaryTextColor];

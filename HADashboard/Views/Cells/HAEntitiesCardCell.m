@@ -156,6 +156,11 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
     } else {
         self.contentView.frame = self.bounds;
     }
+
+    // Sync backgroundView (blur) with contentView frame so it doesn't cover headings.
+    if (self.backgroundView) {
+        self.backgroundView.frame = self.contentView.frame;
+    }
 }
 
 - (void)configureWithSection:(HADashboardConfigSection *)section
@@ -389,8 +394,6 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
 
 - (void)prepareForReuse {
     [super prepareForReuse];
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
-    self.contentView.opaque = ([HATheme currentMode] != HAThemeModeGradient);
     self.titleLabel.text = nil;
     self.titleLabel.textColor = [HATheme secondaryTextColor];
     self.titleLabel.hidden = YES;

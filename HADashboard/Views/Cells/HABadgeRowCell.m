@@ -34,7 +34,6 @@ static const CGFloat kArcNameLabelHeight = 16.0;
 - (instancetype)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (self) {
-        // Badge container is transparent — individual badges have their own backgrounds
         self.contentView.backgroundColor = [UIColor clearColor];
         self.backgroundColor = [UIColor clearColor];
         self.badgeViews = [NSMutableArray array];
@@ -94,7 +93,9 @@ static const CGFloat kArcNameLabelHeight = 16.0;
 - (void)layoutSubviews {
     [super layoutSubviews];
     CGFloat currentWidth = self.contentView.bounds.size.width;
-    // Re-layout badges if the cell width changed since last configure
+    // Re-layout badges if the cell width changed since last configure.
+    // configureWithSection: calls updateBadgeBlurs at the end, so blur
+    // is only recreated when badges actually change — not on every layout pass.
     if (self.lastSection && currentWidth > 0 && fabs(currentWidth - self.lastLayoutWidth) > 1.0) {
         [self configureWithSection:self.lastSection entities:self.lastEntities];
     }
@@ -135,11 +136,12 @@ static const CGFloat kArcNameLabelHeight = 16.0;
 
         UIView *badge = [[UIView alloc] init];
         // HA web: card background + 1px border (ha-badge.ts .badge styles)
-        badge.backgroundColor = [HATheme cellBackgroundColor];
+        badge.backgroundColor = [UIColor clearColor];
         badge.layer.cornerRadius = badgeH / 2.0;
         badge.layer.borderWidth = kBadgeBorderWidth;
         badge.layer.borderColor = [self resolvedBorderColor];
         badge.clipsToBounds = YES;
+        [self insertBlurInBadge:badge];
 
         // Icon on the left
         UILabel *iconLabel = [[UILabel alloc] init];
@@ -466,7 +468,18 @@ static const CGFloat kArcNameLabelHeight = 16.0;
     return [HAEntityDisplayHelper iconColorForEntity:entity];
 }
 
-/// Create a pill badge (non-numeric fallback) — uses same HA web layout as main pill style
+/// Insert a UIVisualEffectView as the bottom-most subview of a badge pill.
+/// The badge's existing cornerRadius + clipsToBounds clips the blur to the pill
+/// shape — the same mechanism cards use, avoiding CAShapeLayer mask issues.
+- (void)insertBlurInBadge:(UIView *)badge {
+    UIVisualEffectView *blur = [[UIVisualEffectView alloc] initWithEffect:
+        [UIBlurEffect effectWithStyle:[HATheme gradientBlurStyle]]];
+    blur.frame = badge.bounds;
+    blur.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    blur.userInteractionEnabled = NO;
+    [badge insertSubview:blur atIndex:0];
+}
+
 - (UIView *)createPillBadgeForEntity:(HAEntity *)entity entityId:(NSString *)entityId section:(HADashboardConfigSection *)section {
     NSString *nameOverride = section.nameOverrides[entityId];
     NSString *name = [HAEntityDisplayHelper displayNameForEntity:entity entityId:entityId section:section];
@@ -475,11 +488,12 @@ static const CGFloat kArcNameLabelHeight = 16.0;
     NSString *icon = [HAEntityDisplayHelper iconGlyphForEntity:entity];
 
     UIView *badge = [[UIView alloc] init];
-    badge.backgroundColor = [HATheme cellBackgroundColor];
+    badge.backgroundColor = [UIColor clearColor];
     badge.layer.cornerRadius = kBadgeHeight / 2.0;
     badge.layer.borderWidth = kBadgeBorderWidth;
     badge.layer.borderColor = [self resolvedBorderColor];
     badge.clipsToBounds = YES;
+    [self insertBlurInBadge:badge];
 
     UILabel *iconLabel = [[UILabel alloc] init];
     iconLabel.text = icon ?: @"";

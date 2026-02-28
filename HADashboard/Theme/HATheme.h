@@ -1,10 +1,9 @@
 #import <UIKit/UIKit.h>
 
 typedef NS_ENUM(NSInteger, HAThemeMode) {
-    HAThemeModeAuto     = 0,  // Follows system on iOS 13+, Light on iOS 9-12
-    HAThemeModeGradient = 1,  // Dark cells + gradient background
-    HAThemeModeDark     = 2,  // Solid dark
-    HAThemeModeLight    = 3,  // Flat light
+    HAThemeModeAuto  = 0,  // Follows system on iOS 13+, sun-based on iOS 9-12
+    HAThemeModeDark  = 1,  // Solid dark
+    HAThemeModeLight = 2,  // Flat light
 };
 
 typedef NS_ENUM(NSInteger, HAGradientPreset) {
@@ -26,7 +25,13 @@ extern NSString *const HAThemeDidChangeNotification;
 + (HAThemeMode)currentMode;
 + (void)setCurrentMode:(HAThemeMode)mode;
 
-// Gradient
+// Gradient background (independent of appearance mode)
++ (BOOL)isGradientEnabled;
++ (void)setGradientEnabled:(BOOL)enabled;
+/// Returns the blur effect style for frosted-glass card backgrounds.
+/// Single source of truth — adapts to dark/light appearance.
++ (UIBlurEffectStyle)gradientBlurStyle;
+
 + (HAGradientPreset)gradientPreset;
 + (void)setGradientPreset:(HAGradientPreset)preset;
 + (NSArray<UIColor *> *)gradientColors;
@@ -37,6 +42,10 @@ extern NSString *const HAThemeDidChangeNotification;
 // Apply the theme's interface style to the key window (iOS 13+).
 // Call once after the window is visible and again whenever the mode changes.
 + (void)applyInterfaceStyle;
+
+// Force sun entity for Auto dark mode (bypasses system appearance on iOS 13+)
++ (BOOL)forceSunEntity;
++ (void)setForceSunEntity:(BOOL)force;
 
 // Effective dark mode (accounts for manual override)
 + (BOOL)effectiveDarkMode;
@@ -52,6 +61,7 @@ extern NSString *const HAThemeDidChangeNotification;
 // Backgrounds
 + (UIColor *)backgroundColor;
 + (UIColor *)cellBackgroundColor;
++ (UIColor *)badgeBackgroundColor;
 + (UIColor *)cellBorderColor;
 
 // Text
@@ -61,6 +71,7 @@ extern NSString *const HAThemeDidChangeNotification;
 
 // Semantic
 + (UIColor *)accentColor;
++ (UIColor *)switchTintColor;
 + (UIColor *)destructiveColor;
 + (UIColor *)successColor;
 + (UIColor *)warningColor;

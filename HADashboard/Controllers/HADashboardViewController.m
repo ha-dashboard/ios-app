@@ -264,9 +264,9 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 #pragma mark - Theme
 
 - (void)applyTheme {
-    BOOL isGradient = ([HATheme currentMode] == HAThemeModeGradient);
+    BOOL isGradient = [HATheme isGradientEnabled];
     if (isGradient) {
-        self.view.backgroundColor = [UIColor blackColor];
+        self.view.backgroundColor = [HATheme effectiveDarkMode] ? [UIColor blackColor] : [UIColor whiteColor];
         NSArray<UIColor *> *colors = [HATheme gradientColors];
         NSMutableArray *cgColors = [NSMutableArray arrayWithCapacity:colors.count];
         for (UIColor *c in colors) [cgColors addObject:(id)c.CGColor];
@@ -297,7 +297,12 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 }
 
 - (void)themeDidChange:(NSNotification *)notification {
+    // Update global switch tint for gradient preset changes
+    [[UISwitch appearance] setOnTintColor:[HATheme switchTintColor]];
     [self applyTheme];
+    // On iOS 9, reloadData may not call willDisplayCell for already-visible cells.
+    // Invalidate the layout to force a full re-display pass.
+    [self.collectionView.collectionViewLayout invalidateLayout];
     [self.collectionView reloadData];
 }
 
@@ -1420,10 +1425,41 @@ static const CGFloat kRowUnitHeight = 56.0;
         [(HACalendarCardCell *)cell beginLoading];
     }
 
+    // Frosted-glass blur as backgroundView on all card cells (cornerRadius > 0).
+    // backgroundView sits behind contentView, so it doesn't interfere with
+    // CAShapeLayers (thermostat arcs) or complex subview hierarchies.
+    // Cells with headings override backgroundView.frame in their layoutSubviews
+    // to keep the blur aligned with contentView (not the full cell bounds).
+    BOOL isCard = (cell.contentView.layer.cornerRadius > 0);
+    if (isCard) {
+        // Force clear background so the blur backgroundView shows through.
+        // Cells set cellBackgroundColor in prepareForReuse which may return
+        // a solid color; override it here unconditionally.
+        cell.contentView.backgroundColor = [UIColor clearColor];
+        cell.contentView.opaque = NO;
+    }
+
+    if (isCard) {
+        UIBlurEffectStyle blurStyle = [HATheme gradientBlurStyle];
+        UIVisualEffectView *existing = [cell.backgroundView isKindOfClass:[UIVisualEffectView class]]
+            ? (UIVisualEffectView *)cell.backgroundView : nil;
+        if (!existing || ![existing.effect isEqual:[UIBlurEffect effectWithStyle:blurStyle]]) {
+            UIVisualEffectView *blurView = [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:blurStyle]];
+            blurView.layer.cornerRadius = cell.contentView.layer.cornerRadius;
+            blurView.clipsToBounds = YES;
+            cell.backgroundView = blurView;
+        }
+    } else if ([cell.backgroundView isKindOfClass:[UIVisualEffectView class]]) {
+        // Clear stale blur backgroundView from non-card cells.
+        cell.backgroundView = nil;
+    }
+
     // Rasterize static cells for faster scrolling (caches rendered bitmap).
-    // Skip camera cells — their content updates frequently (snapshots, overlays).
+    // Skip camera cells (content updates frequently) and blur cells
+    // (shouldRasterize bakes the blur into a static bitmap, breaking compositing).
     BOOL isCamera = [cell isKindOfClass:[HACameraEntityCell class]];
-    cell.layer.shouldRasterize = !isCamera;
+    BOOL isBadge = [cell isKindOfClass:[HABadgeRowCell class]];
+    cell.layer.shouldRasterize = !isCamera && !isCard && !isBadge;
     cell.layer.rasterizationScale = [UIScreen mainScreen].scale;
 }
 
