@@ -1,6 +1,7 @@
 #import "HAEntityRowView.h"
 #import "HAEntity.h"
 #import "HATheme.h"
+#import "HASwitch.h"
 #import "HAHaptics.h"
 #import "HAConnectionManager.h"
 #import "HAIconMapper.h"
@@ -80,7 +81,7 @@
     [self.stateLabel setContentHuggingPriority:UILayoutPriorityDefaultHigh forAxis:UILayoutConstraintAxisHorizontal];
 
     // Toggle switch (for toggle-capable entities) — scaled down to 80% for compact rows
-    self.toggleSwitch = [[UISwitch alloc] init];
+    self.toggleSwitch = [[HASwitch alloc] init];
     self.toggleSwitch.transform = CGAffineTransformMakeScale(0.8, 0.8);
     self.toggleSwitch.onTintColor = [UIColor colorWithRed:0.0 green:0.75 blue:0.75 alpha:1.0]; // HA teal
     self.toggleSwitch.translatesAutoresizingMaskIntoConstraints = NO;

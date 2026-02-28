@@ -5,6 +5,7 @@
 #import "HAAuthManager.h"
 #import "HAConnectionManager.h"
 #import "HATheme.h"
+#import "HASwitch.h"
 #import "HAStartupLog.h"
 
 @interface HALoginViewController () <HAConnectionFormDelegate>
@@ -205,7 +206,7 @@
     demoLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [demoRow addSubview:demoLabel];
 
-    self.demoSwitch = [[UISwitch alloc] init];
+    self.demoSwitch = [[HASwitch alloc] init];
     self.demoSwitch.on = [[HAAuthManager sharedManager] isDemoMode];
     [self.demoSwitch addTarget:self action:@selector(demoSwitchToggled:) forControlEvents:UIControlEventValueChanged];
     self.demoSwitch.translatesAutoresizingMaskIntoConstraints = NO;

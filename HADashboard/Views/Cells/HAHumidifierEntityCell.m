@@ -3,6 +3,7 @@
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
 #import "HATheme.h"
+#import "HASwitch.h"
 
 @interface HAHumidifierEntityCell ()
 @property (nonatomic, strong) UISwitch *toggleSwitch;
@@ -20,8 +21,7 @@
     CGFloat padding = 10.0;
 
     // Toggle switch
-    self.toggleSwitch = [[UISwitch alloc] init];
-    self.toggleSwitch.onTintColor = [HATheme switchTintColor];
+    self.toggleSwitch = [[HASwitch alloc] init];
     self.toggleSwitch.translatesAutoresizingMaskIntoConstraints = NO;
     [self.toggleSwitch addTarget:self action:@selector(switchToggled:) forControlEvents:UIControlEventValueChanged];
     [self.contentView addSubview:self.toggleSwitch];

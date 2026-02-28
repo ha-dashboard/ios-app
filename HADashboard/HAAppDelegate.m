@@ -58,9 +58,6 @@
     [HAIconMapper warmFonts];
     [HAStartupLog log:@"warmFonts END"];
 
-    // Global switch tint — derived from gradient preset accent
-    [[UISwitch appearance] setOnTintColor:[HATheme switchTintColor]];
-
     [HAStartupLog log:@"UIWindow alloc BEGIN"];
     self.window = [[HAThemeAwareWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
     self.window.backgroundColor = [UIColor whiteColor];

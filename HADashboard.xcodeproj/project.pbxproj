@@ -284,6 +284,7 @@
 		7F492E4B89AA3EC6D10777AE /* LOTAssetGroup.h in Sources */ = {isa = PBXBuildFile; fileRef = C829FFF76B2BD9F32FADA454 /* LOTAssetGroup.h */; };
 		8001FCCF9601F206DFB000EC /* HASnapshotTestHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = EE9C4C72189AA85B5EC9ED55 /* HASnapshotTestHelpers.m */; };
 		802C1095A8F35AA1ECAA3371 /* HAEntityRowView.m in Sources */ = {isa = PBXBuildFile; fileRef = F507E17526A91541FBD197B2 /* HAEntityRowView.m */; };
+		AA11BB03CC22DD33EE44FF03 /* HASwitch.m in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB02CC22DD33EE44FF02 /* HASwitch.m */; };
 		814C5B4ADA2BAE66E442FB0B /* LOTPathInterpolator.m in Sources */ = {isa = PBXBuildFile; fileRef = 0DDC6F9EBBEEAB1E45D92A60 /* LOTPathInterpolator.m */; };
 		8184C1C20A9C4C943A226EF6 /* LOTPathAnimator.h in Sources */ = {isa = PBXBuildFile; fileRef = 43FDFEBC4B3F75F4A2EC6F44 /* LOTPathAnimator.h */; };
 		81B20CDCDFF6F6E174808A2F /* rain.json in Resources */ = {isa = PBXBuildFile; fileRef = 6118C62F8B552F1D5F662CAE /* rain.json */; };
@@ -1028,6 +1029,8 @@
 		A864F5B3624DC924FE549454 /* HATheme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HATheme.h; sourceTree = "<group>"; };
 		A890719DF1E3BF975FC51E80 /* HASwitchEntityCell.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HASwitchEntityCell.m; sourceTree = "<group>"; };
 		A9037653F77DB49A02960524 /* HAEntityRowView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAEntityRowView.h; sourceTree = "<group>"; };
+		AA11BB01CC22DD33EE44FF01 /* HASwitch.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HASwitch.h; sourceTree = "<group>"; };
+		AA11BB02CC22DD33EE44FF02 /* HASwitch.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HASwitch.m; sourceTree = "<group>"; };
 		A9B7EF3E1E241A757A1858C2 /* testSensorSectionBinary_sensorSectionBinary_light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testSensorSectionBinary_sensorSectionBinary_light@2x.png"; sourceTree = "<group>"; };
 		AB1ACE78809AD0A2A23A4D16 /* LOTModels.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LOTModels.h; sourceTree = "<group>"; };
 		ABB84AD60E8E51DB404632AC /* HAGaugeCardCell.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAGaugeCardCell.h; sourceTree = "<group>"; };
@@ -1479,6 +1482,8 @@
 				86C998DEAF38FE7FB6E67926 /* HAEntityDisplayHelper.m */,
 				A9037653F77DB49A02960524 /* HAEntityRowView.h */,
 				F507E17526A91541FBD197B2 /* HAEntityRowView.m */,
+				AA11BB01CC22DD33EE44FF01 /* HASwitch.h */,
+				AA11BB02CC22DD33EE44FF02 /* HASwitch.m */,
 				A264F155F20460835D5D0708 /* HAGraphView.h */,
 				646466F9B8796CF4B44D726C /* HAGraphView.m */,
 				D450833728C3B64408E925A7 /* HAMasonryLayout.h */,
@@ -2766,6 +2771,7 @@
 				DD67EF4B0DE6BE37014390C2 /* HAEntityDetailViewController.m in Sources */,
 				6B8AC1573FF113ED885EF362 /* HAEntityDisplayHelper.m in Sources */,
 				802C1095A8F35AA1ECAA3371 /* HAEntityRowView.m in Sources */,
+				AA11BB03CC22DD33EE44FF03 /* HASwitch.m in Sources */,
 				CA09D195B624E6320498B776 /* HAFanEntityCell.m in Sources */,
 				377DA7048B6E5A88A8CE0E2E /* HAFloor.m in Sources */,
 				D6FA3587815DE9F468C81585 /* HAGaugeCardCell.m in Sources */,

@@ -1,6 +1,7 @@
 #import "HAEntityDetailSection.h"
 #import "HAEntity.h"
 #import "HATheme.h"
+#import "HASwitch.h"
 #import "HAHaptics.h"
 #import "HAEntityDisplayHelper.h"
 #import "HAColorWheelView.h"
@@ -881,7 +882,7 @@
     self.entity = entity;
     UIView *container = [[UIView alloc] init];
 
-    self.toggleSwitch = [[UISwitch alloc] init];
+    self.toggleSwitch = [[HASwitch alloc] init];
     self.toggleSwitch.translatesAutoresizingMaskIntoConstraints = NO;
     [self.toggleSwitch addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
     [container addSubview:self.toggleSwitch];
@@ -1387,7 +1388,7 @@
     self.oscillateLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [container addSubview:self.oscillateLabel];
 
-    self.oscillateSwitch = [[UISwitch alloc] init];
+    self.oscillateSwitch = [[HASwitch alloc] init];
     self.oscillateSwitch.translatesAutoresizingMaskIntoConstraints = NO;
     [self.oscillateSwitch addTarget:self action:@selector(oscillateChanged:) forControlEvents:UIControlEventValueChanged];
     [container addSubview:self.oscillateSwitch];

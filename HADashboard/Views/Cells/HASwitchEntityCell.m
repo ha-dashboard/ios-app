@@ -1,4 +1,5 @@
 #import "HASwitchEntityCell.h"
+#import "HASwitch.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -14,8 +15,7 @@
 - (void)setupSubviews {
     [super setupSubviews];
 
-    self.toggleSwitch = [[UISwitch alloc] init];
-    self.toggleSwitch.onTintColor = [HATheme switchTintColor];
+    self.toggleSwitch = [[HASwitch alloc] init];
     self.toggleSwitch.translatesAutoresizingMaskIntoConstraints = NO;
     [self.toggleSwitch addTarget:self action:@selector(switchToggled:) forControlEvents:UIControlEventValueChanged];
     [self.contentView addSubview:self.toggleSwitch];

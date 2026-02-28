@@ -5,6 +5,7 @@
 #import "HADashboardViewController.h"
 #import "HALoginViewController.h"
 #import "HATheme.h"
+#import "HASwitch.h"
 
 @interface HASettingsViewController ()
 // Connection summary
@@ -134,9 +135,8 @@
     gradientLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.gradientToggleRow addSubview:gradientLabel];
 
-    self.gradientSwitch = [[UISwitch alloc] init];
+    self.gradientSwitch = [[HASwitch alloc] init];
     self.gradientSwitch.on = [HATheme isGradientEnabled];
-    self.gradientSwitch.onTintColor = [HATheme switchTintColor];
     [self.gradientSwitch addTarget:self action:@selector(gradientSwitchToggled:) forControlEvents:UIControlEventValueChanged];
     self.gradientSwitch.translatesAutoresizingMaskIntoConstraints = NO;
     [self.gradientToggleRow addSubview:self.gradientSwitch];
@@ -364,7 +364,7 @@
     label.translatesAutoresizingMaskIntoConstraints = NO;
     [section addSubview:label];
 
-    UISwitch *sw = [[UISwitch alloc] init];
+    UISwitch *sw = [[HASwitch alloc] init];
     sw.on = isOn;
     sw.onTintColor = [HATheme switchTintColor];
     [sw addTarget:target action:action forControlEvents:UIControlEventValueChanged];
@@ -676,9 +676,7 @@
 
 - (void)applyThemeColorsToSubviewsOf:(UIView *)view {
     for (UIView *sub in view.subviews) {
-        if ([sub isKindOfClass:[UISwitch class]]) {
-            ((UISwitch *)sub).onTintColor = [HATheme switchTintColor];
-        } else if ([sub isKindOfClass:[UILabel class]]) {
+        if ([sub isKindOfClass:[UILabel class]]) {
             UILabel *label = (UILabel *)sub;
             CGFloat size = label.font.pointSize;
             if (size >= 15) {
@@ -699,7 +697,7 @@
         self.gradientOptionsContainer.hidden = !sender.isOn;
         self.gradientOptionsContainer.alpha = sender.isOn ? 1.0 : 0.0;
     }];
-    self.view.backgroundColor = [HATheme backgroundColor];
+    [self refreshThemeColors];
 }
 
 - (void)gradientPresetChanged:(UISegmentedControl *)sender {
@@ -711,7 +709,7 @@
         self.customHexContainer.hidden = !showCustom;
         self.customHexContainer.alpha = showCustom ? 1.0 : 0.0;
     }];
-    [self updateGradientPreview];
+    [self refreshThemeColors];
 }
 
 - (void)hexFieldChanged:(UITextField *)sender {

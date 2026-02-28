@@ -1452,14 +1452,6 @@ static const CGFloat kRowUnitHeight = 56.0;
         cell.backgroundView = nil;
     }
 
-    // Update switch tint on reused cells (gradient preset may have changed)
-    UIColor *switchTint = [HATheme switchTintColor];
-    for (UIView *sub in cell.contentView.subviews) {
-        if ([sub isKindOfClass:[UISwitch class]]) {
-            ((UISwitch *)sub).onTintColor = switchTint;
-        }
-    }
-
     // Rasterize static cells for faster scrolling (caches rendered bitmap).
     // Skip camera cells (content updates frequently) and blur cells
     // (shouldRasterize bakes the blur into a static bitmap, breaking compositing).
