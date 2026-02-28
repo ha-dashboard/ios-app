@@ -297,8 +297,6 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 }
 
 - (void)themeDidChange:(NSNotification *)notification {
-    // Update global switch tint for gradient preset changes
-    [[UISwitch appearance] setOnTintColor:[HATheme switchTintColor]];
     [self applyTheme];
     // On iOS 9, reloadData may not call willDisplayCell for already-visible cells.
     // Invalidate the layout to force a full re-display pass.
@@ -1452,6 +1450,14 @@ static const CGFloat kRowUnitHeight = 56.0;
     } else if ([cell.backgroundView isKindOfClass:[UIVisualEffectView class]]) {
         // Clear stale blur backgroundView from non-card cells.
         cell.backgroundView = nil;
+    }
+
+    // Update switch tint on reused cells (gradient preset may have changed)
+    UIColor *switchTint = [HATheme switchTintColor];
+    for (UIView *sub in cell.contentView.subviews) {
+        if ([sub isKindOfClass:[UISwitch class]]) {
+            ((UISwitch *)sub).onTintColor = switchTint;
+        }
     }
 
     // Rasterize static cells for faster scrolling (caches rendered bitmap).

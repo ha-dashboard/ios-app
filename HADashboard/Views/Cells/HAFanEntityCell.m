@@ -23,6 +23,7 @@
 
     // On/off toggle
     self.toggleSwitch = [[UISwitch alloc] init];
+    self.toggleSwitch.onTintColor = [HATheme switchTintColor];
     self.toggleSwitch.translatesAutoresizingMaskIntoConstraints = NO;
     [self.toggleSwitch addTarget:self action:@selector(switchToggled:) forControlEvents:UIControlEventValueChanged];
     [self.contentView addSubview:self.toggleSwitch];

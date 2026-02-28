@@ -78,6 +78,7 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
 
     // Header toggle switch (HA web show_header_toggle, also auto-shown for all-toggleable cards)
     self.headerToggle = [[UISwitch alloc] init];
+    self.headerToggle.onTintColor = [HATheme switchTintColor];
     self.headerToggle.transform = CGAffineTransformMakeScale(0.7, 0.7);
     self.headerToggle.translatesAutoresizingMaskIntoConstraints = NO;
     self.headerToggle.hidden = YES;
