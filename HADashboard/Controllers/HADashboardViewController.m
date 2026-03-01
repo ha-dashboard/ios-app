@@ -58,6 +58,7 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 @property (nonatomic, assign) NSUInteger selectedViewIndex;
 @property (nonatomic, assign) BOOL statesLoaded;
 @property (nonatomic, assign) BOOL lovelaceLoaded;
+@property (nonatomic, assign) BOOL lovelaceFetchDone; // YES after fetch succeeds or fails
 @property (nonatomic, assign) BOOL usesColumnarLayout;
 @property (nonatomic, strong) UITapGestureRecognizer *kioskExitTap;
 @property (nonatomic, strong) NSTimer *kioskHideTimer;
@@ -210,6 +211,7 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
         NSUInteger savedViewIndex = self.selectedViewIndex;
         self.statesLoaded = NO;
         self.lovelaceLoaded = NO;
+        self.lovelaceFetchDone = NO;
         self.selectedViewIndex = savedViewIndex;
         [self showLoading:YES message:@"Connecting..."];
         [conn connect];
@@ -221,9 +223,13 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
         [conn fetchDashboardList];
         [self rebuildDashboard];
     } else {
-        [self showLoading:NO message:nil];
+        [self showLoading:YES message:@"Loading dashboard..."];
         [conn fetchAllStates];
         [conn fetchDashboardList];
+        // Fetch Lovelace config — this VC may have been created after the
+        // initial connect already fetched it for a previous VC instance.
+        NSString *selectedDashboard = [[HAAuthManager sharedManager] selectedDashboardPath];
+        [conn fetchLovelaceConfig:selectedDashboard];
     }
 
     // Seed available dashboards from cache if present
@@ -841,6 +847,10 @@ static const CGFloat kRowUnitHeight = 56.0;
 
 - (void)rebuildDashboard {
     if (!self.statesLoaded) return;
+    // Don't build until we know whether a Lovelace config exists — otherwise
+    // we briefly flash the auto-generated "default" entity dump before the
+    // real dashboard arrives.
+    if (!self.lovelaceFetchDone) return;
     [[HAPerfMonitor sharedMonitor] markRebuildStart];
 
     NSDictionary<NSString *, HAEntity *> *entities = [[HAConnectionManager sharedManager] allEntities];
@@ -1986,6 +1996,7 @@ heightForHeaderInSection:(NSInteger)section {
 
     self.lovelaceDashboard = dashboard;
     self.lovelaceLoaded = YES;
+    self.lovelaceFetchDone = YES;
 
     // -HAViewIndex N — override the initial view index (for test harness capture)
     NSInteger bootViewIndex = [[NSUserDefaults standardUserDefaults] integerForKey:@"HAViewIndex"];
@@ -2002,6 +2013,12 @@ heightForHeaderInSection:(NSInteger)section {
     }
 
     [self populateViewPicker];
+    [self rebuildDashboard];
+}
+
+- (void)connectionManagerDidFailToLoadLovelaceDashboard:(HAConnectionManager *)manager {
+    NSLog(@"[Dashboard] Lovelace fetch failed, falling back to default entity dashboard");
+    self.lovelaceFetchDone = YES;
     [self rebuildDashboard];
 }
 

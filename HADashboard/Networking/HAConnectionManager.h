@@ -21,6 +21,7 @@ extern NSString *const HAConnectionManagerDidReceiveRegistriesNotification;    /
 - (void)connectionManager:(HAConnectionManager *)manager didReceiveAllStates:(NSDictionary<NSString *, HAEntity *> *)entities;
 - (void)connectionManager:(HAConnectionManager *)manager didReceiveLovelaceDashboard:(HALovelaceDashboard *)dashboard;
 - (void)connectionManager:(HAConnectionManager *)manager didReceiveDashboardList:(NSArray<NSDictionary *> *)dashboards;
+- (void)connectionManagerDidFailToLoadLovelaceDashboard:(HAConnectionManager *)manager;
 @end
 
 

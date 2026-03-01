@@ -145,6 +145,10 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
             postNotificationName:HAConnectionManagerDidReceiveLovelaceNotification
                           object:self
                         userInfo:@{@"dashboard": self.lovelaceDashboard}];
+    } else {
+        if ([self.delegate respondsToSelector:@selector(connectionManagerDidFailToLoadLovelaceDashboard:)]) {
+            [self.delegate connectionManagerDidFailToLoadLovelaceDashboard:self];
+        }
     }
 
     [[NSNotificationCenter defaultCenter]
@@ -947,8 +951,50 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
             }
             self.lovelaceMessageId = 0;
         } else if (msgId == self.lovelaceMessageId && !success) {
-            NSLog(@"[HAConnection] Lovelace config fetch failed: %@", message[@"error"]);
+            NSDictionary *error = message[@"error"];
+            NSString *errorCode = [error isKindOfClass:[NSDictionary class]] ? error[@"code"] : nil;
+            NSLog(@"[HAConnection] Lovelace config fetch failed: %@", error);
             self.lovelaceMessageId = 0;
+
+            if ([errorCode isEqualToString:@"config_not_found"]) {
+                // Server uses the auto-generated default overview (no custom Lovelace config).
+                // Treat this as an implicit "original-states" strategy dashboard.
+                NSLog(@"[HAConnection] No Lovelace config — using original-states strategy");
+                NSDictionary *implicitStrategy = @{@"type": @"original-states"};
+                self.pendingStrategyConfig = implicitStrategy;
+
+                NSDictionary *currentEntities = [self allEntities];
+                if (currentEntities.count == 0) {
+                    NSLog(@"[HAConnection] Deferring strategy resolution (0 entities loaded)");
+                    return;
+                }
+
+                HALovelaceDashboard *resolved =
+                    [HAStrategyResolver resolveDashboardWithStrategy:implicitStrategy
+                                                           entities:currentEntities
+                                                          areaNames:self.areaNames ?: @{}
+                                                      entityAreaMap:self.entityAreaMap ?: @{}
+                                                     deviceAreaMap:self.deviceAreaMap ?: @{}
+                                                             floors:self.floors
+                                                     entityRegistry:self.entityRegistryEntries];
+                if (resolved) {
+                    self.lovelaceDashboard = resolved;
+                    if ([self.delegate respondsToSelector:@selector(connectionManager:didReceiveLovelaceDashboard:)]) {
+                        [self.delegate connectionManager:self didReceiveLovelaceDashboard:self.lovelaceDashboard];
+                    }
+                    [[NSNotificationCenter defaultCenter]
+                        postNotificationName:HAConnectionManagerDidReceiveLovelaceNotification
+                                      object:self
+                                    userInfo:@{@"dashboard": self.lovelaceDashboard}];
+                } else {
+                    // Strategy resolver couldn't produce a dashboard yet — will retry after states/registries
+                    NSLog(@"[HAConnection] Strategy resolution deferred until registries load");
+                }
+            } else {
+                if ([self.delegate respondsToSelector:@selector(connectionManagerDidFailToLoadLovelaceDashboard:)]) {
+                    [self.delegate connectionManagerDidFailToLoadLovelaceDashboard:self];
+                }
+            }
         } else if (msgId == self.areaRegistryMessageId) {
             self.areaRegistryMessageId = 0;
             if (success) {

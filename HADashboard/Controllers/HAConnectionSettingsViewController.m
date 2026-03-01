@@ -1,4 +1,5 @@
 #import "HAConnectionSettingsViewController.h"
+#import "HAAuthManager.h"
 #import "HAConnectionFormView.h"
 #import "HAConnectionManager.h"
 #import "HADashboardViewController.h"
@@ -92,6 +93,9 @@
 - (void)connectionFormDidConnect:(HAConnectionFormView *)form {
     // Disconnect first to clear stale entities/registries from previous server
     [[HAConnectionManager sharedManager] disconnect];
+
+    // Clear selected dashboard path — the new server may not have the same dashboards
+    [[HAAuthManager sharedManager] saveSelectedDashboardPath:nil];
 
     // Navigate to dashboard
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
