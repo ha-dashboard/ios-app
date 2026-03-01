@@ -9,6 +9,7 @@ set -euo pipefail
 #   scripts/deploy.sh mini5        # Build + deploy to iPad Mini 5 (WiFi, devicectl)
 #   scripts/deploy.sh mini4        # Build + deploy to iPad Mini 4 (WiFi, ios-deploy)
 #   scripts/deploy.sh ipad2        # Build + deploy to iPad 2 via WiFi SSH (jailbroken)
+#   scripts/deploy.sh mac          # Build + launch Mac Catalyst app locally
 #
 # Options:
 #   --no-build    Skip build step
@@ -73,7 +74,7 @@ TOKEN_OVERRIDE=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        sim|sim-ios93|sim-ios103|iphone|mini5|mini4|ipad2|ipad2-usb|all)
+        sim|sim-ios93|sim-ios103|iphone|mini5|mini4|ipad2|ipad2-usb|mac|all)
             if [[ -z "$TARGET" ]]; then
                 TARGET="$1"
             else
@@ -109,6 +110,7 @@ if [[ -z "$TARGET" ]]; then
     echo "  mini4          iPad Mini 4 — iPadOS 15 (ios-deploy, WiFi)"
     echo "  ipad2          iPad 2 — iOS 9 (WiFi SSH, jailbroken)"
     echo "  ipad2-usb      iPad 2 — iOS 9 (Unraid USB fallback)"
+    echo "  mac            Mac Catalyst (local Mac, fullscreen)"
     echo ""
     echo "Options:"
     echo "  --no-build     Skip build step"
@@ -169,6 +171,10 @@ if [[ "$TARGET" == "all" ]]; then
     echo "   Building rosettasim (x86_64, iOS 9+)..."
     "$PROJECT_DIR/scripts/build.sh" rosettasim > /dev/null
     echo "   ✅ RosettaSim build complete"
+
+    echo "   Building mac (Catalyst, arm64)..."
+    "$PROJECT_DIR/scripts/build.sh" mac > /dev/null
+    echo "   ✅ Mac Catalyst build complete"
     echo ""
 
     # ── Phase 2: Deploy in parallel with retries ─────────────────────
@@ -192,6 +198,7 @@ if [[ "$TARGET" == "all" ]]; then
     deploy_bg "mini5"       mini5       --no-build ${OPTS[@]+"${OPTS[@]}"}
     deploy_bg "mini4"       mini4       --no-build ${OPTS[@]+"${OPTS[@]}"}
     deploy_bg "ipad2"       ipad2       --no-build ${OPTS[@]+"${OPTS[@]}"}
+    deploy_bg "mac"         mac         --no-build ${OPTS[@]+"${OPTS[@]}"}
 
     # Wait for all deploys and collect results
     FAILURES=()
@@ -247,6 +254,13 @@ case "$TARGET" in
             APP="$PROJECT_DIR/build/universal/HA Dashboard.app"
         fi
         ;;
+    mac)
+        if [[ "$NO_BUILD" == false ]]; then
+            APP="$("$PROJECT_DIR/scripts/build.sh" mac)"
+        else
+            APP="$PROJECT_DIR/build/mac/Build/Products/Debug-maccatalyst/HA Dashboard.app"
+        fi
+        ;;
 esac
 
 if [ ! -d "$APP" ]; then
@@ -254,7 +268,10 @@ if [ ! -d "$APP" ]; then
     exit 1
 fi
 if [[ "$NO_BUILD" == false ]]; then
-    echo "✅ Build succeeded: $(du -sh "$APP" | cut -f1) — $(lipo -archs "$APP/HA Dashboard" 2>/dev/null || echo "unknown")"
+    # Catalyst binary is at Contents/MacOS/, iOS binary is at the app root
+    BINARY="$APP/HA Dashboard"
+    [[ -f "$APP/Contents/MacOS/HA Dashboard" ]] && BINARY="$APP/Contents/MacOS/HA Dashboard"
+    echo "✅ Build succeeded: $(du -sh "$APP" | cut -f1) — $(lipo -archs "$BINARY" 2>/dev/null || echo "unknown")"
 fi
 
 # ── Per-target dashboard defaults (override with --dashboard) ──────────
@@ -566,6 +583,31 @@ EOF
         echo "────────────────────────────────────────────────────────"
         echo ""
         echo "✅ Deployed to iPad 2 (WiFi)"
+        ;;
+
+    mac)
+        echo "🖥  Deploying to Mac (Catalyst)..."
+
+        # Write launch args to NSUserDefaults for the app's bundle ID
+        if [[ "$RESET_MODE" == true ]]; then
+            defaults write "$BUNDLE_ID" HAClearCredentials -bool true
+        else
+            EFFECTIVE_TOKEN="${TOKEN_OVERRIDE:-$HA_TOKEN}"
+            defaults write "$BUNDLE_ID" HAServerURL -string "$HA_SERVER"
+            defaults write "$BUNDLE_ID" HAAccessToken -string "$EFFECTIVE_TOKEN"
+        fi
+        defaults write "$BUNDLE_ID" HADashboard -string "$HA_DASHBOARD"
+        [[ -n "$KIOSK_MODE" ]] && defaults write "$BUNDLE_ID" HAKioskMode -bool "$([ "$KIOSK_MODE" = "YES" ] && echo true || echo false)"
+        [[ -n "$DEMO_MODE" ]] && defaults write "$BUNDLE_ID" HADemoMode -bool true
+
+        # Kill existing instance if running
+        killall "HA Dashboard" 2>/dev/null || true
+        sleep 0.5
+
+        echo "   Launching with dashboard: ${HA_DASHBOARD:-default}..."
+        open "$APP"
+
+        echo "✅ Running on Mac"
         ;;
 
     ipad2-usb)
