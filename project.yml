@@ -21,6 +21,7 @@ targets:
   HADashboard:
     type: application
     platform: iOS
+    supportedDestinations: [iOS, macCatalyst]
     deploymentTarget: "16.0"
     sources:
       - path: HADashboard

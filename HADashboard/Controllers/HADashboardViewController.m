@@ -248,7 +248,9 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     self.kioskHideTimer = nil;
 
     // Restore idle timer and nav bar when leaving dashboard
+#if !TARGET_OS_MACCATALYST
     [UIApplication sharedApplication].idleTimerDisabled = NO;
+#endif
     [self.navigationController setNavigationBarHidden:NO animated:NO];
 }
 
@@ -1176,7 +1178,9 @@ static const CGFloat kRowUnitHeight = 56.0;
 
 - (void)applyKioskMode {
     BOOL kiosk = [[HAAuthManager sharedManager] isKioskMode];
+#if !TARGET_OS_MACCATALYST
     [UIApplication sharedApplication].idleTimerDisabled = kiosk;
+#endif
     [self.navigationController setNavigationBarHidden:kiosk animated:YES];
     [self setNeedsStatusBarAppearanceUpdate];
     // Also use UIApplication method for iOS 9 compatibility where

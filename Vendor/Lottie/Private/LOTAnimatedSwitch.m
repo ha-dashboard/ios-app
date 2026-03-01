@@ -119,7 +119,7 @@
 
 - (void)_toggleAndSendActions {
   if (self.isEnabled) {
-    #ifndef TARGET_OS_TV
+    #if !TARGET_OS_TV && !TARGET_OS_MACCATALYST
     if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 10.0) {
       UIImpactFeedbackGenerator *generator = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
       [generator impactOccurred];
