@@ -106,8 +106,8 @@
     NSMutableArray<NSString *> *remainingIds = [[areaGroups allKeys] mutableCopy];
     [remainingIds removeObjectsInArray:orderedAreaIds];
     [remainingIds sortUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
-        NSString *nameA = areaNames[a] ?: a;
-        NSString *nameB = areaNames[b] ?: b;
+        NSString *nameA = [areaNames[a] isKindOfClass:[NSString class]] ? areaNames[a] : a;
+        NSString *nameB = [areaNames[b] isKindOfClass:[NSString class]] ? areaNames[b] : b;
         return [nameA caseInsensitiveCompare:nameB];
     }];
     [orderedAreaIds addObjectsFromArray:remainingIds];
@@ -216,8 +216,8 @@
             }
         } else {
             orderedAreaIds = [[[areaGroups allKeys] sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
-                NSString *nameA = areaNames[a] ?: a;
-                NSString *nameB = areaNames[b] ?: b;
+                NSString *nameA = [areaNames[a] isKindOfClass:[NSString class]] ? areaNames[a] : a;
+                NSString *nameB = [areaNames[b] isKindOfClass:[NSString class]] ? areaNames[b] : b;
                 return [nameA caseInsensitiveCompare:nameB];
             }] mutableCopy];
         }
@@ -264,8 +264,8 @@
 
     // 4. Per-area subviews
     NSArray<NSString *> *sortedAreaIds = [[areaGroups allKeys] sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
-        NSString *nameA = areaNames[a] ?: a;
-        NSString *nameB = areaNames[b] ?: b;
+        NSString *nameA = [areaNames[a] isKindOfClass:[NSString class]] ? areaNames[a] : a;
+        NSString *nameB = [areaNames[b] isKindOfClass:[NSString class]] ? areaNames[b] : b;
         return [nameA caseInsensitiveCompare:nameB];
     }];
     for (NSString *areaId in sortedAreaIds) {

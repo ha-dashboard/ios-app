@@ -6,7 +6,7 @@
     self = [super init];
     if (self) {
         _floorId = dict[@"floor_id"];
-        _name = dict[@"name"] ?: _floorId;
+        _name = [dict[@"name"] isKindOfClass:[NSString class]] ? dict[@"name"] : _floorId;
 
         id level = dict[@"level"];
         if ([level isKindOfClass:[NSNumber class]]) {

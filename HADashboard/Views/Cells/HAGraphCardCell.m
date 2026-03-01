@@ -292,7 +292,7 @@ static NSArray<UIColor *> *sColorPalette;
 
             // Determine label for this entity
             HAEntity *entity = allEntities[eid];
-            NSString *label = cfg[@"name"] ?: section.nameOverrides[eid] ?: entity.friendlyName ?: eid;
+            NSString *label = [cfg[@"name"] isKindOfClass:[NSString class]] ? cfg[@"name"] : (section.nameOverrides[eid] ?: entity.friendlyName ?: eid);
             NSString *unit = entity.unitOfMeasurement ?: @"";
 
             [graphEntityInfos addObject:@{

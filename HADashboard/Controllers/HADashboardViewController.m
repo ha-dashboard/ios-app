@@ -1709,7 +1709,7 @@ heightForHeaderInSection:(NSInteger)section {
             }
             if (!color) color = palette[graphEntities.count % palette.count];
 
-            NSString *label = cfg[@"name"] ?: entSection.nameOverrides[eid] ?: entity.friendlyName ?: eid;
+            NSString *label = [cfg[@"name"] isKindOfClass:[NSString class]] ? cfg[@"name"] : (entSection.nameOverrides[eid] ?: entity.friendlyName ?: eid);
             NSString *unit = entity.unitOfMeasurement ?: @"";
 
             [graphEntities addObject:@{

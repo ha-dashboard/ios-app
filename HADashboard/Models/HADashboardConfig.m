@@ -7,7 +7,7 @@
 - (instancetype)initWithDictionary:(NSDictionary *)dict {
     self = [super init];
     if (self) {
-        _entityId    = dict[@"entity_id"] ?: @"";
+        _entityId    = [dict[@"entity_id"] isKindOfClass:[NSString class]] ? dict[@"entity_id"] : @"";
         _displayName = dict[@"display_name"];
         _column      = [dict[@"column"] integerValue];
         _row         = [dict[@"row"] integerValue];
@@ -46,7 +46,7 @@
     }
 
     HADashboardConfig *config = [[HADashboardConfig alloc] init];
-    config.title   = dict[@"title"] ?: @"Dashboard";
+    config.title   = [dict[@"title"] isKindOfClass:[NSString class]] ? dict[@"title"] : @"Dashboard";
     config.columns = dict[@"columns"] ? [dict[@"columns"] integerValue] : 3;
 
     NSArray *itemDicts = dict[@"items"];

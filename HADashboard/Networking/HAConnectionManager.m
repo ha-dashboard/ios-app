@@ -169,6 +169,32 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     self.wsClient = nil;
     self.apiClient = nil;
     self.connected = NO;
+
+    // Clear all cached data so a subsequent connect() starts fresh
+    @synchronized(self.entityStore) {
+        [self.entityStore removeAllObjects];
+    }
+    self.lovelaceDashboard = nil;
+    self.pendingStrategyConfig = nil;
+    self.availableDashboards = nil;
+    self.areaNames = nil;
+    self.entityAreaMap = nil;
+    self.deviceAreaMap = nil;
+    self.floors = nil;
+    self.floorByAreaId = nil;
+    self.rawEntityRegistry = nil;
+    self.rawAreaRegistry = nil;
+    self.registriesLoaded = NO;
+    self.areasLoaded = NO;
+    self.entitiesRegistryLoaded = NO;
+    self.devicesLoaded = NO;
+    self.floorsLoaded = NO;
+    self.lovelaceMessageId = 0;
+    self.dashboardListMessageId = 0;
+    self.areaRegistryMessageId = 0;
+    self.entityRegistryMessageId = 0;
+    self.deviceRegistryMessageId = 0;
+    self.floorRegistryMessageId = 0;
 }
 
 #pragma mark - Data
@@ -849,8 +875,10 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
                     NSString *component = panel[@"component_name"];
                     if (![component isEqualToString:@"lovelace"]) continue;
 
-                    NSString *title = panel[@"title"] ?: key;
-                    NSString *urlPath = panel[@"url_path"] ?: key;
+                    id rawTitle = panel[@"title"];
+                    NSString *title = ([rawTitle isKindOfClass:[NSString class]] && [rawTitle length] > 0) ? rawTitle : key;
+                    id rawUrlPath = panel[@"url_path"];
+                    NSString *urlPath = ([rawUrlPath isKindOfClass:[NSString class]] && [rawUrlPath length] > 0) ? rawUrlPath : key;
                     [dashboards addObject:@{@"title": title, @"url_path": urlPath}];
                 }
                 // Sort by title for consistent ordering

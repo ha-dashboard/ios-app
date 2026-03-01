@@ -14,7 +14,7 @@
 - (instancetype)initWithDictionary:(NSDictionary *)dict {
     self = [super init];
     if (self) {
-        _title = dict[@"title"] ?: @"Home";
+        _title = [dict[@"title"] isKindOfClass:[NSString class]] ? dict[@"title"] : @"Home";
 
         NSArray *viewDicts = dict[@"views"];
         if ([viewDicts isKindOfClass:[NSArray class]]) {
@@ -22,7 +22,7 @@
             for (NSDictionary *vd in viewDicts) {
                 if (![vd isKindOfClass:[NSDictionary class]]) continue;
                 HALovelaceView *view = [[HALovelaceView alloc] init];
-                view.title = vd[@"title"] ?: [NSString stringWithFormat:@"View %lu", (unsigned long)(views.count + 1)];
+                view.title = [vd[@"title"] isKindOfClass:[NSString class]] ? vd[@"title"] : [NSString stringWithFormat:@"View %lu", (unsigned long)(views.count + 1)];
                 view.path  = vd[@"path"];
                 view.icon  = vd[@"icon"];
                 // Collect cards from both "cards" (classic) and "sections" (HA 2024+)

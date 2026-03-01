@@ -258,7 +258,9 @@
         double value = [stateStr doubleValue];
         if (value == 0 && ![stateStr isEqualToString:@"0"] && ![stateStr hasPrefix:@"0."]) continue;
 
-        NSString *timeStr = entry[@"last_changed"] ?: entry[@"last_updated"];
+        id rawTime = entry[@"last_changed"];
+        if (![rawTime isKindOfClass:[NSString class]]) rawTime = entry[@"last_updated"];
+        NSString *timeStr = [rawTime isKindOfClass:[NSString class]] ? rawTime : nil;
         if (!timeStr) continue;
 
         NSDate *date = [parseFmt6 dateFromString:timeStr];
@@ -321,7 +323,9 @@
         NSString *stateStr = entry[@"state"];
         if (!stateStr) continue;
 
-        NSString *timeStr = entry[@"last_changed"] ?: entry[@"last_updated"];
+        id rawTime2 = entry[@"last_changed"];
+        if (![rawTime2 isKindOfClass:[NSString class]]) rawTime2 = entry[@"last_updated"];
+        NSString *timeStr = [rawTime2 isKindOfClass:[NSString class]] ? rawTime2 : nil;
         if (!timeStr) continue;
 
         NSDate *date = [tlFmt6 dateFromString:timeStr];

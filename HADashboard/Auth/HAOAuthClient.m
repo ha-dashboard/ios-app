@@ -287,7 +287,7 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
             }
 
             if ([stepType isEqualToString:@"abort"]) {
-                NSString *reason = result[@"reason"] ?: @"Login aborted";
+                NSString *reason = [result[@"reason"] isKindOfClass:[NSString class]] ? result[@"reason"] : @"Login aborted";
                 dispatch_async(dispatch_get_main_queue(), ^{
                     completion(nil, nil, nil, [self errorWithMessage:reason code:403]);
                 });
@@ -363,7 +363,7 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
 
     for (NSDictionary *field in schema) {
         if (![field isKindOfClass:[NSDictionary class]]) continue;
-        if (![field[@"name"] isEqualToString:@"user"]) continue;
+        if (![field[@"name"] isKindOfClass:[NSString class]] || ![field[@"name"] isEqualToString:@"user"]) continue;
 
         // HA returns the allowed values as an array of [value, label] pairs
         // in the "options" key, or as a flat list in "values"
@@ -413,7 +413,7 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
             NSDictionary *result = [self parseJSONData:data];
 
             if (httpResp.statusCode != 200 || !result) {
-                NSString *errMsg = result[@"error_description"] ?: @"Token exchange failed";
+                NSString *errMsg = [result[@"error_description"] isKindOfClass:[NSString class]] ? result[@"error_description"] : @"Token exchange failed";
                 dispatch_async(dispatch_get_main_queue(), ^{
                     completion(nil, [self errorWithMessage:errMsg code:httpResp.statusCode]);
                 });
