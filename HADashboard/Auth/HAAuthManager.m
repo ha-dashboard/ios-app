@@ -193,6 +193,23 @@ static NSString *const kAutoReloadDashboardKey = @"ha_auto_reload_dashboard";
     }];
 }
 
+- (void)handleAuthFailureWithCompletion:(void (^)(NSString *newToken, NSError *error))completion {
+    if (self.authMode != HAAuthModeOAuth || self.refreshToken.length == 0) {
+        if (completion) {
+            NSError *err = [NSError errorWithDomain:@"HAAuthManager" code:401
+                                           userInfo:@{NSLocalizedDescriptionKey: @"Authentication failed"}];
+            completion(nil, err);
+        }
+        return;
+    }
+
+    [self refreshAccessTokenWithCompletion:^(BOOL success, NSError *error) {
+        if (completion) {
+            completion(success ? self.accessToken : nil, error);
+        }
+    }];
+}
+
 - (void)refreshAccessTokenWithCompletion:(void (^)(BOOL success, NSError *error))completion {
     if (self.authMode != HAAuthModeOAuth || self.refreshToken.length == 0 || self.serverURL.length == 0) {
         if (completion) {

@@ -4,6 +4,17 @@
 
 @implementation HAStrategyResolver
 
+#pragma mark - Helpers
+
++ (NSArray<NSString *> *)sortAreaIds:(NSArray<NSString *> *)areaIds
+                          byNames:(NSDictionary<NSString *, NSString *> *)areaNames {
+    return [areaIds sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+        NSString *nameA = [areaNames[a] isKindOfClass:[NSString class]] ? areaNames[a] : a;
+        NSString *nameB = [areaNames[b] isKindOfClass:[NSString class]] ? areaNames[b] : b;
+        return [nameA caseInsensitiveCompare:nameB];
+    }];
+}
+
 + (HALovelaceDashboard *)resolveDashboardWithStrategy:(NSDictionary *)strategyConfig
                                              entities:(NSDictionary<NSString *, HAEntity *> *)entities
                                             areaNames:(NSDictionary<NSString *, NSString *> *)areaNames
@@ -105,12 +116,7 @@
     // Add remaining areas alphabetically
     NSMutableArray<NSString *> *remainingIds = [[areaGroups allKeys] mutableCopy];
     [remainingIds removeObjectsInArray:orderedAreaIds];
-    [remainingIds sortUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
-        NSString *nameA = areaNames[a] ?: a;
-        NSString *nameB = areaNames[b] ?: b;
-        return [nameA caseInsensitiveCompare:nameB];
-    }];
-    [orderedAreaIds addObjectsFromArray:remainingIds];
+    [orderedAreaIds addObjectsFromArray:[self sortAreaIds:remainingIds byNames:areaNames]];
 
     // 6. Generate card configs for each area
     NSMutableArray<NSDictionary *> *allCards = [NSMutableArray array];
@@ -215,11 +221,7 @@
                 }
             }
         } else {
-            orderedAreaIds = [[[areaGroups allKeys] sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
-                NSString *nameA = areaNames[a] ?: a;
-                NSString *nameB = areaNames[b] ?: b;
-                return [nameA caseInsensitiveCompare:nameB];
-            }] mutableCopy];
+            orderedAreaIds = [[self sortAreaIds:[areaGroups allKeys] byNames:areaNames] mutableCopy];
         }
 
         // Summary counts
@@ -263,11 +265,7 @@
     }
 
     // 4. Per-area subviews
-    NSArray<NSString *> *sortedAreaIds = [[areaGroups allKeys] sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
-        NSString *nameA = areaNames[a] ?: a;
-        NSString *nameB = areaNames[b] ?: b;
-        return [nameA caseInsensitiveCompare:nameB];
-    }];
+    NSArray<NSString *> *sortedAreaIds = [self sortAreaIds:[areaGroups allKeys] byNames:areaNames];
     for (NSString *areaId in sortedAreaIds) {
         NSArray<HAEntity *> *areaEntities = areaGroups[areaId];
         NSString *areaName = areaNames[areaId] ?: areaId;

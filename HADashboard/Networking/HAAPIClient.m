@@ -1,5 +1,6 @@
 #import "HAAPIClient.h"
 #import "HAAuthManager.h"
+#import "NSMutableURLRequest+HAHelpers.h"
 
 @interface HAAPIClient ()
 @property (nonatomic, strong) NSURL *baseURL;
@@ -23,10 +24,7 @@
         }
         _token   = [token copy];
 
-        NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
-        config.timeoutIntervalForRequest = 15.0;
-        config.timeoutIntervalForResource = 30.0;
-        _session = [NSURLSession sessionWithConfiguration:config];
+        _session = [NSURLSession sessionWithConfiguration:[NSMutableURLRequest ha_defaultSessionConfiguration]];
     }
     return self;
 }
@@ -110,8 +108,7 @@
 - (NSMutableURLRequest *)requestWithURL:(NSURL *)url method:(NSString *)method {
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
     request.HTTPMethod = method;
-    [request setValue:[NSString stringWithFormat:@"Bearer %@", self.token] forHTTPHeaderField:@"Authorization"];
-    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    [request ha_setAuthHeaders:self.token];
     return request;
 }
 
@@ -133,24 +130,19 @@
             NSInteger statusCode = httpResponse.statusCode;
 
             if (statusCode == 401) {
-                HAAuthManager *auth = [HAAuthManager sharedManager];
-                if (auth.authMode == HAAuthModeOAuth && !self.isRetrying401) {
+                if (!self.isRetrying401) {
                     self.isRetrying401 = YES;
-                    [auth refreshAccessTokenWithCompletion:^(BOOL success, NSError *refreshError) {
+                    [[HAAuthManager sharedManager] handleAuthFailureWithCompletion:^(NSString *newToken, NSError *refreshError) {
                         self.isRetrying401 = NO;
-                        if (success) {
-                            // Retry with new token
-                            self.token = auth.accessToken;
+                        if (newToken) {
+                            self.token = newToken;
                             NSMutableURLRequest *retry = [request mutableCopy];
-                            [retry setValue:[NSString stringWithFormat:@"Bearer %@", auth.accessToken]
+                            [retry setValue:[NSString stringWithFormat:@"Bearer %@", newToken]
                                 forHTTPHeaderField:@"Authorization"];
                             [self executeRequest:retry completion:completion];
                         } else {
-                            NSError *authError = [NSError errorWithDomain:@"HAAPIClient"
-                                                                     code:401
-                                                                 userInfo:@{NSLocalizedDescriptionKey: @"Unauthorized — token refresh failed"}];
                             dispatch_async(dispatch_get_main_queue(), ^{
-                                if (completion) completion(nil, authError);
+                                if (completion) completion(nil, refreshError);
                             });
                         }
                     }];

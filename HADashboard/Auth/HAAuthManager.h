@@ -50,6 +50,11 @@ typedef NS_ENUM(NSInteger, HAAuthMode) {
 /// Only works in HAAuthModeOAuth. Calls completion on main queue.
 - (void)refreshAccessTokenWithCompletion:(void (^)(BOOL success, NSError *error))completion;
 
+/// Handle an authentication failure by attempting a token refresh if in OAuth mode.
+/// On success, returns the new access token. On failure (or non-OAuth mode), returns an error.
+/// Callers should update their local token copy and retry their operation on success.
+- (void)handleAuthFailureWithCompletion:(void (^)(NSString *newToken, NSError *error))completion;
+
 - (void)saveSelectedDashboardPath:(NSString *)urlPath;
 - (void)setKioskMode:(BOOL)enabled;
 - (void)setDemoMode:(BOOL)enabled;
