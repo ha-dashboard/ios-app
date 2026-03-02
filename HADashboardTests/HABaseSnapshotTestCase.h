@@ -50,8 +50,7 @@ static const CGFloat kTileHeight = 80.0;
 /// with a theme-suffixed identifier, then restores the original theme.
 - (void)verifyView:(UIView *)view identifier:(NSString *)identifier inTheme:(NSInteger)mode;
 
-/// Verify a view snapshot in both Gradient and Light themes.
-/// Calls verifyView:identifier:inTheme: for HAThemeModeGradient and HAThemeModeLight.
+/// Verify a view snapshot in Dark+Gradient and Light themes.
 - (void)verifyView:(UIView *)view identifier:(NSString *)identifier;
 
 @end

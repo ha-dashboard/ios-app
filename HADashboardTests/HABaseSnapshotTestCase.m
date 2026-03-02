@@ -4,6 +4,7 @@
 #import "HABaseEntityCell.h"
 #import "HAEntitiesCardCell.h"
 #import "HABadgeRowCell.h"
+#import "HAGlanceCardCell.h"
 #import "HATheme.h"
 
 @implementation HABaseSnapshotTestCase
@@ -59,6 +60,8 @@
         [(HAEntitiesCardCell *)cell configureWithSection:section entities:entities configItem:configItem];
     } else if ([cell isKindOfClass:[HABadgeRowCell class]]) {
         [(HABadgeRowCell *)cell configureWithSection:section entities:entities];
+    } else if ([cell isKindOfClass:[HAGlanceCardCell class]]) {
+        [(HAGlanceCardCell *)cell configureWithSection:section entities:entities configItem:configItem];
     }
 
     [cell layoutIfNeeded];
@@ -68,25 +71,28 @@
 #pragma mark - Theme Verification
 
 - (void)verifyView:(UIView *)view identifier:(NSString *)identifier inTheme:(NSInteger)mode {
+    [self verifyView:view identifier:identifier inTheme:mode gradient:NO];
+}
+
+- (void)verifyView:(UIView *)view identifier:(NSString *)identifier inTheme:(NSInteger)mode gradient:(BOOL)gradient {
     HAThemeMode originalMode = [HATheme currentMode];
+    BOOL originalGradient = [HATheme isGradientEnabled];
 
     [HATheme setCurrentMode:(HAThemeMode)mode];
+    [HATheme setGradientEnabled:gradient];
     [view setNeedsLayout];
     [view layoutIfNeeded];
 
     NSString *themeSuffix;
     switch ((HAThemeMode)mode) {
         case HAThemeModeLight:
-            themeSuffix = @"_light";
+            themeSuffix = gradient ? @"_light_gradient" : @"_light";
             break;
         case HAThemeModeDark:
-            themeSuffix = @"_dark";
-            break;
-        case HAThemeModeGradient:
-            themeSuffix = @"_gradient";
+            themeSuffix = gradient ? @"_dark_gradient" : @"_dark";
             break;
         default:
-            themeSuffix = @"_auto";
+            themeSuffix = gradient ? @"_auto_gradient" : @"_auto";
             break;
     }
 
@@ -100,10 +106,11 @@
     FBSnapshotVerifyView(view, suffixedIdentifier);
 
     [HATheme setCurrentMode:originalMode];
+    [HATheme setGradientEnabled:originalGradient];
 }
 
 - (void)verifyView:(UIView *)view identifier:(NSString *)identifier {
-    [self verifyView:view identifier:identifier inTheme:HAThemeModeGradient];
+    [self verifyView:view identifier:identifier inTheme:HAThemeModeDark gradient:YES];
     [self verifyView:view identifier:identifier inTheme:HAThemeModeLight];
 }
 

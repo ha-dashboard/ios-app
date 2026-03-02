@@ -974,6 +974,759 @@
     }];
 }
 
+#pragma mark - Showcase: Light (10 variants)
+
++ (HAEntity *)lightScBasicOn {
+    return [self entityWithId:@"light.sc_basic_on" state:@"on" attributes:@{
+        @"friendly_name": @"Basic On", @"brightness": @204, @"color_mode": @"brightness",
+        @"supported_color_modes": @[@"brightness"], @"icon": @"mdi:lightbulb"}];
+}
+
++ (HAEntity *)lightScBasicOff {
+    return [self entityWithId:@"light.sc_basic_off" state:@"off" attributes:@{
+        @"friendly_name": @"Basic Off", @"supported_color_modes": @[@"brightness"],
+        @"icon": @"mdi:lightbulb-outline"}];
+}
+
++ (HAEntity *)lightScColorTemp {
+    return [self entityWithId:@"light.sc_color_temp" state:@"on" attributes:@{
+        @"friendly_name": @"Color Temp", @"brightness": @153, @"color_temp_kelvin": @3000,
+        @"min_color_temp_kelvin": @2000, @"max_color_temp_kelvin": @6500,
+        @"color_mode": @"color_temp", @"supported_color_modes": @[@"color_temp"],
+        @"icon": @"mdi:ceiling-light"}];
+}
+
++ (HAEntity *)lightScRgb {
+    return [self entityWithId:@"light.sc_rgb" state:@"on" attributes:@{
+        @"friendly_name": @"RGB Blue", @"brightness": @255, @"hs_color": @[@240, @100],
+        @"rgb_color": @[@0, @0, @255], @"color_mode": @"hs",
+        @"supported_color_modes": @[@"hs"], @"icon": @"mdi:led-strip-variant"}];
+}
+
++ (HAEntity *)lightScRgbw {
+    return [self entityWithId:@"light.sc_rgbw" state:@"on" attributes:@{
+        @"friendly_name": @"RGBW", @"brightness": @200, @"rgbw_color": @[@255, @0, @0, @128],
+        @"color_mode": @"rgbw", @"supported_color_modes": @[@"rgbw"],
+        @"icon": @"mdi:led-strip"}];
+}
+
++ (HAEntity *)lightScAllModes {
+    return [self entityWithId:@"light.sc_all_modes" state:@"on" attributes:@{
+        @"friendly_name": @"All Modes", @"brightness": @191, @"color_temp_kelvin": @4000,
+        @"min_color_temp_kelvin": @2000, @"max_color_temp_kelvin": @6500,
+        @"color_mode": @"color_temp",
+        @"supported_color_modes": @[@"brightness", @"color_temp", @"hs"],
+        @"icon": @"mdi:lightbulb-multiple"}];
+}
+
++ (HAEntity *)lightScEffect {
+    return [self entityWithId:@"light.sc_effect" state:@"on" attributes:@{
+        @"friendly_name": @"With Effect", @"brightness": @255, @"effect": @"rainbow",
+        @"effect_list": @[@"rainbow", @"strobe", @"colorloop", @"none"],
+        @"color_mode": @"rgb", @"supported_color_modes": @[@"rgb"],
+        @"icon": @"mdi:lava-lamp"}];
+}
+
++ (HAEntity *)lightScBrightnessOnly {
+    return [self entityWithId:@"light.sc_brightness_only" state:@"on" attributes:@{
+        @"friendly_name": @"Brightness Only", @"brightness": @102,
+        @"color_mode": @"brightness", @"supported_color_modes": @[@"brightness"],
+        @"icon": @"mdi:desk-lamp"}];
+}
+
++ (HAEntity *)lightScDimmedLow {
+    return [self entityWithId:@"light.sc_dimmed_low" state:@"on" attributes:@{
+        @"friendly_name": @"Dimmed 2%", @"brightness": @5,
+        @"color_mode": @"brightness", @"supported_color_modes": @[@"brightness"],
+        @"icon": @"mdi:lightbulb-on-10"}];
+}
+
++ (HAEntity *)lightScMaxBright {
+    return [self entityWithId:@"light.sc_max_bright" state:@"on" attributes:@{
+        @"friendly_name": @"Max Bright", @"brightness": @255,
+        @"color_mode": @"brightness", @"supported_color_modes": @[@"brightness"],
+        @"icon": @"mdi:lightbulb-on"}];
+}
+
+#pragma mark - Showcase: Climate (8 variants)
+
++ (HAEntity *)climateScHeating {
+    return [self entityWithId:@"climate.sc_heating" state:@"heat" attributes:@{
+        @"friendly_name": @"Heating", @"temperature": @22, @"current_temperature": @20,
+        @"hvac_action": @"heating", @"hvac_modes": @[@"off", @"heat", @"cool", @"auto"],
+        @"min_temp": @7, @"max_temp": @35, @"target_temp_step": @0.5,
+        @"temperature_unit": @"\u00B0C"}];
+}
+
++ (HAEntity *)climateScCooling {
+    return [self entityWithId:@"climate.sc_cooling" state:@"cool" attributes:@{
+        @"friendly_name": @"Cooling", @"temperature": @24, @"current_temperature": @26,
+        @"hvac_action": @"cooling", @"hvac_modes": @[@"off", @"heat", @"cool", @"auto"],
+        @"min_temp": @7, @"max_temp": @35, @"target_temp_step": @0.5,
+        @"temperature_unit": @"\u00B0C"}];
+}
+
++ (HAEntity *)climateScHeatCool {
+    return [self entityWithId:@"climate.sc_heat_cool" state:@"heat_cool" attributes:@{
+        @"friendly_name": @"Heat/Cool", @"target_temp_high": @24, @"target_temp_low": @20,
+        @"current_temperature": @22, @"hvac_action": @"idle",
+        @"hvac_modes": @[@"off", @"heat", @"cool", @"heat_cool"],
+        @"min_temp": @7, @"max_temp": @35, @"temperature_unit": @"\u00B0C"}];
+}
+
++ (HAEntity *)climateScPresets {
+    return [self entityWithId:@"climate.sc_presets" state:@"heat" attributes:@{
+        @"friendly_name": @"With Presets", @"temperature": @22, @"current_temperature": @20.5,
+        @"hvac_action": @"heating", @"hvac_modes": @[@"off", @"heat", @"cool", @"auto"],
+        @"preset_mode": @"eco", @"preset_modes": @[@"eco", @"comfort", @"away", @"boost", @"sleep"],
+        @"min_temp": @7, @"max_temp": @35, @"target_temp_step": @0.5,
+        @"temperature_unit": @"\u00B0C"}];
+}
+
++ (HAEntity *)climateScFan {
+    return [self entityWithId:@"climate.sc_fan" state:@"cool" attributes:@{
+        @"friendly_name": @"With Fan", @"temperature": @24, @"current_temperature": @26,
+        @"hvac_action": @"cooling", @"hvac_modes": @[@"off", @"heat", @"cool", @"auto"],
+        @"fan_mode": @"medium", @"fan_modes": @[@"auto", @"low", @"medium", @"high"],
+        @"min_temp": @7, @"max_temp": @35, @"target_temp_step": @1,
+        @"temperature_unit": @"\u00B0C"}];
+}
+
++ (HAEntity *)climateScSwing {
+    return [self entityWithId:@"climate.sc_swing" state:@"heat" attributes:@{
+        @"friendly_name": @"With Swing", @"temperature": @21, @"current_temperature": @19,
+        @"hvac_action": @"heating", @"hvac_modes": @[@"off", @"heat", @"cool", @"auto"],
+        @"swing_mode": @"vertical",
+        @"swing_modes": @[@"on", @"off", @"vertical", @"horizontal", @"both"],
+        @"min_temp": @7, @"max_temp": @35, @"temperature_unit": @"\u00B0C"}];
+}
+
++ (HAEntity *)climateScAll {
+    return [self entityWithId:@"climate.sc_all" state:@"heat" attributes:@{
+        @"friendly_name": @"All Features", @"temperature": @22, @"current_temperature": @21,
+        @"hvac_action": @"heating", @"hvac_modes": @[@"off", @"heat", @"cool", @"auto", @"dry", @"fan_only"],
+        @"preset_mode": @"comfort", @"preset_modes": @[@"eco", @"comfort", @"away", @"boost"],
+        @"fan_mode": @"auto", @"fan_modes": @[@"auto", @"low", @"medium", @"high"],
+        @"swing_mode": @"off", @"swing_modes": @[@"on", @"off", @"vertical", @"horizontal"],
+        @"aux_heat": @YES, @"target_humidity": @50,
+        @"min_temp": @7, @"max_temp": @35, @"target_temp_step": @0.5,
+        @"temperature_unit": @"\u00B0C"}];
+}
+
++ (HAEntity *)climateScOff {
+    return [self entityWithId:@"climate.sc_off" state:@"off" attributes:@{
+        @"friendly_name": @"Off", @"current_temperature": @18,
+        @"hvac_action": @"off", @"hvac_modes": @[@"off", @"heat", @"cool", @"auto"],
+        @"min_temp": @7, @"max_temp": @35, @"temperature_unit": @"\u00B0C"}];
+}
+
+#pragma mark - Showcase: Cover (10 variants)
+
++ (HAEntity *)coverScPosition {
+    return [self entityWithId:@"cover.sc_position" state:@"open" attributes:@{
+        @"friendly_name": @"Position Only", @"current_position": @50,
+        @"supported_features": @15, @"device_class": @"shutter"}];
+}
+
++ (HAEntity *)coverScTilt {
+    return [self entityWithId:@"cover.sc_tilt" state:@"open" attributes:@{
+        @"friendly_name": @"Tilt Only", @"current_position": @100, @"current_tilt_position": @30,
+        @"supported_features": @255, @"device_class": @"blind"}];
+}
+
++ (HAEntity *)coverScPosTilt {
+    return [self entityWithId:@"cover.sc_pos_tilt" state:@"open" attributes:@{
+        @"friendly_name": @"Position+Tilt", @"current_position": @75, @"current_tilt_position": @60,
+        @"supported_features": @255, @"device_class": @"blind"}];
+}
+
++ (HAEntity *)coverScNoPosition {
+    return [self entityWithId:@"cover.sc_no_position" state:@"open" attributes:@{
+        @"friendly_name": @"No Position", @"supported_features": @3, @"device_class": @"awning"}];
+}
+
++ (HAEntity *)coverScOpening {
+    return [self entityWithId:@"cover.sc_opening" state:@"opening" attributes:@{
+        @"friendly_name": @"Opening", @"current_position": @65,
+        @"supported_features": @15, @"device_class": @"shutter"}];
+}
+
++ (HAEntity *)coverScClosed {
+    return [self entityWithId:@"cover.sc_closed" state:@"closed" attributes:@{
+        @"friendly_name": @"Closed", @"current_position": @0,
+        @"supported_features": @15, @"device_class": @"shutter"}];
+}
+
++ (HAEntity *)coverScBlind {
+    return [self entityWithId:@"cover.sc_blind" state:@"open" attributes:@{
+        @"friendly_name": @"Blind", @"current_position": @80, @"current_tilt_position": @45,
+        @"supported_features": @255, @"device_class": @"blind"}];
+}
+
++ (HAEntity *)coverScGarage {
+    return [self entityWithId:@"cover.sc_garage" state:@"closed" attributes:@{
+        @"friendly_name": @"Garage", @"supported_features": @3, @"device_class": @"garage",
+        @"icon": @"mdi:garage"}];
+}
+
++ (HAEntity *)coverScDoor {
+    return [self entityWithId:@"cover.sc_door" state:@"closed" attributes:@{
+        @"friendly_name": @"Door", @"supported_features": @3, @"device_class": @"door",
+        @"icon": @"mdi:gate"}];
+}
+
++ (HAEntity *)coverScShutter {
+    return [self entityWithId:@"cover.sc_shutter" state:@"open" attributes:@{
+        @"friendly_name": @"Shutter", @"current_position": @100,
+        @"supported_features": @15, @"device_class": @"shutter"}];
+}
+
+#pragma mark - Showcase: Lock (5 variants)
+
++ (HAEntity *)lockScLocked {
+    return [self entityWithId:@"lock.sc_locked" state:@"locked" attributes:@{
+        @"friendly_name": @"Locked", @"icon": @"mdi:lock"}];
+}
+
++ (HAEntity *)lockScUnlocked {
+    return [self entityWithId:@"lock.sc_unlocked" state:@"unlocked" attributes:@{
+        @"friendly_name": @"Unlocked", @"icon": @"mdi:lock-open"}];
+}
+
++ (HAEntity *)lockScJammed {
+    return [self entityWithId:@"lock.sc_jammed" state:@"jammed" attributes:@{
+        @"friendly_name": @"Jammed", @"icon": @"mdi:lock-alert"}];
+}
+
++ (HAEntity *)lockScCode {
+    return [self entityWithId:@"lock.sc_code" state:@"locked" attributes:@{
+        @"friendly_name": @"With Code", @"code_format": @"^\\d{4}$",
+        @"icon": @"mdi:lock-smart"}];
+}
+
++ (HAEntity *)lockScLocking {
+    return [self entityWithId:@"lock.sc_locking" state:@"locking" attributes:@{
+        @"friendly_name": @"Locking", @"icon": @"mdi:lock-clock"}];
+}
+
+#pragma mark - Showcase: Media Player (6 variants)
+
++ (HAEntity *)mediaPlayerScFull {
+    return [self entityWithId:@"media_player.sc_full" state:@"playing" attributes:@{
+        @"friendly_name": @"Full Player", @"media_title": @"Interstellar",
+        @"media_artist": @"Hans Zimmer", @"media_album_name": @"Soundtrack",
+        @"media_content_type": @"music", @"entity_picture": @"/local/interstellar.jpg",
+        @"source": @"Spotify", @"source_list": @[@"TV", @"Spotify", @"AirPlay", @"Bluetooth"],
+        @"volume_level": @0.65, @"is_volume_muted": @NO,
+        @"shuffle": @YES, @"repeat": @"all",
+        @"media_duration": @240, @"media_position": @120,
+        @"supported_features": @152461, @"icon": @"mdi:speaker"}];
+}
+
++ (HAEntity *)mediaPlayerScPaused {
+    return [self entityWithId:@"media_player.sc_paused" state:@"paused" attributes:@{
+        @"friendly_name": @"Paused", @"media_title": @"Yesterday",
+        @"media_artist": @"The Beatles", @"volume_level": @0.5, @"is_volume_muted": @NO,
+        @"supported_features": @152461, @"icon": @"mdi:speaker"}];
+}
+
++ (HAEntity *)mediaPlayerScMuted {
+    return [self entityWithId:@"media_player.sc_muted" state:@"playing" attributes:@{
+        @"friendly_name": @"Muted", @"media_title": @"Focus Beats",
+        @"media_artist": @"Lo-Fi Radio", @"volume_level": @0.7, @"is_volume_muted": @YES,
+        @"supported_features": @152461, @"icon": @"mdi:speaker"}];
+}
+
++ (HAEntity *)mediaPlayerScIdle {
+    return [self entityWithId:@"media_player.sc_idle" state:@"idle" attributes:@{
+        @"friendly_name": @"Idle", @"volume_level": @0.3, @"is_volume_muted": @NO,
+        @"supported_features": @152461, @"icon": @"mdi:speaker"}];
+}
+
++ (HAEntity *)mediaPlayerScOff {
+    return [self entityWithId:@"media_player.sc_off" state:@"off" attributes:@{
+        @"friendly_name": @"Off", @"volume_level": @0.5, @"is_volume_muted": @NO,
+        @"supported_features": @152461, @"icon": @"mdi:speaker-off"}];
+}
+
++ (HAEntity *)mediaPlayerScNoSource {
+    return [self entityWithId:@"media_player.sc_no_source" state:@"playing" attributes:@{
+        @"friendly_name": @"No Source", @"media_title": @"Radio Stream",
+        @"media_artist": @"BBC Radio 4", @"volume_level": @0.4, @"is_volume_muted": @NO,
+        @"supported_features": @21437, @"icon": @"mdi:radio"}];
+}
+
+#pragma mark - Showcase: Alarm (7 variants)
+
++ (HAEntity *)alarmScDisarmed {
+    return [self entityWithId:@"alarm_control_panel.sc_disarmed" state:@"disarmed" attributes:@{
+        @"friendly_name": @"Disarmed", @"code_arm_required": @YES,
+        @"code_format": @"number", @"supported_features": @31, @"icon": @"mdi:shield-check"}];
+}
+
++ (HAEntity *)alarmScHome {
+    return [self entityWithId:@"alarm_control_panel.sc_home" state:@"armed_home" attributes:@{
+        @"friendly_name": @"Armed Home", @"code_arm_required": @YES,
+        @"supported_features": @31, @"icon": @"mdi:shield-home"}];
+}
+
++ (HAEntity *)alarmScAway {
+    return [self entityWithId:@"alarm_control_panel.sc_away" state:@"armed_away" attributes:@{
+        @"friendly_name": @"Armed Away", @"code_arm_required": @YES,
+        @"supported_features": @31, @"icon": @"mdi:shield-lock"}];
+}
+
++ (HAEntity *)alarmScNight {
+    return [self entityWithId:@"alarm_control_panel.sc_night" state:@"armed_night" attributes:@{
+        @"friendly_name": @"Night", @"code_arm_required": @YES, @"code_format": @"number",
+        @"supported_features": @31, @"icon": @"mdi:shield-moon"}];
+}
+
++ (HAEntity *)alarmScVacation {
+    return [self entityWithId:@"alarm_control_panel.sc_vacation" state:@"armed_vacation" attributes:@{
+        @"friendly_name": @"Vacation", @"code_arm_required": @NO,
+        @"supported_features": @31, @"icon": @"mdi:shield-airplane"}];
+}
+
++ (HAEntity *)alarmScTriggered {
+    return [self entityWithId:@"alarm_control_panel.sc_triggered" state:@"triggered" attributes:@{
+        @"friendly_name": @"TRIGGERED", @"code_arm_required": @YES,
+        @"supported_features": @31, @"icon": @"mdi:bell-ring"}];
+}
+
++ (HAEntity *)alarmScNoCode {
+    return [self entityWithId:@"alarm_control_panel.sc_no_code" state:@"disarmed" attributes:@{
+        @"friendly_name": @"No Code", @"code_arm_required": @NO,
+        @"supported_features": @31, @"icon": @"mdi:shield-off"}];
+}
+
+#pragma mark - Showcase: Fan (5 variants)
+
++ (HAEntity *)fanScBasic {
+    return [self entityWithId:@"fan.sc_basic" state:@"on" attributes:@{
+        @"friendly_name": @"Basic 50%", @"percentage": @50,
+        @"percentage_step": @(100.0/3.0), @"icon": @"mdi:fan"}];
+}
+
++ (HAEntity *)fanScPresets {
+    return [self entityWithId:@"fan.sc_presets" state:@"on" attributes:@{
+        @"friendly_name": @"With Presets", @"percentage": @67,
+        @"preset_mode": @"nature", @"preset_modes": @[@"auto", @"sleep", @"nature", @"baby"],
+        @"percentage_step": @(100.0/6.0), @"icon": @"mdi:fan"}];
+}
+
++ (HAEntity *)fanScOscillating {
+    return [self entityWithId:@"fan.sc_oscillating" state:@"on" attributes:@{
+        @"friendly_name": @"Oscillating", @"percentage": @75, @"oscillating": @YES,
+        @"direction": @"forward", @"percentage_step": @(100.0/4.0), @"icon": @"mdi:fan"}];
+}
+
++ (HAEntity *)fanScReverse {
+    return [self entityWithId:@"fan.sc_reverse" state:@"on" attributes:@{
+        @"friendly_name": @"Reverse", @"percentage": @33, @"oscillating": @NO,
+        @"direction": @"reverse", @"percentage_step": @(100.0/3.0),
+        @"icon": @"mdi:ceiling-fan"}];
+}
+
++ (HAEntity *)fanScOff {
+    return [self entityWithId:@"fan.sc_off" state:@"off" attributes:@{
+        @"friendly_name": @"Off", @"percentage": @0, @"icon": @"mdi:fan-off"}];
+}
+
+#pragma mark - Showcase: Sensor (10 variants)
+
++ (HAEntity *)sensorScTemperature {
+    return [self entityWithId:@"sensor.sc_temperature" state:@"22.5" attributes:@{
+        @"friendly_name": @"Temperature", @"unit_of_measurement": @"\u00B0C",
+        @"device_class": @"temperature", @"state_class": @"measurement", @"icon": @"mdi:thermometer"}];
+}
+
++ (HAEntity *)sensorScHumidity {
+    return [self entityWithId:@"sensor.sc_humidity" state:@"65" attributes:@{
+        @"friendly_name": @"Humidity", @"unit_of_measurement": @"%",
+        @"device_class": @"humidity", @"state_class": @"measurement", @"icon": @"mdi:water-percent"}];
+}
+
++ (HAEntity *)sensorScPower {
+    return [self entityWithId:@"sensor.sc_power" state:@"1200" attributes:@{
+        @"friendly_name": @"Power", @"unit_of_measurement": @"W",
+        @"device_class": @"power", @"state_class": @"measurement", @"icon": @"mdi:flash"}];
+}
+
++ (HAEntity *)sensorScEnergy {
+    return [self entityWithId:@"sensor.sc_energy" state:@"45.2" attributes:@{
+        @"friendly_name": @"Energy", @"unit_of_measurement": @"kWh",
+        @"device_class": @"energy", @"state_class": @"total_increasing", @"icon": @"mdi:lightning-bolt"}];
+}
+
++ (HAEntity *)sensorScBattery {
+    return [self entityWithId:@"sensor.sc_battery" state:@"78" attributes:@{
+        @"friendly_name": @"Battery", @"unit_of_measurement": @"%",
+        @"device_class": @"battery", @"icon": @"mdi:battery-70"}];
+}
+
++ (HAEntity *)sensorScIlluminance {
+    return [self entityWithId:@"sensor.sc_illuminance" state:@"350" attributes:@{
+        @"friendly_name": @"Illuminance", @"unit_of_measurement": @"lx",
+        @"device_class": @"illuminance", @"icon": @"mdi:brightness-5"}];
+}
+
++ (HAEntity *)sensorScPressure {
+    return [self entityWithId:@"sensor.sc_pressure" state:@"1013" attributes:@{
+        @"friendly_name": @"Pressure", @"unit_of_measurement": @"hPa",
+        @"device_class": @"pressure", @"state_class": @"measurement", @"icon": @"mdi:gauge"}];
+}
+
++ (HAEntity *)sensorScGas {
+    return [self entityWithId:@"sensor.sc_gas" state:@"2.3" attributes:@{
+        @"friendly_name": @"Gas", @"unit_of_measurement": @"m\u00B3",
+        @"device_class": @"gas", @"state_class": @"total_increasing", @"icon": @"mdi:meter-gas"}];
+}
+
++ (HAEntity *)sensorScMonetary {
+    return [self entityWithId:@"sensor.sc_monetary" state:@"12.50" attributes:@{
+        @"friendly_name": @"Cost", @"unit_of_measurement": @"\u00A3",
+        @"device_class": @"monetary", @"state_class": @"total", @"icon": @"mdi:currency-gbp"}];
+}
+
++ (HAEntity *)sensorScText {
+    return [self entityWithId:@"sensor.sc_text" state:@"Running" attributes:@{
+        @"friendly_name": @"Status", @"icon": @"mdi:state-machine"}];
+}
+
+#pragma mark - Showcase: Binary Sensor (12 variants)
+
++ (HAEntity *)binarySensorScDoorOpen {
+    return [self entityWithId:@"binary_sensor.sc_door_open" state:@"on" attributes:@{
+        @"friendly_name": @"Door Open", @"device_class": @"door", @"icon": @"mdi:door-open"}];
+}
+
++ (HAEntity *)binarySensorScDoorClosed {
+    return [self entityWithId:@"binary_sensor.sc_door_closed" state:@"off" attributes:@{
+        @"friendly_name": @"Door Closed", @"device_class": @"door", @"icon": @"mdi:door-closed"}];
+}
+
++ (HAEntity *)binarySensorScMotionOn {
+    return [self entityWithId:@"binary_sensor.sc_motion_on" state:@"on" attributes:@{
+        @"friendly_name": @"Motion Detected", @"device_class": @"motion", @"icon": @"mdi:motion-sensor"}];
+}
+
++ (HAEntity *)binarySensorScMotionOff {
+    return [self entityWithId:@"binary_sensor.sc_motion_off" state:@"off" attributes:@{
+        @"friendly_name": @"Motion Clear", @"device_class": @"motion", @"icon": @"mdi:motion-sensor"}];
+}
+
++ (HAEntity *)binarySensorScSmoke {
+    return [self entityWithId:@"binary_sensor.sc_smoke" state:@"on" attributes:@{
+        @"friendly_name": @"Smoke!", @"device_class": @"smoke", @"icon": @"mdi:smoke-detector-alert"}];
+}
+
++ (HAEntity *)binarySensorScMoisture {
+    return [self entityWithId:@"binary_sensor.sc_moisture" state:@"on" attributes:@{
+        @"friendly_name": @"Moisture!", @"device_class": @"moisture", @"icon": @"mdi:water-alert"}];
+}
+
++ (HAEntity *)binarySensorScWindow {
+    return [self entityWithId:@"binary_sensor.sc_window" state:@"on" attributes:@{
+        @"friendly_name": @"Window Open", @"device_class": @"window", @"icon": @"mdi:window-open"}];
+}
+
++ (HAEntity *)binarySensorScOccupancy {
+    return [self entityWithId:@"binary_sensor.sc_occupancy" state:@"on" attributes:@{
+        @"friendly_name": @"Occupied", @"device_class": @"occupancy", @"icon": @"mdi:account"}];
+}
+
++ (HAEntity *)binarySensorScPresence {
+    return [self entityWithId:@"binary_sensor.sc_presence" state:@"on" attributes:@{
+        @"friendly_name": @"Present", @"device_class": @"presence", @"icon": @"mdi:home-account"}];
+}
+
++ (HAEntity *)binarySensorScBatteryLow {
+    return [self entityWithId:@"binary_sensor.sc_battery_low" state:@"on" attributes:@{
+        @"friendly_name": @"Battery Low", @"device_class": @"battery", @"icon": @"mdi:battery-alert"}];
+}
+
++ (HAEntity *)binarySensorScPlug {
+    return [self entityWithId:@"binary_sensor.sc_plug" state:@"on" attributes:@{
+        @"friendly_name": @"Plug", @"device_class": @"plug", @"icon": @"mdi:power-plug"}];
+}
+
++ (HAEntity *)binarySensorScGeneric {
+    return [self entityWithId:@"binary_sensor.sc_generic" state:@"on" attributes:@{
+        @"friendly_name": @"Generic On", @"icon": @"mdi:check-circle"}];
+}
+
+#pragma mark - Showcase: Vacuum (4 variants)
+
++ (HAEntity *)vacuumScDocked {
+    return [self entityWithId:@"vacuum.sc_docked" state:@"docked" attributes:@{
+        @"friendly_name": @"Docked", @"battery_level": @80, @"status": @"Docked",
+        @"icon": @"mdi:robot-vacuum"}];
+}
+
++ (HAEntity *)vacuumScCleaning {
+    return [self entityWithId:@"vacuum.sc_cleaning" state:@"cleaning" attributes:@{
+        @"friendly_name": @"Cleaning", @"battery_level": @65, @"status": @"Cleaning",
+        @"fan_speed": @"turbo", @"fan_speed_list": @[@"quiet", @"balanced", @"turbo", @"max"],
+        @"icon": @"mdi:robot-vacuum"}];
+}
+
++ (HAEntity *)vacuumScReturning {
+    return [self entityWithId:@"vacuum.sc_returning" state:@"returning" attributes:@{
+        @"friendly_name": @"Returning", @"battery_level": @20, @"status": @"Returning to dock",
+        @"icon": @"mdi:robot-vacuum"}];
+}
+
++ (HAEntity *)vacuumScError {
+    return [self entityWithId:@"vacuum.sc_error" state:@"error" attributes:@{
+        @"friendly_name": @"Error", @"battery_level": @45, @"status": @"Stuck on cable",
+        @"icon": @"mdi:robot-vacuum-alert"}];
+}
+
+#pragma mark - Showcase: Humidifier (3 variants)
+
++ (HAEntity *)humidifierScOn {
+    return [self entityWithId:@"humidifier.sc_on" state:@"on" attributes:@{
+        @"friendly_name": @"Normal", @"humidity": @60, @"current_humidity": @45,
+        @"min_humidity": @30, @"max_humidity": @80,
+        @"mode": @"normal", @"available_modes": @[@"normal", @"eco", @"sleep"],
+        @"icon": @"mdi:air-humidifier"}];
+}
+
++ (HAEntity *)humidifierScEco {
+    return [self entityWithId:@"humidifier.sc_eco" state:@"on" attributes:@{
+        @"friendly_name": @"Eco Mode", @"humidity": @50, @"current_humidity": @42,
+        @"min_humidity": @30, @"max_humidity": @80,
+        @"mode": @"eco", @"available_modes": @[@"normal", @"eco", @"sleep"],
+        @"icon": @"mdi:air-humidifier"}];
+}
+
++ (HAEntity *)humidifierScOff {
+    return [self entityWithId:@"humidifier.sc_off" state:@"off" attributes:@{
+        @"friendly_name": @"Off", @"min_humidity": @30, @"max_humidity": @80,
+        @"icon": @"mdi:air-humidifier-off"}];
+}
+
+#pragma mark - Showcase: Input Boolean (2 variants)
+
++ (HAEntity *)inputBooleanScOn {
+    return [self entityWithId:@"input_boolean.sc_on" state:@"on" attributes:@{
+        @"friendly_name": @"Guest Mode", @"icon": @"mdi:account-group"}];
+}
+
++ (HAEntity *)inputBooleanScOff {
+    return [self entityWithId:@"input_boolean.sc_off" state:@"off" attributes:@{
+        @"friendly_name": @"Sleep Mode", @"icon": @"mdi:sleep"}];
+}
+
+#pragma mark - Showcase: Input Number (2 variants)
+
++ (HAEntity *)inputNumberScSlider {
+    return [self entityWithId:@"input_number.sc_slider" state:@"42" attributes:@{
+        @"friendly_name": @"Slider", @"min": @0, @"max": @100, @"step": @1,
+        @"mode": @"slider", @"unit_of_measurement": @"%", @"icon": @"mdi:percent"}];
+}
+
++ (HAEntity *)inputNumberScBox {
+    return [self entityWithId:@"input_number.sc_box" state:@"123.5" attributes:@{
+        @"friendly_name": @"Box", @"min": @0, @"max": @1000, @"step": @0.1,
+        @"mode": @"box", @"unit_of_measurement": @"W", @"icon": @"mdi:flash"}];
+}
+
+#pragma mark - Showcase: Input Select (1 variant)
+
++ (HAEntity *)inputSelectSc {
+    return [self entityWithId:@"input_select.sc" state:@"Netflix" attributes:@{
+        @"friendly_name": @"App", @"options": @[@"YouTube", @"Netflix", @"Plex", @"Disney+", @"BBC"],
+        @"icon": @"mdi:application"}];
+}
+
+#pragma mark - Showcase: Input Text (2 variants)
+
++ (HAEntity *)inputTextScText {
+    return [self entityWithId:@"input_text.sc_text" state:@"Hello World" attributes:@{
+        @"friendly_name": @"Text", @"mode": @"text", @"min": @0, @"max": @100,
+        @"icon": @"mdi:form-textbox"}];
+}
+
++ (HAEntity *)inputTextScPassword {
+    return [self entityWithId:@"input_text.sc_password" state:@"secret123" attributes:@{
+        @"friendly_name": @"Password", @"mode": @"password", @"min": @0, @"max": @64,
+        @"icon": @"mdi:form-textbox-password"}];
+}
+
+#pragma mark - Showcase: Input DateTime (3 variants)
+
++ (HAEntity *)inputDateTimeScDate {
+    return [self entityWithId:@"input_datetime.sc_date" state:@"2026-03-15" attributes:@{
+        @"friendly_name": @"Date", @"has_date": @YES, @"has_time": @NO,
+        @"year": @2026, @"month": @3, @"day": @15, @"icon": @"mdi:calendar"}];
+}
+
++ (HAEntity *)inputDateTimeScTime {
+    return [self entityWithId:@"input_datetime.sc_time" state:@"07:30:00" attributes:@{
+        @"friendly_name": @"Time", @"has_date": @NO, @"has_time": @YES,
+        @"hour": @7, @"minute": @30, @"second": @0, @"icon": @"mdi:clock-outline"}];
+}
+
++ (HAEntity *)inputDateTimeScBoth {
+    return [self entityWithId:@"input_datetime.sc_both" state:@"2026-03-15 14:30:00" attributes:@{
+        @"friendly_name": @"Date+Time", @"has_date": @YES, @"has_time": @YES,
+        @"year": @2026, @"month": @3, @"day": @15, @"hour": @14, @"minute": @30, @"second": @0,
+        @"icon": @"mdi:calendar-clock"}];
+}
+
+#pragma mark - Showcase: Counter (1 variant)
+
++ (HAEntity *)counterSc {
+    return [self entityWithId:@"counter.sc" state:@"5" attributes:@{
+        @"friendly_name": @"Counter", @"step": @1, @"minimum": @0, @"maximum": @100,
+        @"icon": @"mdi:counter"}];
+}
+
+#pragma mark - Showcase: Timer (3 variants)
+
++ (HAEntity *)timerScActive {
+    return [self entityWithId:@"timer.sc_active" state:@"active" attributes:@{
+        @"friendly_name": @"Active", @"duration": @"0:05:00", @"remaining": @"0:03:22",
+        @"icon": @"mdi:timer-outline"}];
+}
+
++ (HAEntity *)timerScPaused {
+    return [self entityWithId:@"timer.sc_paused" state:@"paused" attributes:@{
+        @"friendly_name": @"Paused", @"duration": @"0:30:00", @"remaining": @"0:12:45",
+        @"icon": @"mdi:timer-pause"}];
+}
+
++ (HAEntity *)timerScIdle {
+    return [self entityWithId:@"timer.sc_idle" state:@"idle" attributes:@{
+        @"friendly_name": @"Idle", @"duration": @"0:10:00", @"icon": @"mdi:timer-outline"}];
+}
+
+#pragma mark - Showcase: Person (3 variants)
+
++ (HAEntity *)personScHome {
+    return [self entityWithId:@"person.sc_home" state:@"home" attributes:@{
+        @"friendly_name": @"Home", @"icon": @"mdi:account"}];
+}
+
++ (HAEntity *)personScAway {
+    return [self entityWithId:@"person.sc_away" state:@"not_home" attributes:@{
+        @"friendly_name": @"Away", @"icon": @"mdi:account-off"}];
+}
+
++ (HAEntity *)personScZone {
+    return [self entityWithId:@"person.sc_zone" state:@"Work" attributes:@{
+        @"friendly_name": @"At Zone", @"latitude": @51.507, @"longitude": @-0.127,
+        @"gps_accuracy": @15, @"icon": @"mdi:account"}];
+}
+
+#pragma mark - Showcase: Scene & Script (2 variants)
+
++ (HAEntity *)sceneSc {
+    return [self entityWithId:@"scene.sc" state:@"off" attributes:@{
+        @"friendly_name": @"Movie Night", @"icon": @"mdi:movie-open"}];
+}
+
++ (HAEntity *)scriptSc {
+    return [self entityWithId:@"script.sc" state:@"on" attributes:@{
+        @"friendly_name": @"Bedtime", @"current": @1, @"last_triggered": @"2026-03-01T22:00:00Z",
+        @"icon": @"mdi:script-text"}];
+}
+
+#pragma mark - Showcase: Automation (1 variant)
+
++ (HAEntity *)automationSc {
+    return [self entityWithId:@"automation.sc" state:@"on" attributes:@{
+        @"friendly_name": @"Motion Lights", @"current": @0,
+        @"last_triggered": @"2026-03-01T18:30:00Z", @"icon": @"mdi:robot"}];
+}
+
+#pragma mark - Showcase: Update (2 variants)
+
++ (HAEntity *)updateScAvailable {
+    return [self entityWithId:@"update.sc_available" state:@"on" attributes:@{
+        @"friendly_name": @"HA Core", @"installed_version": @"2024.2.0",
+        @"latest_version": @"2024.4.0", @"title": @"Home Assistant Core",
+        @"release_url": @"https://www.home-assistant.io/blog/", @"icon": @"mdi:package-up"}];
+}
+
++ (HAEntity *)updateScCurrent {
+    return [self entityWithId:@"update.sc_current" state:@"off" attributes:@{
+        @"friendly_name": @"Zigbee", @"installed_version": @"7.4.1",
+        @"latest_version": @"7.4.1", @"title": @"Zigbee Coordinator",
+        @"icon": @"mdi:package-check"}];
+}
+
+#pragma mark - Showcase: Valve (2 variants)
+
++ (HAEntity *)valveScOpen {
+    return [self entityWithId:@"valve.sc_open" state:@"open" attributes:@{
+        @"friendly_name": @"Garden Valve", @"current_position": @100, @"icon": @"mdi:valve-open"}];
+}
+
++ (HAEntity *)valveScClosed {
+    return [self entityWithId:@"valve.sc_closed" state:@"closed" attributes:@{
+        @"friendly_name": @"Pool Valve", @"current_position": @0, @"icon": @"mdi:valve-closed"}];
+}
+
+#pragma mark - Showcase: Lawn Mower (2 variants)
+
++ (HAEntity *)lawnMowerScDocked {
+    return [self entityWithId:@"lawn_mower.sc_docked" state:@"docked" attributes:@{
+        @"friendly_name": @"Mower Docked", @"icon": @"mdi:robot-mower"}];
+}
+
++ (HAEntity *)lawnMowerScMowing {
+    return [self entityWithId:@"lawn_mower.sc_mowing" state:@"mowing" attributes:@{
+        @"friendly_name": @"Mowing", @"icon": @"mdi:robot-mower"}];
+}
+
+#pragma mark - Showcase: Water Heater (1 variant)
+
++ (HAEntity *)waterHeaterSc {
+    return [self entityWithId:@"water_heater.sc" state:@"eco" attributes:@{
+        @"friendly_name": @"Water Heater", @"temperature": @50, @"current_temperature": @48.5,
+        @"min_temp": @30, @"max_temp": @65, @"target_temp_step": @1,
+        @"operation_mode": @"eco", @"operation_list": @[@"eco", @"electric", @"performance", @"off"],
+        @"icon": @"mdi:water-boiler"}];
+}
+
+#pragma mark - Showcase: Misc Domains
+
++ (HAEntity *)remoteSc {
+    return [self entityWithId:@"remote.sc" state:@"idle" attributes:@{
+        @"friendly_name": @"TV Remote", @"current_activity": @"Watch TV",
+        @"activity_list": @[@"Watch TV", @"Gaming", @"Music", @"Off"], @"icon": @"mdi:remote"}];
+}
+
++ (HAEntity *)imageSc {
+    return [self entityWithId:@"image.sc" state:@"2026-03-01T10:00:00Z" attributes:@{
+        @"friendly_name": @"Snapshot", @"entity_picture": @"/api/image_proxy/image.sc",
+        @"icon": @"mdi:image"}];
+}
+
++ (HAEntity *)todoSc {
+    return [self entityWithId:@"todo.sc" state:@"3" attributes:@{
+        @"friendly_name": @"Shopping List", @"icon": @"mdi:clipboard-list"}];
+}
+
++ (HAEntity *)eventSc {
+    return [self entityWithId:@"event.sc" state:@"2026-03-01T15:30:00Z" attributes:@{
+        @"friendly_name": @"Doorbell", @"event_type": @"button_press",
+        @"device_class": @"doorbell", @"icon": @"mdi:doorbell"}];
+}
+
++ (HAEntity *)deviceTrackerScHome {
+    return [self entityWithId:@"device_tracker.sc_home" state:@"home" attributes:@{
+        @"friendly_name": @"Car", @"source_type": @"gps", @"icon": @"mdi:car"}];
+}
+
++ (HAEntity *)deviceTrackerScAway {
+    return [self entityWithId:@"device_tracker.sc_away" state:@"not_home" attributes:@{
+        @"friendly_name": @"Laptop", @"source_type": @"router", @"icon": @"mdi:laptop"}];
+}
+
 #pragma mark - Edge Cases (Tier C)
 
 + (HAEntity *)unavailableEntity:(NSString *)entityId {

@@ -180,6 +180,197 @@
 + (HAEntity *)clockWeatherSunny;
 + (HAEntity *)clockWeatherCloudy;
 
+#pragma mark - Showcase: Light (10 variants)
+
++ (HAEntity *)lightScBasicOn;
++ (HAEntity *)lightScBasicOff;
++ (HAEntity *)lightScColorTemp;
++ (HAEntity *)lightScRgb;
++ (HAEntity *)lightScRgbw;
++ (HAEntity *)lightScAllModes;
++ (HAEntity *)lightScEffect;
++ (HAEntity *)lightScBrightnessOnly;
++ (HAEntity *)lightScDimmedLow;
++ (HAEntity *)lightScMaxBright;
+
+#pragma mark - Showcase: Climate (8 variants)
+
++ (HAEntity *)climateScHeating;
++ (HAEntity *)climateScCooling;
++ (HAEntity *)climateScHeatCool;
++ (HAEntity *)climateScPresets;
++ (HAEntity *)climateScFan;
++ (HAEntity *)climateScSwing;
++ (HAEntity *)climateScAll;
++ (HAEntity *)climateScOff;
+
+#pragma mark - Showcase: Cover (10 variants)
+
++ (HAEntity *)coverScPosition;
++ (HAEntity *)coverScTilt;
++ (HAEntity *)coverScPosTilt;
++ (HAEntity *)coverScNoPosition;
++ (HAEntity *)coverScOpening;
++ (HAEntity *)coverScClosed;
++ (HAEntity *)coverScBlind;
++ (HAEntity *)coverScGarage;
++ (HAEntity *)coverScDoor;
++ (HAEntity *)coverScShutter;
+
+#pragma mark - Showcase: Lock (5 variants)
+
++ (HAEntity *)lockScLocked;
++ (HAEntity *)lockScUnlocked;
++ (HAEntity *)lockScJammed;
++ (HAEntity *)lockScCode;
++ (HAEntity *)lockScLocking;
+
+#pragma mark - Showcase: Media Player (6 variants)
+
++ (HAEntity *)mediaPlayerScFull;
++ (HAEntity *)mediaPlayerScPaused;
++ (HAEntity *)mediaPlayerScMuted;
++ (HAEntity *)mediaPlayerScIdle;
++ (HAEntity *)mediaPlayerScOff;
++ (HAEntity *)mediaPlayerScNoSource;
+
+#pragma mark - Showcase: Alarm (7 variants)
+
++ (HAEntity *)alarmScDisarmed;
++ (HAEntity *)alarmScHome;
++ (HAEntity *)alarmScAway;
++ (HAEntity *)alarmScNight;
++ (HAEntity *)alarmScVacation;
++ (HAEntity *)alarmScTriggered;
++ (HAEntity *)alarmScNoCode;
+
+#pragma mark - Showcase: Fan (5 variants)
+
++ (HAEntity *)fanScBasic;
++ (HAEntity *)fanScPresets;
++ (HAEntity *)fanScOscillating;
++ (HAEntity *)fanScReverse;
++ (HAEntity *)fanScOff;
+
+#pragma mark - Showcase: Sensor (10 variants)
+
++ (HAEntity *)sensorScTemperature;
++ (HAEntity *)sensorScHumidity;
++ (HAEntity *)sensorScPower;
++ (HAEntity *)sensorScEnergy;
++ (HAEntity *)sensorScBattery;
++ (HAEntity *)sensorScIlluminance;
++ (HAEntity *)sensorScPressure;
++ (HAEntity *)sensorScGas;
++ (HAEntity *)sensorScMonetary;
++ (HAEntity *)sensorScText;
+
+#pragma mark - Showcase: Binary Sensor (12 variants)
+
++ (HAEntity *)binarySensorScDoorOpen;
++ (HAEntity *)binarySensorScDoorClosed;
++ (HAEntity *)binarySensorScMotionOn;
++ (HAEntity *)binarySensorScMotionOff;
++ (HAEntity *)binarySensorScSmoke;
++ (HAEntity *)binarySensorScMoisture;
++ (HAEntity *)binarySensorScWindow;
++ (HAEntity *)binarySensorScOccupancy;
++ (HAEntity *)binarySensorScPresence;
++ (HAEntity *)binarySensorScBatteryLow;
++ (HAEntity *)binarySensorScPlug;
++ (HAEntity *)binarySensorScGeneric;
+
+#pragma mark - Showcase: Vacuum (4 variants)
+
++ (HAEntity *)vacuumScDocked;
++ (HAEntity *)vacuumScCleaning;
++ (HAEntity *)vacuumScReturning;
++ (HAEntity *)vacuumScError;
+
+#pragma mark - Showcase: Humidifier (3 variants)
+
++ (HAEntity *)humidifierScOn;
++ (HAEntity *)humidifierScEco;
++ (HAEntity *)humidifierScOff;
+
+#pragma mark - Showcase: Input Boolean (2 variants)
+
++ (HAEntity *)inputBooleanScOn;
++ (HAEntity *)inputBooleanScOff;
+
+#pragma mark - Showcase: Input Number (2 variants)
+
++ (HAEntity *)inputNumberScSlider;
++ (HAEntity *)inputNumberScBox;
+
+#pragma mark - Showcase: Input Select (1 variant)
+
++ (HAEntity *)inputSelectSc;
+
+#pragma mark - Showcase: Input Text (2 variants)
+
++ (HAEntity *)inputTextScText;
++ (HAEntity *)inputTextScPassword;
+
+#pragma mark - Showcase: Input DateTime (3 variants)
+
++ (HAEntity *)inputDateTimeScDate;
++ (HAEntity *)inputDateTimeScTime;
++ (HAEntity *)inputDateTimeScBoth;
+
+#pragma mark - Showcase: Counter (1 variant)
+
++ (HAEntity *)counterSc;
+
+#pragma mark - Showcase: Timer (3 variants)
+
++ (HAEntity *)timerScActive;
++ (HAEntity *)timerScPaused;
++ (HAEntity *)timerScIdle;
+
+#pragma mark - Showcase: Person (3 variants)
+
++ (HAEntity *)personScHome;
++ (HAEntity *)personScAway;
++ (HAEntity *)personScZone;
+
+#pragma mark - Showcase: Scene & Script (2 variants)
+
++ (HAEntity *)sceneSc;
++ (HAEntity *)scriptSc;
+
+#pragma mark - Showcase: Automation (1 variant)
+
++ (HAEntity *)automationSc;
+
+#pragma mark - Showcase: Update (2 variants)
+
++ (HAEntity *)updateScAvailable;
++ (HAEntity *)updateScCurrent;
+
+#pragma mark - Showcase: Valve (2 variants)
+
++ (HAEntity *)valveScOpen;
++ (HAEntity *)valveScClosed;
+
+#pragma mark - Showcase: Lawn Mower (2 variants)
+
++ (HAEntity *)lawnMowerScDocked;
++ (HAEntity *)lawnMowerScMowing;
+
+#pragma mark - Showcase: Water Heater (1 variant)
+
++ (HAEntity *)waterHeaterSc;
+
+#pragma mark - Showcase: Misc Domains
+
++ (HAEntity *)remoteSc;
++ (HAEntity *)imageSc;
++ (HAEntity *)todoSc;
++ (HAEntity *)eventSc;
++ (HAEntity *)deviceTrackerScHome;
++ (HAEntity *)deviceTrackerScAway;
+
 #pragma mark - Edge Cases (Tier C)
 
 + (HAEntity *)unavailableEntity:(NSString *)entityId;
