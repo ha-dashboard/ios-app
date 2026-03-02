@@ -61,7 +61,11 @@ static const CGFloat kGraphHeight = 160.0;
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.view.backgroundColor = [HATheme cellBackgroundColor];
+    // Use the non-gradient cell color — the detail sheet is presented modally
+    // over the dashboard, not composited over the gradient background.
+    self.view.backgroundColor = [HATheme effectiveDarkMode]
+        ? [UIColor colorWithRed:0.12 green:0.13 blue:0.16 alpha:1.0]
+        : [UIColor whiteColor];
     [self setupGrabber];
     [self setupHeader];
     [self setupScrollView];

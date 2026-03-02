@@ -5,6 +5,7 @@
 #import "HADashboardViewController.h"
 #import "HALoginViewController.h"
 #import "HATheme.h"
+#import "HASwitch.h"
 
 @interface HASettingsViewController ()
 // Connection summary
@@ -21,6 +22,10 @@
 // Theme
 @property (nonatomic, strong) UIStackView *themeStack;
 @property (nonatomic, strong) UISegmentedControl *themeModeSegment;
+@property (nonatomic, strong) UIView *sunEntityToggleRow;
+@property (nonatomic, strong) UISwitch *sunEntitySwitch;
+@property (nonatomic, strong) UIView *gradientToggleRow;
+@property (nonatomic, strong) UISwitch *gradientSwitch;
 @property (nonatomic, strong) UIView *gradientOptionsContainer;
 @property (nonatomic, strong) UISegmentedControl *gradientPresetSegment;
 @property (nonatomic, strong) UIView *customHexContainer;
@@ -46,6 +51,13 @@
 
 // Logout
 @property (nonatomic, strong) UIButton *logoutButton;
+
+// Developer mode
+@property (nonatomic, strong) UILabel *developerSectionHeader;
+@property (nonatomic, strong) UIView *developerSection;
+@property (nonatomic, assign) NSInteger devTapCount;
+@property (nonatomic, strong) NSDate *devTapStart;
+@property (nonatomic, strong) UIView *versionRow; // for tap gesture
 @end
 
 @implementation HASettingsViewController
@@ -98,16 +110,56 @@
     self.themeStack.translatesAutoresizingMaskIntoConstraints = NO;
     [container addSubview:self.themeStack];
 
-    self.themeModeSegment = [[UISegmentedControl alloc] initWithItems:@[@"Auto", @"Gradient", @"Dark", @"Light"]];
+    self.themeModeSegment = [[UISegmentedControl alloc] initWithItems:@[@"Auto", @"Dark", @"Light"]];
     self.themeModeSegment.selectedSegmentIndex = (NSInteger)[HATheme currentMode];
     [self.themeModeSegment addTarget:self action:@selector(themeModeChanged:) forControlEvents:UIControlEventValueChanged];
     self.themeModeSegment.translatesAutoresizingMaskIntoConstraints = NO;
     [self.themeStack addArrangedSubview:self.themeModeSegment];
 
-    // Gradient options
+    // Sun entity toggle (use HA sun.sun instead of system dark mode)
+    UISwitch *sunSw = nil;
+    self.sunEntityToggleRow = [self createToggleSection:@"Use Sun Entity"
+        helpText:@"Use Home Assistant sun.sun entity for auto dark mode instead of system appearance."
+        isOn:[HATheme forceSunEntity]
+        target:self action:@selector(sunEntitySwitchToggled:)
+        switchOut:&sunSw];
+    self.sunEntitySwitch = sunSw;
+    // Only visible when Auto mode is selected and device supports system appearance
+    BOOL showSunToggle = ([HATheme currentMode] == HAThemeModeAuto
+                          && [NSProcessInfo processInfo].operatingSystemVersion.majorVersion >= 13);
+    self.sunEntityToggleRow.hidden = !showSunToggle;
+    [self.themeStack addArrangedSubview:self.sunEntityToggleRow];
+
+    // Gradient background toggle row
+    self.gradientToggleRow = [[UIView alloc] init];
+    self.gradientToggleRow.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.themeStack addArrangedSubview:self.gradientToggleRow];
+
+    UILabel *gradientLabel = [[UILabel alloc] init];
+    gradientLabel.text = @"Gradient Background";
+    gradientLabel.font = [UIFont systemFontOfSize:16];
+    gradientLabel.textColor = [HATheme primaryTextColor];
+    gradientLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.gradientToggleRow addSubview:gradientLabel];
+
+    self.gradientSwitch = [[HASwitch alloc] init];
+    self.gradientSwitch.on = [HATheme isGradientEnabled];
+    [self.gradientSwitch addTarget:self action:@selector(gradientSwitchToggled:) forControlEvents:UIControlEventValueChanged];
+    self.gradientSwitch.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.gradientToggleRow addSubview:self.gradientSwitch];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [gradientLabel.topAnchor constraintEqualToAnchor:self.gradientToggleRow.topAnchor],
+        [gradientLabel.leadingAnchor constraintEqualToAnchor:self.gradientToggleRow.leadingAnchor],
+        [gradientLabel.bottomAnchor constraintEqualToAnchor:self.gradientToggleRow.bottomAnchor],
+        [self.gradientSwitch.trailingAnchor constraintEqualToAnchor:self.gradientToggleRow.trailingAnchor],
+        [self.gradientSwitch.centerYAnchor constraintEqualToAnchor:gradientLabel.centerYAnchor],
+    ]];
+
+    // Gradient options (preset picker, custom hex, preview)
     self.gradientOptionsContainer = [[UIView alloc] init];
     self.gradientOptionsContainer.translatesAutoresizingMaskIntoConstraints = NO;
-    self.gradientOptionsContainer.hidden = ([HATheme currentMode] != HAThemeModeGradient);
+    self.gradientOptionsContainer.hidden = ![HATheme isGradientEnabled];
     [self.themeStack addArrangedSubview:self.gradientOptionsContainer];
 
     UILabel *presetLabel = [[UILabel alloc] init];
@@ -242,6 +294,14 @@
     self.aboutSection = [self createAboutSection];
     [container addSubview:self.aboutSection];
 
+    // ── DEVELOPER section (placeholder for future options, hidden) ────
+    self.developerSectionHeader = [[UILabel alloc] init];
+    self.developerSectionHeader.hidden = YES;
+    [container addSubview:self.developerSectionHeader];
+    self.developerSection = [[UIView alloc] init];
+    self.developerSection.hidden = YES;
+    [container addSubview:self.developerSection];
+
     // ── Log Out & Reset ───────────────────────────────────────────────
     self.logoutButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.logoutButton setTitle:@"Log Out & Reset" forState:UIControlStateNormal];
@@ -263,12 +323,14 @@
         @"autoReload":self.autoReloadSection,
         @"aboutHdr":  self.aboutSectionHeader,
         @"about":     self.aboutSection,
+        @"devHdr":    self.developerSectionHeader,
+        @"dev":       self.developerSection,
         @"logout":    self.logoutButton,
     };
     NSDictionary *metrics = @{@"p": @16, @"sh": @32, @"hg": @10, @"fh": @44};
 
     [container addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[demo]-p-[autoReload]-sh-[aboutHdr]-hg-[about]-sh-[logout(fh)]|"
+        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[demo]-p-[autoReload]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
         options:0 metrics:metrics views:views]];
 
     for (NSString *name in views) {
@@ -319,8 +381,9 @@
     label.translatesAutoresizingMaskIntoConstraints = NO;
     [section addSubview:label];
 
-    UISwitch *sw = [[UISwitch alloc] init];
+    UISwitch *sw = [[HASwitch alloc] init];
     sw.on = isOn;
+    sw.onTintColor = [HATheme switchTintColor];
     [sw addTarget:target action:action forControlEvents:UIControlEventValueChanged];
     sw.translatesAutoresizingMaskIntoConstraints = NO;
     [section addSubview:sw];
@@ -354,11 +417,15 @@
     stack.spacing = 16;
     stack.translatesAutoresizingMaskIntoConstraints = NO;
 
-    // Version + build
+    // Version + build (tappable for developer mode activation)
     NSDictionary *info = [[NSBundle mainBundle] infoDictionary];
     NSString *version = info[@"CFBundleShortVersionString"] ?: @"0.0.0";
     NSString *build = info[@"CFBundleVersion"] ?: @"0";
-    [stack addArrangedSubview:[self aboutRow:@"Version" value:[NSString stringWithFormat:@"%@ (%@)", version, build]]];
+    self.versionRow = [self aboutRow:@"Version" value:[NSString stringWithFormat:@"%@ (%@)", version, build]];
+    self.versionRow.userInteractionEnabled = YES;
+    UITapGestureRecognizer *devTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(versionTapped)];
+    [self.versionRow addGestureRecognizer:devTap];
+    [stack addArrangedSubview:self.versionRow];
 
     // Connected server
     NSString *serverURL = [[HAAuthManager sharedManager] serverURL] ?: @"Not connected";
@@ -588,13 +655,70 @@
 - (void)themeModeChanged:(UISegmentedControl *)sender {
     HAThemeMode mode = (HAThemeMode)sender.selectedSegmentIndex;
     [HATheme setCurrentMode:mode];
+    [self refreshThemeColors];
 
-    BOOL showGradient = (mode == HAThemeModeGradient);
+    // Show sun entity toggle only in Auto mode on iOS 13+
+    BOOL showSun = (mode == HAThemeModeAuto
+                    && [NSProcessInfo processInfo].operatingSystemVersion.majorVersion >= 13);
     [UIView animateWithDuration:0.25 animations:^{
-        self.gradientOptionsContainer.hidden = !showGradient;
-        self.gradientOptionsContainer.alpha = showGradient ? 1.0 : 0.0;
+        self.sunEntityToggleRow.hidden = !showSun;
     }];
+}
+
+- (void)sunEntitySwitchToggled:(UISwitch *)sender {
+    [HATheme setForceSunEntity:sender.isOn];
+    [self refreshThemeColors];
+}
+
+/// Re-apply theme colors to all labels and backgrounds in the settings page.
+/// Needed on iOS 9-12 where there's no system trait-based color resolution.
+- (void)refreshThemeColors {
     self.view.backgroundColor = [HATheme backgroundColor];
+    self.connectionRow.backgroundColor = [HATheme controlBackgroundColor];
+    [self updateGradientPreview];
+
+    // Navigation bar (iOS 9-12 needs manual styling)
+    if (@available(iOS 13.0, *)) {
+        // Handled by overrideUserInterfaceStyle
+    } else {
+        UINavigationBar *navBar = self.navigationController.navigationBar;
+        BOOL dark = [HATheme isDarkMode];
+        navBar.barStyle = dark ? UIBarStyleBlack : UIBarStyleDefault;
+        navBar.barTintColor = dark
+            ? [UIColor colorWithRed:0.11 green:0.11 blue:0.13 alpha:1.0]
+            : nil;
+        navBar.tintColor = [HATheme primaryTextColor];
+    }
+
+    // Walk all labels and re-apply text colors based on font size convention:
+    // 16pt = primary, 12pt/11pt = secondary, 10pt = tertiary
+    [self applyThemeColorsToSubviewsOf:self.view];
+}
+
+- (void)applyThemeColorsToSubviewsOf:(UIView *)view {
+    for (UIView *sub in view.subviews) {
+        if ([sub isKindOfClass:[UILabel class]]) {
+            UILabel *label = (UILabel *)sub;
+            CGFloat size = label.font.pointSize;
+            if (size >= 15) {
+                label.textColor = [HATheme primaryTextColor];
+            } else if (size >= 11) {
+                label.textColor = [HATheme secondaryTextColor];
+            } else {
+                label.textColor = [HATheme tertiaryTextColor];
+            }
+        }
+        [self applyThemeColorsToSubviewsOf:sub];
+    }
+}
+
+- (void)gradientSwitchToggled:(UISwitch *)sender {
+    [HATheme setGradientEnabled:sender.isOn];
+    [UIView animateWithDuration:0.25 animations:^{
+        self.gradientOptionsContainer.hidden = !sender.isOn;
+        self.gradientOptionsContainer.alpha = sender.isOn ? 1.0 : 0.0;
+    }];
+    [self refreshThemeColors];
 }
 
 - (void)gradientPresetChanged:(UISegmentedControl *)sender {
@@ -606,7 +730,7 @@
         self.customHexContainer.hidden = !showCustom;
         self.customHexContainer.alpha = showCustom ? 1.0 : 0.0;
     }];
-    [self updateGradientPreview];
+    [self refreshThemeColors];
 }
 
 - (void)hexFieldChanged:(UITextField *)sender {
@@ -636,6 +760,44 @@
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     [self.view endEditing:YES];
+}
+
+#pragma mark - Developer Mode
+
+- (void)versionTapped {
+    NSDate *now = [NSDate date];
+
+    // Reset counter if more than 3 seconds since first tap
+    if (!self.devTapStart || [now timeIntervalSinceDate:self.devTapStart] > 3.0) {
+        self.devTapCount = 0;
+        self.devTapStart = now;
+    }
+
+    self.devTapCount++;
+
+    if (self.devTapCount >= 5) {
+        self.devTapCount = 0;
+        self.devTapStart = nil;
+
+        BOOL newState = ![HATheme isDeveloperMode];
+        [HATheme setDeveloperMode:newState];
+
+        // Show/hide developer section
+        [UIView animateWithDuration:0.3 animations:^{
+            self.developerSectionHeader.hidden = !newState;
+            self.developerSection.hidden = !newState;
+        }];
+
+        // Toast feedback
+        NSString *message = newState ? @"Developer Mode Enabled" : @"Developer Mode Disabled";
+        UIAlertController *toast = [UIAlertController alertControllerWithTitle:nil
+                                                                      message:message
+                                                               preferredStyle:UIAlertControllerStyleAlert];
+        [self presentViewController:toast animated:YES completion:nil];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [toast dismissViewControllerAnimated:YES completion:nil];
+        });
+    }
 }
 
 @end

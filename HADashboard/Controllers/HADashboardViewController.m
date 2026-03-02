@@ -28,6 +28,10 @@
 #import "HAHeadingCell.h"
 #import "HACameraEntityCell.h"
 #import "HAClockWeatherCell.h"
+#import "HAGlanceCardCell.h"
+#import "HAAction.h"
+#import "HAActionDispatcher.h"
+#import "HAMarkdownCardCell.h"
 #import "HAWeatherEntityCell.h"
 #import "HAGaugeCardCell.h"
 #import "HAAlarmEntityCell.h"
@@ -43,7 +47,8 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 
 @interface HADashboardViewController () <UICollectionViewDataSource, UICollectionViewDelegate,
     UICollectionViewDelegateFlowLayout, HAColumnarLayoutDelegate, HAMasonryLayoutDelegate, HAPanelLayoutDelegate,
-    HASidebarLayoutDelegate, HAConnectionManagerDelegate, HAEntityDetailDelegate>
+    HASidebarLayoutDelegate, HAConnectionManagerDelegate, HAEntityDetailDelegate,
+    UIGestureRecognizerDelegate>
 @property (nonatomic, strong) UICollectionView *collectionView;
 @property (nonatomic, strong) UIRefreshControl *refreshControl;
 @property (nonatomic, strong) UISegmentedControl *viewPicker;
@@ -58,6 +63,7 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 @property (nonatomic, assign) NSUInteger selectedViewIndex;
 @property (nonatomic, assign) BOOL statesLoaded;
 @property (nonatomic, assign) BOOL lovelaceLoaded;
+@property (nonatomic, assign) BOOL lovelaceFetchDone; // YES after fetch succeeds or fails
 @property (nonatomic, assign) BOOL usesColumnarLayout;
 @property (nonatomic, strong) UITapGestureRecognizer *kioskExitTap;
 @property (nonatomic, strong) NSTimer *kioskHideTimer;
@@ -70,6 +76,7 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 @property (nonatomic, strong) CAGradientLayer *backgroundGradient;
 @property (nonatomic, strong) HABottomSheetTransitioningDelegate *bottomSheetDelegate;
 @property (nonatomic, strong) UILongPressGestureRecognizer *longPressGesture;
+@property (nonatomic, strong) UITapGestureRecognizer *doubleTapGesture;
 @property (nonatomic, assign) CGPoint lastTapPoint;
 @property (nonatomic, strong) HASkeletonView *skeletonView;
 @property (nonatomic, strong) UIButton *titleButton;
@@ -167,6 +174,27 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     tapTracker.delaysTouchesEnded = NO;
     [self.collectionView addGestureRecognizer:tapTracker];
 
+    // Double tap on collection view cells: fires double_tap_action if configured.
+    // gestureRecognizerShouldBegin: returns NO when the tapped cell has no
+    // double_tap_action, so the gesture fails immediately and single-tap fires
+    // with zero delay in the common case.
+    self.doubleTapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleDoubleTap:)];
+    self.doubleTapGesture.numberOfTapsRequired = 2;
+    self.doubleTapGesture.delegate = self;
+    [self.collectionView addGestureRecognizer:self.doubleTapGesture];
+
+    // Make the collection view's internal tap recognizer wait for double-tap to fail.
+    // When gestureRecognizerShouldBegin: returns NO (no double_tap_action), the
+    // double-tap fails immediately so single-tap fires with no perceivable delay.
+    for (UIGestureRecognizer *gr in self.collectionView.gestureRecognizers) {
+        if ([gr isKindOfClass:[UITapGestureRecognizer class]] && gr != self.doubleTapGesture) {
+            UITapGestureRecognizer *tap = (UITapGestureRecognizer *)gr;
+            if (tap.numberOfTapsRequired == 1) {
+                [tap requireGestureRecognizerToFail:self.doubleTapGesture];
+            }
+        }
+    }
+
     // Long press on collection view cells: open entity detail
     self.longPressGesture = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
     self.longPressGesture.minimumPressDuration = 0.5;
@@ -202,6 +230,12 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     [[NSNotificationCenter defaultCenter] addObserver:self
         selector:@selector(dashboardListReceived:)
         name:HAConnectionManagerDidReceiveDashboardListNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+        selector:@selector(actionMoreInfoRequested:)
+        name:@"HAActionMoreInfoNotification" object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+        selector:@selector(actionNavigateRequested:)
+        name:HAActionNavigateNotification object:nil];
 
     // Connect if not already
     HAConnectionManager *conn = [HAConnectionManager sharedManager];
@@ -210,6 +244,7 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
         NSUInteger savedViewIndex = self.selectedViewIndex;
         self.statesLoaded = NO;
         self.lovelaceLoaded = NO;
+        self.lovelaceFetchDone = NO;
         self.selectedViewIndex = savedViewIndex;
         [self showLoading:YES message:@"Connecting..."];
         [conn connect];
@@ -221,9 +256,13 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
         [conn fetchDashboardList];
         [self rebuildDashboard];
     } else {
-        [self showLoading:NO message:nil];
+        [self showLoading:YES message:@"Loading dashboard..."];
         [conn fetchAllStates];
         [conn fetchDashboardList];
+        // Fetch Lovelace config — this VC may have been created after the
+        // initial connect already fetched it for a previous VC instance.
+        NSString *selectedDashboard = [[HAAuthManager sharedManager] selectedDashboardPath];
+        [conn fetchLovelaceConfig:selectedDashboard];
     }
 
     // Seed available dashboards from cache if present
@@ -242,7 +281,9 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     self.kioskHideTimer = nil;
 
     // Restore idle timer and nav bar when leaving dashboard
+#if !TARGET_OS_MACCATALYST
     [UIApplication sharedApplication].idleTimerDisabled = NO;
+#endif
     [self.navigationController setNavigationBarHidden:NO animated:NO];
 }
 
@@ -264,9 +305,9 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 #pragma mark - Theme
 
 - (void)applyTheme {
-    BOOL isGradient = ([HATheme currentMode] == HAThemeModeGradient);
+    BOOL isGradient = [HATheme isGradientEnabled];
     if (isGradient) {
-        self.view.backgroundColor = [UIColor blackColor];
+        self.view.backgroundColor = [HATheme effectiveDarkMode] ? [UIColor blackColor] : [UIColor whiteColor];
         NSArray<UIColor *> *colors = [HATheme gradientColors];
         NSMutableArray *cgColors = [NSMutableArray arrayWithCapacity:colors.count];
         for (UIColor *c in colors) [cgColors addObject:(id)c.CGColor];
@@ -298,6 +339,9 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 
 - (void)themeDidChange:(NSNotification *)notification {
     [self applyTheme];
+    // On iOS 9, reloadData may not call willDisplayCell for already-visible cells.
+    // Invalidate the layout to force a full re-display pass.
+    [self.collectionView.collectionViewLayout invalidateLayout];
     [self.collectionView reloadData];
 }
 
@@ -686,10 +730,15 @@ static const CGFloat kRowUnitHeight = 56.0;
 
     if ([item.cardType isEqualToString:@"heading"]) {
         return 40.0; // match section header height
+    } else if ([item.cardType isEqualToString:@"markdown"]) {
+        return [HAMarkdownCardCell preferredHeightForConfigItem:item width:itemWidth];
     } else if ([item.cardType isEqualToString:@"badges"]) {
         HADashboardConfigSection *entSection = item.entitiesSection ?: section;
         BOOL chipStyle = [entSection.customProperties[@"chipStyle"] boolValue];
         return [HABadgeRowCell preferredHeightForEntityCount:(NSInteger)entSection.entityIds.count width:itemWidth chipStyle:chipStyle];
+    } else if ([item.cardType isEqualToString:@"glance"]) {
+        HADashboardConfigSection *entSection = item.entitiesSection ?: section;
+        return [HAGlanceCardCell preferredHeightForSection:entSection width:itemWidth configItem:item] + headingExtra;
     } else if ([item.cardType isEqualToString:@"entities"]) {
         HADashboardConfigSection *entSection = item.entitiesSection ?: section;
         if (entSection.entityIds.count > 0 || entSection.customProperties[@"sceneEntityIds"]) {
@@ -728,7 +777,7 @@ static const CGFloat kRowUnitHeight = 56.0;
         height = [HAMediaPlayerEntityCell preferredHeight] + headingExtra;
     } else if ([item.cardType isEqualToString:@"tile"]) {
         BOOL isCompact = [item.customProperties[@"compact"] boolValue];
-        height = (isCompact ? [HATileEntityCell compactHeight] : [HATileEntityCell preferredHeight]) + headingExtra;
+        height = (isCompact ? [HATileEntityCell compactHeight] : [HATileEntityCell preferredHeightForConfigItem:item]) + headingExtra;
     } else {
         height = 100.0 + headingExtra;
     }
@@ -838,6 +887,10 @@ static const CGFloat kRowUnitHeight = 56.0;
 
 - (void)rebuildDashboard {
     if (!self.statesLoaded) return;
+    // Don't build until we know whether a Lovelace config exists — otherwise
+    // we briefly flash the auto-generated "default" entity dump before the
+    // real dashboard arrives.
+    if (!self.lovelaceFetchDone) return;
     [[HAPerfMonitor sharedMonitor] markRebuildStart];
 
     NSDictionary<NSString *, HAEntity *> *entities = [[HAConnectionManager sharedManager] allEntities];
@@ -1163,7 +1216,9 @@ static const CGFloat kRowUnitHeight = 56.0;
 
 - (void)applyKioskMode {
     BOOL kiosk = [[HAAuthManager sharedManager] isKioskMode];
+#if !TARGET_OS_MACCATALYST
     [UIApplication sharedApplication].idleTimerDisabled = kiosk;
+#endif
     [self.navigationController setNavigationBarHidden:kiosk animated:YES];
     [self setNeedsStatusBarAppearanceUpdate];
     // Also use UIApplication method for iOS 9 compatibility where
@@ -1354,12 +1409,24 @@ static const CGFloat kRowUnitHeight = 56.0;
         [(HAGaugeCardCell *)cell configureWithEntity:entity configItem:item];
     } else if ([cell isKindOfClass:[HAHeadingCell class]]) {
         [(HAHeadingCell *)cell configureWithItem:item];
+    } else if ([cell isKindOfClass:[HAMarkdownCardCell class]]) {
+        [(HAMarkdownCardCell *)cell configureWithConfigItem:item];
     } else if ([cell isKindOfClass:[HABadgeRowCell class]]) {
         HADashboardConfigSection *entSection = item.entitiesSection ?: section;
         [(HABadgeRowCell *)cell configureWithSection:entSection entities:allEntities];
         __weak typeof(self) weakSelf = self;
         ((HABadgeRowCell *)cell).entityTapBlock = ^(HAEntity *tappedEntity) {
-            [weakSelf presentEntityDetail:tappedEntity];
+            // Badges default to more-info (no per-badge action config yet)
+            [weakSelf executeActionType:@"tap_action" forEntity:tappedEntity configProperties:item.customProperties];
+        };
+    } else if ([cell isKindOfClass:[HAGlanceCardCell class]]) {
+        HADashboardConfigSection *entSection = item.entitiesSection ?: section;
+        [(HAGlanceCardCell *)cell configureWithSection:entSection entities:allEntities configItem:item];
+        __weak typeof(self) weakSelf = self;
+        ((HAGlanceCardCell *)cell).entityTapBlock = ^(HAEntity *tappedEntity, NSDictionary *actionConfig) {
+            // Use per-entity action config if available, fall back to card-level
+            NSDictionary *props = actionConfig ?: item.customProperties;
+            [weakSelf executeActionType:@"tap_action" forEntity:tappedEntity configProperties:props];
         };
     } else if ([cell isKindOfClass:[HAGraphCardCell class]]) {
         HADashboardConfigSection *entSection = item.entitiesSection ?: section;
@@ -1382,6 +1449,10 @@ static const CGFloat kRowUnitHeight = 56.0;
     } else if ([cell isKindOfClass:[HABaseEntityCell class]]) {
         [(HABaseEntityCell *)cell configureWithEntity:entity configItem:item];
     }
+
+    // Apply blur background here for iOS 9 compatibility.
+    // On iOS 9, willDisplayCell may not fire for initially visible cells.
+    [self applyBlurBackgroundToCell:cell];
 
     [[HAPerfMonitor sharedMonitor] markCellEnd];
     return cell;
@@ -1408,6 +1479,48 @@ static const CGFloat kRowUnitHeight = 56.0;
 
 #pragma mark - Visibility-Based Loading
 
+/// Apply frosted-glass blur backgroundView to card cells (cornerRadius > 0).
+/// Idempotent — checks if blur is already applied to avoid double-work.
+/// Called from both cellForItemAtIndexPath (iOS 9 compat) and willDisplayCell (iOS 10+).
+- (void)applyBlurBackgroundToCell:(UICollectionViewCell *)cell {
+    BOOL isCard = (cell.contentView.layer.cornerRadius > 0);
+
+    if (isCard) {
+        // Force clear background so the blur backgroundView shows through.
+        cell.contentView.backgroundColor = [UIColor clearColor];
+        cell.contentView.opaque = NO;
+    }
+
+    if (isCard && [HATheme canBlur]) {
+        UIBlurEffectStyle blurStyle = [HATheme gradientBlurStyle];
+        UIVisualEffectView *existing = [cell.backgroundView isKindOfClass:[UIVisualEffectView class]]
+            ? (UIVisualEffectView *)cell.backgroundView : nil;
+        if (!existing || ![existing.effect isEqual:[UIBlurEffect effectWithStyle:blurStyle]]) {
+            UIVisualEffectView *blurView = [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:blurStyle]];
+            blurView.layer.cornerRadius = cell.contentView.layer.cornerRadius;
+            blurView.clipsToBounds = YES;
+            cell.backgroundView = blurView;
+        }
+    } else if (isCard) {
+        // Reduce Transparency fallback: solid semi-transparent background.
+        UIView *bg;
+        if ([cell.backgroundView isKindOfClass:[UIVisualEffectView class]] || !cell.backgroundView) {
+            bg = [[UIView alloc] init];
+            bg.layer.cornerRadius = cell.contentView.layer.cornerRadius;
+            bg.clipsToBounds = YES;
+            cell.backgroundView = bg;
+        } else {
+            bg = cell.backgroundView;
+        }
+        bg.backgroundColor = [HATheme effectiveDarkMode]
+            ? [UIColor colorWithWhite:0.18 alpha:0.75]
+            : [UIColor colorWithWhite:1.0 alpha:0.75];
+    } else if ([cell.backgroundView isKindOfClass:[UIVisualEffectView class]]) {
+        // Clear stale blur backgroundView from non-card cells.
+        cell.backgroundView = nil;
+    }
+}
+
 - (void)collectionView:(UICollectionView *)collectionView
        willDisplayCell:(UICollectionViewCell *)cell
     forItemAtIndexPath:(NSIndexPath *)indexPath {
@@ -1420,10 +1533,16 @@ static const CGFloat kRowUnitHeight = 56.0;
         [(HACalendarCardCell *)cell beginLoading];
     }
 
+    // Apply blur background (idempotent — safe to call from both cellForItem and willDisplay)
+    [self applyBlurBackgroundToCell:cell];
+
     // Rasterize static cells for faster scrolling (caches rendered bitmap).
-    // Skip camera cells — their content updates frequently (snapshots, overlays).
+    // Skip camera cells (content updates frequently) and blur cells
+    // (shouldRasterize bakes the blur into a static bitmap, breaking compositing).
     BOOL isCamera = [cell isKindOfClass:[HACameraEntityCell class]];
-    cell.layer.shouldRasterize = !isCamera;
+    BOOL isBadge = [cell isKindOfClass:[HABadgeRowCell class]];
+    BOOL isCard = (cell.contentView.layer.cornerRadius > 0);
+    cell.layer.shouldRasterize = !isCamera && !isCard && !isBadge;
     cell.layer.rasterizationScale = [UIScreen mainScreen].scale;
 }
 
@@ -1539,7 +1658,7 @@ heightForHeaderInSection:(NSInteger)section {
 
     NSString *ct = item.cardType;
 
-    // Entities card: resolve which entity row was tapped → toggle
+    // Entities card: resolve which entity row was tapped
     if ([ct isEqualToString:@"entities"]) {
         UICollectionViewCell *cell = [collectionView cellForItemAtIndexPath:indexPath];
         if ([cell isKindOfClass:[HAEntitiesCardCell class]]) {
@@ -1548,16 +1667,7 @@ heightForHeaderInSection:(NSInteger)section {
             for (HAEntityRowView *row in entCell.rowViews) {
                 if (CGRectContainsPoint(row.frame, [entCell.stackView convertPoint:cellPoint fromView:entCell])) {
                     if (row.entity) {
-                        NSString *svc = [row.entity toggleService];
-                        if (svc) {
-                            [HAHaptics lightImpact];
-                            [[HAConnectionManager sharedManager] callService:svc
-                                                                    inDomain:[row.entity domain]
-                                                                    withData:nil
-                                                                    entityId:row.entity.entityId];
-                        } else {
-                            [self presentEntityDetail:row.entity];
-                        }
+                        [self executeActionType:@"tap_action" forEntity:row.entity configProperties:row.actionConfig ?: item.customProperties];
                         return;
                     }
                 }
@@ -1569,6 +1679,9 @@ heightForHeaderInSection:(NSInteger)section {
     // Badges: handled by HABadgeRowCell's own tap gestures
     if ([ct isEqualToString:@"badges"]) return;
 
+    // Glance: handled by HAGlanceCardCell's own tap gestures
+    if ([ct isEqualToString:@"glance"]) return;
+
     // Graph cards: resolve primary entity from section
     if ([ct isEqualToString:@"graph"]) return;
 
@@ -1578,17 +1691,33 @@ heightForHeaderInSection:(NSInteger)section {
     HAEntity *entity = [[HAConnectionManager sharedManager] entityForId:item.entityId];
     if (!entity) return;
 
-    // Tap on toggleable entities → toggle. Non-toggleable → open detail.
-    NSString *toggleSvc = [entity toggleService];
-    if (toggleSvc) {
-        [HAHaptics lightImpact];
-        [[HAConnectionManager sharedManager] callService:toggleSvc
-                                                inDomain:[entity domain]
-                                                withData:nil
-                                                entityId:entity.entityId];
-    } else {
-        [self presentEntityDetail:entity];
+    [self executeActionType:@"tap_action" forEntity:entity configProperties:item.customProperties];
+}
+
+/// Resolve and execute an action (tap_action, hold_action, double_tap_action) for an entity.
+/// Falls back to domain-default behavior when no action is configured.
+- (void)executeActionType:(NSString *)actionType
+                forEntity:(HAEntity *)entity
+         configProperties:(NSDictionary *)props {
+    // Check for configured action
+    NSDictionary *actionDict = props[actionType];
+    HAAction *action = [HAAction actionFromDictionary:actionDict];
+
+    // No configured action: apply defaults matching previous hardcoded behavior
+    if (!action) {
+        if ([actionType isEqualToString:@"tap_action"]) {
+            action = [HAAction defaultTapActionForEntity:entity];
+        } else if ([actionType isEqualToString:@"hold_action"]) {
+            action = [HAAction defaultHoldAction];
+        } else {
+            // double_tap: no default (no-op)
+            return;
+        }
     }
+
+    [[HAActionDispatcher sharedDispatcher] executeAction:action
+                                              forEntity:entity
+                                     fromViewController:self];
 }
 
 - (void)presentEntityDetail:(HAEntity *)entity {
@@ -1612,6 +1741,82 @@ heightForHeaderInSection:(NSInteger)section {
 
     [HAHaptics lightImpact];
     [self presentViewController:detail animated:YES completion:nil];
+}
+
+#pragma mark - Action Notification Handlers
+
+- (void)actionMoreInfoRequested:(NSNotification *)note {
+    HAEntity *entity = note.userInfo[@"entity"];
+    if (entity) {
+        [self presentEntityDetail:entity];
+    }
+}
+
+- (void)actionNavigateRequested:(NSNotification *)note {
+    NSString *path = note.userInfo[@"path"];
+    if (!path) return;
+
+    // Navigate to a view within the current dashboard.
+    // Path format: "/lovelace/view-path" or just "view-path"
+    // Strip leading dashboard path to get view path/index.
+    NSString *viewPath = [path lastPathComponent];
+
+    HALovelaceDashboard *dashboard = [HAConnectionManager sharedManager].lovelaceDashboard;
+    if (!dashboard) return;
+
+    // Try to find view by path
+    for (NSUInteger i = 0; i < dashboard.views.count; i++) {
+        HALovelaceView *view = dashboard.views[i];
+        if ([view.path isEqualToString:viewPath] ||
+            [view.title.lowercaseString isEqualToString:viewPath.lowercaseString]) {
+            self.selectedViewIndex = i;
+            self.viewPicker.selectedSegmentIndex = (NSInteger)i;
+            [self rebuildDashboard];
+            return;
+        }
+    }
+
+    // Try as numeric index
+    NSInteger idx = [viewPath integerValue];
+    if (idx > 0 && (NSUInteger)idx < dashboard.views.count) {
+        self.selectedViewIndex = (NSUInteger)idx;
+        self.viewPicker.selectedSegmentIndex = (NSInteger)idx;
+        [self rebuildDashboard];
+    }
+}
+
+#pragma mark - Double Tap
+
+- (void)handleDoubleTap:(UITapGestureRecognizer *)gesture {
+    CGPoint point = [gesture locationInView:self.collectionView];
+    NSIndexPath *indexPath = [self.collectionView indexPathForItemAtPoint:point];
+    if (!indexPath) return;
+
+    HADashboardConfigItem *item = [self itemAtIndexPath:indexPath];
+    if (!item) return;
+
+    // Only fire if double_tap_action is actually configured
+    NSDictionary *doubleTapConfig = item.customProperties[@"double_tap_action"];
+    if (!doubleTapConfig) return;
+
+    HAEntity *entity = [[HAConnectionManager sharedManager] entityForId:item.entityId];
+    [self executeActionType:@"double_tap_action" forEntity:entity configProperties:item.customProperties];
+}
+
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
+    if (gestureRecognizer != self.doubleTapGesture) return YES;
+
+    // Only allow the double-tap gesture to begin if the tapped cell has
+    // double_tap_action configured. Otherwise fail immediately so the
+    // single-tap fires without any delay.
+    CGPoint point = [gestureRecognizer locationInView:self.collectionView];
+    NSIndexPath *indexPath = [self.collectionView indexPathForItemAtPoint:point];
+    if (!indexPath) return NO;
+
+    HADashboardConfigItem *item = [self itemAtIndexPath:indexPath];
+    if (!item) return NO;
+
+    return item.customProperties[@"double_tap_action"] != nil;
 }
 
 #pragma mark - Long Press (Quick Toggle)
@@ -1675,7 +1880,7 @@ heightForHeaderInSection:(NSInteger)section {
             }
             if (!color) color = palette[graphEntities.count % palette.count];
 
-            NSString *label = cfg[@"name"] ?: entSection.nameOverrides[eid] ?: entity.friendlyName ?: eid;
+            NSString *label = [cfg[@"name"] isKindOfClass:[NSString class]] ? cfg[@"name"] : (entSection.nameOverrides[eid] ?: entity.friendlyName ?: eid);
             NSString *unit = entity.unitOfMeasurement ?: @"";
 
             [graphEntities addObject:@{
@@ -1723,7 +1928,7 @@ heightForHeaderInSection:(NSInteger)section {
         return;
     }
 
-    // Entities card: resolve which entity row was long-pressed → open detail
+    // Entities card: resolve which entity row was long-pressed
     if ([ct isEqualToString:@"entities"]) {
         UICollectionViewCell *cell = [self.collectionView cellForItemAtIndexPath:indexPath];
         if ([cell isKindOfClass:[HAEntitiesCardCell class]]) {
@@ -1732,8 +1937,7 @@ heightForHeaderInSection:(NSInteger)section {
             for (HAEntityRowView *row in entCell.rowViews) {
                 if (CGRectContainsPoint(row.frame, [entCell.stackView convertPoint:cellPoint fromView:entCell])) {
                     if (row.entity) {
-                        [HAHaptics mediumImpact];
-                        [self presentEntityDetail:row.entity];
+                        [self executeActionType:@"hold_action" forEntity:row.entity configProperties:row.actionConfig ?: item.customProperties];
                         return;
                     }
                 }
@@ -1742,11 +1946,11 @@ heightForHeaderInSection:(NSInteger)section {
         return;
     }
 
-    // Badges card: resolve which badge was long-pressed → open detail
-    if ([ct isEqualToString:@"badges"]) {
-        // Badge tap-to-detail is handled by HABadgeRowCell's own gesture recognizers
-        return;
-    }
+    // Badges card: handled by HABadgeRowCell's own gesture recognizers
+    if ([ct isEqualToString:@"badges"]) return;
+
+    // Glance card: handled by HAGlanceCardCell's own gesture recognizers
+    if ([ct isEqualToString:@"glance"]) return;
 
     // Calendar card: no entity detail for calendar entities
     if ([ct isEqualToString:@"calendar"]) return;
@@ -1754,9 +1958,7 @@ heightForHeaderInSection:(NSInteger)section {
     HAEntity *entity = [[HAConnectionManager sharedManager] entityForId:item.entityId];
     if (!entity) return;
 
-    // Long-press opens entity detail bottom sheet
-    [HAHaptics mediumImpact];
-    [self presentEntityDetail:entity];
+    [self executeActionType:@"hold_action" forEntity:entity configProperties:item.customProperties];
 }
 
 #pragma mark - HAEntityDetailDelegate
@@ -1952,6 +2154,7 @@ heightForHeaderInSection:(NSInteger)section {
 
     self.lovelaceDashboard = dashboard;
     self.lovelaceLoaded = YES;
+    self.lovelaceFetchDone = YES;
 
     // -HAViewIndex N — override the initial view index (for test harness capture)
     NSInteger bootViewIndex = [[NSUserDefaults standardUserDefaults] integerForKey:@"HAViewIndex"];
@@ -1968,6 +2171,12 @@ heightForHeaderInSection:(NSInteger)section {
     }
 
     [self populateViewPicker];
+    [self rebuildDashboard];
+}
+
+- (void)connectionManagerDidFailToLoadLovelaceDashboard:(HAConnectionManager *)manager {
+    NSLog(@"[Dashboard] Lovelace fetch failed, falling back to default entity dashboard");
+    self.lovelaceFetchDone = YES;
     [self rebuildDashboard];
 }
 

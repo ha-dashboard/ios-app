@@ -42,11 +42,12 @@ echo "Version: $APP_VERSION ($BUILD_NUMBER)" >&2
 # ── Parse args ────────────────────────────────────────────────────────
 TARGET="${1:-}"
 if [[ -z "$TARGET" ]]; then
-    echo "Usage: scripts/build.sh <sim|device>"
+    echo "Usage: scripts/build.sh <sim|device|mac>"
     echo ""
     echo "Targets:"
     echo "  sim      Simulator build (arm64, Xcode 26)"
     echo "  device   Universal device build (armv7+arm64, matches CI)"
+    echo "  mac      Mac Catalyst build (arm64, macOS)"
     exit 1
 fi
 
@@ -343,6 +344,47 @@ build_device() {
     echo "$APP"
 }
 
+# ── Mac Catalyst build (arm64, macOS) ──────────────────────────────────
+build_mac() {
+    echo "Building for Mac Catalyst (arm64)..." >&2
+
+    if [ ! -d "$XCODE26" ]; then
+        echo "Xcode not found at $XCODE26" >&2
+        exit 1
+    fi
+    export DEVELOPER_DIR="$XCODE26/Contents/Developer"
+
+    local BUILD_DIR="$PROJECT_DIR/build/mac"
+
+    local SIGNING_FLAGS=(
+        CODE_SIGN_IDENTITY="Apple Development"
+        CODE_SIGN_STYLE=Automatic
+        "DEVELOPMENT_TEAM=$APPLE_TEAM_ID"
+    )
+
+    xcodebuild \
+        -project "$PROJECT_DIR/HADashboard.xcodeproj" \
+        -scheme HADashboard \
+        -destination 'platform=macOS,variant=Mac Catalyst' \
+        -configuration Debug \
+        -derivedDataPath "$BUILD_DIR" \
+        ARCHS=arm64 \
+        ONLY_ACTIVE_ARCH=YES \
+        "PRODUCT_BUNDLE_IDENTIFIER=$BUNDLE_ID" \
+        "MARKETING_VERSION=$APP_VERSION" \
+        "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" \
+        "${SIGNING_FLAGS[@]}" \
+        build 2>&1 | grep -E '(error:|BUILD)' | tail -5 >&2
+
+    local APP="$BUILD_DIR/Build/Products/Debug-maccatalyst/HA Dashboard.app"
+    if [ ! -d "$APP" ]; then
+        echo "Build failed" >&2
+        exit 1
+    fi
+
+    echo "$APP"
+}
+
 # ── Main ──────────────────────────────────────────────────────────────
 case "$TARGET" in
     sim|simulator)
@@ -354,9 +396,12 @@ case "$TARGET" in
     device|universal)
         build_device
         ;;
+    mac|catalyst)
+        build_mac
+        ;;
     *)
         echo "Unknown target: $TARGET" >&2
-        echo "Use 'sim', 'rosettasim', or 'device'" >&2
+        echo "Use 'sim', 'rosettasim', 'device', or 'mac'" >&2
         exit 1
         ;;
 esac
