@@ -99,7 +99,13 @@ static NSString *const kEnabledKey = @"HADeviceIntegration_enabled";
 
 - (void)connectionDidConnect:(NSNotification *)note {
     if (self.enabled && self.isRegistered) {
-        [self start];
+        if (self.running) {
+            // Already running (e.g. registration completed before WS was ready).
+            // Retry the push channel now that WS is authenticated.
+            [self.commandHandler startListening];
+        } else {
+            [self start];
+        }
     }
 }
 

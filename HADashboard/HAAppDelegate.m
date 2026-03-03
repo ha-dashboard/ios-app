@@ -11,6 +11,7 @@
 #import "HAStartupLog.h"
 #import "HAEntityStateCache.h"
 #import "HADeviceIntegrationManager.h"
+#import "HADeviceRegistration.h"
 
 /// Window subclass that detects system appearance changes (iOS 13+) and posts
 /// HAThemeDidChangeNotification so every view/VC refreshes — not just the
@@ -115,6 +116,22 @@
     // -HADemoMode YES/NO — override demo mode from launch arguments
     if ([defaults objectForKey:@"HADemoMode"]) {
         [[HAAuthManager sharedManager] setDemoMode:[defaults boolForKey:@"HADemoMode"]];
+    }
+    // -HAAutoRegister YES — auto-register device integration on launch (testing only)
+    if ([defaults boolForKey:@"HAAutoRegister"]) {
+        [HADeviceIntegrationManager sharedManager].enabled = YES;
+        if (![[HADeviceRegistration sharedManager] isRegistered]) {
+            NSLog(@"[AppDelegate] HAAutoRegister: triggering device registration");
+            [[HADeviceRegistration sharedManager] registerWithCompletion:^(BOOL success, NSError *error) {
+                if (success) {
+                    NSLog(@"[AppDelegate] HAAutoRegister: registration succeeded");
+                } else {
+                    NSLog(@"[AppDelegate] HAAutoRegister: registration failed: %@", error.localizedDescription);
+                }
+            }];
+        } else {
+            NSLog(@"[AppDelegate] HAAutoRegister: already registered");
+        }
     }
 
     [HAStartupLog log:@"isConfigured check BEGIN"];
