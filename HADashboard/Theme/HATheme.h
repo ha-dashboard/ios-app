@@ -32,13 +32,9 @@ extern NSString *const HAThemeDidChangeNotification;
 /// Single source of truth — adapts to dark/light appearance.
 + (UIBlurEffectStyle)gradientBlurStyle;
 
-/// Whether the device supports blur compositing (UIVisualEffectView).
-/// Returns NO when Reduce Transparency is enabled in accessibility settings.
 + (BOOL)canBlur;
-
-/// Create a frosted-glass background view suitable for insertion as a subview or backgroundView.
-/// Returns UIVisualEffectView when blur is available, or a semi-transparent solid UIView
-/// when Reduce Transparency is on.
++ (UIImage *)blurredGradientImage;
++ (void)updateBlurredGradientFromLayer:(CAGradientLayer *)layer size:(CGSize)size;
 + (UIView *)frostedBackgroundViewWithCornerRadius:(CGFloat)cornerRadius;
 
 + (HAGradientPreset)gradientPreset;

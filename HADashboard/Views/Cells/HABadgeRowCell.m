@@ -474,6 +474,11 @@ static const CGFloat kArcNameLabelHeight = 16.0;
     bg.frame = badge.bounds;
     bg.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     bg.userInteractionEnabled = NO;
+    // For vImage path: use center crop so the small badge shows a representative
+    // gradient slice rather than the entire squished image.
+    if ([bg isKindOfClass:[UIImageView class]]) {
+        ((UIImageView *)bg).contentMode = UIViewContentModeCenter;
+    }
     [badge insertSubview:bg atIndex:0];
 }
 

@@ -10,6 +10,7 @@ xcuserdata/
 *.ipa
 *.dSYM.zip
 *.dSYM
+.idea/
 
 # Xcode project internals
 *.pbxuser

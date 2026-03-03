@@ -330,7 +330,13 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
         self.view.backgroundColor = [HATheme backgroundColor];
         self.backgroundGradient.hidden = YES;
     }
-
+    // vImage blur cache for non-Metal devices
+    if (![HATheme canBlur] && !self.backgroundGradient.hidden) {
+        self.backgroundGradient.frame = self.view.bounds;
+        [HATheme updateBlurredGradientFromLayer:self.backgroundGradient size:self.view.bounds.size];
+    } else if (![HATheme canBlur]) {
+        [HATheme updateBlurredGradientFromLayer:nil size:CGSizeZero];
+    }
     self.connectionBar.backgroundColor = [HATheme connectionBarColor];
     self.statusLabel.textColor = [HATheme secondaryTextColor];
     self.titleButton.tintColor = [HATheme primaryTextColor];
@@ -353,16 +359,6 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 
 - (void)themeDidChange:(NSNotification *)notification {
     [self applyTheme];
-
-    // Clear all blur backgroundViews — the blur style (light/dark) or
-    // blurred gradient cache has changed. applyBlurBackgroundToCell: will
-    // recreate them with the correct style during reload.
-    for (UICollectionViewCell *cell in self.collectionView.visibleCells) {
-        cell.backgroundView = nil;
-    }
-
-    // On iOS 9, reloadData may not call willDisplayCell for already-visible cells.
-    // Invalidate the layout to force a full re-display pass.
     [self.collectionView.collectionViewLayout invalidateLayout];
     [self.collectionView reloadData];
 }
@@ -1501,20 +1497,28 @@ static const CGFloat kRowUnitHeight = 56.0;
 
 #pragma mark - Visibility-Based Loading
 
-/// Apply frosted-glass blur backgroundView to card cells (cornerRadius > 0).
-/// Idempotent — safe to call from both cellForItemAtIndexPath and willDisplayCell.
 - (void)applyBlurBackgroundToCell:(UICollectionViewCell *)cell {
     BOOL isCard = (cell.contentView.layer.cornerRadius > 0);
+    if (!isCard) {
+        if (cell.backgroundView) cell.backgroundView = nil;
+        return;
+    }
 
-    if (isCard) {
-        cell.contentView.backgroundColor = [UIColor clearColor];
-        cell.contentView.opaque = NO;
+    cell.contentView.backgroundColor = [UIColor clearColor];
+    cell.contentView.opaque = NO;
+    cell.backgroundView = [HATheme frostedBackgroundViewWithCornerRadius:
+        cell.contentView.layer.cornerRadius];
 
-        // Always set the backgroundView — theme changes alter blur style (light/dark).
-        cell.backgroundView = [HATheme frostedBackgroundViewWithCornerRadius:
-            cell.contentView.layer.cornerRadius];
-    } else if ([cell.backgroundView isKindOfClass:[UIVisualEffectView class]]) {
-        cell.backgroundView = nil;
+    if ([cell.backgroundView isKindOfClass:[UIImageView class]]) {
+        CGSize viewSize = self.view.bounds.size;
+        if (viewSize.width > 0 && viewSize.height > 0) {
+            CGRect cellFrame = [cell.superview convertRect:cell.frame toView:self.view];
+            ((UIImageView *)cell.backgroundView).layer.contentsRect = CGRectMake(
+                cellFrame.origin.x / viewSize.width,
+                cellFrame.origin.y / viewSize.height,
+                cellFrame.size.width / viewSize.width,
+                cellFrame.size.height / viewSize.height);
+        }
     }
 }
 

@@ -1,5 +1,8 @@
 #import "HATheme.h"
 #import "HASunBasedTheme.h"
+#import "HASoftwareBlur.h"
+#include <dlfcn.h>
+#include <TargetConditionals.h>
 
 NSString *const HAThemeDidChangeNotification = @"HAThemeDidChangeNotification";
 
@@ -84,7 +87,52 @@ static NSString *const kDeveloperModeKey   = @"HADeveloperModeEnabled";
 }
 
 + (BOOL)canBlur {
-    return !UIAccessibilityIsReduceTransparencyEnabled();
+    if (UIAccessibilityIsReduceTransparencyEnabled()) return NO;
+    static BOOL checked = NO;
+    static BOOL hardwareCanBlur = YES;
+    if (!checked) {
+        checked = YES;
+#if TARGET_OS_SIMULATOR
+        hardwareCanBlur = YES;
+#else
+        void *metalLib = dlopen("/System/Library/Frameworks/Metal.framework/Metal", RTLD_LAZY);
+        if (metalLib) {
+            typedef id (*CreateDeviceFunc)(void);
+            CreateDeviceFunc fn = (CreateDeviceFunc)dlsym(metalLib, "MTLCreateSystemDefaultDevice");
+            hardwareCanBlur = (fn && fn() != nil);
+            dlclose(metalLib);
+        } else {
+            hardwareCanBlur = NO;
+        }
+#endif
+    }
+    return hardwareCanBlur;
+}
+
+static UIImage *_blurredGradientCache = nil;
+
++ (UIImage *)blurredGradientImage { return _blurredGradientCache; }
+
++ (void)updateBlurredGradientFromLayer:(CAGradientLayer *)layer size:(CGSize)size {
+    if (!layer || size.width <= 0 || size.height <= 0) { _blurredGradientCache = nil; return; }
+    UIGraphicsBeginImageContextWithOptions(size, NO, 1.0);
+    CGContextRef ctx = UIGraphicsGetCurrentContext();
+    if (!ctx) { UIGraphicsEndImageContext(); _blurredGradientCache = nil; return; }
+    [layer renderInContext:ctx];
+    UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    if (!img) { _blurredGradientCache = nil; return; }
+    UIImage *blurred = [HASoftwareBlur blurImage:img radius:20.0];
+    if (!blurred) { _blurredGradientCache = nil; return; }
+    UIGraphicsBeginImageContextWithOptions(blurred.size, NO, blurred.scale);
+    [blurred drawAtPoint:CGPointZero];
+    UIColor *tint = [self effectiveDarkMode]
+        ? [UIColor colorWithWhite:1.0 alpha:0.12]
+        : [UIColor colorWithWhite:1.0 alpha:0.3];
+    [tint setFill];
+    UIRectFillUsingBlendMode(CGRectMake(0, 0, blurred.size.width, blurred.size.height), kCGBlendModeSourceAtop);
+    _blurredGradientCache = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
 }
 
 + (UIView *)frostedBackgroundViewWithCornerRadius:(CGFloat)cornerRadius {
@@ -95,8 +143,16 @@ static NSString *const kDeveloperModeKey   = @"HADeveloperModeEnabled";
         blur.clipsToBounds = YES;
         return blur;
     }
-
-    // Reduce Transparency fallback: semi-transparent solid
+    UIImage *blurredGradient = [self blurredGradientImage];
+    if (blurredGradient) {
+        UIImageView *bgView = [[UIImageView alloc] init];
+        bgView.image = blurredGradient;
+        bgView.contentMode = UIViewContentModeScaleAspectFill;
+        bgView.clipsToBounds = YES;
+        bgView.alpha = 0.85;
+        bgView.layer.cornerRadius = cornerRadius;
+        return bgView;
+    }
     UIView *bg = [[UIView alloc] init];
     bg.backgroundColor = [self effectiveDarkMode]
         ? [UIColor colorWithWhite:0.18 alpha:0.75]
