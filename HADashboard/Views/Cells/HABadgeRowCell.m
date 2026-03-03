@@ -468,25 +468,13 @@ static const CGFloat kArcNameLabelHeight = 16.0;
     return [HAEntityDisplayHelper iconColorForEntity:entity];
 }
 
-/// Insert a blur background as the bottom-most subview of a badge pill.
-/// Uses UIVisualEffectView when the device supports blur, falls back to
-/// a semi-transparent solid color on non-Metal devices (iPad 2) and when
-/// Reduce Transparency is enabled.
+/// Insert a frosted-glass background as the bottom-most subview of a badge pill.
 - (void)insertBlurInBadge:(UIView *)badge {
-    if ([HATheme canBlur]) {
-        UIVisualEffectView *blur = [[UIVisualEffectView alloc] initWithEffect:
-            [UIBlurEffect effectWithStyle:[HATheme gradientBlurStyle]]];
-        blur.frame = badge.bounds;
-        blur.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        blur.userInteractionEnabled = NO;
-        [badge insertSubview:blur atIndex:0];
-    } else {
-        UIView *bg = [[UIView alloc] initWithFrame:badge.bounds];
-        bg.backgroundColor = [HATheme badgeBackgroundColor];
-        bg.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        bg.userInteractionEnabled = NO;
-        [badge insertSubview:bg atIndex:0];
-    }
+    UIView *bg = [HATheme frostedBackgroundViewWithCornerRadius:badge.layer.cornerRadius];
+    bg.frame = badge.bounds;
+    bg.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    bg.userInteractionEnabled = NO;
+    [badge insertSubview:bg atIndex:0];
 }
 
 - (UIView *)createPillBadgeForEntity:(HAEntity *)entity entityId:(NSString *)entityId section:(HADashboardConfigSection *)section {

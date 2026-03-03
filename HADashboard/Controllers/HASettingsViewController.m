@@ -3,9 +3,23 @@
 #import "HAConnectionManager.h"
 #import "HAConnectionSettingsViewController.h"
 #import "HADashboardViewController.h"
+#import "HADeviceRegistration.h"
+#import "HADeviceIntegrationManager.h"
 #import "HALoginViewController.h"
 #import "HATheme.h"
 #import "HASwitch.h"
+#import <objc/runtime.h>
+
+static const void *kSensorDefaultsKeyAssoc = &kSensorDefaultsKeyAssoc;
+
+// NSUserDefaults keys for device integration
+static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
+static NSString *const kSensorBatteryLevel     = @"ha_sensor_battery_level_enabled";
+static NSString *const kSensorBatteryState     = @"ha_sensor_battery_state_enabled";
+static NSString *const kSensorScreenBrightness = @"ha_sensor_screen_brightness_enabled";
+static NSString *const kSensorStorage          = @"ha_sensor_storage_enabled";
+static NSString *const kSensorAppState         = @"ha_sensor_app_state_enabled";
+static NSString *const kSensorActiveDashboard  = @"ha_sensor_active_dashboard_enabled";
 
 @interface HASettingsViewController ()
 // Connection summary
@@ -45,6 +59,20 @@
 // Auto-reload dashboard
 @property (nonatomic, strong) UIView *autoReloadSection;
 @property (nonatomic, strong) UISwitch *autoReloadSwitch;
+
+// Device Integration
+@property (nonatomic, strong) UILabel *integrationSectionHeader;
+@property (nonatomic, strong) UIView *integrationSection;
+@property (nonatomic, strong) UISwitch *registrationSwitch;
+@property (nonatomic, strong) UILabel *registrationStatusLabel;
+@property (nonatomic, strong) UITextField *deviceNameField;
+@property (nonatomic, strong) UIView *sensorsContainer;
+@property (nonatomic, strong) UISwitch *batteryLevelSwitch;
+@property (nonatomic, strong) UISwitch *batteryStateSwitch;
+@property (nonatomic, strong) UISwitch *brightnessSwitch;
+@property (nonatomic, strong) UISwitch *storageSwitch;
+@property (nonatomic, strong) UISwitch *appStateSwitch;
+@property (nonatomic, strong) UISwitch *activeDashboardSwitch;
 
 // About
 @property (nonatomic, strong) UIView *aboutSection;
@@ -287,6 +315,13 @@
     self.autoReloadSwitch = autoReloadSw;
     [container addSubview:self.autoReloadSection];
 
+    // ── DEVICE INTEGRATION section ────────────────────────────────────
+    self.integrationSectionHeader = [self createSectionHeaderWithText:@"DEVICE INTEGRATION"];
+    [container addSubview:self.integrationSectionHeader];
+
+    self.integrationSection = [self createDeviceIntegrationSection];
+    [container addSubview:self.integrationSection];
+
     // ── ABOUT section ─────────────────────────────────────────────────
     self.aboutSectionHeader = [self createSectionHeaderWithText:@"ABOUT"];
     [container addSubview:self.aboutSectionHeader];
@@ -322,6 +357,8 @@
         @"kiosk":     self.kioskSection,
         @"demo":      self.demoSection,
         @"autoReload":self.autoReloadSection,
+        @"intHdr":    self.integrationSectionHeader,
+        @"intSec":    self.integrationSection,
         @"aboutHdr":  self.aboutSectionHeader,
         @"about":     self.aboutSection,
         @"devHdr":    self.developerSectionHeader,
@@ -331,7 +368,7 @@
     NSDictionary *metrics = @{@"p": @16, @"sh": @32, @"hg": @10, @"fh": @44};
 
     [container addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[demo]-p-[autoReload]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
+        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[demo]-p-[autoReload]-sh-[intHdr]-hg-[intSec]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
         options:0 metrics:metrics views:views]];
 
     for (NSString *name in views) {
@@ -410,6 +447,216 @@
     ]];
 
     return section;
+}
+
+- (UIView *)createDeviceIntegrationSection {
+    UIStackView *stack = [[UIStackView alloc] init];
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = 12;
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+
+    // ── Registration toggle row ──
+    UIView *regRow = [[UIView alloc] init];
+    regRow.translatesAutoresizingMaskIntoConstraints = NO;
+    [stack addArrangedSubview:regRow];
+
+    UILabel *regLabel = [[UILabel alloc] init];
+    regLabel.text = @"Register with Home Assistant";
+    regLabel.font = [UIFont systemFontOfSize:16];
+    regLabel.textColor = [HATheme primaryTextColor];
+    regLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [regRow addSubview:regLabel];
+
+    self.registrationSwitch = [[HASwitch alloc] init];
+    self.registrationSwitch.on = [HADeviceRegistration sharedManager].isRegistered;
+    self.registrationSwitch.onTintColor = [HATheme switchTintColor];
+    [self.registrationSwitch addTarget:self action:@selector(registrationSwitchToggled:) forControlEvents:UIControlEventValueChanged];
+    self.registrationSwitch.translatesAutoresizingMaskIntoConstraints = NO;
+    [regRow addSubview:self.registrationSwitch];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [regLabel.topAnchor constraintEqualToAnchor:regRow.topAnchor],
+        [regLabel.leadingAnchor constraintEqualToAnchor:regRow.leadingAnchor],
+        [regLabel.bottomAnchor constraintEqualToAnchor:regRow.bottomAnchor],
+        [self.registrationSwitch.trailingAnchor constraintEqualToAnchor:regRow.trailingAnchor],
+        [self.registrationSwitch.centerYAnchor constraintEqualToAnchor:regLabel.centerYAnchor],
+    ]];
+
+    // Status label
+    self.registrationStatusLabel = [[UILabel alloc] init];
+    self.registrationStatusLabel.font = [UIFont systemFontOfSize:12];
+    self.registrationStatusLabel.textColor = [HATheme secondaryTextColor];
+    self.registrationStatusLabel.numberOfLines = 0;
+    self.registrationStatusLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self updateRegistrationStatus];
+    [stack addArrangedSubview:self.registrationStatusLabel];
+
+    // ── Device name field ──
+    UILabel *nameLabel = [[UILabel alloc] init];
+    nameLabel.text = @"Device Name";
+    nameLabel.font = [UIFont systemFontOfSize:12];
+    nameLabel.textColor = [HATheme secondaryTextColor];
+    nameLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [stack addArrangedSubview:nameLabel];
+
+    self.deviceNameField = [[UITextField alloc] init];
+    NSString *savedName = [[NSUserDefaults standardUserDefaults] stringForKey:kDeviceNameOverride];
+    self.deviceNameField.text = savedName ?: [UIDevice currentDevice].name;
+    self.deviceNameField.placeholder = [UIDevice currentDevice].name;
+    self.deviceNameField.borderStyle = UITextBorderStyleRoundedRect;
+    self.deviceNameField.font = [UIFont systemFontOfSize:14];
+    self.deviceNameField.autocorrectionType = UITextAutocorrectionTypeNo;
+    self.deviceNameField.returnKeyType = UIReturnKeyDone;
+    self.deviceNameField.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.deviceNameField addTarget:self action:@selector(deviceNameChanged:) forControlEvents:UIControlEventEditingDidEnd];
+    [stack addArrangedSubview:self.deviceNameField];
+    [self.deviceNameField.heightAnchor constraintEqualToConstant:36].active = YES;
+
+    // ── Sensors subsection ──
+    self.sensorsContainer = [[UIView alloc] init];
+    self.sensorsContainer.translatesAutoresizingMaskIntoConstraints = NO;
+    self.sensorsContainer.hidden = ![HADeviceRegistration sharedManager].isRegistered;
+    [stack addArrangedSubview:self.sensorsContainer];
+
+    UIStackView *sensorStack = [[UIStackView alloc] init];
+    sensorStack.axis = UILayoutConstraintAxisVertical;
+    sensorStack.spacing = 10;
+    sensorStack.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.sensorsContainer addSubview:sensorStack];
+    [NSLayoutConstraint activateConstraints:@[
+        [sensorStack.topAnchor constraintEqualToAnchor:self.sensorsContainer.topAnchor],
+        [sensorStack.leadingAnchor constraintEqualToAnchor:self.sensorsContainer.leadingAnchor],
+        [sensorStack.trailingAnchor constraintEqualToAnchor:self.sensorsContainer.trailingAnchor],
+        [sensorStack.bottomAnchor constraintEqualToAnchor:self.sensorsContainer.bottomAnchor],
+    ]];
+
+    UILabel *sensorsHeader = [[UILabel alloc] init];
+    sensorsHeader.text = @"SENSORS";
+    sensorsHeader.font = [UIFont systemFontOfSize:11 weight:UIFontWeightMedium];
+    sensorsHeader.textColor = [HATheme secondaryTextColor];
+    sensorsHeader.translatesAutoresizingMaskIntoConstraints = NO;
+    [sensorStack addArrangedSubview:sensorsHeader];
+
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    // Battery Level defaults ON
+    if (![defaults objectForKey:kSensorBatteryLevel]) [defaults setBool:YES forKey:kSensorBatteryLevel];
+
+    self.batteryLevelSwitch = [self addSensorToggleToStack:sensorStack
+        title:@"Battery Level" key:kSensorBatteryLevel action:@selector(sensorToggleChanged:)];
+    self.batteryStateSwitch = [self addSensorToggleToStack:sensorStack
+        title:@"Battery State" key:kSensorBatteryState action:@selector(sensorToggleChanged:)];
+    self.brightnessSwitch = [self addSensorToggleToStack:sensorStack
+        title:@"Screen Brightness" key:kSensorScreenBrightness action:@selector(sensorToggleChanged:)];
+    self.storageSwitch = [self addSensorToggleToStack:sensorStack
+        title:@"Storage Available" key:kSensorStorage action:@selector(sensorToggleChanged:)];
+    self.appStateSwitch = [self addSensorToggleToStack:sensorStack
+        title:@"App State" key:kSensorAppState action:@selector(sensorToggleChanged:)];
+    self.activeDashboardSwitch = [self addSensorToggleToStack:sensorStack
+        title:@"Active Dashboard" key:kSensorActiveDashboard action:@selector(sensorToggleChanged:)];
+
+    return stack;
+}
+
+- (UISwitch *)addSensorToggleToStack:(UIStackView *)stack title:(NSString *)title key:(NSString *)key action:(SEL)action {
+    UIView *row = [[UIView alloc] init];
+    row.translatesAutoresizingMaskIntoConstraints = NO;
+    [stack addArrangedSubview:row];
+
+    UILabel *label = [[UILabel alloc] init];
+    label.text = title;
+    label.font = [UIFont systemFontOfSize:14];
+    label.textColor = [HATheme primaryTextColor];
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    [row addSubview:label];
+
+    UISwitch *sw = [[HASwitch alloc] init];
+    sw.on = [[NSUserDefaults standardUserDefaults] boolForKey:key];
+    sw.onTintColor = [HATheme switchTintColor];
+    sw.accessibilityLabel = [NSString stringWithFormat:@"%@ Sensor", title];
+    objc_setAssociatedObject(sw, kSensorDefaultsKeyAssoc, key, OBJC_ASSOCIATION_COPY_NONATOMIC);
+    [sw addTarget:self action:action forControlEvents:UIControlEventValueChanged];
+    sw.translatesAutoresizingMaskIntoConstraints = NO;
+    [row addSubview:sw];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [label.topAnchor constraintEqualToAnchor:row.topAnchor],
+        [label.leadingAnchor constraintEqualToAnchor:row.leadingAnchor],
+        [label.bottomAnchor constraintEqualToAnchor:row.bottomAnchor],
+        [sw.trailingAnchor constraintEqualToAnchor:row.trailingAnchor],
+        [sw.centerYAnchor constraintEqualToAnchor:label.centerYAnchor],
+    ]];
+
+    return sw;
+}
+
+- (void)updateRegistrationStatus {
+    HADeviceRegistration *reg = [HADeviceRegistration sharedManager];
+    if (reg.isRegistered) {
+        NSString *truncatedId = reg.webhookId;
+        if (truncatedId.length > 12) {
+            truncatedId = [NSString stringWithFormat:@"%@\u2026", [truncatedId substringToIndex:12]];
+        }
+        self.registrationStatusLabel.text = [NSString stringWithFormat:@"Registered \u2014 Webhook: %@", truncatedId];
+    } else {
+        self.registrationStatusLabel.text = @"Not registered. Enable to send device sensors to Home Assistant.";
+    }
+}
+
+#pragma mark - Device Integration Actions
+
+- (void)registrationSwitchToggled:(UISwitch *)sender {
+    if (sender.isOn) {
+        sender.enabled = NO;
+        self.registrationStatusLabel.text = @"Registering\u2026";
+        [[HADeviceRegistration sharedManager] registerWithCompletion:^(BOOL success, NSError *error) {
+            sender.enabled = YES;
+            if (success) {
+                // Enable integration manager so sensors start reporting
+                [HADeviceIntegrationManager sharedManager].enabled = YES;
+                [self updateRegistrationStatus];
+                [UIView animateWithDuration:0.25 animations:^{
+                    self.sensorsContainer.hidden = NO;
+                }];
+            } else {
+                sender.on = NO;
+                self.registrationStatusLabel.text = [NSString stringWithFormat:@"Registration failed: %@",
+                    error.localizedDescription ?: @"Unknown error"];
+            }
+        }];
+    } else {
+        [HADeviceIntegrationManager sharedManager].enabled = NO;
+        [[HADeviceRegistration sharedManager] unregister];
+        [self updateRegistrationStatus];
+        [UIView animateWithDuration:0.25 animations:^{
+            self.sensorsContainer.hidden = YES;
+        }];
+    }
+}
+
+- (void)deviceNameChanged:(UITextField *)sender {
+    NSString *name = sender.text;
+    if (name.length > 0) {
+        [[NSUserDefaults standardUserDefaults] setObject:name forKey:kDeviceNameOverride];
+    } else {
+        [[NSUserDefaults standardUserDefaults] removeObjectForKey:kDeviceNameOverride];
+        sender.text = [UIDevice currentDevice].name;
+    }
+
+    // Push name change to HA if registered
+    if ([HADeviceRegistration sharedManager].isRegistered) {
+        NSDictionary *update = @{
+            @"device_name": [HADeviceRegistration sharedManager].deviceName,
+            @"app_version": [[NSBundle mainBundle] infoDictionary][@"CFBundleShortVersionString"] ?: @"0.0.0",
+        };
+        [[HADeviceRegistration sharedManager] sendWebhookWithType:@"update_registration" data:update completion:nil];
+    }
+}
+
+- (void)sensorToggleChanged:(UISwitch *)sender {
+    NSString *key = objc_getAssociatedObject(sender, kSensorDefaultsKeyAssoc);
+    if (key) {
+        [[NSUserDefaults standardUserDefaults] setBool:sender.isOn forKey:key];
+    }
 }
 
 - (UIView *)createAboutSection {
