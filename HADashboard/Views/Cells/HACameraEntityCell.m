@@ -460,6 +460,24 @@ static const NSInteger kOverlayButtonTagBase = 9000;
 - (void)fetchSnapshot {
     if (!self.entity || !self.entity.entityId) return;
 
+    // Demo mode: entity_picture starts with demo:// — use placeholder
+    NSString *ep = HAAttrString(self.entity.attributes, @"entity_picture");
+    if ([ep hasPrefix:@"demo://"]) {
+        CGFloat w = MAX(self.snapshotView.bounds.size.width, 200);
+        CGFloat h = MAX(self.snapshotView.bounds.size.height, 150);
+        UIGraphicsBeginImageContextWithOptions(CGSizeMake(w, h), YES, 0);
+        [[UIColor colorWithRed:0.1 green:0.12 blue:0.15 alpha:1] setFill];
+        UIRectFill(CGRectMake(0, 0, w, h));
+        NSDictionary *attrs = @{NSFontAttributeName: [UIFont systemFontOfSize:14], NSForegroundColorAttributeName: [UIColor colorWithWhite:0.5 alpha:1]};
+        NSString *label = [NSString stringWithFormat:@"📷 %@", [self.entity friendlyName] ?: @"Camera"];
+        CGSize sz = [label sizeWithAttributes:attrs];
+        [label drawAtPoint:CGPointMake((w - sz.width) / 2, (h - sz.height) / 2) withAttributes:attrs];
+        self.snapshotView.image = UIGraphicsGetImageFromCurrentImageContext();
+        UIGraphicsEndImageContext();
+        [self.loadingSpinner stopAnimating];
+        return;
+    }
+
     HAAuthManager *auth = [HAAuthManager sharedManager];
     if (!auth.isConfigured) return;
 

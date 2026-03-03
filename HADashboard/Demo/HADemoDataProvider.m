@@ -967,6 +967,26 @@
     [self addEntityWithId:@"device_tracker.sc_away" state:@"not_home" attributes:@{
         @"friendly_name": @"Laptop", @"source_type": @"router", @"icon": @"mdi:laptop"}];
 
+    // ── CAMERA ENTITIES (for card types showcase) ─────────────────
+    [self addEntityWithId:@"camera.sc_streaming" state:@"streaming" attributes:@{
+        @"friendly_name": @"Front Door", @"entity_picture": @"demo://camera-placeholder",
+        @"is_streaming": @YES, @"icon": @"mdi:cctv",
+        @"supported_features": @3}]; // TURN_ON=1 + TURN_OFF=2
+    [self addEntityWithId:@"camera.sc_idle" state:@"idle" attributes:@{
+        @"friendly_name": @"Backyard", @"entity_picture": @"demo://camera-placeholder",
+        @"icon": @"mdi:cctv", @"supported_features": @3}];
+
+    // ── MEDIA PLAYER WITH BUNDLED ART ─────────────────────────────
+    [self addEntityWithId:@"media_player.sc_with_art" state:@"playing" attributes:@{
+        @"friendly_name": @"With Art", @"media_title": @"Demo Track",
+        @"media_artist": @"Demo Artist", @"media_album_name": @"Demo Album",
+        @"media_content_type": @"music", @"entity_picture": @"demo://album-art",
+        @"source": @"Local", @"source_list": @[@"Local", @"Bluetooth"],
+        @"volume_level": @0.55, @"is_volume_muted": @NO,
+        @"shuffle": @NO, @"repeat": @"off",
+        @"media_duration": @180, @"media_position": @60,
+        @"supported_features": @152461, @"icon": @"mdi:speaker"}];
+
     // ============================================================
     // Test-harness dashboard entities (for bundled demo-dashboard.json)
     // ============================================================
@@ -1909,6 +1929,105 @@
             @{@"title": @"Other", @"cards": @[
                 T(@"remote.sc"), T(@"image.sc"), T(@"todo.sc"),
                 T(@"event.sc"), T(@"device_tracker.sc_home"), T(@"device_tracker.sc_away")
+            ]}
+        ]},
+        // ── View 10: Card Types ──
+        @{@"title": @"Card Types", @"path": @"card-types", @"type": @"sections", @"max_columns": @3, @"sections": @[
+            @{@"title": @"Entities Card (secondary_info)", @"cards": @[
+                @{@"type": @"entities", @"title": @"Entity Rows", @"show_header_toggle": @NO,
+                  @"entities": @[
+                    @{@"entity": @"light.sc_basic_on", @"secondary_info": @"last-changed"},
+                    @{@"entity": @"sensor.sc_temperature", @"secondary_info": @"entity-id"},
+                    @{@"entity": @"cover.sc_position", @"secondary_info": @"position"},
+                    @{@"entity": @"light.sc_brightness_only", @"secondary_info": @"brightness"},
+                    @{@"entity": @"binary_sensor.sc_door_open", @"secondary_info": @"last-updated"}
+                ]}
+            ]},
+            @{@"title": @"Entities Card (state_color)", @"cards": @[
+                @{@"type": @"entities", @"title": @"State Colors",
+                  @"entities": @[
+                    @{@"entity": @"light.sc_basic_on", @"state_color": @YES},
+                    @{@"entity": @"light.sc_basic_off", @"state_color": @YES},
+                    @{@"entity": @"switch.in_meeting", @"state_color": @YES},
+                    @{@"entity": @"binary_sensor.sc_motion_on", @"state_color": @YES},
+                    @{@"type": @"divider"},
+                    @{@"entity": @"sensor.sc_temperature"},
+                    @{@"type": @"section", @"label": @"Covers"},
+                    @{@"entity": @"cover.sc_position", @"state_color": @YES}
+                ]}
+            ]},
+            @{@"title": @"Entity Card", @"cards": @[
+                @{@"type": @"entity", @"entity": @"sensor.sc_temperature"},
+                @{@"type": @"entity", @"entity": @"light.sc_basic_on", @"attribute": @"brightness"}
+            ]},
+            @{@"title": @"Statistic Card", @"cards": @[
+                @{@"type": @"statistic", @"entity": @"sensor.sc_energy", @"stat_type": @"max"},
+                @{@"type": @"statistic", @"entity": @"sensor.sc_temperature", @"stat_type": @"mean"}
+            ]},
+            @{@"title": @"Markdown Card", @"cards": @[
+                @{@"type": @"markdown", @"content": @"## Dashboard Info\n**Status**: Online\n\n- Lights: 10\n- Sensors: 10\n- Automations: Active\n\n> Built with HA Dashboard"}
+            ]},
+            @{@"title": @"Glance Card (state_color)", @"cards": @[
+                @{@"type": @"glance", @"title": @"Quick Status", @"columns": @3,
+                  @"show_name": @YES, @"show_state": @YES, @"state_color": @YES,
+                  @"entities": @[
+                    @{@"entity": @"light.sc_basic_on"}, @{@"entity": @"light.sc_basic_off"},
+                    @{@"entity": @"switch.in_meeting"}, @{@"entity": @"binary_sensor.sc_door_open"},
+                    @{@"entity": @"sensor.sc_temperature"}, @{@"entity": @"person.sc_home"}
+                ]}
+            ]},
+            @{@"title": @"Entity Filter Card", @"cards": @[
+                @{@"type": @"entity-filter",
+                  @"state_filter": @[@"on"],
+                  @"card": @{@"type": @"entities", @"title": @"Active Entities"},
+                  @"entities": @[
+                    @"light.sc_basic_on", @"light.sc_basic_off",
+                    @"switch.in_meeting", @"switch.driveway",
+                    @"input_boolean.sc_on", @"input_boolean.sc_off"
+                ]}
+            ]},
+            @{@"title": @"Area Card", @"cards": @[
+                @{@"type": @"area", @"area": @"living_room"}
+            ]},
+            @{@"title": @"Picture Glance", @"cards": @[
+                @{@"type": @"picture-glance", @"title": @"Living Room",
+                  @"entities": @[@"light.sc_basic_on", @"sensor.sc_temperature", @"binary_sensor.sc_motion_on"]}
+            ]},
+            @{@"title": @"Map Card", @"cards": @[
+                @{@"type": @"map", @"entities": @[@"person.sc_home", @"person.sc_away", @"device_tracker.sc_home"],
+                  @"default_zoom": @14}
+            ]},
+            @{@"title": @"Camera Cards", @"cards": @[
+                @{@"type": @"tile", @"entity": @"camera.sc_streaming"},
+                @{@"type": @"tile", @"entity": @"camera.sc_idle"}
+            ]}
+        ]},
+        // ── View 11: Display Options ──
+        @{@"title": @"Display Options", @"path": @"display-opts", @"type": @"sections", @"max_columns": @3, @"sections": @[
+            @{@"title": @"Tile: state_content", @"cards": @[
+                @{@"type": @"tile", @"entity": @"light.sc_basic_on", @"state_content": @"last-changed"},
+                @{@"type": @"tile", @"entity": @"sensor.sc_temperature", @"state_content": @[@"state", @"last-changed"]}
+            ]},
+            @{@"title": @"Tile: attribute display", @"cards": @[
+                @{@"type": @"tile", @"entity": @"light.sc_brightness_only", @"attribute": @"brightness"},
+                @{@"type": @"tile", @"entity": @"climate.sc_heating", @"attribute": @"current_temperature"}
+            ]},
+            @{@"title": @"Tile: vertical layout", @"cards": @[
+                @{@"type": @"tile", @"entity": @"light.sc_basic_on", @"vertical": @YES,
+                  @"features": @[@{@"type": @"light-brightness"}]},
+                @{@"type": @"tile", @"entity": @"fan.sc_basic", @"vertical": @YES,
+                  @"features": @[@{@"type": @"fan-speed"}]}
+            ]},
+            @{@"title": @"Tile: hide_state", @"cards": @[
+                @{@"type": @"tile", @"entity": @"switch.in_meeting", @"hide_state": @YES},
+                @{@"type": @"tile", @"entity": @"light.sc_basic_on", @"hide_state": @YES}
+            ]},
+            @{@"title": @"Tile: show_entity_picture", @"cards": @[
+                @{@"type": @"tile", @"entity": @"person.sc_home", @"show_entity_picture": @YES},
+                @{@"type": @"tile", @"entity": @"person.sc_away", @"show_entity_picture": @YES}
+            ]},
+            @{@"title": @"Media With Art", @"cards": @[
+                M(@"media_player.sc_with_art"), M(@"media_player.sc_full")
             ]}
         ]}
     ];

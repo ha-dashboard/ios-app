@@ -300,7 +300,11 @@ static const CGFloat kPadding        = 12.0;
     // ── Album art (entity_picture) ──
     [self.artLoadTask cancel];
     NSString *picturePath = HAAttrString(entity.attributes, @"entity_picture");
-    if (picturePath.length > 0) {
+    if ([picturePath hasPrefix:@"demo://"]) {
+        // Demo mode placeholder: generate a colored gradient image
+        self.albumArtView.image = [self demoPla:entity.state];
+        self.albumArtView.hidden = NO;
+    } else if (picturePath.length > 0) {
         [self loadAlbumArt:picturePath];
     } else {
         self.albumArtView.hidden = YES;
@@ -414,6 +418,22 @@ static const CGFloat kPadding        = 12.0;
 }
 
 #pragma mark - Actions
+
+- (UIImage *)demoPla:(NSString *)state {
+    CGFloat size = 60;
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(size, size), YES, 0);
+    BOOL playing = [state isEqualToString:@"playing"];
+    UIColor *c1 = playing ? [UIColor colorWithRed:0.3 green:0.2 blue:0.6 alpha:1] : [UIColor darkGrayColor];
+    UIColor *c2 = playing ? [UIColor colorWithRed:0.6 green:0.3 blue:0.8 alpha:1] : [UIColor grayColor];
+    [c1 setFill]; UIRectFill(CGRectMake(0, 0, size, size / 2));
+    [c2 setFill]; UIRectFill(CGRectMake(0, size / 2, size, size / 2));
+    // Draw a music note symbol
+    NSDictionary *attrs = @{NSFontAttributeName: [UIFont systemFontOfSize:28], NSForegroundColorAttributeName: [UIColor whiteColor]};
+    [@"\u266B" drawAtPoint:CGPointMake(size / 2 - 10, size / 2 - 16) withAttributes:attrs];
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return image;
+}
 
 - (void)loadAlbumArt:(NSString *)picturePath {
     HAAuthManager *auth = [HAAuthManager sharedManager];
