@@ -429,13 +429,47 @@ static HACameraStreamMode currentStreamMode(void) {
     nameLabel.text = [self.entity friendlyName] ?: self.currentEntityId;
     nameLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightMedium];
     nameLabel.textColor = [UIColor whiteColor];
-    nameLabel.frame = CGRectMake(16, fullscreen.view.bounds.size.height - 50, fullscreen.view.bounds.size.width - 32, 30);
+    nameLabel.frame = CGRectMake(16, fullscreen.view.bounds.size.height - 50, fullscreen.view.bounds.size.width - 100, 30);
     nameLabel.autoresizingMask = UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleWidth;
     [fullscreen.view addSubview:nameLabel];
 
+    // Audio controls — bottom-right (HLS only, MJPEG has no audio)
+    if (self.hlsPlayer) {
+        UIFont *iconFont = [HAIconMapper mdiFontOfSize:18];
+        NSString *muteGlyph = [HAIconMapper glyphForIconName:@"volume-off"] ?: @"🔇";
+        UIButton *muteButton = [UIButton buttonWithType:UIButtonTypeCustom];
+        muteButton.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.6];
+        muteButton.layer.cornerRadius = 18;
+        muteButton.clipsToBounds = YES;
+        muteButton.tag = 8001; // identify for glyph updates
+        [muteButton setAttributedTitle:[[NSAttributedString alloc] initWithString:muteGlyph
+            attributes:@{NSFontAttributeName: iconFont, NSForegroundColorAttributeName: [UIColor whiteColor]}]
+            forState:UIControlStateNormal];
+        muteButton.frame = CGRectMake(fullscreen.view.bounds.size.width - 50,
+                                      fullscreen.view.bounds.size.height - 50, 36, 36);
+        muteButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleTopMargin;
+        [muteButton addTarget:self action:@selector(fullscreenMuteToggled:) forControlEvents:UIControlEventTouchUpInside];
+        [fullscreen.view addSubview:muteButton];
+
+        // Volume slider — horizontal, left of mute button, hidden until unmuted
+        UISlider *volumeSlider = [[UISlider alloc] init];
+        volumeSlider.minimumValue = 0;
+        volumeSlider.maximumValue = 1.0;
+        CGFloat savedVol = [[NSUserDefaults standardUserDefaults] floatForKey:@"HACameraVolume"];
+        volumeSlider.value = savedVol > 0 ? savedVol : 0.5;
+        volumeSlider.minimumTrackTintColor = [UIColor whiteColor];
+        volumeSlider.maximumTrackTintColor = [UIColor colorWithWhite:0.4 alpha:1];
+        volumeSlider.frame = CGRectMake(fullscreen.view.bounds.size.width - 200,
+                                        fullscreen.view.bounds.size.height - 46, 140, 28);
+        volumeSlider.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleTopMargin;
+        volumeSlider.hidden = YES; // Hidden until unmuted
+        volumeSlider.tag = 8002;
+        [volumeSlider addTarget:self action:@selector(fullscreenVolumeChanged:) forControlEvents:UIControlEventValueChanged];
+        [fullscreen.view addSubview:volumeSlider];
+    }
+
     __weak AVPlayerLayer *weakFSLayer = fsLayer;
     [vc presentViewController:fullscreen animated:YES completion:^{
-        // Set HLS layer frame AFTER presentation (view has its final size now)
         __strong AVPlayerLayer *layer = weakFSLayer;
         if (layer) {
             layer.frame = imageView.bounds;
@@ -445,10 +479,72 @@ static HACameraStreamMode currentStreamMode(void) {
 
 - (void)dismissFullscreenButton:(UIButton *)sender {
     self.fullscreenImageView = nil;
-    // The fullscreen's AVPlayerLayer is a separate layer on the same AVPlayer —
-    // it gets deallocated when the fullscreen VC is dismissed. Card's layer is untouched.
+    // Always re-mute when returning to grid view
+    if (self.hlsPlayer) {
+        self.hlsPlayer.volume = 0;
+    }
     UIViewController *presented = sender.window.rootViewController.presentedViewController;
     [presented dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)fullscreenMuteToggled:(UIButton *)sender {
+    if (!self.hlsPlayer) return;
+
+    BOOL wasMuted = (self.hlsPlayer.volume == 0);
+    UIFont *iconFont = [HAIconMapper mdiFontOfSize:18];
+
+    if (wasMuted) {
+        // Unmute — restore saved volume
+        CGFloat vol = [[NSUserDefaults standardUserDefaults] floatForKey:@"HACameraVolume"];
+        if (vol <= 0) vol = 0.5;
+        self.hlsPlayer.volume = vol;
+
+        NSString *glyph = [HAIconMapper glyphForIconName:@"volume-high"] ?: @"🔊";
+        [sender setAttributedTitle:[[NSAttributedString alloc] initWithString:glyph
+            attributes:@{NSFontAttributeName: iconFont, NSForegroundColorAttributeName: [UIColor whiteColor]}]
+            forState:UIControlStateNormal];
+
+        // Show volume slider
+        UIView *slider = [sender.superview viewWithTag:8002];
+        slider.hidden = NO;
+        if ([slider isKindOfClass:[UISlider class]]) {
+            ((UISlider *)slider).value = vol;
+        }
+    } else {
+        // Mute
+        self.hlsPlayer.volume = 0;
+
+        NSString *glyph = [HAIconMapper glyphForIconName:@"volume-off"] ?: @"🔇";
+        [sender setAttributedTitle:[[NSAttributedString alloc] initWithString:glyph
+            attributes:@{NSFontAttributeName: iconFont, NSForegroundColorAttributeName: [UIColor whiteColor]}]
+            forState:UIControlStateNormal];
+
+        // Hide volume slider
+        UIView *slider = [sender.superview viewWithTag:8002];
+        slider.hidden = YES;
+    }
+}
+
+- (void)fullscreenVolumeChanged:(UISlider *)slider {
+    if (!self.hlsPlayer) return;
+    self.hlsPlayer.volume = slider.value;
+    [[NSUserDefaults standardUserDefaults] setFloat:slider.value forKey:@"HACameraVolume"];
+
+    // Update mute button icon based on volume level
+    UIButton *muteBtn = (UIButton *)[slider.superview viewWithTag:8001];
+    if (!muteBtn) return;
+    UIFont *iconFont = [HAIconMapper mdiFontOfSize:18];
+    NSString *glyph;
+    if (slider.value <= 0.01) {
+        glyph = [HAIconMapper glyphForIconName:@"volume-off"] ?: @"🔇";
+    } else if (slider.value < 0.5) {
+        glyph = [HAIconMapper glyphForIconName:@"volume-medium"] ?: @"🔉";
+    } else {
+        glyph = [HAIconMapper glyphForIconName:@"volume-high"] ?: @"🔊";
+    }
+    [muteBtn setAttributedTitle:[[NSAttributedString alloc] initWithString:glyph
+        attributes:@{NSFontAttributeName: iconFont, NSForegroundColorAttributeName: [UIColor whiteColor]}]
+        forState:UIControlStateNormal];
 }
 
 #pragma mark - Overlay Action Buttons
