@@ -193,7 +193,7 @@ if [[ "$TARGET" == "all" ]]; then
     deploy_bg "sim"         sim         --no-build ${OPTS[@]+"${OPTS[@]}"}
     deploy_bg "sim-iphone"  sim iphone  --no-build ${OPTS[@]+"${OPTS[@]}"}
     deploy_bg "sim-ios93"   sim-ios93   --no-build ${OPTS[@]+"${OPTS[@]}"}
-    # deploy_bg "sim-ios103"  sim-ios103  --no-build ${OPTS[@]+"${OPTS[@]}"}  # disabled — hangs deploy
+    deploy_bg "sim-ios103"  sim-ios103  --no-build ${OPTS[@]+"${OPTS[@]}"}
     deploy_bg "iphone"      iphone      --no-build ${OPTS[@]+"${OPTS[@]}"}
     deploy_bg "mini5"       mini5       --no-build ${OPTS[@]+"${OPTS[@]}"}
     deploy_bg "mini4"       mini4       --no-build ${OPTS[@]+"${OPTS[@]}"}
@@ -464,8 +464,11 @@ case "$TARGET" in
         echo "📱 Deploying to iPad Mini 4 (ios-deploy + pymobiledevice3)..."
         export DEVELOPER_DIR="$XCODE26/Contents/Developer"
 
-        echo "   Installing..."
-        ios-deploy --bundle "$APP" --id "$IPAD_MINI4_UDID" --nostart 2>&1 | tail -5
+        echo "   Installing (30s timeout)..."
+        if ! timeout 30 ios-deploy --bundle "$APP" --id "$IPAD_MINI4_UDID" --nostart 2>&1 | tail -5; then
+            echo "❌ iPad Mini 4 install failed or timed out (WiFi connectivity issue)"
+            exit 1
+        fi
 
         # Launch via pymobiledevice3 DVT (bypasses debugserver breakpoint issue)
         if command -v pymobiledevice3 &>/dev/null; then
