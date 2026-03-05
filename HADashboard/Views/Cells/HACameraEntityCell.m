@@ -800,16 +800,28 @@ static HACameraStreamMode currentStreamMode(void) {
     }
 
     HAAuthManager *auth = [HAAuthManager sharedManager];
-    if (!auth.isConfigured) return;
+    if (!auth.isConfigured) {
+        NSLog(@"[HACameraEntityCell] fetchSnapshot: auth not configured for %@", self.currentEntityId);
+        return;
+    }
 
     NSString *proxyPath = [self.entity cameraProxyPath];
     NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@%@", auth.serverURL, proxyPath]];
-    if (!url) return;
+    if (!url) {
+        NSLog(@"[HACameraEntityCell] fetchSnapshot: invalid URL for %@", self.currentEntityId);
+        return;
+    }
+
+    NSLog(@"[HACameraEntityCell] fetchSnapshot: %@ token=%@...", url,
+          [auth.accessToken substringToIndex:MIN(10, auth.accessToken.length)]);
 
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
     [request setValue:[NSString stringWithFormat:@"Bearer %@", auth.accessToken] forHTTPHeaderField:@"Authorization"];
 
-    // Cancel previous fetch if still in progress
+    // Don't cancel an in-flight fetch for the same entity — let it complete
+    if (self.currentTask && self.currentTask.state == NSURLSessionTaskStateRunning) {
+        return;
+    }
     [self.currentTask cancel];
 
     if (!self.snapshotView.image) {
@@ -826,6 +838,9 @@ static HACameraStreamMode currentStreamMode(void) {
             BOOL fetchFailed = (error != nil) || (httpResponse.statusCode != 200) || !data;
 
             if (fetchFailed) {
+                NSLog(@"[HACameraEntityCell] fetchSnapshot FAILED for %@: HTTP %ld, error=%@, dataLen=%lu",
+                      expectedEntityId, (long)httpResponse.statusCode,
+                      error.localizedDescription ?: @"(none)", (unsigned long)data.length);
                 dispatch_async(dispatch_get_main_queue(), ^{
                     __strong typeof(weakSelf) strongSelf = weakSelf;
                     if (!strongSelf) return;
@@ -1096,29 +1111,36 @@ static HACameraStreamMode currentStreamMode(void) {
 - (void)beginLoading {
     if (!self.currentEntityId) return;
 
-    // Already streaming — don't restart
-    if (self.streamParser.isStreaming || self.hlsPlayer) return;
+    // Already have HLS — don't restart anything
+    if (self.hlsPlayer) return;
 
-    // Fetch snapshot immediately for fast initial display — stream replaces it
+    // 1. Snapshot immediately for fast initial display
     if (!self.snapshotView.image && self.needsSnapshotLoad) {
         self.needsSnapshotLoad = NO;
         [self fetchSnapshot];
     }
 
-    HACameraStreamMode mode = currentStreamMode();
-    BOOL entitySupportsStream = ([self.entity supportedFeatures] & 2) != 0; // STREAM = bit 1
+    // Already have MJPEG — don't start another (HLS upgrade handled by wsDidConnect)
+    if (self.streamParser.isStreaming) return;
 
-    // Stream factory: pick method based on mode override + entity capabilities
-    if (mode == HACameraStreamModeHLS || (mode == HACameraStreamModeAuto && entitySupportsStream && !self.hlsFailed)) {
+    HACameraStreamMode mode = currentStreamMode();
+    BOOL entitySupportsStream = ([self.entity supportedFeatures] & 2) != 0;
+    BOOL wsConnected = [HAConnectionManager sharedManager].isConnected;
+
+    // 2. Try HLS only if WS is connected (don't waste time failing before WS auth)
+    if (mode == HACameraStreamModeHLS ||
+        (mode == HACameraStreamModeAuto && entitySupportsStream && wsConnected && !self.hlsFailed)) {
         [self startHLSStream];
         return;
     }
-    if (mode == HACameraStreamModeMJPEG || (mode == HACameraStreamModeAuto && !self.streamFailed)) {
+
+    // 3. MJPEG as interim (will be upgraded to HLS by wsDidConnect if applicable)
+    if (mode != HACameraStreamModeSnapshot && !self.streamFailed) {
         [self startMJPEGStream];
         return;
     }
 
-    // All streams failed — fall back to snapshot polling
+    // 4. Snapshot polling as last resort
     if (!self.refreshTimer) {
         [self startRefreshTimer];
     }
@@ -1140,15 +1162,23 @@ static HACameraStreamMode currentStreamMode(void) {
 
 - (void)wsDidConnect:(NSNotification *)note {
     if (!self.currentEntityId || !self.window) return;
-    if (!self.hlsFailed) return;
+    // Already on HLS — nothing to do
+    if (self.hlsPlayer) return;
+
+    HACameraStreamMode mode = currentStreamMode();
     BOOL entitySupportsStream = ([self.entity supportedFeatures] & 2) != 0;
-    if (!entitySupportsStream) return;
-    NSLog(@"[HACameraEntityCell] WS connected — upgrading to HLS for %@", self.currentEntityId);
-    // Stop current MJPEG stream so beginLoading can start HLS
+
+    // In Auto mode: upgrade MJPEG → HLS if entity supports it
+    // In forced HLS mode: always try
+    BOOL shouldTryHLS = (mode == HACameraStreamModeHLS) ||
+                        (mode == HACameraStreamModeAuto && entitySupportsStream);
+    if (!shouldTryHLS || self.hlsFailed) return;
+
+    NSLog(@"[HACameraEntityCell] WS connected — attempting HLS for %@", self.currentEntityId);
+    // Stop MJPEG so HLS can take over. If HLS fails, error handler restarts MJPEG.
     [self.streamParser stop];
     self.streamParser = nil;
-    self.hlsFailed = NO;
-    [self beginLoading];
+    [self startHLSStream];
 }
 
 - (void)didMoveToWindow {

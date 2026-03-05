@@ -222,13 +222,15 @@ static const NSTimeInterval kFirstFrameTimeout = 10.0;
     NSData *jpegData = [chunk subdataWithRange:NSMakeRange(jpegStart, chunk.length - jpegStart)];
     if (jpegData.length < 100) return; // Too small for a valid JPEG
 
-    // Decode on background thread to avoid main thread stalls
+    // Decode on background thread to avoid main thread stalls.
+    // Use weak/strong to prevent crash if parser is deallocated mid-decode (iPad 2 iOS 9).
+    __weak typeof(self) weakSelf = self;
     dispatch_async(_decodeQueue, ^{
-        if (!self.streaming) return;
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf || !strongSelf.streaming) return;
 
         // Autoreleasepool per frame prevents memory accumulation on A5 (iPad 2)
         @autoreleasepool {
-            // Force-decode: create a bitmap context to decompress the JPEG
             UIImage *lazyImage = [UIImage imageWithData:jpegData];
             if (!lazyImage) return;
 
@@ -237,17 +239,17 @@ static const NSTimeInterval kFirstFrameTimeout = 10.0;
             UIImage *decoded = UIGraphicsGetImageFromCurrentImageContext();
             UIGraphicsEndImageContext();
 
-            if (!decoded || !self.streaming) return;
+            if (!decoded || !strongSelf.streaming) return;
 
             dispatch_async(dispatch_get_main_queue(), ^{
-                if (self.streaming && self.frameHandler) {
-                    if (!self.receivedFirstFrame) {
-                        self.receivedFirstFrame = YES;
-                        [self.firstFrameTimer invalidate];
-                        self.firstFrameTimer = nil;
-                    }
-                    self.frameHandler(decoded);
+                __strong typeof(weakSelf) mainSelf = weakSelf;
+                if (!mainSelf || !mainSelf.streaming || !mainSelf.frameHandler) return;
+                if (!mainSelf.receivedFirstFrame) {
+                    mainSelf.receivedFirstFrame = YES;
+                    [mainSelf.firstFrameTimer invalidate];
+                    mainSelf.firstFrameTimer = nil;
                 }
+                mainSelf.frameHandler(decoded);
             });
         }
     });
