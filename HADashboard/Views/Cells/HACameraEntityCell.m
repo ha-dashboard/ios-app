@@ -6,11 +6,13 @@
 #import "HAEntityDisplayHelper.h"
 #import "HAIconMapper.h"
 #import "HAMJPEGStreamParser.h"
+#import "HAStartupLog.h"
 #import <AVFoundation/AVFoundation.h>
 #import <objc/runtime.h>
 
 static const NSTimeInterval kSnapshotRefreshInterval = 5.0;
 static const NSInteger kMaxConsecutiveFailuresBeforeClear = 3;
+
 
 // Overlay button layout constants
 static const CGFloat kOverlayButtonSize     = 28.0;
@@ -308,6 +310,8 @@ static HACameraStreamMode currentStreamMode(void) {
 
     // If entity changed, reset image and restart refresh cycle
     BOOL entityChanged = ![self.currentEntityId isEqualToString:entity.entityId];
+    [HAStartupLog log:[NSString stringWithFormat:@"[CAM] configure %p: %@ → %@ (changed=%d)", self,
+          self.currentEntityId, entity.entityId, entityChanged]];
     NSLog(@"[HACameraEntityCell] configure %p: %@ → %@ (changed=%d)", self,
           self.currentEntityId, entity.entityId, entityChanged);
     self.currentEntityId = entity.entityId;
@@ -343,7 +347,11 @@ static HACameraStreamMode currentStreamMode(void) {
         self.snapshotView.image = nil;
         self.consecutiveFailures = 0;
         self.streamFailed = NO;
-        self.hlsFailed = NO;
+        // On iOS <10, HLS is permanently disabled (crashes AVFoundation).
+        // Don't reset hlsFailed — it was set once by startHLSStream.
+        if ([[[UIDevice currentDevice] systemVersion] compare:@"10.0" options:NSNumericSearch] != NSOrderedAscending) {
+            self.hlsFailed = NO;
+        }
         self.needsSnapshotLoad = YES;
     }
     // Same entity: stream continues uninterrupted
@@ -942,6 +950,7 @@ static HACameraStreamMode currentStreamMode(void) {
 - (void)startMJPEGStream {
     HAAuthManager *auth = [HAAuthManager sharedManager];
     if (!auth.isConfigured || !self.entity) return;
+    [HAStartupLog log:[NSString stringWithFormat:@"[CAM] startMJPEG %@ (cell %p)", self.currentEntityId, self]];
 
     NSString *streamPath = [self.entity cameraStreamPath];
     if (!streamPath) {
@@ -976,6 +985,9 @@ static HACameraStreamMode currentStreamMode(void) {
             return;
         }
         strongSelf.frameCount++;
+        if (strongSelf.frameCount == 1 || strongSelf.frameCount % 30 == 0) {
+            [HAStartupLog log:[NSString stringWithFormat:@"[CAM] MJPEG frame %lu for %@", (unsigned long)strongSelf.frameCount, expectedEntityId]];
+        }
         strongSelf.snapshotView.image = frame;
         // Mirror to fullscreen view if presented
         UIImageView *fsIV = strongSelf.fullscreenImageView;
@@ -1024,6 +1036,7 @@ static HACameraStreamMode currentStreamMode(void) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf) return;
         if (strongSelf.streamParser != expectedParser) return;
+        [HAStartupLog log:[NSString stringWithFormat:@"[CAM] MJPEG FAILED %@: %@", expectedEntityId, error.localizedDescription]];
         NSLog(@"[HACameraEntityCell] MJPEG stream failed: %@ — attempting reconnect (cell %p)", error.localizedDescription, strongSelf);
         strongSelf.streamParser = nil;
         strongSelf.receivingFrames = NO;
@@ -1369,6 +1382,7 @@ static HACameraStreamMode currentStreamMode(void) {
     NSInteger maxAttempts = 3;
 
     if (self.reconnectAttempts > maxAttempts) {
+        [HAStartupLog log:[NSString stringWithFormat:@"[CAM] MAX RECONNECT %@ — snapshot fallback", self.currentEntityId]];
         NSLog(@"[HACameraEntityCell] Max reconnect attempts (%ld) for %@ — falling back to snapshot polling",
               (long)maxAttempts, self.currentEntityId);
         [self stopHLSPlayer];
@@ -1402,8 +1416,10 @@ static HACameraStreamMode currentStreamMode(void) {
         strongSelf.receivingFrames = NO;
         [strongSelf updateLiveBadge];
 
-        // Reset failed flags to allow fresh attempt
-        strongSelf.hlsFailed = NO;
+        // Reset failed flags to allow fresh attempt (but not HLS on iOS 9)
+        if ([[[UIDevice currentDevice] systemVersion] compare:@"10.0" options:NSNumericSearch] != NSOrderedAscending) {
+            strongSelf.hlsFailed = NO;
+        }
         strongSelf.streamFailed = NO;
         strongSelf.needsSnapshotLoad = YES;
         [strongSelf beginLoading];
@@ -1450,6 +1466,10 @@ static HACameraStreamMode currentStreamMode(void) {
 
 - (void)beginLoading {
     if (!self.currentEntityId) return;
+
+    [HAStartupLog log:[NSString stringWithFormat:@"[CAM] beginLoading %@ hlsPlayer=%d hlsReq=%d mjpeg=%d hlsFail=%d streamFail=%d",
+              self.currentEntityId, self.hlsPlayer != nil, self.hlsRequestInFlight,
+              self.streamParser.isStreaming, self.hlsFailed, self.streamFailed]];
 
     // Already have HLS or requesting — don't restart anything
     if (self.hlsPlayer || self.hlsRequestInFlight) return;
@@ -1516,8 +1536,11 @@ static HACameraStreamMode currentStreamMode(void) {
     // Already on HLS — nothing to do
     if (self.hlsPlayer) return;
 
-    // WS reconnect clears HLS failure flag — allows fresh attempt
-    self.hlsFailed = NO;
+    // WS reconnect clears HLS failure flag — allows fresh attempt.
+    // But NOT on iOS 9 where HLS is permanently disabled.
+    if ([[[UIDevice currentDevice] systemVersion] compare:@"10.0" options:NSNumericSearch] != NSOrderedAscending) {
+        self.hlsFailed = NO;
+    }
     self.reconnectAttempts = 0;
 
     HACameraStreamMode mode = currentStreamMode();
@@ -1529,6 +1552,7 @@ static HACameraStreamMode currentStreamMode(void) {
                         (mode == HACameraStreamModeAuto && entitySupportsStream);
     if (!shouldTryHLS) return;
 
+    [HAStartupLog log:[NSString stringWithFormat:@"[CAM] wsDidConnect HLS upgrade %@ mjpeg=%d", self.currentEntityId, self.streamParser.isStreaming]];
     NSLog(@"[HACameraEntityCell] WS connected — attempting HLS upgrade for %@ (MJPEG streaming=%d)",
           self.currentEntityId, self.streamParser.isStreaming);
     // Don't stop MJPEG yet — let HLS start in parallel. Once HLS confirms
