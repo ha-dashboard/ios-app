@@ -226,9 +226,17 @@
 
 + (NSArray *)parseHistoryData:(NSData *)data maxPoints:(NSUInteger)maxPoints {
     if (maxPoints == 0) maxPoints = 100;
+    if (!data || data.length == 0) return @[];
 
-    NSArray *result = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-    if (![result isKindOfClass:[NSArray class]] || result.count == 0) return @[];
+    NSError *jsonError = nil;
+    NSArray *result = nil;
+    @try {
+        result = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+    } @catch (NSException *e) {
+        NSLog(@"[HAHistoryManager] JSON parse exception: %@", e.reason);
+        return @[];
+    }
+    if (jsonError || ![result isKindOfClass:[NSArray class]] || result.count == 0) return @[];
 
     NSArray *states = result.firstObject;
     if (![states isKindOfClass:[NSArray class]]) return @[];
@@ -292,8 +300,17 @@
 }
 
 + (NSArray *)parseHistoryStateData:(NSData *)data {
-    NSArray *result = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-    if (![result isKindOfClass:[NSArray class]] || result.count == 0) return @[];
+    if (!data || data.length == 0) return @[];
+
+    NSError *jsonError = nil;
+    NSArray *result = nil;
+    @try {
+        result = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+    } @catch (NSException *e) {
+        NSLog(@"[HAHistoryManager] Timeline JSON parse exception: %@", e.reason);
+        return @[];
+    }
+    if (jsonError || ![result isKindOfClass:[NSArray class]] || result.count == 0) return @[];
 
     NSArray *states = result.firstObject;
     if (![states isKindOfClass:[NSArray class]] || states.count == 0) return @[];
