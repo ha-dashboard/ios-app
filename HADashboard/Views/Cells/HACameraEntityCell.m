@@ -1132,21 +1132,12 @@ static HACameraStreamMode currentStreamMode(void) {
                              options:(NSKeyValueObservingOptionNew | NSKeyValueObservingOptionInitial) context:NULL];
     self.hlsPlayerLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
     self.hlsPlayerLayer.frame = self.snapshotView.bounds;
-    // Insert at bottom of layer stack so subviews (overlay buttons, controls) render above video
-    [self.snapshotView.layer insertSublayer:self.hlsPlayerLayer atIndex:0];
+    // DON'T add the layer to the view yet — wait until readyForDisplay confirms
+    // video is actually rendering. This prevents a blank HLS layer from covering
+    // MJPEG frames on devices where HLS fails (e.g. iPad 2).
 
     [self.hlsPlayer play];
     [self.loadingSpinner stopAnimating];
-    // Don't show LIVE badge yet — wait for readyForDisplay KVO.
-    // But also check immediately in case readyForDisplay was already YES before observer was added.
-    if (self.hlsPlayerLayer.readyForDisplay) {
-        NSLog(@"[HACameraEntityCell] HLS layer already ready for %@", self.currentEntityId);
-        self.receivingFrames = YES;
-        self.hlsLive = YES;
-        self.lastFrameTime = [NSDate date];
-        [self startHealthCheckTimer];
-        [self updateLiveBadge];
-    }
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
@@ -1157,6 +1148,11 @@ static HACameraStreamMode currentStreamMode(void) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 [self stopHLSPlayer];
                 self.hlsFailed = YES;
+                // If MJPEG is still running in parallel, let it continue
+                if (self.streamParser.isStreaming) {
+                    NSLog(@"[HACameraEntityCell] HLS failed but MJPEG still active — keeping MJPEG");
+                    return;
+                }
                 self.needsSnapshotLoad = YES;
                 [self beginLoading]; // Fallback to MJPEG
             });
@@ -1175,6 +1171,17 @@ static HACameraStreamMode currentStreamMode(void) {
         if (ready) {
             NSLog(@"[HACameraEntityCell] HLS rendering video for %@", self.currentEntityId);
             dispatch_async(dispatch_get_main_queue(), ^{
+                // HLS is confirmed rendering — NOW insert the layer into the view
+                if (self.hlsPlayerLayer && !self.hlsPlayerLayer.superlayer) {
+                    self.hlsPlayerLayer.frame = self.snapshotView.bounds;
+                    [self.snapshotView.layer insertSublayer:self.hlsPlayerLayer atIndex:0];
+                }
+                // Stop MJPEG if it was running in parallel
+                if (self.streamParser) {
+                    NSLog(@"[HACameraEntityCell] HLS confirmed — stopping parallel MJPEG for %@", self.currentEntityId);
+                    [self.streamParser stop];
+                    self.streamParser = nil;
+                }
                 self.receivingFrames = YES;
                 self.hlsLive = YES;
                 self.lastFrameTime = [NSDate date];
@@ -1189,9 +1196,17 @@ static HACameraStreamMode currentStreamMode(void) {
 
 - (void)hlsPlaybackFailed:(NSNotification *)note {
     NSLog(@"[HACameraEntityCell] HLS playback failed to end time for %@", self.currentEntityId);
+    [self stopHLSPlayer];
+    self.hlsFailed = YES;
+    // If MJPEG is still running in parallel, let it continue — don't reconnect
+    if (self.streamParser.isStreaming) {
+        NSLog(@"[HACameraEntityCell] HLS failed but MJPEG still active for %@ — keeping MJPEG", self.currentEntityId);
+        return;
+    }
     self.receivingFrames = NO;
     [self updateLiveBadge];
-    [self attemptStreamReconnect];
+    self.needsSnapshotLoad = YES;
+    [self beginLoading]; // Falls through to MJPEG since hlsFailed=YES
 }
 
 - (void)hlsPlaybackStalled:(NSNotification *)note {
@@ -1267,6 +1282,14 @@ static HACameraStreamMode currentStreamMode(void) {
     if (remaining <= 0 || !self.hlsPlayerLayer || self.receivingFrames) return;
     if (self.hlsPlayerLayer.readyForDisplay) {
         NSLog(@"[HACameraEntityCell] HLS readyForDisplay confirmed via poll for %@", self.currentEntityId);
+        if (self.hlsPlayerLayer && !self.hlsPlayerLayer.superlayer) {
+            self.hlsPlayerLayer.frame = self.snapshotView.bounds;
+            [self.snapshotView.layer insertSublayer:self.hlsPlayerLayer atIndex:0];
+        }
+        if (self.streamParser) {
+            [self.streamParser stop];
+            self.streamParser = nil;
+        }
         self.receivingFrames = YES;
         self.hlsLive = YES;
         self.lastFrameTime = [NSDate date];
@@ -1433,7 +1456,9 @@ static HACameraStreamMode currentStreamMode(void) {
     BOOL entitySupportsStream = ([self.entity supportedFeatures] & 2) != 0;
     BOOL wsConnected = [HAConnectionManager sharedManager].isConnected;
 
-    // 2. Try HLS only if WS is connected (don't waste time failing before WS auth)
+    // 2. Try HLS if WS is connected. If HLS fails, error handler falls through to MJPEG.
+    //    The HLS player layer is NOT inserted into the view until readyForDisplay confirms,
+    //    so it won't cover MJPEG/snapshot frames on devices where HLS fails (iPad 2).
     if (mode == HACameraStreamModeHLS ||
         (mode == HACameraStreamModeAuto && entitySupportsStream && wsConnected && !self.hlsFailed)) {
         [self startHLSStream];
@@ -1493,14 +1518,10 @@ static HACameraStreamMode currentStreamMode(void) {
                         (mode == HACameraStreamModeAuto && entitySupportsStream);
     if (!shouldTryHLS) return;
 
-    NSLog(@"[HACameraEntityCell] WS connected — attempting HLS for %@", self.currentEntityId);
-    // Stop MJPEG so HLS can take over. If HLS fails, error handler restarts MJPEG.
-    [self.streamParser stop];
-    self.streamParser = nil;
-    self.receivingFrames = NO;
-    self.recentFrameCount = 0;
-    self.frameWindowStart = nil;
-    [self updateLiveBadge];
+    NSLog(@"[HACameraEntityCell] WS connected — attempting HLS upgrade for %@ (MJPEG streaming=%d)",
+          self.currentEntityId, self.streamParser.isStreaming);
+    // Don't stop MJPEG yet — let HLS start in parallel. Once HLS confirms
+    // readyForDisplay, we'll stop MJPEG. If HLS fails, MJPEG continues uninterrupted.
     [self startHLSStream];
 }
 
