@@ -4,7 +4,7 @@
 
 A native iOS app that renders your [Home Assistant](https://www.home-assistant.io/) Lovelace dashboards natively — no web views.
 
-Built to run on everything from a jailbroken iPad 2 (iOS 9.3.5, armv7) wall-mounted as a kiosk, to an iPhone 17 Pro Max running iOS 26.
+Built to run on everything from an iPad 2 (iOS 9.3.5, armv7) wall-mounted as a kiosk, to the latest iPhones on iOS 26.
 
 ## Features
 
