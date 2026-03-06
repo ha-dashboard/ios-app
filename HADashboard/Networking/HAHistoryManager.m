@@ -89,7 +89,6 @@
         return;
     }
 
-    NSString *capturedKey = [cacheKey copy];
     NSUInteger capturedMax = effectiveMax;
     NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
         if (error || !data) {
@@ -99,7 +98,7 @@
 
         NSArray *points = [HAHistoryManager parseHistoryData:data maxPoints:capturedMax];
         if (points.count > 0) {
-            [self.cache setObject:points forKey:capturedKey];
+            [self.cache setObject:points forKey:cacheKey];
         }
 
         ha_dispatchMainCompletion(completion, points, nil);
@@ -138,7 +137,6 @@
         return;
     }
 
-    NSString *capturedKey = [cacheKey copy];
     NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
         if (error || !data) {
             ha_dispatchMainCompletion(completion, nil, error);
@@ -147,7 +145,7 @@
 
         NSArray *segments = [HAHistoryManager parseHistoryStateData:data];
         if (segments.count > 0) {
-            [self.cache setObject:segments forKey:capturedKey];
+            [self.cache setObject:segments forKey:cacheKey];
         }
 
         ha_dispatchMainCompletion(completion, segments, nil);

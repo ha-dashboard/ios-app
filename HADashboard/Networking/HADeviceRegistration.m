@@ -88,8 +88,12 @@ static NSString *const kDeviceNameOverride   = @"ha_device_name_override";
         return;
     }
 
+    __weak typeof(self) weakSelf = self;
     NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request
         completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            typeof(self) strongSelf = weakSelf;
+            if (!strongSelf) return;
+
             if (error) {
                 dispatch_async(dispatch_get_main_queue(), ^{ if (completion) completion(NO, error); });
                 return;
@@ -123,20 +127,20 @@ static NSString *const kDeviceNameOverride   = @"ha_device_name_override";
             id wid = resp[@"webhook_id"];
             id ch  = resp[@"cloudhook_url"];
             id rui = resp[@"remote_ui_url"];
-            self.webhookId    = ([wid isKindOfClass:[NSString class]] ? wid : nil);
-            self.cloudhookURL = ([ch isKindOfClass:[NSString class]] ? ch : nil);
-            self.remoteUIURL  = ([rui isKindOfClass:[NSString class]] ? rui : nil);
+            strongSelf.webhookId    = ([wid isKindOfClass:[NSString class]] ? wid : nil);
+            strongSelf.cloudhookURL = ([ch isKindOfClass:[NSString class]] ? ch : nil);
+            strongSelf.remoteUIURL  = ([rui isKindOfClass:[NSString class]] ? rui : nil);
 
-            [HAKeychainHelper setString:self.webhookId forKey:kKeychainWebhookId];
-            if (self.cloudhookURL) [HAKeychainHelper setString:self.cloudhookURL forKey:kKeychainCloudhookURL];
-            if (self.remoteUIURL)  [HAKeychainHelper setString:self.remoteUIURL forKey:kKeychainRemoteUIURL];
+            [HAKeychainHelper setString:strongSelf.webhookId forKey:kKeychainWebhookId];
+            if (strongSelf.cloudhookURL) [HAKeychainHelper setString:strongSelf.cloudhookURL forKey:kKeychainCloudhookURL];
+            if (strongSelf.remoteUIURL)  [HAKeychainHelper setString:strongSelf.remoteUIURL forKey:kKeychainRemoteUIURL];
 
-            HALogI(@"device", @"Registered with webhook_id: %@", self.webhookId);
+            HALogI(@"device", @"Registered with webhook_id: %@", strongSelf.webhookId);
 
             dispatch_async(dispatch_get_main_queue(), ^{
                 [[NSNotificationCenter defaultCenter] postNotificationName:HADeviceRegistrationDidCompleteNotification
-                                                                    object:self
-                                                                  userInfo:@{@"webhookId": self.webhookId}];
+                                                                    object:strongSelf
+                                                                  userInfo:@{@"webhookId": strongSelf.webhookId ?: @""}];
                 if (completion) completion(YES, nil);
             });
         }];
@@ -202,8 +206,12 @@ static NSString *const kDeviceNameOverride   = @"ha_device_name_override";
         return;
     }
 
+    __weak typeof(self) weakSelf = self;
     NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request
         completionHandler:^(NSData *responseData, NSURLResponse *response, NSError *error) {
+            typeof(self) strongSelf = weakSelf;
+            if (!strongSelf) return;
+
             if (error) {
                 ha_dispatchMainCompletion(completion, nil, error);
                 return;
@@ -214,10 +222,10 @@ static NSString *const kDeviceNameOverride   = @"ha_device_name_override";
             // Fix 3: 410 Gone means webhook is invalid — clear registration
             if (http.statusCode == 410) {
                 HALogW(@"device", @"410 Gone — webhook invalidated, clearing registration");
-                [self unregister];
+                [strongSelf unregister];
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [[NSNotificationCenter defaultCenter] postNotificationName:HADeviceRegistrationDidInvalidateNotification
-                                                                        object:self userInfo:nil];
+                                                                        object:strongSelf userInfo:nil];
                     NSError *goneErr = [NSError errorWithDomain:@"HADeviceRegistration" code:410
                                                       userInfo:@{NSLocalizedDescriptionKey: @"Webhook invalidated (410 Gone) — re-register required"}];
                     if (completion) completion(nil, goneErr);

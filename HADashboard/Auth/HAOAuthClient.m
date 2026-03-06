@@ -39,27 +39,30 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
     __weak typeof(self) weakSelf = self;
     NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request
         completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            typeof(self) strongSelf = weakSelf;
+            if (!strongSelf) return;
+
             if (error) {
                 ha_dispatchMainCompletion(completion, nil, error);
                 return;
             }
 
             NSHTTPURLResponse *httpResp = (NSHTTPURLResponse *)response;
-            NSDictionary *result = [self parseJSONData:data];
+            NSDictionary *result = [strongSelf parseJSONData:data];
 
             if (httpResp.statusCode != 200 || !result) {
-                ha_dispatchMainCompletion(completion, nil, [self errorWithMessage:@"Failed to start login flow" code:httpResp.statusCode]);
+                ha_dispatchMainCompletion(completion, nil, [strongSelf errorWithMessage:@"Failed to start login flow" code:httpResp.statusCode]);
                 return;
             }
 
             NSString *flowId = result[@"flow_id"];
             if (!flowId) {
-                ha_dispatchMainCompletion(completion, nil, [self errorWithMessage:@"No flow_id in response" code:0]);
+                ha_dispatchMainCompletion(completion, nil, [strongSelf errorWithMessage:@"No flow_id in response" code:0]);
                 return;
             }
 
             // Step 2: Submit credentials
-            [weakSelf submitCredentials:username password:password flowId:flowId completion:completion];
+            [strongSelf submitCredentials:username password:password flowId:flowId completion:completion];
         }];
     [task resume];
 }
@@ -76,18 +79,22 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
     };
     NSMutableURLRequest *request = [NSMutableURLRequest ha_postRequestWithURL:submitURL jsonBody:body];
 
+    __weak typeof(self) weakSelf = self;
     NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request
         completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            typeof(self) strongSelf = weakSelf;
+            if (!strongSelf) return;
+
             if (error) {
                 ha_dispatchMainCompletion(completion, nil, error);
                 return;
             }
 
             NSHTTPURLResponse *httpResp = (NSHTTPURLResponse *)response;
-            NSDictionary *result = [self parseJSONData:data];
+            NSDictionary *result = [strongSelf parseJSONData:data];
 
             if (httpResp.statusCode != 200 || !result) {
-                ha_dispatchMainCompletion(completion, nil, [self errorWithMessage:@"Login failed — check username/password" code:httpResp.statusCode]);
+                ha_dispatchMainCompletion(completion, nil, [strongSelf errorWithMessage:@"Login failed — check username/password" code:httpResp.statusCode]);
                 return;
             }
 
@@ -101,7 +108,7 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
                     NSString *baseErr = ((NSDictionary *)errors)[@"base"];
                     if (baseErr) errMsg = baseErr;
                 }
-                ha_dispatchMainCompletion(completion, nil, [self errorWithMessage:errMsg code:401]);
+                ha_dispatchMainCompletion(completion, nil, [strongSelf errorWithMessage:errMsg code:401]);
                 return;
             }
 
@@ -114,7 +121,7 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
                 }
             }
 
-            ha_dispatchMainCompletion(completion, nil, [self errorWithMessage:@"Unexpected login response" code:0]);
+            ha_dispatchMainCompletion(completion, nil, [strongSelf errorWithMessage:@"Unexpected login response" code:0]);
         }];
     [task resume];
 }
@@ -144,8 +151,12 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
     request.HTTPMethod = @"GET";
 
+    __weak typeof(self) weakSelf = self;
     NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request
         completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            typeof(self) strongSelf = weakSelf;
+            if (!strongSelf) return;
+
             if (error) {
                 ha_dispatchMainCompletion(completion, nil, error);
                 return;
@@ -153,7 +164,7 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
 
             NSHTTPURLResponse *httpResp = (NSHTTPURLResponse *)response;
             if (httpResp.statusCode != 200 || !data) {
-                ha_dispatchMainCompletion(completion, nil, [self errorWithMessage:@"Failed to fetch auth providers" code:httpResp.statusCode]);
+                ha_dispatchMainCompletion(completion, nil, [strongSelf errorWithMessage:@"Failed to fetch auth providers" code:httpResp.statusCode]);
                 return;
             }
 
@@ -165,7 +176,7 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
             } else if ([parsed isKindOfClass:[NSArray class]]) {
                 providers = parsed;
             }
-            ha_dispatchMainCompletion(completion, providers, providers ? nil : [self errorWithMessage:@"Invalid providers response" code:0]);
+            ha_dispatchMainCompletion(completion, providers, providers ? nil : [strongSelf errorWithMessage:@"Invalid providers response" code:0]);
         }];
     [task resume];
 }
@@ -196,20 +207,24 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
     };
     NSMutableURLRequest *request = [NSMutableURLRequest ha_postRequestWithURL:flowURL jsonBody:body];
 
+    __weak typeof(self) weakSelf = self;
     NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request
         completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            typeof(self) strongSelf = weakSelf;
+            if (!strongSelf) return;
+
             if (error) {
                 dispatch_async(dispatch_get_main_queue(), ^{ completion(nil, nil, nil, error); });
                 return;
             }
 
             NSHTTPURLResponse *httpResp = (NSHTTPURLResponse *)response;
-            NSDictionary *result = [self parseJSONData:data];
+            NSDictionary *result = [strongSelf parseJSONData:data];
 
             if (httpResp.statusCode != 200 || !result) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     completion(nil, nil, nil,
-                        [self errorWithMessage:@"Failed to start trusted network login" code:httpResp.statusCode]);
+                        [strongSelf errorWithMessage:@"Failed to start trusted network login" code:httpResp.statusCode]);
                 });
                 return;
             }
@@ -222,18 +237,18 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
                 NSString *authCode = result[@"result"];
                 dispatch_async(dispatch_get_main_queue(), ^{
                     completion(authCode, nil, nil, authCode ? nil :
-                        [self errorWithMessage:@"No auth code in response" code:0]);
+                        [strongSelf errorWithMessage:@"No auth code in response" code:0]);
                 });
                 return;
             }
 
             // Otherwise we get a form asking to select a user
             if ([stepType isEqualToString:@"form"]) {
-                NSDictionary *users = [self extractUsersFromFlowResult:result];
+                NSDictionary *users = [strongSelf extractUsersFromFlowResult:result];
                 if (users.count == 0) {
                     dispatch_async(dispatch_get_main_queue(), ^{
                         completion(nil, nil, nil,
-                            [self errorWithMessage:@"No users available for trusted network login" code:0]);
+                            [strongSelf errorWithMessage:@"No users available for trusted network login" code:0]);
                     });
                     return;
                 }
@@ -241,7 +256,7 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
                 // Single user: auto-select
                 if (users.count == 1) {
                     NSString *onlyUserId = users.allKeys.firstObject;
-                    [self submitTrustedNetworkUser:onlyUserId flowId:resultFlowId completion:completion];
+                    [strongSelf submitTrustedNetworkUser:onlyUserId flowId:resultFlowId completion:completion];
                     return;
                 }
 
@@ -255,13 +270,13 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
             if ([stepType isEqualToString:@"abort"]) {
                 NSString *reason = [result[@"reason"] isKindOfClass:[NSString class]] ? result[@"reason"] : @"Login aborted";
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    completion(nil, nil, nil, [self errorWithMessage:reason code:403]);
+                    completion(nil, nil, nil, [strongSelf errorWithMessage:reason code:403]);
                 });
                 return;
             }
 
             dispatch_async(dispatch_get_main_queue(), ^{
-                completion(nil, nil, nil, [self errorWithMessage:@"Unexpected login response" code:0]);
+                completion(nil, nil, nil, [strongSelf errorWithMessage:@"Unexpected login response" code:0]);
             });
         }];
     [task resume];
@@ -277,20 +292,24 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
     };
     NSMutableURLRequest *request = [NSMutableURLRequest ha_postRequestWithURL:submitURL jsonBody:body];
 
+    __weak typeof(self) weakSelf = self;
     NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request
         completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            typeof(self) strongSelf = weakSelf;
+            if (!strongSelf) return;
+
             if (error) {
                 dispatch_async(dispatch_get_main_queue(), ^{ completion(nil, nil, nil, error); });
                 return;
             }
 
             NSHTTPURLResponse *httpResp = (NSHTTPURLResponse *)response;
-            NSDictionary *result = [self parseJSONData:data];
+            NSDictionary *result = [strongSelf parseJSONData:data];
 
             if (httpResp.statusCode != 200 || !result) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     completion(nil, nil, nil,
-                        [self errorWithMessage:@"Failed to complete trusted network login" code:httpResp.statusCode]);
+                        [strongSelf errorWithMessage:@"Failed to complete trusted network login" code:httpResp.statusCode]);
                 });
                 return;
             }
@@ -300,13 +319,13 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
                 NSString *authCode = result[@"result"];
                 dispatch_async(dispatch_get_main_queue(), ^{
                     completion(authCode, nil, nil, authCode ? nil :
-                        [self errorWithMessage:@"No auth code in response" code:0]);
+                        [strongSelf errorWithMessage:@"No auth code in response" code:0]);
                 });
                 return;
             }
 
             dispatch_async(dispatch_get_main_queue(), ^{
-                completion(nil, nil, nil, [self errorWithMessage:@"Unexpected response after user selection" code:0]);
+                completion(nil, nil, nil, [strongSelf errorWithMessage:@"Unexpected response after user selection" code:0]);
             });
         }];
     [task resume];
@@ -362,19 +381,23 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
     [request setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
     request.HTTPBody = [formBody dataUsingEncoding:NSUTF8StringEncoding];
 
+    __weak typeof(self) weakSelf = self;
     NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request
         completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            typeof(self) strongSelf = weakSelf;
+            if (!strongSelf) return;
+
             if (error) {
                 ha_dispatchMainCompletion(completion, nil, error);
                 return;
             }
 
             NSHTTPURLResponse *httpResp = (NSHTTPURLResponse *)response;
-            NSDictionary *result = [self parseJSONData:data];
+            NSDictionary *result = [strongSelf parseJSONData:data];
 
             if (httpResp.statusCode != 200 || !result) {
                 NSString *errMsg = [result[@"error_description"] isKindOfClass:[NSString class]] ? result[@"error_description"] : @"Token exchange failed";
-                ha_dispatchMainCompletion(completion, nil, [self errorWithMessage:errMsg code:httpResp.statusCode]);
+                ha_dispatchMainCompletion(completion, nil, [strongSelf errorWithMessage:errMsg code:httpResp.statusCode]);
                 return;
             }
 
