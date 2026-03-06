@@ -98,7 +98,7 @@ static void HSVtoRGB(CGFloat h, CGFloat s, CGFloat v, CGFloat *r, CGFloat *g, CG
     CGFloat y = (self.bounds.size.height - diameter) / 2.0;
     self.wheelImageView.frame = CGRectMake(x, y, diameter, diameter);
 
-    if (fabs(diameter - _lastDiameter) > 1.0) {
+    if (fabs(diameter - _lastDiameter) > 4.0) {
         _lastDiameter = diameter;
         [self regenerateWheelImage];
     }
