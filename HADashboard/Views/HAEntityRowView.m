@@ -558,6 +558,7 @@
 #pragma mark - Inline Slider (input_number / number)
 
 - (void)showInlineSlider {
+    self.inlineSlider.minimumTrackTintColor = [HATheme switchTintColor];
     self.inlineSlider.hidden = NO;
     self.sliderValueLabel.hidden = NO;
     self.nameLabelToStateLabelConstraint.active = NO;

@@ -65,6 +65,7 @@
     self.speedSlider = [[UISlider alloc] init];
     self.speedSlider.minimumValue = 0;
     self.speedSlider.maximumValue = 100;
+    self.speedSlider.minimumTrackTintColor = [HATheme switchTintColor];
     self.speedSlider.translatesAutoresizingMaskIntoConstraints = NO;
     [self.speedSlider addTarget:self action:@selector(sliderChanged:) forControlEvents:UIControlEventValueChanged];
     [self.speedSlider addTarget:self action:@selector(sliderTouchUp:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside];
@@ -136,6 +137,8 @@
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
     [super configureWithEntity:entity configItem:configItem];
+
+    self.speedSlider.minimumTrackTintColor = [HATheme switchTintColor];
 
     BOOL isOn = entity.isOn;
     self.toggleSwitch.on = isOn;

@@ -40,6 +40,7 @@
     self.brightnessSlider = [[UISlider alloc] init];
     self.brightnessSlider.minimumValue = 0;
     self.brightnessSlider.maximumValue = 100;
+    self.brightnessSlider.minimumTrackTintColor = [HATheme switchTintColor];
     self.brightnessSlider.translatesAutoresizingMaskIntoConstraints = NO;
     [self.brightnessSlider addTarget:self action:@selector(sliderChanged:) forControlEvents:UIControlEventValueChanged];
     [self.brightnessSlider addTarget:self action:@selector(sliderTouchUp:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside];
@@ -136,6 +137,8 @@
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
     [super configureWithEntity:entity configItem:configItem];
+
+    self.brightnessSlider.minimumTrackTintColor = [HATheme switchTintColor];
 
     // Read transition from card config (seconds)
     id transition = configItem.customProperties[@"transition"];

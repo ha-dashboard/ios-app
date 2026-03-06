@@ -30,6 +30,7 @@
 
     // Slider (shown in slider mode)
     self.valueSlider = [[UISlider alloc] init];
+    self.valueSlider.minimumTrackTintColor = [HATheme switchTintColor];
     self.valueSlider.translatesAutoresizingMaskIntoConstraints = NO;
     [self.valueSlider addTarget:self action:@selector(sliderChanged:) forControlEvents:UIControlEventValueChanged];
     [self.valueSlider addTarget:self action:@selector(sliderTouchUp:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside];
@@ -97,6 +98,7 @@
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
     [super configureWithEntity:entity configItem:configItem];
 
+    self.valueSlider.minimumTrackTintColor = [HATheme switchTintColor];
     self.entityMin  = [entity inputNumberMin];
     self.entityMax  = [entity inputNumberMax];
     self.entityStep = [entity inputNumberStep];

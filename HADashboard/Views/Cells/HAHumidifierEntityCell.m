@@ -33,6 +33,7 @@
 
     // Humidity slider
     self.humiditySlider = [[UISlider alloc] init];
+    self.humiditySlider.minimumTrackTintColor = [HATheme switchTintColor];
     self.humiditySlider.translatesAutoresizingMaskIntoConstraints = NO;
     [self.humiditySlider addTarget:self action:@selector(sliderChanged:) forControlEvents:UIControlEventValueChanged];
     [self.humiditySlider addTarget:self action:@selector(sliderTouchUp:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside];
@@ -81,6 +82,8 @@
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
     [super configureWithEntity:entity configItem:configItem];
+
+    self.humiditySlider.minimumTrackTintColor = [HATheme switchTintColor];
 
     self.toggleSwitch.on = entity.isOn;
     self.toggleSwitch.enabled = entity.isAvailable;

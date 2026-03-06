@@ -154,6 +154,7 @@ static const CGFloat kPadding        = 12.0;
     self.volumeSlider = [[UISlider alloc] init];
     self.volumeSlider.minimumValue = 0.0;
     self.volumeSlider.maximumValue = 1.0;
+    self.volumeSlider.minimumTrackTintColor = [HATheme switchTintColor];
     self.volumeSlider.translatesAutoresizingMaskIntoConstraints = NO;
     [self.volumeSlider addTarget:self action:@selector(volumeSliderTouchUp:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside];
     [self.contentView addSubview:self.volumeSlider];
@@ -285,6 +286,7 @@ static const CGFloat kPadding        = 12.0;
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
     [super configureWithEntity:entity configItem:configItem];
+    self.volumeSlider.minimumTrackTintColor = [HATheme switchTintColor];
     self.nameLabel.hidden = YES;
     self.stateLabel.hidden = YES;
 
