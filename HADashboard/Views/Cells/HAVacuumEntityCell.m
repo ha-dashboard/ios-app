@@ -6,6 +6,7 @@
 #import "HATheme.h"
 #import "HAIconMapper.h"
 #import "HAEntityDisplayHelper.h"
+#import "UIView+HAUtilities.h"
 
 static const CGFloat kIconCircleSize = 60.0;
 static const CGFloat kIconFontSize   = 32.0;
@@ -386,24 +387,10 @@ static const CGFloat kButtonSpacing  = 12.0;
     if (speeds.count == 0) return;
     NSString *current = HAAttrString(self.entity.attributes, HAAttrFanSpeed);
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Fan Speed"
-                                                                  message:nil
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
-    for (NSString *speed in speeds) {
-        BOOL isCurrent = [speed isEqualToString:current];
-        NSString *title = isCurrent ? [NSString stringWithFormat:@"\u2713 %@", [speed capitalizedString]] : [speed capitalizedString];
-        [alert addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-            [self callService:@"set_fan_speed" inDomain:HAEntityDomainVacuum withData:@{@"fan_speed": speed}];
-        }]];
-    }
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-
-    UIResponder *responder = self;
-    while (responder && ![responder isKindOfClass:[UIViewController class]]) responder = [responder nextResponder];
-    if ([responder isKindOfClass:[UIViewController class]]) {
-        alert.popoverPresentationController.sourceView = self.fanSpeedButton;
-        [(UIViewController *)responder presentViewController:alert animated:YES completion:nil];
-    }
+    [self presentOptionsWithTitle:@"Fan Speed" options:speeds current:current sourceView:self.fanSpeedButton
+                          handler:^(NSString *selected) {
+        [self callService:@"set_fan_speed" inDomain:HAEntityDomainVacuum withData:@{@"fan_speed": selected}];
+    }];
 }
 
 #pragma mark - Reuse

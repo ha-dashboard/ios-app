@@ -106,7 +106,11 @@ static NSString *const kDeviceNameOverride   = @"ha_device_name_override";
 
             NSDictionary *resp = nil;
             if (data.length > 0) {
-                resp = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+                NSError *jsonError = nil;
+                resp = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+                if (jsonError) {
+                    HALogW(@"HADeviceRegistration", @"JSON parse error: %@", jsonError.localizedDescription);
+                }
             }
             if (![resp isKindOfClass:[NSDictionary class]] || !resp[@"webhook_id"]) {
                 NSError *parseErr = [NSError errorWithDomain:@"HADeviceRegistration" code:-2
@@ -231,7 +235,11 @@ static NSString *const kDeviceNameOverride   = @"ha_device_name_override";
 
             id parsed = nil;
             if (responseData.length > 0) {
-                parsed = [NSJSONSerialization JSONObjectWithData:responseData options:0 error:nil];
+                NSError *jsonError2 = nil;
+                parsed = [NSJSONSerialization JSONObjectWithData:responseData options:0 error:&jsonError2];
+                if (jsonError2) {
+                    HALogW(@"HADeviceRegistration", @"JSON parse error: %@", jsonError2.localizedDescription);
+                }
             }
             dispatch_async(dispatch_get_main_queue(), ^{ if (completion) completion(parsed, nil); });
         }];

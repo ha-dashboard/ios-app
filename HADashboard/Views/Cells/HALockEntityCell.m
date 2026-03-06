@@ -4,6 +4,7 @@
 #import "HADashboardConfig.h"
 #import "HATheme.h"
 #import "HAHaptics.h"
+#import "UIView+HAUtilities.h"
 
 @interface HALockEntityCell ()
 @property (nonatomic, strong) UIButton *lockButton;
@@ -140,11 +141,7 @@
 
     [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
 
-    UIResponder *responder = self;
-    while (responder && ![responder isKindOfClass:[UIViewController class]]) {
-        responder = [responder nextResponder];
-    }
-    UIViewController *vc = (UIViewController *)responder;
+    UIViewController *vc = [self ha_parentViewController];
     if (vc) {
         [vc presentViewController:alert animated:YES completion:nil];
     }

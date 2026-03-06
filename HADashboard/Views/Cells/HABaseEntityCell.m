@@ -5,6 +5,7 @@
 #import "HAIconMapper.h"
 #import "HAConnectionManager.h"
 #import "HAHaptics.h"
+#import "UIView+HAUtilities.h"
 
 static const CGFloat kHeadingHeight = 28.0;
 static const CGFloat kHeadingGap = 2.0;
@@ -209,6 +210,50 @@ static const CGFloat kHeadingGap = 2.0;
     [btn addTarget:target action:action forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:btn];
     return btn;
+}
+
+#pragma mark - Slider Helpers
+
+- (void)sliderTouchDown:(UISlider *)sender {
+    self.sliderDragging = YES;
+}
+
+- (void)sliderTouchUp:(UISlider *)sender {
+    self.sliderDragging = NO;
+}
+
+#pragma mark - Option Sheet
+
+- (void)presentOptionsWithTitle:(NSString *)title
+                        options:(NSArray<NSString *> *)options
+                        current:(NSString *)current
+                     sourceView:(UIView *)sourceView
+                        handler:(void(^)(NSString *selected))handler {
+    UIViewController *vc = [self ha_parentViewController];
+    if (!vc) return;
+
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:title
+                                                                  message:nil
+                                                           preferredStyle:UIAlertControllerStyleActionSheet];
+    for (NSString *option in options) {
+        UIAlertAction *action = [UIAlertAction actionWithTitle:[option capitalizedString]
+                                                         style:UIAlertActionStyleDefault
+                                                       handler:^(UIAlertAction *a) {
+            [HAHaptics lightImpact];
+            if (handler) handler(option);
+        }];
+        if ([option isEqualToString:current]) {
+            [action setValue:@YES forKey:@"checked"];
+        }
+        [sheet addAction:action];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+
+    if (sourceView) {
+        sheet.popoverPresentationController.sourceView = sourceView;
+        sheet.popoverPresentationController.sourceRect = sourceView.bounds;
+    }
+    [vc presentViewController:sheet animated:YES completion:nil];
 }
 
 @end

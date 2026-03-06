@@ -10,7 +10,6 @@
 @property (nonatomic, strong) UILabel *valueLabel;
 @property (nonatomic, strong) UITextField *boxTextField;
 @property (nonatomic, strong) UIButton *boxSubmitButton;
-@property (nonatomic, assign) BOOL sliderDragging;
 @property (nonatomic, assign) BOOL isBoxMode;
 @property (nonatomic, assign) double entityMin;
 @property (nonatomic, assign) double entityMax;
@@ -154,10 +153,6 @@
 
 #pragma mark - Slider Actions
 
-- (void)sliderTouchDown:(UISlider *)sender {
-    self.sliderDragging = YES;
-}
-
 - (void)sliderChanged:(UISlider *)sender {
     double snapped = [self snapToStep:sender.value];
     self.valueLabel.text = [self formatValue:snapped];
@@ -168,7 +163,7 @@
 }
 
 - (void)sliderTouchUp:(UISlider *)sender {
-    self.sliderDragging = NO;
+    [super sliderTouchUp:sender];
     [HAHaptics lightImpact];
     double snapped = [self snapToStep:sender.value];
     sender.value = (float)snapped;

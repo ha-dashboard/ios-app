@@ -4,6 +4,7 @@
 #import "HADashboardConfig.h"
 #import "HATheme.h"
 #import "HAHaptics.h"
+#import "UIView+HAUtilities.h"
 
 @interface HAInputSelectEntityCell ()
 @property (nonatomic, strong) UIButton *optionButton;
@@ -80,12 +81,7 @@
     alert.popoverPresentationController.sourceView = self.optionButton;
     alert.popoverPresentationController.sourceRect = self.optionButton.bounds;
 
-    // Walk up responder chain to find the view controller
-    UIResponder *responder = self;
-    while (responder && ![responder isKindOfClass:[UIViewController class]]) {
-        responder = [responder nextResponder];
-    }
-    UIViewController *vc = (UIViewController *)responder;
+    UIViewController *vc = [self ha_parentViewController];
     if (vc) {
         [vc presentViewController:alert animated:YES completion:nil];
     }

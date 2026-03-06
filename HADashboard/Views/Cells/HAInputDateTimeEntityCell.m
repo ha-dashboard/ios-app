@@ -3,6 +3,7 @@
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
 #import <objc/runtime.h>
+#import "UIView+HAUtilities.h"
 
 @interface HAInputDateTimeEntityCell ()
 @property (nonatomic, strong) UIButton *valueButton;
@@ -91,11 +92,7 @@
     nav.popoverPresentationController.sourceRect = self.valueButton.bounds;
     nav.popoverPresentationController.permittedArrowDirections = UIPopoverArrowDirectionAny;
 
-    UIResponder *responder = self;
-    while (responder && ![responder isKindOfClass:[UIViewController class]]) {
-        responder = [responder nextResponder];
-    }
-    UIViewController *vc = (UIViewController *)responder;
+    UIViewController *vc = [self ha_parentViewController];
     if (vc) {
         [vc presentViewController:nav animated:YES completion:nil];
     }

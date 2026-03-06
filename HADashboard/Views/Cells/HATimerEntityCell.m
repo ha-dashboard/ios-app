@@ -3,6 +3,7 @@
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
 #import "HATheme.h"
+#import "UIView+HAUtilities.h"
 
 @interface HATimerEntityCell ()
 @property (nonatomic, strong) UILabel *timeLabel;
@@ -178,11 +179,7 @@
 }
 
 - (void)changeTapped {
-    UIResponder *responder = self;
-    while (responder && ![responder isKindOfClass:[UIViewController class]]) {
-        responder = [responder nextResponder];
-    }
-    UIViewController *vc = (UIViewController *)responder;
+    UIViewController *vc = [self ha_parentViewController];
     if (!vc) return;
 
     UIDatePicker *picker = [[UIDatePicker alloc] init];

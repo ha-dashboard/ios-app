@@ -12,7 +12,6 @@
 @property (nonatomic, strong) UILabel *brightnessLabel;
 @property (nonatomic, strong) UISlider *colorTempSlider;
 @property (nonatomic, strong) UILabel *colorTempLabel;
-@property (nonatomic, assign) BOOL sliderDragging;
 @property (nonatomic, assign) BOOL colorTempDragging;
 /// Brightness slider bottom constraint — deactivated when color temp slider is visible
 @property (nonatomic, strong) NSLayoutConstraint *brightnessBottomConstraint;
@@ -230,17 +229,13 @@
     [self callService:service inDomain:[self.entity domain] withData:[self dataWithTransition:nil]];
 }
 
-- (void)sliderTouchDown:(UISlider *)sender {
-    self.sliderDragging = YES;
-}
-
 - (void)sliderChanged:(UISlider *)sender {
     NSInteger pct = (NSInteger)sender.value;
     self.brightnessLabel.text = [NSString stringWithFormat:@"%ld%%", (long)pct];
 }
 
 - (void)sliderTouchUp:(UISlider *)sender {
-    self.sliderDragging = NO;
+    [super sliderTouchUp:sender];
 
     [HAHaptics lightImpact];
 
@@ -255,31 +250,10 @@
     if (!self.entity) return;
     NSArray *effects = [self.entity effectList];
     if (effects.count == 0) return;
-
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Light Effect"
-                                                                  message:nil
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
-    for (NSString *effect in effects) {
-        NSString *title = [effect capitalizedString];
-        BOOL isCurrent = [effect isEqualToString:[self.entity effect]];
-        UIAlertAction *action = [UIAlertAction actionWithTitle:isCurrent ? [NSString stringWithFormat:@"\u2713 %@", title] : title
-                                                        style:UIAlertActionStyleDefault
-                                                      handler:^(UIAlertAction *a) {
-            [self callService:@"turn_on" inDomain:[self.entity domain] withData:[self dataWithTransition:@{HAAttrEffect: effect}]];
-        }];
-        [alert addAction:action];
-    }
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-
-    // Present from the nearest view controller
-    UIResponder *responder = self;
-    while (responder && ![responder isKindOfClass:[UIViewController class]]) {
-        responder = [responder nextResponder];
-    }
-    if ([responder isKindOfClass:[UIViewController class]]) {
-        alert.popoverPresentationController.sourceView = self.effectButton;
-        [(UIViewController *)responder presentViewController:alert animated:YES completion:nil];
-    }
+    NSString *current = [self.entity effect];
+    [self presentOptionsWithTitle:@"Light Effect" options:effects current:current sourceView:self.effectButton handler:^(NSString *selected) {
+        [self callService:@"turn_on" inDomain:[self.entity domain] withData:[self dataWithTransition:@{HAAttrEffect: selected}]];
+    }];
 }
 
 - (void)colorTempSliderTouchDown:(UISlider *)sender {

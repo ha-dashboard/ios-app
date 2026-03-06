@@ -2,6 +2,7 @@
 #import "HAAuthManager.h"
 #import "HAConnectionManager.h"
 #import "NSMutableURLRequest+HAHelpers.h"
+#import "HALog.h"
 
 @implementation HALogbookManager
 
@@ -81,7 +82,11 @@
                 return;
             }
 
-            NSArray *entries = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+            NSError *jsonError = nil;
+            NSArray *entries = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+            if (jsonError) {
+                HALogW(@"HALogbookManager", @"JSON parse error: %@", jsonError.localizedDescription);
+            }
             if (![entries isKindOfClass:[NSArray class]]) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     completion(@[], nil);

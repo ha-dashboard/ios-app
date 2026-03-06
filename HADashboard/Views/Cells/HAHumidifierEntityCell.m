@@ -11,7 +11,6 @@
 @property (nonatomic, strong) UILabel *humidityLabel;
 @property (nonatomic, strong) UILabel *currentHumidityLabel;
 @property (nonatomic, strong) UIButton *modeButton;
-@property (nonatomic, assign) BOOL sliderDragging;
 @end
 
 @implementation HAHumidifierEntityCell
@@ -139,29 +138,9 @@
     NSArray *modes = HAAttrArray(self.entity.attributes, HAAttrAvailableModes);
     if (modes.count == 0) return;
     NSString *current = HAAttrString(self.entity.attributes, HAAttrMode);
-
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Mode"
-                                                                  message:nil
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
-    for (NSString *mode in modes) {
-        BOOL isCurrent = [mode isEqualToString:current];
-        NSString *title = isCurrent ? [NSString stringWithFormat:@"\u2713 %@", [mode capitalizedString]] : [mode capitalizedString];
-        [alert addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-            [self callService:@"set_mode" inDomain:HAEntityDomainHumidifier withData:@{@"mode": mode}];
-        }]];
-    }
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-
-    UIResponder *responder = self;
-    while (responder && ![responder isKindOfClass:[UIViewController class]]) responder = [responder nextResponder];
-    if ([responder isKindOfClass:[UIViewController class]]) {
-        alert.popoverPresentationController.sourceView = self.modeButton;
-        [(UIViewController *)responder presentViewController:alert animated:YES completion:nil];
-    }
-}
-
-- (void)sliderTouchDown:(UISlider *)sender {
-    self.sliderDragging = YES;
+    [self presentOptionsWithTitle:@"Mode" options:modes current:current sourceView:self.modeButton handler:^(NSString *selected) {
+        [self callService:@"set_mode" inDomain:HAEntityDomainHumidifier withData:@{@"mode": selected}];
+    }];
 }
 
 - (void)sliderChanged:(UISlider *)sender {
@@ -169,7 +148,7 @@
 }
 
 - (void)sliderTouchUp:(UISlider *)sender {
-    self.sliderDragging = NO;
+    [super sliderTouchUp:sender];
 
     float snapped = roundf(sender.value);
     sender.value = snapped;

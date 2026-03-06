@@ -6,6 +6,7 @@
 #import "HAHaptics.h"
 #import "HAEntityDisplayHelper.h"
 #import "HAIconMapper.h"
+#import "UIView+HAUtilities.h"
 
 @interface HAWaterHeaterEntityCell ()
 @property (nonatomic, strong) UILabel *tempLabel;
@@ -138,29 +139,13 @@
     NSArray *modes = self.entity.attributes[@"operation_list"];
     if (![modes isKindOfClass:[NSArray class]] || modes.count == 0) return;
 
-    UIResponder *responder = self;
-    while (responder && ![responder isKindOfClass:[UIViewController class]]) responder = [responder nextResponder];
-    UIViewController *vc = (UIViewController *)responder;
-    if (!vc) return;
-
     NSString *current = self.entity.attributes[@"operation_mode"];
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:nil message:nil
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
-    for (NSString *mode in modes) {
-        UIAlertAction *action = [UIAlertAction actionWithTitle:[mode capitalizedString]
-                                                         style:UIAlertActionStyleDefault
-                                                       handler:^(UIAlertAction *a) {
-            [HAHaptics lightImpact];
-            [self callService:@"set_operation_mode" inDomain:@"water_heater"
-                     withData:@{@"operation_mode": mode}];
-        }];
-        if ([mode isEqualToString:current]) [action setValue:@YES forKey:@"checked"];
-        [sheet addAction:action];
-    }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-    sheet.popoverPresentationController.sourceView = self.modeButton;
-    sheet.popoverPresentationController.sourceRect = self.modeButton.bounds;
-    [vc presentViewController:sheet animated:YES completion:nil];
+    [self presentOptionsWithTitle:nil options:modes current:current sourceView:self.modeButton
+                          handler:^(NSString *selected) {
+        [HAHaptics lightImpact];
+        [self callService:@"set_operation_mode" inDomain:@"water_heater"
+                 withData:@{@"operation_mode": selected}];
+    }];
 }
 
 - (void)prepareForReuse {

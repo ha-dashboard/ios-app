@@ -141,9 +141,7 @@
                                 forHTTPHeaderField:@"Authorization"];
                             [self executeRequest:retry completion:completion];
                         } else {
-                            dispatch_async(dispatch_get_main_queue(), ^{
-                                if (completion) completion(nil, refreshError);
-                            });
+                            ha_dispatchMainCompletion(completion, nil, refreshError);
                         }
                     }];
                     return;
@@ -152,9 +150,7 @@
                 NSError *authError = [NSError errorWithDomain:@"HAAPIClient"
                                                          code:401
                                                      userInfo:@{NSLocalizedDescriptionKey: @"Unauthorized — check your access token"}];
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    if (completion) completion(nil, authError);
-                });
+                ha_dispatchMainCompletion(completion, nil, authError);
                 return;
             }
 
@@ -163,9 +159,7 @@
                 NSError *httpError = [NSError errorWithDomain:@"HAAPIClient"
                                                          code:statusCode
                                                      userInfo:@{NSLocalizedDescriptionKey: msg}];
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    if (completion) completion(nil, httpError);
-                });
+                ha_dispatchMainCompletion(completion, nil, httpError);
                 return;
             }
 
@@ -174,16 +168,12 @@
                 NSError *jsonError = nil;
                 parsed = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
                 if (jsonError) {
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        if (completion) completion(nil, jsonError);
-                    });
+                    ha_dispatchMainCompletion(completion, nil, jsonError);
                     return;
                 }
             }
 
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if (completion) completion(parsed, nil);
-            });
+            ha_dispatchMainCompletion(completion, parsed, nil);
         }];
 
     [task resume];

@@ -36,4 +36,31 @@
 /// Create a styled action button, add it to contentView, and configure for autolayout.
 - (UIButton *)actionButtonWithTitle:(NSString *)title target:(id)target action:(SEL)action;
 
+#pragma mark - Slider Helpers
+
+/// YES while the user is dragging a slider.  Subclasses can check this to
+/// suppress external state updates during a drag gesture.
+@property (nonatomic, assign) BOOL sliderDragging;
+
+/// Wire to UIControlEventTouchDown on any slider.  Sets sliderDragging = YES.
+- (void)sliderTouchDown:(UISlider *)sender;
+
+/// Wire to UIControlEventTouchUpInside / TouchUpOutside.  Sets sliderDragging = NO.
+/// Subclasses should override and call super to perform the service call.
+- (void)sliderTouchUp:(UISlider *)sender;
+
+#pragma mark - Option Sheet
+
+/// Present an action-sheet picker.
+/// @param title  Optional sheet title (may be nil).
+/// @param options  Display strings to show.
+/// @param current  The currently-selected option (gets a checkmark), or nil.
+/// @param sourceView  Anchor view for iPad popover.
+/// @param handler  Called with the selected option string.
+- (void)presentOptionsWithTitle:(NSString *)title
+                        options:(NSArray<NSString *> *)options
+                        current:(NSString *)current
+                     sourceView:(UIView *)sourceView
+                        handler:(void(^)(NSString *selected))handler;
+
 @end

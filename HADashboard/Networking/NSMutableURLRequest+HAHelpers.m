@@ -14,4 +14,14 @@
     return config;
 }
 
++ (NSMutableURLRequest *)ha_postRequestWithURL:(NSURL *)url jsonBody:(NSDictionary *)body {
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    request.HTTPMethod = @"POST";
+    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    if (body) {
+        request.HTTPBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
+    }
+    return request;
+}
+
 @end

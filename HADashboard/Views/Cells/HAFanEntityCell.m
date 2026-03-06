@@ -15,7 +15,6 @@
 @property (nonatomic, strong) UIButton *directionButton;
 @property (nonatomic, strong) UIButton *speedDownButton;
 @property (nonatomic, strong) UIButton *speedUpButton;
-@property (nonatomic, assign) BOOL sliderDragging;
 @end
 
 @implementation HAFanEntityCell
@@ -208,17 +207,13 @@
     [self callService:service inDomain:@"fan"];
 }
 
-- (void)sliderTouchDown:(UISlider *)sender {
-    self.sliderDragging = YES;
-}
-
 - (void)sliderChanged:(UISlider *)sender {
     NSInteger pct = (NSInteger)sender.value;
     self.speedLabel.text = [NSString stringWithFormat:@"%ld%%", (long)pct];
 }
 
 - (void)sliderTouchUp:(UISlider *)sender {
-    self.sliderDragging = NO;
+    [super sliderTouchUp:sender];
 
     [HAHaptics lightImpact];
 
@@ -230,28 +225,10 @@
 - (void)presetTapped {
     NSArray *modes = self.entity.attributes[@"preset_modes"];
     if (![modes isKindOfClass:[NSArray class]] || modes.count == 0) return;
-    UIResponder *responder = self;
-    while (responder && ![responder isKindOfClass:[UIViewController class]]) responder = [responder nextResponder];
-    UIViewController *vc = (UIViewController *)responder;
-    if (!vc) return;
-
     NSString *current = [self.entity fanPresetMode];
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:nil message:nil
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
-    for (NSString *mode in modes) {
-        UIAlertAction *action = [UIAlertAction actionWithTitle:[mode capitalizedString]
-                                                         style:UIAlertActionStyleDefault
-                                                       handler:^(UIAlertAction *a) {
-            [HAHaptics lightImpact];
-            [self callService:@"set_preset_mode" inDomain:@"fan" withData:@{@"preset_mode": mode}];
-        }];
-        if ([mode isEqualToString:current]) [action setValue:@YES forKey:@"checked"];
-        [sheet addAction:action];
-    }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-    sheet.popoverPresentationController.sourceView = self.presetButton;
-    sheet.popoverPresentationController.sourceRect = self.presetButton.bounds;
-    [vc presentViewController:sheet animated:YES completion:nil];
+    [self presentOptionsWithTitle:nil options:modes current:current sourceView:self.presetButton handler:^(NSString *selected) {
+        [self callService:@"set_preset_mode" inDomain:@"fan" withData:@{@"preset_mode": selected}];
+    }];
 }
 
 - (void)oscillateTapped {

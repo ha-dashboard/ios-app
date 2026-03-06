@@ -4,6 +4,7 @@
 #import "HATheme.h"
 #import "HASwitch.h"
 #import "HAHaptics.h"
+#import "UIView+HAUtilities.h"
 
 @interface HARemoteEntityCell ()
 @property (nonatomic, strong) UISwitch *toggleSwitch;
@@ -68,27 +69,13 @@
 - (void)activityTapped {
     NSArray *activities = self.entity.attributes[@"activity_list"];
     if (![activities isKindOfClass:[NSArray class]] || activities.count == 0) return;
-    UIResponder *responder = self;
-    while (responder && ![responder isKindOfClass:[UIViewController class]]) responder = [responder nextResponder];
-    UIViewController *vc = (UIViewController *)responder;
-    if (!vc) return;
 
     NSString *current = self.entity.attributes[@"current_activity"];
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:nil message:nil
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
-    for (NSString *act in activities) {
-        UIAlertAction *action = [UIAlertAction actionWithTitle:act style:UIAlertActionStyleDefault
-                                                       handler:^(UIAlertAction *a) {
-            [HAHaptics lightImpact];
-            [self callService:@"turn_on" inDomain:@"remote" withData:@{@"activity": act}];
-        }];
-        if ([act isEqualToString:current]) [action setValue:@YES forKey:@"checked"];
-        [sheet addAction:action];
-    }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-    sheet.popoverPresentationController.sourceView = self.activityButton;
-    sheet.popoverPresentationController.sourceRect = self.activityButton.bounds;
-    [vc presentViewController:sheet animated:YES completion:nil];
+    [self presentOptionsWithTitle:nil options:activities current:current sourceView:self.activityButton
+                          handler:^(NSString *selected) {
+        [HAHaptics lightImpact];
+        [self callService:@"turn_on" inDomain:@"remote" withData:@{@"activity": selected}];
+    }];
 }
 
 - (void)prepareForReuse {

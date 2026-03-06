@@ -6,6 +6,7 @@
 #import "HAHaptics.h"
 #import "HAIconMapper.h"
 #import "HAEntityDisplayHelper.h"
+#import "UIView+HAUtilities.h"
 
 // Gauge geometry -- proportions matched to HA web's ha-control-circular-slider:
 // SVG viewBox 320x320, center (160,160), RADIUS=145, stroke=24
@@ -1221,9 +1222,7 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
     } else { return; }
     if (![options isKindOfClass:[NSArray class]] || options.count == 0) return;
 
-    UIResponder *responder = self;
-    while (responder && ![responder isKindOfClass:[UIViewController class]]) responder = [responder nextResponder];
-    UIViewController *vc = (UIViewController *)responder;
+    UIViewController *vc = [self ha_parentViewController];
     if (!vc) return;
 
     NSString *entityId = self.entity.entityId; // capture before block

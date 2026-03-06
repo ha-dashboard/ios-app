@@ -6,6 +6,7 @@
 #import "HAHaptics.h"
 #import "HAEntityDisplayHelper.h"
 #import "HAIconMapper.h"
+#import "UIView+HAUtilities.h"
 
 @interface HAModeFeatureView ()
 @property (nonatomic, strong) UIScrollView *scrollView;       // For icons style
@@ -203,12 +204,7 @@
 }
 
 - (void)dropdownTapped:(UIButton *)sender {
-    // Find the nearest view controller to present the action sheet
-    UIResponder *responder = self;
-    while (responder && ![responder isKindOfClass:[UIViewController class]]) {
-        responder = [responder nextResponder];
-    }
-    UIViewController *vc = (UIViewController *)responder;
+    UIViewController *vc = [self ha_parentViewController];
     if (!vc) return;
 
     UIAlertController *sheet = [UIAlertController alertControllerWithTitle:nil
