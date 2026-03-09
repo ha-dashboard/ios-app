@@ -160,6 +160,7 @@
             CGFloat y = 0;
             for (UIView *v in visible) {
                 v.frame = CGRectMake(0, y, w, itemH);
+                [v setNeedsLayout];
                 y += itemH + self.spacing;
             }
         } else {
@@ -167,6 +168,7 @@
             CGFloat x = 0;
             for (UIView *v in visible) {
                 v.frame = CGRectMake(x, 0, itemW, h);
+                [v setNeedsLayout];
                 x += itemW + self.spacing;
             }
         }
@@ -184,6 +186,7 @@
                 } else {
                     v.frame = CGRectMake(0, y, w, itemH);
                 }
+                [v setNeedsLayout];
                 y += itemH + self.spacing;
             }
         } else {
@@ -197,9 +200,17 @@
                 } else {
                     v.frame = CGRectMake(x, 0, itemW, h);
                 }
+                [v setNeedsLayout];
                 x += itemW + self.spacing;
             }
         }
+    }
+
+    // Force immediate child layout so subviews position correctly
+    // in the same layout pass (children need their new bounds to
+    // calculate internal frame positions)
+    for (UIView *v in visible) {
+        [v layoutIfNeeded];
     }
 }
 
