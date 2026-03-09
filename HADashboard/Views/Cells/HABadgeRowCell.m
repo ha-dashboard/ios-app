@@ -247,6 +247,7 @@ static const CGFloat kArcNameLabelHeight = 16.0;
             CGFloat w = [badgeWidths[j] floatValue];
             UIView *badge = allBadges[j];
             badge.frame = CGRectMake(x, y, w, badgeH);
+            if (!HAAutoLayoutAvailable()) [self layoutBadgeSubviews:badge width:w height:badgeH];
             badge.tag = j; // index into badgeEntities
             badge.userInteractionEnabled = YES;
             UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(badgeTapped:)];
@@ -329,6 +330,7 @@ static const CGFloat kArcNameLabelHeight = 16.0;
             // Vertically center shorter badges (pills) within row
             CGFloat yOffset = (rowHeight - h) / 2.0;
             badge.frame = CGRectMake(x, y + yOffset, w, h);
+            if (!HAAutoLayoutAvailable()) [self layoutBadgeSubviews:badge width:w height:h];
             badge.tag = j; // index into badgeEntities
             badge.userInteractionEnabled = YES;
             UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(badgeTapped:)];
@@ -563,6 +565,13 @@ static const CGFloat kArcNameLabelHeight = 16.0;
     [badge addSubview:nameLabel];
     [badge addSubview:valueLabel];
 
+    CGFloat nameWidth = ceil([name sizeWithAttributes:@{NSFontAttributeName: nameLabel.font}].width);
+    CGFloat valWidth = ceil([valueText sizeWithAttributes:@{NSFontAttributeName: valueLabel.font}].width);
+    CGFloat iconW = icon.length > 0 ? kBadgeIconSize : 0;
+    CGFloat infoWidth = MAX(nameWidth, valWidth) + 4.0;
+    CGFloat badgeWidth = (kBadgeHPad - 4) + iconW + kBadgeGap + infoWidth + kBadgeHPad;
+    badgeWidth = MAX(badgeWidth, kBadgeHeight);
+
     if (HAAutoLayoutAvailable()) {
         [NSLayoutConstraint activateConstraints:@[
             [iconLabel.leadingAnchor constraintEqualToAnchor:badge.leadingAnchor constant:kBadgeHPad - 4],
@@ -574,14 +583,15 @@ static const CGFloat kArcNameLabelHeight = 16.0;
             [valueLabel.topAnchor constraintEqualToAnchor:badge.centerYAnchor constant:1],
             [valueLabel.trailingAnchor constraintLessThanOrEqualToAnchor:badge.trailingAnchor constant:-kBadgeHPad],
         ]];
+    } else {
+        CGFloat midY = kBadgeHeight / 2.0;
+        CGFloat iconX = kBadgeHPad - 4;
+        iconLabel.frame = CGRectMake(iconX, midY - kBadgeIconSize / 2, kBadgeIconSize, kBadgeIconSize);
+        CGFloat textX = iconX + kBadgeIconSize + kBadgeGap;
+        CGFloat textW = badgeWidth - textX - kBadgeHPad;
+        nameLabel.frame = CGRectMake(textX, midY - 14, textW, 12);
+        valueLabel.frame = CGRectMake(textX, midY + 1, textW, 14);
     }
-
-    CGFloat nameWidth = ceil([name sizeWithAttributes:@{NSFontAttributeName: nameLabel.font}].width);
-    CGFloat valWidth = ceil([valueText sizeWithAttributes:@{NSFontAttributeName: valueLabel.font}].width);
-    CGFloat iconW = icon.length > 0 ? kBadgeIconSize : 0;
-    CGFloat infoWidth = MAX(nameWidth, valWidth) + 4.0;
-    CGFloat badgeWidth = (kBadgeHPad - 4) + iconW + kBadgeGap + infoWidth + kBadgeHPad;
-    badgeWidth = MAX(badgeWidth, kBadgeHeight);
     CGFloat maxWidth = self.contentView.bounds.size.width - kArcPadding * 2;
     if (maxWidth <= 0) maxWidth = 300;
     badgeWidth = MIN(badgeWidth, maxWidth);
@@ -608,6 +618,44 @@ static const CGFloat kArcNameLabelHeight = 16.0;
     NSScanner *scanner = [NSScanner scannerWithString:str];
     double value;
     return [scanner scanDouble:&value] && [scanner isAtEnd];
+}
+
+#pragma mark - Frame-based badge subview layout
+
+- (void)layoutBadgeSubviews:(UIView *)badge width:(CGFloat)w height:(CGFloat)h {
+    CGFloat midY = h / 2.0;
+    CGFloat iconX = kBadgeHPad - 4;
+    // Find subviews by order: icon (tag=0 or first UILabel with MDI font), then name/value
+    UILabel *iconLabel = nil, *nameLabel = nil, *valueLabel = nil;
+    for (UIView *sub in badge.subviews) {
+        if (![sub isKindOfClass:[UILabel class]]) continue;
+        UILabel *label = (UILabel *)sub;
+        if (!iconLabel) {
+            iconLabel = label;
+        } else if (!nameLabel && badge.subviews.count > 3) {
+            // 3+ labels: icon, name, value (or icon, value for 2-label chips, handled below)
+            nameLabel = label;
+        } else {
+            valueLabel = label;
+        }
+    }
+    // 2-label badge (chip style): icon + value only
+    if (!valueLabel && nameLabel) {
+        valueLabel = nameLabel;
+        nameLabel = nil;
+    }
+
+    if (iconLabel) {
+        iconLabel.frame = CGRectMake(iconX, midY - kBadgeIconSize / 2, kBadgeIconSize, kBadgeIconSize);
+    }
+    CGFloat textX = iconX + kBadgeIconSize + kBadgeGap;
+    CGFloat textW = MAX(0, w - textX - kBadgeHPad);
+    if (nameLabel && valueLabel) {
+        nameLabel.frame = CGRectMake(textX, midY - 14, textW, 12);
+        valueLabel.frame = CGRectMake(textX, midY + 1, textW, 14);
+    } else if (valueLabel) {
+        valueLabel.frame = CGRectMake(textX, midY - 7, textW, 14);
+    }
 }
 
 #pragma mark - Badge Tap
