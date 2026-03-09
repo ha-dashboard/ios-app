@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HARemoteEntityCell.h"
 #import "HAEntity.h"
 #import "HADashboardConfig.h"
@@ -32,12 +33,29 @@
     [self.activityButton addTarget:self action:@selector(activityTapped) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:self.activityButton];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self.toggleSwitch.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
-        [self.toggleSwitch.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:padding],
-        [self.activityButton.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
-        [self.activityButton.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-padding],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.toggleSwitch.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
+            [self.toggleSwitch.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:padding],
+            [self.activityButton.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
+            [self.activityButton.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-padding],
+        ]];
+    }
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat padding = 10.0;
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat h = self.contentView.bounds.size.height;
+
+        CGSize switchSize = [self.toggleSwitch sizeThatFits:CGSizeZero];
+        self.toggleSwitch.frame = CGRectMake(w - padding - switchSize.width, padding, switchSize.width, switchSize.height);
+
+        CGSize actSize = [self.activityButton sizeThatFits:CGSizeMake(w - padding * 2, CGFLOAT_MAX)];
+        self.activityButton.frame = CGRectMake(padding, h - padding - actSize.height, actSize.width, actSize.height);
+    }
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {

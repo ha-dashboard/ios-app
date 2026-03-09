@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HAInputTextEntityCell.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
@@ -28,14 +29,32 @@
     self.textField.translatesAutoresizingMaskIntoConstraints = NO;
     [self.contentView addSubview:self.textField];
 
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.textField attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.textField attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.textField attribute:NSLayoutAttributeBottom
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.textField attribute:NSLayoutAttributeHeight
-        relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:36]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.textField attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.textField attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.textField attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.textField attribute:NSLayoutAttributeHeight
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:36]];
+    }
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat padding = 10.0;
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat h = self.contentView.bounds.size.height;
+        self.textField.frame = CGRectMake(padding, h - padding - 36, w - padding * 2, 36);
+    }
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {

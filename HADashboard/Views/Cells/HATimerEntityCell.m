@@ -1,9 +1,11 @@
+#import "HAAutoLayout.h"
 #import "HATimerEntityCell.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
 #import "HATheme.h"
 #import "UIView+HAUtilities.h"
+#import "UIViewController+HAAlert.h"
 
 @interface HATimerEntityCell ()
 @property (nonatomic, strong) UILabel *timeLabel;
@@ -63,38 +65,66 @@
     [self.contentView addSubview:self.cancelButton];
 
     // Time label: below name
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.timeLabel attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.timeLabel attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:self.nameLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:4]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.timeLabel attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.timeLabel attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.nameLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:4]];
+    }
 
     // Buttons: bottom-right row
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.cancelButton attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.cancelButton attribute:NSLayoutAttributeBottom
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.cancelButton attribute:NSLayoutAttributeWidth
-        relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonWidth]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.cancelButton attribute:NSLayoutAttributeHeight
-        relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonHeight]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.cancelButton attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.cancelButton attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.cancelButton attribute:NSLayoutAttributeWidth
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonWidth]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.cancelButton attribute:NSLayoutAttributeHeight
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonHeight]];
+    }
 
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.pauseButton attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.cancelButton attribute:NSLayoutAttributeLeading multiplier:1 constant:-buttonSpacing]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.pauseButton attribute:NSLayoutAttributeBottom
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.pauseButton attribute:NSLayoutAttributeWidth
-        relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonWidth]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.pauseButton attribute:NSLayoutAttributeHeight
-        relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonHeight]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.pauseButton attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.cancelButton attribute:NSLayoutAttributeLeading multiplier:1 constant:-buttonSpacing]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.pauseButton attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.pauseButton attribute:NSLayoutAttributeWidth
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonWidth]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.pauseButton attribute:NSLayoutAttributeHeight
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonHeight]];
+    }
 
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.startButton attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.pauseButton attribute:NSLayoutAttributeLeading multiplier:1 constant:-buttonSpacing]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.startButton attribute:NSLayoutAttributeBottom
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.startButton attribute:NSLayoutAttributeWidth
-        relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonWidth]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.startButton attribute:NSLayoutAttributeHeight
-        relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonHeight]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.startButton attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.pauseButton attribute:NSLayoutAttributeLeading multiplier:1 constant:-buttonSpacing]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.startButton attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.startButton attribute:NSLayoutAttributeWidth
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonWidth]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.startButton attribute:NSLayoutAttributeHeight
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonHeight]];
+    }
 
     // Finish button (force-complete the timer)
     self.finishButton = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -116,15 +146,17 @@
     [self.changeButton addTarget:self action:@selector(changeTapped) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:self.changeButton];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self.finishButton.trailingAnchor constraintEqualToAnchor:self.startButton.leadingAnchor constant:-buttonSpacing],
-        [self.finishButton.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-padding],
-        [self.finishButton.widthAnchor constraintEqualToConstant:buttonWidth],
-        [self.finishButton.heightAnchor constraintEqualToConstant:buttonHeight],
-        // Change button: left of time label, same Y
-        [self.changeButton.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
-        [self.changeButton.centerYAnchor constraintEqualToAnchor:self.timeLabel.centerYAnchor],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.finishButton.trailingAnchor constraintEqualToAnchor:self.startButton.leadingAnchor constant:-buttonSpacing],
+            [self.finishButton.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-padding],
+            [self.finishButton.widthAnchor constraintEqualToConstant:buttonWidth],
+            [self.finishButton.heightAnchor constraintEqualToConstant:buttonHeight],
+            // Change button: left of time label, same Y
+            [self.changeButton.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
+            [self.changeButton.centerYAnchor constraintEqualToAnchor:self.timeLabel.centerYAnchor],
+        ]];
+    }
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
@@ -196,28 +228,72 @@
         }
     }
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Set Duration"
-                                                                  message:@"\n\n\n\n\n\n\n"
-                                                           preferredStyle:UIAlertControllerStyleAlert];
-    [alert.view addSubview:picker];
-    picker.translatesAutoresizingMaskIntoConstraints = NO;
-    [NSLayoutConstraint activateConstraints:@[
-        [picker.centerXAnchor constraintEqualToAnchor:alert.view.centerXAnchor],
-        [picker.topAnchor constraintEqualToAnchor:alert.view.topAnchor constant:50],
-    ]];
-
     __weak typeof(self) weakSelf = self;
-    [alert addAction:[UIAlertAction actionWithTitle:@"Set" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+    void (^setDuration)(void) = ^{
         NSTimeInterval secs = picker.countDownDuration;
         NSInteger h = (NSInteger)(secs / 3600);
         NSInteger m = (NSInteger)((NSInteger)secs % 3600) / 60;
         NSInteger s = (NSInteger)secs % 60;
         NSString *dur = [NSString stringWithFormat:@"%ld:%02ld:%02ld", (long)h, (long)m, (long)s];
         [weakSelf callService:@"change" inDomain:HAEntityDomainTimer withData:@{@"duration": dur}];
-    }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    };
 
-    [vc presentViewController:alert animated:YES completion:nil];
+    if ([UIAlertController class]) {
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Set Duration"
+                                                                      message:@"\n\n\n\n\n\n\n"
+                                                               preferredStyle:UIAlertControllerStyleAlert];
+        [alert.view addSubview:picker];
+        picker.translatesAutoresizingMaskIntoConstraints = NO;
+        if (HAAutoLayoutAvailable()) {
+            [NSLayoutConstraint activateConstraints:@[
+                [picker.centerXAnchor constraintEqualToAnchor:alert.view.centerXAnchor],
+                [picker.topAnchor constraintEqualToAnchor:alert.view.topAnchor constant:50],
+            ]];
+        }
+        [alert addAction:[UIAlertAction actionWithTitle:@"Set" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            setDuration();
+        }]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+        [vc presentViewController:alert animated:YES completion:nil];
+    } else {
+        // iOS 5-7: simple Set/Cancel alert (picker not embedded)
+        [vc ha_showAlertWithTitle:@"Set Duration"
+                          message:nil
+                      cancelTitle:@"Cancel"
+                     actionTitles:@[@"Set"]
+                          handler:^(NSInteger index) {
+            if (index == 0) setDuration();
+        }];
+    }
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat h = self.contentView.bounds.size.height;
+        CGFloat padding = 10.0;
+        CGFloat btnW = 56.0;
+        CGFloat btnH = 28.0;
+        CGFloat btnSpacing = 4.0;
+
+        // Time label: below name
+        CGSize timeSize = [self.timeLabel sizeThatFits:CGSizeMake(w / 2.0, CGFLOAT_MAX)];
+        self.timeLabel.frame = CGRectMake(padding, CGRectGetMaxY(self.nameLabel.frame) + 4, timeSize.width, timeSize.height);
+
+        // Change button: right, same Y as time
+        CGSize changeSize = [self.changeButton sizeThatFits:CGSizeMake(60, CGFLOAT_MAX)];
+        self.changeButton.frame = CGRectMake(w - padding - changeSize.width, self.timeLabel.frame.origin.y + (timeSize.height - changeSize.height) / 2.0, changeSize.width, changeSize.height);
+
+        // Cancel: bottom-right
+        self.cancelButton.frame = CGRectMake(w - padding - btnW, h - padding - btnH, btnW, btnH);
+        // Pause: left of cancel
+        self.pauseButton.frame = CGRectMake(CGRectGetMinX(self.cancelButton.frame) - btnSpacing - btnW, h - padding - btnH, btnW, btnH);
+        // Start: left of pause
+        self.startButton.frame = CGRectMake(CGRectGetMinX(self.pauseButton.frame) - btnSpacing - btnW, h - padding - btnH, btnW, btnH);
+        // Finish: left of start
+        self.finishButton.frame = CGRectMake(CGRectGetMinX(self.startButton.frame) - btnSpacing - btnW, h - padding - btnH, btnW, btnH);
+    }
 }
 
 - (void)prepareForReuse {

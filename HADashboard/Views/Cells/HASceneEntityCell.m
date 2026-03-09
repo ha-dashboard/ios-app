@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HASceneEntityCell.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
@@ -40,20 +41,32 @@ static const NSTimeInterval kActivationFeedbackDuration = 1.5;
     self.feedbackLabel.alpha = 0.0;
 
     // Activate button: centered bottom
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.activateButton attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.activateButton attribute:NSLayoutAttributeCenterY
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeCenterY multiplier:1 constant:8]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.activateButton attribute:NSLayoutAttributeWidth
-        relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:80]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.activateButton attribute:NSLayoutAttributeHeight
-        relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:32]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.activateButton attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.activateButton attribute:NSLayoutAttributeCenterY
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeCenterY multiplier:1 constant:8]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.activateButton attribute:NSLayoutAttributeWidth
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:80]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.activateButton attribute:NSLayoutAttributeHeight
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:32]];
+    }
 
     // Feedback label: same position as button
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.feedbackLabel attribute:NSLayoutAttributeCenterX
-        relatedBy:NSLayoutRelationEqual toItem:self.activateButton attribute:NSLayoutAttributeCenterX multiplier:1 constant:0]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.feedbackLabel attribute:NSLayoutAttributeCenterY
-        relatedBy:NSLayoutRelationEqual toItem:self.activateButton attribute:NSLayoutAttributeCenterY multiplier:1 constant:0]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.feedbackLabel attribute:NSLayoutAttributeCenterX
+            relatedBy:NSLayoutRelationEqual toItem:self.activateButton attribute:NSLayoutAttributeCenterX multiplier:1 constant:0]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.feedbackLabel attribute:NSLayoutAttributeCenterY
+            relatedBy:NSLayoutRelationEqual toItem:self.activateButton attribute:NSLayoutAttributeCenterY multiplier:1 constant:0]];
+    }
 
     // Stop button (for running scripts)
     self.stopButton = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -67,12 +80,14 @@ static const NSTimeInterval kActivationFeedbackDuration = 1.5;
     [self.stopButton addTarget:self action:@selector(stopTapped) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:self.stopButton];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self.stopButton.trailingAnchor constraintEqualToAnchor:self.activateButton.leadingAnchor constant:-4],
-        [self.stopButton.centerYAnchor constraintEqualToAnchor:self.activateButton.centerYAnchor],
-        [self.stopButton.widthAnchor constraintEqualToConstant:60],
-        [self.stopButton.heightAnchor constraintEqualToConstant:32],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.stopButton.trailingAnchor constraintEqualToAnchor:self.activateButton.leadingAnchor constant:-4],
+            [self.stopButton.centerYAnchor constraintEqualToAnchor:self.activateButton.centerYAnchor],
+            [self.stopButton.widthAnchor constraintEqualToConstant:60],
+            [self.stopButton.heightAnchor constraintEqualToConstant:32],
+        ]];
+    }
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
@@ -142,6 +157,26 @@ static const NSTimeInterval kActivationFeedbackDuration = 1.5;
     if (!self.entity) return;
     [HAHaptics mediumImpact];
     [self callService:@"turn_off" inDomain:[self.entity domain]];
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat padding = 10.0;
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat h = self.contentView.bounds.size.height;
+        CGFloat btnW = 80.0;
+        CGFloat btnH = 32.0;
+        CGFloat midY = h / 2.0 + 8.0;
+        self.activateButton.frame = CGRectMake(w - padding - btnW, midY - btnH / 2.0, btnW, btnH);
+        CGSize fbSize = [self.feedbackLabel sizeThatFits:CGSizeMake(btnW, CGFLOAT_MAX)];
+        self.feedbackLabel.frame = CGRectMake(CGRectGetMidX(self.activateButton.frame) - fbSize.width / 2.0,
+                                              CGRectGetMidY(self.activateButton.frame) - fbSize.height / 2.0,
+                                              fbSize.width, fbSize.height);
+        CGFloat stopW = 60.0;
+        self.stopButton.frame = CGRectMake(CGRectGetMinX(self.activateButton.frame) - 4.0 - stopW,
+                                           midY - btnH / 2.0, stopW, btnH);
+    }
 }
 
 - (void)prepareForReuse {

@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HASensorEntityCell.h"
 #import "HAEntity.h"
 #import "HADashboardConfig.h"
@@ -26,17 +27,27 @@
     self.unitLabel = [self labelWithFont:[UIFont systemFontOfSize:14] color:[HATheme secondaryTextColor] lines:1];
 
     CGFloat padding = 10.0;
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.valueLabel attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.valueLabel attribute:NSLayoutAttributeBottom
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.valueLabel attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.valueLabel attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
+    }
 
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.unitLabel attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.valueLabel attribute:NSLayoutAttributeTrailing multiplier:1 constant:4]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.unitLabel attribute:NSLayoutAttributeBaseline
-        relatedBy:NSLayoutRelationEqual toItem:self.valueLabel attribute:NSLayoutAttributeBaseline multiplier:1 constant:0]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.unitLabel attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationLessThanOrEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.unitLabel attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.valueLabel attribute:NSLayoutAttributeTrailing multiplier:1 constant:4]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.unitLabel attribute:NSLayoutAttributeBaseline
+            relatedBy:NSLayoutRelationEqual toItem:self.valueLabel attribute:NSLayoutAttributeBaseline multiplier:1 constant:0]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.unitLabel attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationLessThanOrEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    }
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
@@ -50,6 +61,20 @@
         self.contentView.backgroundColor = entity.isOn
             ? [HATheme onTintColor]
             : [HATheme cellBackgroundColor];
+    }
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat padding = 10.0;
+        CGFloat h = self.contentView.bounds.size.height;
+        CGSize valSize = [self.valueLabel sizeThatFits:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)];
+        self.valueLabel.frame = CGRectMake(padding, h - padding - valSize.height, valSize.width, valSize.height);
+        CGSize unitSize = [self.unitLabel sizeThatFits:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)];
+        self.unitLabel.frame = CGRectMake(CGRectGetMaxX(self.valueLabel.frame) + 4,
+                                          CGRectGetMaxY(self.valueLabel.frame) - unitSize.height,
+                                          unitSize.width, unitSize.height);
     }
 }
 

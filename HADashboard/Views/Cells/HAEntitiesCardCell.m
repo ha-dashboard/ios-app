@@ -1,3 +1,5 @@
+#import "HAAutoLayout.h"
+#import "HAStackView.h"
 #import "HAEntitiesCardCell.h"
 #import "HASwitch.h"
 #import "HADashboardConfig.h"
@@ -27,7 +29,7 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
 @property (nonatomic, strong) UISwitch *headerToggle;
 @property (nonatomic, strong) NSMutableArray<HAEntityRowView *> *rowViews;
 @property (nonatomic, weak) HADashboardConfigSection *lastConfiguredSection;
-@property (nonatomic, strong) UIStackView *stackView;
+@property (nonatomic, strong) HAStackView *stackView;
 @property (nonatomic, strong) NSLayoutConstraint *stackTopWithTitle;
 @property (nonatomic, strong) NSLayoutConstraint *stackTopNoTitle;
 @property (nonatomic, strong) NSLayoutConstraint *stackTopWithToggle;
@@ -93,16 +95,18 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
     [self.contentView addSubview:self.headerToggle];
 
     // Position at top-right of card — works with or without title
-    [NSLayoutConstraint activateConstraints:@[
-        [self.headerToggle.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-8],
-        [self.headerToggle.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:6],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.headerToggle.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-8],
+            [self.headerToggle.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:6],
+        ]];
+    }
 
     // Stack view for entity rows
-    self.stackView = [[UIStackView alloc] init];
-    self.stackView.axis = UILayoutConstraintAxisVertical;
-    self.stackView.distribution = UIStackViewDistributionFill;
-    self.stackView.alignment = UIStackViewAlignmentFill;
+    self.stackView = [[HAStackView alloc] init];
+    self.stackView.axis = 1;
+    self.stackView.distribution = 0;
+    self.stackView.alignment = 0;
     self.stackView.spacing = 0;
     self.stackView.translatesAutoresizingMaskIntoConstraints = NO;
     [self.contentView addSubview:self.stackView];
@@ -112,19 +116,23 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
 
     // Layout constraints
     // Title label: 12pt padding from top and sides
-    [NSLayoutConstraint activateConstraints:@[
-        [self.titleLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:12],
-        [self.titleLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-12],
-        [self.titleLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:12]
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.titleLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:12],
+            [self.titleLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-12],
+            [self.titleLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:12]
+        ]];
+    }
 
     // Stack view: below title (when shown) or at contentView top (no title).
-    self.stackTopWithTitle = [self.stackView.topAnchor constraintEqualToAnchor:self.titleLabel.bottomAnchor constant:4];
-    self.stackTopNoTitle = [self.stackView.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:0];
-    self.stackTopWithToggle = [self.stackView.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:36];
-    self.stackTopWithTitle.active = NO;
-    self.stackTopWithToggle.active = NO;
-    self.stackTopNoTitle.active = YES; // default: no title
+    if (HAAutoLayoutAvailable()) {
+        self.stackTopWithTitle = [self.stackView.topAnchor constraintEqualToAnchor:self.titleLabel.bottomAnchor constant:4];
+        self.stackTopNoTitle = [self.stackView.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:0];
+        self.stackTopWithToggle = [self.stackView.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:36];
+        self.stackTopWithTitle.active = NO;
+        self.stackTopWithToggle.active = NO;
+        self.stackTopNoTitle.active = YES; // default: no title
+    }
 
     // Scene chips scroll view (below entity rows)
     self.sceneChipScrollView = [[UIScrollView alloc] init];
@@ -133,24 +141,26 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
     self.sceneChipScrollView.hidden = YES;
     [self.contentView addSubview:self.sceneChipScrollView];
 
-    self.chipScrollHeight = [self.sceneChipScrollView.heightAnchor constraintEqualToConstant:0];
+    if (HAAutoLayoutAvailable()) {
+        self.chipScrollHeight = [self.sceneChipScrollView.heightAnchor constraintEqualToConstant:0];
 
-    // Layout chain: stack → chipScroll → contentView bottom
-    // Bottom constraint uses high priority (not required) to avoid conflicts
-    // with the cell frame height set by HAColumnarLayout.
-    NSLayoutConstraint *bottom = [self.sceneChipScrollView.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:0];
-    bottom.priority = UILayoutPriorityDefaultHigh;
+        // Layout chain: stack → chipScroll → contentView bottom
+        // Bottom constraint uses high priority (not required) to avoid conflicts
+        // with the cell frame height set by HAColumnarLayout.
+        NSLayoutConstraint *bottom = [self.sceneChipScrollView.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:0];
+        bottom.priority = UILayoutPriorityDefaultHigh;
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self.stackView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
-        [self.stackView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
+        [NSLayoutConstraint activateConstraints:@[
+            [self.stackView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
+            [self.stackView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
 
-        [self.sceneChipScrollView.topAnchor constraintEqualToAnchor:self.stackView.bottomAnchor],
-        [self.sceneChipScrollView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
-        [self.sceneChipScrollView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
-        self.chipScrollHeight,
-        bottom,
-    ]];
+            [self.sceneChipScrollView.topAnchor constraintEqualToAnchor:self.stackView.bottomAnchor],
+            [self.sceneChipScrollView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
+            [self.sceneChipScrollView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
+            self.chipScrollHeight,
+            bottom,
+        ]];
+    }
 }
 
 - (void)layoutSubviews {
@@ -168,6 +178,25 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
     // Sync backgroundView (blur) with contentView frame so it doesn't cover headings.
     if (self.backgroundView) {
         self.backgroundView.frame = self.contentView.frame;
+    }
+
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat y = 0;
+        // Title
+        if (!self.titleLabel.hidden && self.titleLabel.text.length > 0) {
+            CGSize titleSize = [self.titleLabel sizeThatFits:CGSizeMake(w - 24, CGFLOAT_MAX)];
+            self.titleLabel.frame = CGRectMake(12, 12, w - 24, titleSize.height);
+            y = CGRectGetMaxY(self.titleLabel.frame) + 4;
+        }
+        // Header toggle
+        if (!self.headerToggle.hidden) {
+            CGSize toggleSize = [self.headerToggle sizeThatFits:CGSizeZero];
+            self.headerToggle.frame = CGRectMake(w - 8 - toggleSize.width, 6, toggleSize.width, toggleSize.height);
+            if (y == 0) y = 36;
+        }
+        // Stack
+        self.stackView.frame = CGRectMake(0, y, w, self.contentView.bounds.size.height - y);
     }
 }
 
@@ -369,7 +398,9 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
                 divider.backgroundColor = [HATheme controlBorderColor];
                 divider.tag = 999;
                 divider.translatesAutoresizingMaskIntoConstraints = NO;
-                [divider.heightAnchor constraintEqualToConstant:1].active = YES;
+                if (HAAutoLayoutAvailable()) {
+                    [divider.heightAnchor constraintEqualToConstant:1].active = YES;
+                }
                 // Insert at correct position in stack
                 NSInteger insertIdx = MIN(entityRowIdx, (NSInteger)self.stackView.arrangedSubviews.count);
                 [self.stackView insertArrangedSubview:divider atIndex:insertIdx];
@@ -388,12 +419,14 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
                 wrapper.tag = 999;
                 [wrapper addSubview:sectionLabel];
                 sectionLabel.translatesAutoresizingMaskIntoConstraints = NO;
-                [NSLayoutConstraint activateConstraints:@[
-                    [sectionLabel.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor constant:insets.left],
-                    [sectionLabel.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor constant:-insets.right],
-                    [sectionLabel.topAnchor constraintEqualToAnchor:wrapper.topAnchor constant:insets.top],
-                    [sectionLabel.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor constant:-insets.bottom],
-                ]];
+                if (HAAutoLayoutAvailable()) {
+                    [NSLayoutConstraint activateConstraints:@[
+                        [sectionLabel.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor constant:insets.left],
+                        [sectionLabel.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor constant:-insets.right],
+                        [sectionLabel.topAnchor constraintEqualToAnchor:wrapper.topAnchor constant:insets.top],
+                        [sectionLabel.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor constant:-insets.bottom],
+                    ]];
+                }
                 NSInteger insertIdx = MIN(entityRowIdx, (NSInteger)self.stackView.arrangedSubviews.count);
                 [self.stackView insertArrangedSubview:wrapper atIndex:insertIdx];
                 entityRowIdx++;
@@ -417,7 +450,9 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
                 [linkRow setTitleColor:[HATheme accentColor] forState:UIControlStateNormal];
                 linkRow.tag = 999;
                 linkRow.translatesAutoresizingMaskIntoConstraints = NO;
-                [linkRow.heightAnchor constraintEqualToConstant:36].active = YES;
+                if (HAAutoLayoutAvailable()) {
+                    [linkRow.heightAnchor constraintEqualToConstant:36].active = YES;
+                }
                 // Store URL for tap — use objc_setAssociatedObject or just open on tap
                 NSString *url = rowInfo[@"url"];
                 [linkRow addTarget:self action:@selector(weblinkTapped:) forControlEvents:UIControlEventTouchUpInside];
@@ -442,7 +477,9 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
                 btnRow.titleLabel.font = [UIFont systemFontOfSize:14];
                 btnRow.tag = 999;
                 btnRow.translatesAutoresizingMaskIntoConstraints = NO;
-                [btnRow.heightAnchor constraintEqualToConstant:36].active = YES;
+                if (HAAutoLayoutAvailable()) {
+                    [btnRow.heightAnchor constraintEqualToConstant:36].active = YES;
+                }
                 // Wire tap action from config
                 NSDictionary *tapAction = rowInfo[@"tap_action"];
                 if ([tapAction isKindOfClass:[NSDictionary class]]) {
@@ -455,13 +492,15 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
                 continue;
             }
             if ([rowType isEqualToString:@"buttons"]) {
-                UIStackView *btnStack = [[UIStackView alloc] init];
-                btnStack.axis = UILayoutConstraintAxisHorizontal;
+                HAStackView *btnStack = [[HAStackView alloc] init];
+                btnStack.axis = 0;
                 btnStack.spacing = 8;
-                btnStack.distribution = UIStackViewDistributionFillEqually;
+                btnStack.distribution = 1;
                 btnStack.tag = 999;
                 btnStack.translatesAutoresizingMaskIntoConstraints = NO;
-                [btnStack.heightAnchor constraintEqualToConstant:36].active = YES;
+                if (HAAutoLayoutAvailable()) {
+                    [btnStack.heightAnchor constraintEqualToConstant:36].active = YES;
+                }
                 NSArray *entities = rowInfo[@"entities"];
                 if ([entities isKindOfClass:[NSArray class]]) {
                     for (id btnEntry in entities) {
@@ -495,12 +534,14 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
                 wrapper.tag = 999;
                 [wrapper addSubview:btnStack];
                 btnStack.translatesAutoresizingMaskIntoConstraints = NO;
-                [NSLayoutConstraint activateConstraints:@[
-                    [btnStack.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor constant:10],
-                    [btnStack.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor constant:-10],
-                    [btnStack.topAnchor constraintEqualToAnchor:wrapper.topAnchor constant:4],
-                    [btnStack.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor constant:-4],
-                ]];
+                if (HAAutoLayoutAvailable()) {
+                    [NSLayoutConstraint activateConstraints:@[
+                        [btnStack.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor constant:10],
+                        [btnStack.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor constant:-10],
+                        [btnStack.topAnchor constraintEqualToAnchor:wrapper.topAnchor constant:4],
+                        [btnStack.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor constant:-4],
+                    ]];
+                }
                 NSInteger insertIdx = MIN(entityRowIdx, (NSInteger)self.stackView.arrangedSubviews.count);
                 [self.stackView insertArrangedSubview:wrapper atIndex:insertIdx];
                 entityRowIdx++;

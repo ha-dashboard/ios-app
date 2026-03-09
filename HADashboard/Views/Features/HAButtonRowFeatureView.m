@@ -1,3 +1,5 @@
+#import "HAAutoLayout.h"
+#import "HAStackView.h"
 #import "HAButtonRowFeatureView.h"
 #import "HAEntity.h"
 #import "HATheme.h"
@@ -6,7 +8,7 @@
 #import "HAIconMapper.h"
 
 @interface HAButtonRowFeatureView ()
-@property (nonatomic, strong) UIStackView *buttonStack;
+@property (nonatomic, strong) HAStackView *buttonStack;
 @property (nonatomic, strong) NSArray<UIButton *> *buttons;
 @property (nonatomic, strong) UISwitch *toggleSwitch;  // For "toggle" feature type
 @property (nonatomic, strong) UILabel *tempValueLabel;  // For "target-temperature" display
@@ -27,22 +29,24 @@
 }
 
 - (void)setupUI {
-    self.buttonStack = [[UIStackView alloc] init];
-    self.buttonStack.axis = UILayoutConstraintAxisHorizontal;
-    self.buttonStack.distribution = UIStackViewDistributionFillEqually;
+    self.buttonStack = [[HAStackView alloc] init];
+    self.buttonStack.axis = 0;
+    self.buttonStack.distribution = 1;
     self.buttonStack.spacing = 8;
     self.buttonStack.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:self.buttonStack];
 
-    NSLayoutConstraint *heightConstraint = [self.heightAnchor constraintEqualToConstant:[HAButtonRowFeatureView preferredHeight]];
-    heightConstraint.priority = UILayoutPriorityDefaultHigh;
-    [NSLayoutConstraint activateConstraints:@[
-        [self.buttonStack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12],
-        [self.buttonStack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-12],
-        [self.buttonStack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-        [self.buttonStack.heightAnchor constraintEqualToConstant:32],
-        heightConstraint,
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        NSLayoutConstraint *heightConstraint = [self.heightAnchor constraintEqualToConstant:[HAButtonRowFeatureView preferredHeight]];
+        heightConstraint.priority = UILayoutPriorityDefaultHigh;
+        [NSLayoutConstraint activateConstraints:@[
+            [self.buttonStack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12],
+            [self.buttonStack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-12],
+            [self.buttonStack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+            [self.buttonStack.heightAnchor constraintEqualToConstant:32],
+            heightConstraint,
+        ]];
+    }
 }
 
 - (void)configureWithEntity:(HAEntity *)entity featureConfig:(NSDictionary *)config {
@@ -142,7 +146,7 @@
     [self.buttonStack addArrangedSubview:leftSpacer];
     [self.buttonStack addArrangedSubview:self.toggleSwitch];
     [self.buttonStack addArrangedSubview:rightSpacer];
-    self.buttonStack.distribution = UIStackViewDistributionEqualCentering;
+    self.buttonStack.distribution = 4;
 }
 
 #pragma mark - Vacuum Commands
@@ -193,12 +197,14 @@
 
 - (void)setupTargetTemperatureForEntity:(HAEntity *)entity available:(BOOL)available {
     // Use fill distribution so the value label stretches and buttons stay compact
-    self.buttonStack.distribution = UIStackViewDistributionFill;
+    self.buttonStack.distribution = 0;
 
     UIButton *minusBtn = [self makeButtonWithTitle:@"\u2212" tag:40]; // −
     minusBtn.enabled = available;
-    [minusBtn.widthAnchor constraintEqualToConstant:44].active = YES;
-    [minusBtn setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+    if (HAAutoLayoutAvailable()) {
+        [minusBtn.widthAnchor constraintEqualToConstant:44].active = YES;
+    }
+    [minusBtn setContentHuggingPriority:UILayoutPriorityRequired forAxis:0];
 
     self.tempValueLabel = [[UILabel alloc] init];
     self.tempValueLabel.textAlignment = NSTextAlignmentCenter;
@@ -209,18 +215,32 @@
     self.tempValueLabel.text = target
         ? [NSString stringWithFormat:@"%@%@", target, unit]
         : @"--";
-    [self.tempValueLabel setContentHuggingPriority:UILayoutPriorityDefaultLow forAxis:UILayoutConstraintAxisHorizontal];
+    if (HAAutoLayoutAvailable()) {
+        [self.tempValueLabel setContentHuggingPriority:UILayoutPriorityDefaultLow forAxis:0];
+    }
 
     UIButton *plusBtn = [self makeButtonWithTitle:@"+" tag:41];
     plusBtn.enabled = available;
-    [plusBtn.widthAnchor constraintEqualToConstant:44].active = YES;
-    [plusBtn setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+    if (HAAutoLayoutAvailable()) {
+        [plusBtn.widthAnchor constraintEqualToConstant:44].active = YES;
+    }
+    [plusBtn setContentHuggingPriority:UILayoutPriorityRequired forAxis:0];
 
     [self.buttonStack addArrangedSubview:minusBtn];
     [self.buttonStack addArrangedSubview:self.tempValueLabel];
     [self.buttonStack addArrangedSubview:plusBtn];
 
     self.buttons = @[minusBtn, plusBtn];
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat h = [HAButtonRowFeatureView preferredHeight];
+        CGFloat selfW = self.bounds.size.width;
+        self.frame = CGRectMake(self.frame.origin.x, self.frame.origin.y, selfW, h);
+        self.buttonStack.frame = CGRectMake(12, (h - 32) / 2, selfW - 24, 32);
+    }
 }
 
 #pragma mark - Button Factory

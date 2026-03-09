@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HAInputSelectEntityCell.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
@@ -5,6 +6,7 @@
 #import "HATheme.h"
 #import "HAHaptics.h"
 #import "UIView+HAUtilities.h"
+#import "UIViewController+HAAlert.h"
 
 @interface HAInputSelectEntityCell ()
 @property (nonatomic, strong) UIButton *optionButton;
@@ -31,14 +33,32 @@
     [self.contentView addSubview:self.optionButton];
 
     // Button: below name, full width
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.optionButton attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.optionButton attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.optionButton attribute:NSLayoutAttributeBottom
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.optionButton attribute:NSLayoutAttributeHeight
-        relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:36]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.optionButton attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.optionButton attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.optionButton attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.optionButton attribute:NSLayoutAttributeHeight
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:36]];
+    }
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat padding = 10.0;
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat h = self.contentView.bounds.size.height;
+        self.optionButton.frame = CGRectMake(padding, h - padding - 36, w - padding * 2, 36);
+    }
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
@@ -57,33 +77,22 @@
     NSArray<NSString *> *options = [self.entity inputSelectOptions];
     if (options.count == 0) return;
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:[self.entity friendlyName]
-                                                                   message:nil
-                                                            preferredStyle:UIAlertControllerStyleActionSheet];
-
     NSString *current = [self.entity inputSelectCurrentOption];
-
+    NSMutableArray *titles = [NSMutableArray arrayWithCapacity:options.count];
     for (NSString *option in options) {
         BOOL isSelected = [option isEqualToString:current];
-        NSString *title = isSelected ? [NSString stringWithFormat:@"\u2713 %@", option] : option;
-
-        UIAlertAction *action = [UIAlertAction actionWithTitle:title
-                                                         style:UIAlertActionStyleDefault
-                                                       handler:^(UIAlertAction *a) {
-            [self selectOption:option];
-        }];
-        [alert addAction:action];
+        [titles addObject:isSelected ? [NSString stringWithFormat:@"\u2713 %@", option] : option];
     }
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-
-    // iPad popover anchor
-    alert.popoverPresentationController.sourceView = self.optionButton;
-    alert.popoverPresentationController.sourceRect = self.optionButton.bounds;
 
     UIViewController *vc = [self ha_parentViewController];
     if (vc) {
-        [vc presentViewController:alert animated:YES completion:nil];
+        [vc ha_showActionSheetWithTitle:[self.entity friendlyName]
+                            cancelTitle:@"Cancel"
+                           actionTitles:titles
+                             sourceView:self.optionButton
+                                handler:^(NSInteger index) {
+            [self selectOption:options[(NSUInteger)index]];
+        }];
     }
 }
 

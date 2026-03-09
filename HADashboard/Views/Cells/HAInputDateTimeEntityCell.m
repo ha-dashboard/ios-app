@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HAInputDateTimeEntityCell.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
@@ -26,12 +27,29 @@
     [self.valueButton addTarget:self action:@selector(valueTapped) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:self.valueButton];
 
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.valueButton attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.valueButton attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.valueButton attribute:NSLayoutAttributeBottom
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.valueButton attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.valueButton attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.valueButton attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
+    }
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat padding = 10.0;
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat h = self.contentView.bounds.size.height;
+        CGSize btnSize = [self.valueButton sizeThatFits:CGSizeMake(w - padding * 2, CGFLOAT_MAX)];
+        self.valueButton.frame = CGRectMake(padding, h - padding - btnSize.height, w - padding * 2, btnSize.height);
+    }
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
@@ -70,8 +88,12 @@
 
     picker.translatesAutoresizingMaskIntoConstraints = NO;
     [pickerVC.view addSubview:picker];
-    [pickerVC.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[p]|" options:0 metrics:nil views:@{@"p": picker}]];
-    [pickerVC.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[p]|" options:0 metrics:nil views:@{@"p": picker}]];
+    if (HAAutoLayoutAvailable()) {
+        [pickerVC.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[p]|" options:0 metrics:nil views:@{@"p": picker}]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [pickerVC.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[p]|" options:0 metrics:nil views:@{@"p": picker}]];
+    }
 
     pickerVC.preferredContentSize = CGSizeMake(320, 216);
 

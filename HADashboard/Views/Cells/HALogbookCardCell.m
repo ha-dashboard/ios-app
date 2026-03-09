@@ -1,3 +1,5 @@
+#import "HAAutoLayout.h"
+#import "HAStackView.h"
 #import "HALogbookCardCell.h"
 #import "HADashboardConfig.h"
 #import "HAEntity.h"
@@ -10,7 +12,7 @@ static const NSInteger kMaxEntries = 10;
 
 @interface HALogbookCardCell ()
 @property (nonatomic, strong) UILabel *titleLabel;
-@property (nonatomic, strong) UIStackView *entryStack;
+@property (nonatomic, strong) HAStackView *entryStack;
 @property (nonatomic, strong) UILabel *emptyLabel;
 @property (nonatomic, strong) UIActivityIndicatorView *spinner;
 @property (nonatomic, assign) NSInteger hoursToShow;
@@ -33,8 +35,8 @@ static const NSInteger kMaxEntries = 10;
         self.titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
         [self.contentView addSubview:self.titleLabel];
 
-        self.entryStack = [[UIStackView alloc] init];
-        self.entryStack.axis = UILayoutConstraintAxisVertical;
+        self.entryStack = [[HAStackView alloc] init];
+        self.entryStack.axis = 1;
         self.entryStack.spacing = 2;
         self.entryStack.translatesAutoresizingMaskIntoConstraints = NO;
         [self.contentView addSubview:self.entryStack];
@@ -53,21 +55,23 @@ static const NSInteger kMaxEntries = 10;
         self.spinner.hidesWhenStopped = YES;
         [self.contentView addSubview:self.spinner];
 
-        [NSLayoutConstraint activateConstraints:@[
-            [self.titleLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kPadding],
-            [self.titleLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding],
-            [self.titleLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding],
-
-            [self.entryStack.topAnchor constraintEqualToAnchor:self.titleLabel.bottomAnchor constant:8],
-            [self.entryStack.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding],
-            [self.entryStack.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding],
-
-            [self.emptyLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-            [self.emptyLabel.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
-
-            [self.spinner.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-            [self.spinner.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
-        ]];
+        if (HAAutoLayoutAvailable()) {
+            [NSLayoutConstraint activateConstraints:@[
+                [self.titleLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kPadding],
+                [self.titleLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding],
+                [self.titleLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding],
+    
+                [self.entryStack.topAnchor constraintEqualToAnchor:self.titleLabel.bottomAnchor constant:8],
+                [self.entryStack.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding],
+                [self.entryStack.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding],
+    
+                [self.emptyLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
+                [self.emptyLabel.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
+    
+                [self.spinner.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
+                [self.spinner.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
+            ]];
+        }
     }
     return self;
 }
@@ -166,7 +170,9 @@ static const NSInteger kMaxEntries = 10;
 - (UIView *)createEntryRow:(NSDictionary *)entry {
     UIView *row = [[UIView alloc] init];
     row.translatesAutoresizingMaskIntoConstraints = NO;
-    [row.heightAnchor constraintEqualToConstant:kRowHeight].active = YES;
+    if (HAAutoLayoutAvailable()) {
+        [row.heightAnchor constraintEqualToConstant:kRowHeight].active = YES;
+    }
 
     // Time label
     UILabel *timeLabel = [[UILabel alloc] init];
@@ -208,15 +214,17 @@ static const NSInteger kMaxEntries = 10;
         }
     }
 
-    [NSLayoutConstraint activateConstraints:@[
-        [timeLabel.leadingAnchor constraintEqualToAnchor:row.leadingAnchor],
-        [timeLabel.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
-        [timeLabel.widthAnchor constraintEqualToConstant:50],
-
-        [msgLabel.leadingAnchor constraintEqualToAnchor:timeLabel.trailingAnchor constant:4],
-        [msgLabel.trailingAnchor constraintEqualToAnchor:row.trailingAnchor],
-        [msgLabel.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [timeLabel.leadingAnchor constraintEqualToAnchor:row.leadingAnchor],
+            [timeLabel.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+            [timeLabel.widthAnchor constraintEqualToConstant:50],
+    
+            [msgLabel.leadingAnchor constraintEqualToAnchor:timeLabel.trailingAnchor constant:4],
+            [msgLabel.trailingAnchor constraintEqualToAnchor:row.trailingAnchor],
+            [msgLabel.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+        ]];
+    }
 
     return row;
 }
@@ -224,6 +232,35 @@ static const NSInteger kMaxEntries = 10;
 + (CGFloat)preferredHeightForHours:(NSInteger)hours {
     // Title + up to 10 rows + padding
     return kPadding + 20 + 8 + (kMaxEntries * (kRowHeight + 2)) + kPadding;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat h = self.contentView.bounds.size.height;
+        CGSize titleSize = [self.titleLabel sizeThatFits:CGSizeMake(w - kPadding * 2, CGFLOAT_MAX)];
+        self.titleLabel.frame = CGRectMake(kPadding, kPadding, w - kPadding * 2, titleSize.height);
+        CGFloat stackY = CGRectGetMaxY(self.titleLabel.frame) + 8;
+        self.entryStack.frame = CGRectMake(kPadding, stackY, w - kPadding * 2, h - stackY - kPadding);
+        self.emptyLabel.frame = CGRectMake(0, 0, w, h);
+        CGSize spinSize = [self.spinner sizeThatFits:CGSizeMake(w, h)];
+        self.spinner.frame = CGRectMake((w - spinSize.width) / 2, (h - spinSize.height) / 2,
+                                        spinSize.width, spinSize.height);
+
+        // Layout entry rows
+        for (UIView *row in self.entryStack.arrangedSubviews) {
+            row.frame = CGRectMake(0, 0, self.entryStack.bounds.size.width, kRowHeight);
+            NSArray *subs = row.subviews;
+            if (subs.count >= 2) {
+                UILabel *timeLabel = subs[0];
+                UILabel *msgLabel = subs[1];
+                CGFloat rowW = row.bounds.size.width;
+                timeLabel.frame = CGRectMake(0, (kRowHeight - 12) / 2, 50, 12);
+                msgLabel.frame = CGRectMake(54, (kRowHeight - 14) / 2, rowW - 54, 14);
+            }
+        }
+    }
 }
 
 - (void)prepareForReuse {

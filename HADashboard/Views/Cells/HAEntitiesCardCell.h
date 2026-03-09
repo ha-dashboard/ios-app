@@ -1,4 +1,5 @@
 #import <UIKit/UIKit.h>
+#import "HAStackView.h"
 
 @class HADashboardConfigSection;
 @class HADashboardConfigItem;
@@ -23,6 +24,6 @@
 
 /// Entity row views (for hit-testing from dashboard VC).
 @property (nonatomic, strong, readonly) NSMutableArray<HAEntityRowView *> *rowViews;
-@property (nonatomic, strong, readonly) UIStackView *stackView;
+@property (nonatomic, strong, readonly) HAStackView *stackView;
 
 @end

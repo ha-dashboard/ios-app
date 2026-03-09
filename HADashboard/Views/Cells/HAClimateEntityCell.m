@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HAClimateEntityCell.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
@@ -52,28 +53,44 @@
     CGFloat padding = 10.0;
 
     // Current temp: left side, vertically centered
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.currentTempLabel attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.currentTempLabel attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:self.nameLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:2]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.currentTempLabel attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.currentTempLabel attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.nameLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:2]];
+    }
 
     // Mode label: below current temp
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.modeLabel attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.modeLabel attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:self.currentTempLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:2]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.modeLabel attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.modeLabel attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.currentTempLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:2]];
+    }
 
     // Stepper: bottom-right
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.tempStepper attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.tempStepper attribute:NSLayoutAttributeBottom
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.tempStepper attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.tempStepper attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
+    }
 
     // Target label: above stepper
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.targetTempLabel attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.targetTempLabel attribute:NSLayoutAttributeBottom
-        relatedBy:NSLayoutRelationEqual toItem:self.tempStepper attribute:NSLayoutAttributeTop multiplier:1 constant:-4]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.targetTempLabel attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.targetTempLabel attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.tempStepper attribute:NSLayoutAttributeTop multiplier:1 constant:-4]];
+    }
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
@@ -126,6 +143,31 @@
                                             inDomain:@"climate"
                                             withData:data
                                             entityId:self.entity.entityId];
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat h = self.contentView.bounds.size.height;
+        CGFloat padding = 10.0;
+
+        // currentTempLabel: left, below name
+        CGSize tempSize = [self.currentTempLabel sizeThatFits:CGSizeMake(w / 2.0, CGFLOAT_MAX)];
+        self.currentTempLabel.frame = CGRectMake(padding, CGRectGetMaxY(self.nameLabel.frame) + 2, tempSize.width, tempSize.height);
+
+        // modeLabel: below current temp
+        CGSize modeSize = [self.modeLabel sizeThatFits:CGSizeMake(w / 2.0, CGFLOAT_MAX)];
+        self.modeLabel.frame = CGRectMake(padding, CGRectGetMaxY(self.currentTempLabel.frame) + 2, modeSize.width, modeSize.height);
+
+        // tempStepper: bottom-right
+        CGSize stepSize = self.tempStepper.intrinsicContentSize;
+        self.tempStepper.frame = CGRectMake(w - padding - stepSize.width, h - padding - stepSize.height, stepSize.width, stepSize.height);
+
+        // targetTempLabel: above stepper, right-aligned
+        CGSize targetSize = [self.targetTempLabel sizeThatFits:CGSizeMake(w / 2.0, CGFLOAT_MAX)];
+        self.targetTempLabel.frame = CGRectMake(w - padding - targetSize.width, CGRectGetMinY(self.tempStepper.frame) - 4 - targetSize.height, targetSize.width, targetSize.height);
+    }
 }
 
 - (void)prepareForReuse {

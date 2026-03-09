@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HAVacuumEntityCell.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
@@ -76,26 +77,32 @@ static const CGFloat kButtonSpacing  = 12.0;
     // to handle dynamic visibility (only configured commands shown).
 
     // Icon circle: centered horizontally, near top
-    [NSLayoutConstraint activateConstraints:@[
-        [self.iconCircle.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-        [self.iconCircle.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:padding + 4],
-        [self.iconCircle.widthAnchor constraintEqualToConstant:kIconCircleSize],
-        [self.iconCircle.heightAnchor constraintEqualToConstant:kIconCircleSize],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.iconCircle.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
+            [self.iconCircle.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:padding + 4],
+            [self.iconCircle.widthAnchor constraintEqualToConstant:kIconCircleSize],
+            [self.iconCircle.heightAnchor constraintEqualToConstant:kIconCircleSize],
+        ]];
+    }
 
     // Icon label: centered inside circle
-    [NSLayoutConstraint activateConstraints:@[
-        [self.iconLabel.centerXAnchor constraintEqualToAnchor:self.iconCircle.centerXAnchor],
-        [self.iconLabel.centerYAnchor constraintEqualToAnchor:self.iconCircle.centerYAnchor],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.iconLabel.centerXAnchor constraintEqualToAnchor:self.iconCircle.centerXAnchor],
+            [self.iconLabel.centerYAnchor constraintEqualToAnchor:self.iconCircle.centerYAnchor],
+        ]];
+    }
 
     // Status label: below icon circle, centered
-    [NSLayoutConstraint activateConstraints:@[
-        [self.statusLabel2.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-        [self.statusLabel2.topAnchor constraintEqualToAnchor:self.iconCircle.bottomAnchor constant:4],
-        [self.statusLabel2.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:padding],
-        [self.statusLabel2.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.statusLabel2.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
+            [self.statusLabel2.topAnchor constraintEqualToAnchor:self.iconCircle.bottomAnchor constant:4],
+            [self.statusLabel2.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:padding],
+            [self.statusLabel2.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
+        ]];
+    }
 
     // Buttons don't use auto layout — positioned in layoutSubviews for dynamic visibility
     self.playPauseButton.translatesAutoresizingMaskIntoConstraints = YES;
@@ -113,6 +120,16 @@ static const CGFloat kButtonSpacing  = 12.0;
     CGFloat padding = 10.0;
     CGFloat contentW = self.contentView.bounds.size.width;
     CGFloat contentH = self.contentView.bounds.size.height;
+
+    if (!HAAutoLayoutAvailable()) {
+        // Icon circle: centered horizontally, near top
+        self.iconCircle.frame = CGRectMake((contentW - kIconCircleSize) / 2.0, padding + 4, kIconCircleSize, kIconCircleSize);
+        self.iconLabel.frame = CGRectMake(0, 0, kIconCircleSize, kIconCircleSize);
+
+        // Status label: below icon, centered
+        CGSize statusSize = [self.statusLabel2 sizeThatFits:CGSizeMake(contentW - padding * 2, CGFLOAT_MAX)];
+        self.statusLabel2.frame = CGRectMake((contentW - statusSize.width) / 2.0, CGRectGetMaxY(self.iconCircle.frame) + 4, statusSize.width, statusSize.height);
+    }
 
     // Collect visible buttons
     NSMutableArray<UIButton *> *visibleButtons = [NSMutableArray array];

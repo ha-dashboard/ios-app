@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HAAttributeRowView.h"
 #import "HATheme.h"
 
@@ -33,17 +34,32 @@
     self.valueLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:self.valueLabel];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self.keyLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-        [self.keyLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-        [self.keyLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.valueLabel.leadingAnchor constant:-8],
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.keyLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+            [self.keyLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+            [self.keyLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.valueLabel.leadingAnchor constant:-8],
+    
+            [self.valueLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+            [self.valueLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+            [self.valueLabel.widthAnchor constraintLessThanOrEqualToAnchor:self.widthAnchor multiplier:0.6],
+    
+            [self.heightAnchor constraintGreaterThanOrEqualToConstant:28],
+        ]];
+    }
+}
 
-        [self.valueLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-        [self.valueLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-        [self.valueLabel.widthAnchor constraintLessThanOrEqualToAnchor:self.widthAnchor multiplier:0.6],
-
-        [self.heightAnchor constraintGreaterThanOrEqualToConstant:28],
-    ]];
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat w = self.bounds.size.width;
+        CGFloat h = MAX(28, self.bounds.size.height);
+        CGFloat valW = w * 0.6;
+        CGSize keySize = [self.keyLabel sizeThatFits:CGSizeMake(w - valW - 8, CGFLOAT_MAX)];
+        self.keyLabel.frame = CGRectMake(0, (h - keySize.height) / 2, w - valW - 8, keySize.height);
+        CGSize valSize = [self.valueLabel sizeThatFits:CGSizeMake(valW, CGFLOAT_MAX)];
+        self.valueLabel.frame = CGRectMake(w - valW, (h - valSize.height) / 2, valW, valSize.height);
+    }
 }
 
 - (void)configureWithKey:(NSString *)key value:(NSString *)value {

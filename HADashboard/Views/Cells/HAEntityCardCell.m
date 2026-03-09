@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HAEntityCardCell.h"
 #import "HAEntity.h"
 #import "HADashboardConfig.h"
@@ -47,20 +48,42 @@
     self.entityStateLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.contentView addSubview:self.entityStateLabel];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self.entityIconLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:12],
-        [self.entityIconLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.entityIconLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:12],
+            [self.entityIconLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
+    
+            [self.entityStateLabel.topAnchor constraintEqualToAnchor:self.entityIconLabel.bottomAnchor constant:4],
+            [self.entityStateLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
+            [self.entityStateLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:8],
+            [self.entityStateLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-8],
+    
+            [self.entityNameLabel.topAnchor constraintEqualToAnchor:self.entityStateLabel.bottomAnchor constant:2],
+            [self.entityNameLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
+            [self.entityNameLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:8],
+            [self.entityNameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-8],
+        ]];
+    }
+}
 
-        [self.entityStateLabel.topAnchor constraintEqualToAnchor:self.entityIconLabel.bottomAnchor constant:4],
-        [self.entityStateLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-        [self.entityStateLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:8],
-        [self.entityStateLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-8],
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat padding = 8.0;
+        CGFloat maxW = w - padding * 2;
 
-        [self.entityNameLabel.topAnchor constraintEqualToAnchor:self.entityStateLabel.bottomAnchor constant:2],
-        [self.entityNameLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-        [self.entityNameLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:8],
-        [self.entityNameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-8],
-    ]];
+        CGSize iconSize = [self.entityIconLabel sizeThatFits:CGSizeMake(maxW, CGFLOAT_MAX)];
+        self.entityIconLabel.frame = CGRectMake((w - iconSize.width) / 2.0, 12, iconSize.width, iconSize.height);
+
+        CGSize stateSize = [self.entityStateLabel sizeThatFits:CGSizeMake(maxW, CGFLOAT_MAX)];
+        self.entityStateLabel.frame = CGRectMake((w - stateSize.width) / 2.0, CGRectGetMaxY(self.entityIconLabel.frame) + 4,
+                                                  stateSize.width, stateSize.height);
+
+        CGSize nameSize = [self.entityNameLabel sizeThatFits:CGSizeMake(maxW, CGFLOAT_MAX)];
+        self.entityNameLabel.frame = CGRectMake((w - nameSize.width) / 2.0, CGRectGetMaxY(self.entityStateLabel.frame) + 2,
+                                                 nameSize.width, nameSize.height);
+    }
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {

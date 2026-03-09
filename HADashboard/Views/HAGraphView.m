@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HAGraphView.h"
 #import "HATheme.h"
 #import <sys/utsname.h>
@@ -118,15 +119,21 @@ static NSDateFormatter *sCachedTimeFmt(void) {
     self.legendContainer.hidden = YES;
     [self addSubview:self.legendContainer];
 
-    self.legendHeightConstraint = [self.legendContainer.heightAnchor constraintEqualToConstant:0];
+    if (HAAutoLayoutAvailable()) {
+        self.legendHeightConstraint = [self.legendContainer.heightAnchor constraintEqualToConstant:0];
+    }
     // Position legend above the time axis labels (18pt bottom padding when axis shown)
-    self.legendBottomConstraint = [self.legendContainer.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-2];
-    [NSLayoutConstraint activateConstraints:@[
-        [self.legendContainer.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:8],
-        [self.legendContainer.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-8],
-        self.legendBottomConstraint,
-        self.legendHeightConstraint,
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        self.legendBottomConstraint = [self.legendContainer.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-2];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.legendContainer.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:8],
+            [self.legendContainer.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-8],
+            self.legendBottomConstraint,
+            self.legendHeightConstraint,
+        ]];
+    }
 
     // Crosshair line (vertical, 1px, hidden until inspection)
     _crosshairLine = [CALayer layer];
@@ -157,14 +164,16 @@ static NSDateFormatter *sCachedTimeFmt(void) {
     _tooltipTimeLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [_tooltipView addSubview:_tooltipTimeLabel];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [_tooltipValueLabel.topAnchor constraintEqualToAnchor:_tooltipView.topAnchor constant:3],
-        [_tooltipValueLabel.leadingAnchor constraintEqualToAnchor:_tooltipView.leadingAnchor constant:6],
-        [_tooltipValueLabel.trailingAnchor constraintEqualToAnchor:_tooltipView.trailingAnchor constant:-6],
-        [_tooltipTimeLabel.topAnchor constraintEqualToAnchor:_tooltipValueLabel.bottomAnchor constant:1],
-        [_tooltipTimeLabel.leadingAnchor constraintEqualToAnchor:_tooltipView.leadingAnchor constant:6],
-        [_tooltipTimeLabel.trailingAnchor constraintEqualToAnchor:_tooltipView.trailingAnchor constant:-6],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [_tooltipValueLabel.topAnchor constraintEqualToAnchor:_tooltipView.topAnchor constant:3],
+            [_tooltipValueLabel.leadingAnchor constraintEqualToAnchor:_tooltipView.leadingAnchor constant:6],
+            [_tooltipValueLabel.trailingAnchor constraintEqualToAnchor:_tooltipView.trailingAnchor constant:-6],
+            [_tooltipTimeLabel.topAnchor constraintEqualToAnchor:_tooltipValueLabel.bottomAnchor constant:1],
+            [_tooltipTimeLabel.leadingAnchor constraintEqualToAnchor:_tooltipView.leadingAnchor constant:6],
+            [_tooltipTimeLabel.trailingAnchor constraintEqualToAnchor:_tooltipView.trailingAnchor constant:-6],
+        ]];
+    }
 
     [self addSubview:_tooltipView];
 }
@@ -702,6 +711,23 @@ static NSDateFormatter *sCachedTimeFmt(void) {
 - (void)layoutSubviews {
     [super layoutSubviews];
     self.gradientLayer.frame = self.bounds;
+
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat w = self.bounds.size.width;
+        CGFloat h = self.bounds.size.height;
+        // Legend container at bottom
+        CGFloat legendH = self.legendHeightConstraint ? self.legendHeightConstraint.constant : 0;
+        if (!self.legendContainer.hidden && legendH > 0) {
+            self.legendContainer.frame = CGRectMake(8, h - legendH - 2, w - 16, legendH);
+        }
+        // Tooltip internal layout
+        if (!self.tooltipView.hidden) {
+            CGFloat tw = self.tooltipView.bounds.size.width;
+            self.tooltipValueLabel.frame = CGRectMake(6, 3, tw - 12, 16);
+            self.tooltipTimeLabel.frame = CGRectMake(6, 20, tw - 12, 12);
+        }
+    }
+
     CGSize newSize = self.bounds.size;
     if (CGSizeEqualToSize(newSize, self.lastLayoutSize)) return;
     self.lastLayoutSize = newSize;

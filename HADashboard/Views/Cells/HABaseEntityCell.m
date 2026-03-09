@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HABaseEntityCell.h"
 #import "HAEntity.h"
 #import "HADashboardConfig.h"
@@ -6,6 +7,7 @@
 #import "HAConnectionManager.h"
 #import "HAHaptics.h"
 #import "UIView+HAUtilities.h"
+#import "UIViewController+HAAlert.h"
 
 static const CGFloat kHeadingHeight = 28.0;
 static const CGFloat kHeadingGap = 2.0;
@@ -53,20 +55,22 @@ static const CGFloat kHeadingGap = 2.0;
     self.stateLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.contentView addSubview:self.stateLabel];
 
-    CGFloat padding = 10.0;
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.nameLabel attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.nameLabel attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.nameLabel attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTop multiplier:1 constant:padding]];
+    if (HAAutoLayoutAvailable()) {
+        CGFloat padding = 10.0;
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.nameLabel attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.nameLabel attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.nameLabel attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTop multiplier:1 constant:padding]];
 
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.stateLabel attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.stateLabel attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.stateLabel attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:self.nameLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:4]];
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.stateLabel attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.stateLabel attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.stateLabel attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.nameLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:4]];
+    }
 }
 
 - (void)layoutSubviews {
@@ -87,6 +91,16 @@ static const CGFloat kHeadingGap = 2.0;
     // UICollectionViewCell auto-sizes backgroundView to cell bounds; override here.
     if (self.backgroundView) {
         self.backgroundView.frame = self.contentView.frame;
+    }
+
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat padding = 10.0;
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat labelW = w - padding * 2;
+        CGSize nameSize = [self.nameLabel sizeThatFits:CGSizeMake(labelW, CGFLOAT_MAX)];
+        self.nameLabel.frame = CGRectMake(padding, padding, labelW, nameSize.height);
+        CGSize stateSize = [self.stateLabel sizeThatFits:CGSizeMake(labelW, CGFLOAT_MAX)];
+        self.stateLabel.frame = CGRectMake(padding, CGRectGetMaxY(self.nameLabel.frame) + 4, labelW, stateSize.height);
     }
 }
 
@@ -232,28 +246,20 @@ static const CGFloat kHeadingGap = 2.0;
     UIViewController *vc = [self ha_parentViewController];
     if (!vc) return;
 
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:title
-                                                                  message:nil
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
+    NSMutableArray *titles = [NSMutableArray arrayWithCapacity:options.count];
     for (NSString *option in options) {
-        UIAlertAction *action = [UIAlertAction actionWithTitle:[option capitalizedString]
-                                                         style:UIAlertActionStyleDefault
-                                                       handler:^(UIAlertAction *a) {
-            [HAHaptics lightImpact];
-            if (handler) handler(option);
-        }];
-        if ([option isEqualToString:current]) {
-            [action setValue:@YES forKey:@"checked"];
-        }
-        [sheet addAction:action];
+        BOOL isActive = [option isEqualToString:current];
+        [titles addObject:isActive ? [NSString stringWithFormat:@"\u2713 %@", [option capitalizedString]] : [option capitalizedString]];
     }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
 
-    if (sourceView) {
-        sheet.popoverPresentationController.sourceView = sourceView;
-        sheet.popoverPresentationController.sourceRect = sourceView.bounds;
-    }
-    [vc presentViewController:sheet animated:YES completion:nil];
+    [vc ha_showActionSheetWithTitle:title
+                        cancelTitle:@"Cancel"
+                       actionTitles:titles
+                         sourceView:sourceView
+                            handler:^(NSInteger index) {
+        [HAHaptics lightImpact];
+        if (handler) handler(options[(NSUInteger)index]);
+    }];
 }
 
 @end

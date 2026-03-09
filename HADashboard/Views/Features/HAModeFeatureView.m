@@ -1,3 +1,5 @@
+#import "HAAutoLayout.h"
+#import "HAStackView.h"
 #import "HAModeFeatureView.h"
 #import "HAEntity.h"
 #import "HAEntity+Climate.h"
@@ -7,10 +9,11 @@
 #import "HAEntityDisplayHelper.h"
 #import "HAIconMapper.h"
 #import "UIView+HAUtilities.h"
+#import "UIViewController+HAAlert.h"
 
 @interface HAModeFeatureView ()
 @property (nonatomic, strong) UIScrollView *scrollView;       // For icons style
-@property (nonatomic, strong) UIStackView *modeStack;         // For icons style
+@property (nonatomic, strong) HAStackView *modeStack;         // For icons style
 @property (nonatomic, strong) UIButton *dropdownButton;       // For dropdown style
 @property (nonatomic, strong) NSArray<NSString *> *modes;     // Available mode values
 @property (nonatomic, copy) NSString *currentMode;            // Currently active mode
@@ -26,9 +29,11 @@
 - (instancetype)init {
     self = [super init];
     if (self) {
-        NSLayoutConstraint *heightConstraint = [self.heightAnchor constraintEqualToConstant:[HAModeFeatureView preferredHeight]];
-        heightConstraint.priority = UILayoutPriorityDefaultHigh;
-        [NSLayoutConstraint activateConstraints:@[heightConstraint]];
+        if (HAAutoLayoutAvailable()) {
+            NSLayoutConstraint *heightConstraint = [self.heightAnchor constraintEqualToConstant:[HAModeFeatureView preferredHeight]];
+            heightConstraint.priority = UILayoutPriorityDefaultHigh;
+            [NSLayoutConstraint activateConstraints:@[heightConstraint]];
+        }
     }
     return self;
 }
@@ -112,23 +117,25 @@
     self.scrollView.showsVerticalScrollIndicator = NO;
     [self addSubview:self.scrollView];
 
-    self.modeStack = [[UIStackView alloc] init];
-    self.modeStack.axis = UILayoutConstraintAxisHorizontal;
+    self.modeStack = [[HAStackView alloc] init];
+    self.modeStack.axis = 0;
     self.modeStack.spacing = 6;
     self.modeStack.translatesAutoresizingMaskIntoConstraints = NO;
     [self.scrollView addSubview:self.modeStack];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self.scrollView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12],
-        [self.scrollView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-12],
-        [self.scrollView.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-        [self.scrollView.heightAnchor constraintEqualToConstant:30],
-        [self.modeStack.leadingAnchor constraintEqualToAnchor:self.scrollView.leadingAnchor],
-        [self.modeStack.trailingAnchor constraintEqualToAnchor:self.scrollView.trailingAnchor],
-        [self.modeStack.topAnchor constraintEqualToAnchor:self.scrollView.topAnchor],
-        [self.modeStack.bottomAnchor constraintEqualToAnchor:self.scrollView.bottomAnchor],
-        [self.modeStack.heightAnchor constraintEqualToAnchor:self.scrollView.heightAnchor],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.scrollView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12],
+            [self.scrollView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-12],
+            [self.scrollView.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+            [self.scrollView.heightAnchor constraintEqualToConstant:30],
+            [self.modeStack.leadingAnchor constraintEqualToAnchor:self.scrollView.leadingAnchor],
+            [self.modeStack.trailingAnchor constraintEqualToAnchor:self.scrollView.trailingAnchor],
+            [self.modeStack.topAnchor constraintEqualToAnchor:self.scrollView.topAnchor],
+            [self.modeStack.bottomAnchor constraintEqualToAnchor:self.scrollView.bottomAnchor],
+            [self.modeStack.heightAnchor constraintEqualToAnchor:self.scrollView.heightAnchor],
+        ]];
+    }
 
     UIColor *activeColor = [HAEntityDisplayHelper iconColorForEntity:entity];
 
@@ -185,12 +192,32 @@
     [self.dropdownButton addTarget:self action:@selector(dropdownTapped:) forControlEvents:UIControlEventTouchUpInside];
     [self addSubview:self.dropdownButton];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self.dropdownButton.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
-        [self.dropdownButton.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-        [self.dropdownButton.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.leadingAnchor constant:12],
-        [self.dropdownButton.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor constant:-12],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.dropdownButton.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+            [self.dropdownButton.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+            [self.dropdownButton.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.leadingAnchor constant:12],
+            [self.dropdownButton.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor constant:-12],
+        ]];
+    }
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat h = [HAModeFeatureView preferredHeight];
+        CGFloat w = self.bounds.size.width;
+        if (self.isDropdownStyle && self.dropdownButton) {
+            CGSize btnSize = [self.dropdownButton sizeThatFits:CGSizeMake(w - 24, h)];
+            self.dropdownButton.frame = CGRectMake((w - btnSize.width) / 2, (h - btnSize.height) / 2,
+                                                    btnSize.width, btnSize.height);
+        } else if (self.scrollView) {
+            self.scrollView.frame = CGRectMake(12, (h - 30) / 2, w - 24, 30);
+            CGSize stackSize = [self.modeStack sizeThatFits:CGSizeMake(CGFLOAT_MAX, 30)];
+            self.modeStack.frame = CGRectMake(0, 0, stackSize.width, 30);
+            self.scrollView.contentSize = stackSize;
+        }
+    }
 }
 
 #pragma mark - Actions
@@ -207,32 +234,22 @@
     UIViewController *vc = [self ha_parentViewController];
     if (!vc) return;
 
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:nil
-                                                                  message:nil
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
-
-    __weak typeof(self) weakSelf = self; // Fix #2: prevent retain cycle
+    __weak typeof(self) weakSelf = self;
+    NSMutableArray *titles = [NSMutableArray arrayWithCapacity:self.modes.count];
     for (NSString *mode in self.modes) {
         NSString *displayName = [self displayNameForMode:mode];
         BOOL isActive = [mode isEqualToString:self.currentMode];
-        // Fix #6: use checkmark emoji instead of private setValue:@"checked"
-        NSString *title = isActive ? [NSString stringWithFormat:@"\u2713 %@", displayName] : displayName;
-        UIAlertAction *action = [UIAlertAction actionWithTitle:title
-                                                         style:UIAlertActionStyleDefault
-                                                       handler:^(UIAlertAction *a) {
-            [HAHaptics lightImpact];
-            [weakSelf callServiceForMode:mode];
-        }];
-        [sheet addAction:action];
+        [titles addObject:isActive ? [NSString stringWithFormat:@"\u2713 %@", displayName] : displayName];
     }
 
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-
-    // iPad popover anchor
-    sheet.popoverPresentationController.sourceView = sender;
-    sheet.popoverPresentationController.sourceRect = sender.bounds;
-
-    [vc presentViewController:sheet animated:YES completion:nil];
+    [vc ha_showActionSheetWithTitle:nil
+                        cancelTitle:@"Cancel"
+                       actionTitles:titles
+                         sourceView:sender
+                            handler:^(NSInteger index) {
+        [HAHaptics lightImpact];
+        [weakSelf callServiceForMode:weakSelf.modes[(NSUInteger)index]];
+    }];
 }
 
 - (void)callServiceForMode:(NSString *)mode {

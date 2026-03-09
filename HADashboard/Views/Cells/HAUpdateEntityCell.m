@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HAUpdateEntityCell.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
@@ -34,22 +35,36 @@
     [self.contentView addSubview:self.updateButton];
 
     // Version label: below name
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.versionLabel attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.versionLabel attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.updateButton attribute:NSLayoutAttributeLeading multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.versionLabel attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:self.nameLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:4]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.versionLabel attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.versionLabel attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.updateButton attribute:NSLayoutAttributeLeading multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.versionLabel attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.nameLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:4]];
+    }
 
     // Update button: right side, vertically centered
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.updateButton attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.updateButton attribute:NSLayoutAttributeCenterY
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeCenterY multiplier:1 constant:8]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.updateButton attribute:NSLayoutAttributeWidth
-        relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:72]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.updateButton attribute:NSLayoutAttributeHeight
-        relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:30]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.updateButton attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.updateButton attribute:NSLayoutAttributeCenterY
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeCenterY multiplier:1 constant:8]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.updateButton attribute:NSLayoutAttributeWidth
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:72]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.updateButton attribute:NSLayoutAttributeHeight
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:30]];
+    }
 
     // Release summary label (below version)
     self.summaryLabel = [[UILabel alloc] init];
@@ -61,11 +76,13 @@
     self.summaryLabel.hidden = YES;
     [self.contentView addSubview:self.summaryLabel];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self.summaryLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
-        [self.summaryLabel.trailingAnchor constraintEqualToAnchor:self.updateButton.leadingAnchor constant:-padding],
-        [self.summaryLabel.topAnchor constraintEqualToAnchor:self.versionLabel.bottomAnchor constant:2],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.summaryLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
+            [self.summaryLabel.trailingAnchor constraintEqualToAnchor:self.updateButton.leadingAnchor constant:-padding],
+            [self.summaryLabel.topAnchor constraintEqualToAnchor:self.versionLabel.bottomAnchor constant:2],
+        ]];
+    }
 
     // Skip button (below update button)
     self.skipButton = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -76,10 +93,12 @@
     [self.skipButton addTarget:self action:@selector(skipTapped) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:self.skipButton];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self.skipButton.centerXAnchor constraintEqualToAnchor:self.updateButton.centerXAnchor],
-        [self.skipButton.topAnchor constraintEqualToAnchor:self.updateButton.bottomAnchor constant:2],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.skipButton.centerXAnchor constraintEqualToAnchor:self.updateButton.centerXAnchor],
+            [self.skipButton.topAnchor constraintEqualToAnchor:self.updateButton.bottomAnchor constant:2],
+        ]];
+    }
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
@@ -136,6 +155,37 @@
 
 - (void)skipTapped {
     [self callService:@"skip" inDomain:HAEntityDomainUpdate];
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat padding = 10.0;
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat h = self.contentView.bounds.size.height;
+        CGFloat btnW = 72;
+        CGFloat btnH = 30;
+        // Update button right, vertically centered offset by 8
+        self.updateButton.frame = CGRectMake(w - padding - btnW, h / 2 + 8 - btnH / 2, btnW, btnH);
+        // Version label below nameLabel
+        CGFloat nameMaxY = CGRectGetMaxY(self.nameLabel.frame);
+        CGFloat verW = CGRectGetMinX(self.updateButton.frame) - padding * 2;
+        CGSize verSize = [self.versionLabel sizeThatFits:CGSizeMake(verW, CGFLOAT_MAX)];
+        self.versionLabel.frame = CGRectMake(padding, nameMaxY + 4, verW, verSize.height);
+        // Summary below version
+        if (!self.summaryLabel.hidden) {
+            CGSize sumSize = [self.summaryLabel sizeThatFits:CGSizeMake(verW, CGFLOAT_MAX)];
+            self.summaryLabel.frame = CGRectMake(padding, CGRectGetMaxY(self.versionLabel.frame) + 2,
+                                                 verW, sumSize.height);
+        }
+        // Skip button below update button
+        if (!self.skipButton.hidden) {
+            CGSize skipSize = [self.skipButton sizeThatFits:CGSizeMake(btnW, CGFLOAT_MAX)];
+            self.skipButton.frame = CGRectMake(CGRectGetMidX(self.updateButton.frame) - skipSize.width / 2,
+                                               CGRectGetMaxY(self.updateButton.frame) + 2,
+                                               skipSize.width, skipSize.height);
+        }
+    }
 }
 
 - (void)prepareForReuse {

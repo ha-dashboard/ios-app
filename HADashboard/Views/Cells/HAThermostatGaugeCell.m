@@ -1,3 +1,5 @@
+#import "HAAutoLayout.h"
+#import "HAStackView.h"
 #import "HAThermostatGaugeCell.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
@@ -7,6 +9,7 @@
 #import "HAIconMapper.h"
 #import "HAEntityDisplayHelper.h"
 #import "UIView+HAUtilities.h"
+#import "UIViewController+HAAlert.h"
 
 // Gauge geometry -- proportions matched to HA web's ha-control-circular-slider:
 // SVG viewBox 320x320, center (160,160), RADIUS=145, stroke=24
@@ -64,7 +67,7 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
 @property (nonatomic, strong) UILabel *modeLabel;
 @property (nonatomic, strong) UIButton *plusButton;
 @property (nonatomic, strong) UIButton *minusButton;
-@property (nonatomic, strong) UIStackView *modeStack;
+@property (nonatomic, strong) HAStackView *modeStack;
 @property (nonatomic, strong) NSArray<NSString *> *availableModes;
 @property (nonatomic, copy) NSString *currentMode;
 
@@ -94,7 +97,7 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
 @property (nonatomic, copy) NSArray<NSString *> *lastBuiltModes; // modes the buttons were built for
 @property (nonatomic, copy) NSString *lastBuiltCurrentMode;      // active mode when buttons were built
 // Extra mode selectors (preset, fan, swing) — tappable labels below mode bar
-@property (nonatomic, strong) UIStackView *extraModesStack;
+@property (nonatomic, strong) HAStackView *extraModesStack;
 @end
 
 @implementation HAThermostatGaugeCell
@@ -378,37 +381,39 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
     self.modeBar.translatesAutoresizingMaskIntoConstraints = NO;
     [self.contentView addSubview:self.modeBar];
 
-    self.modeStack = [[UIStackView alloc] init];
-    self.modeStack.axis = UILayoutConstraintAxisHorizontal;
-    self.modeStack.distribution = UIStackViewDistributionFillEqually;
+    self.modeStack = [[HAStackView alloc] init];
+    self.modeStack.axis = 0;
+    self.modeStack.distribution = 1;
     self.modeStack.spacing = 4;
     self.modeStack.translatesAutoresizingMaskIntoConstraints = NO;
     [self.modeBar addSubview:self.modeStack];
 
     // Extra modes stack (preset, fan, swing) — compact tappable labels below mode bar
-    self.extraModesStack = [[UIStackView alloc] init];
-    self.extraModesStack.axis = UILayoutConstraintAxisHorizontal;
-    self.extraModesStack.distribution = UIStackViewDistributionFillEqually;
+    self.extraModesStack = [[HAStackView alloc] init];
+    self.extraModesStack.axis = 0;
+    self.extraModesStack.distribution = 1;
     self.extraModesStack.spacing = 8;
     self.extraModesStack.translatesAutoresizingMaskIntoConstraints = NO;
     self.extraModesStack.hidden = YES;
     [self.contentView addSubview:self.extraModesStack];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self.modeBar.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kModeBarSidePad],
-        [self.modeBar.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kModeBarSidePad],
-        [self.modeBar.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-kModeBarBottomPad],
-        [self.modeBar.heightAnchor constraintEqualToConstant:kModeBarHeight],
-        [self.modeStack.leadingAnchor constraintEqualToAnchor:self.modeBar.leadingAnchor constant:8],
-        [self.modeStack.trailingAnchor constraintEqualToAnchor:self.modeBar.trailingAnchor constant:-8],
-        [self.modeStack.topAnchor constraintEqualToAnchor:self.modeBar.topAnchor constant:4],
-        [self.modeStack.bottomAnchor constraintEqualToAnchor:self.modeBar.bottomAnchor constant:-4],
-        // Extra modes: overlaid inside the arc area above mode bar (small text)
-        [self.extraModesStack.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kModeBarSidePad],
-        [self.extraModesStack.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kModeBarSidePad],
-        [self.extraModesStack.bottomAnchor constraintEqualToAnchor:self.modeBar.topAnchor constant:-4],
-        [self.extraModesStack.heightAnchor constraintEqualToConstant:24],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.modeBar.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kModeBarSidePad],
+            [self.modeBar.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kModeBarSidePad],
+            [self.modeBar.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-kModeBarBottomPad],
+            [self.modeBar.heightAnchor constraintEqualToConstant:kModeBarHeight],
+            [self.modeStack.leadingAnchor constraintEqualToAnchor:self.modeBar.leadingAnchor constant:8],
+            [self.modeStack.trailingAnchor constraintEqualToAnchor:self.modeBar.trailingAnchor constant:-8],
+            [self.modeStack.topAnchor constraintEqualToAnchor:self.modeBar.topAnchor constant:4],
+            [self.modeStack.bottomAnchor constraintEqualToAnchor:self.modeBar.bottomAnchor constant:-4],
+            // Extra modes: overlaid inside the arc area above mode bar (small text)
+            [self.extraModesStack.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kModeBarSidePad],
+            [self.extraModesStack.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kModeBarSidePad],
+            [self.extraModesStack.bottomAnchor constraintEqualToAnchor:self.modeBar.topAnchor constant:-4],
+            [self.extraModesStack.heightAnchor constraintEqualToConstant:24],
+        ]];
+    }
 }
 
 - (UIButton *)makeOutlinedButtonWithTitle:(NSString *)title action:(SEL)action {
@@ -430,6 +435,19 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
 
 - (void)layoutSubviews {
     [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat h = self.contentView.bounds.size.height;
+
+        // Mode bar: bottom
+        self.modeBar.frame = CGRectMake(kModeBarSidePad, h - kModeBarBottomPad - kModeBarHeight, w - kModeBarSidePad * 2, kModeBarHeight);
+        self.modeStack.frame = CGRectMake(8, 4, self.modeBar.bounds.size.width - 16, kModeBarHeight - 8);
+
+        // Extra modes stack: above mode bar
+        if (!self.extraModesStack.hidden) {
+            self.extraModesStack.frame = CGRectMake(kModeBarSidePad, CGRectGetMinY(self.modeBar.frame) - 4 - 24, w - kModeBarSidePad * 2, 24);
+        }
+    }
     [self updateGaugeArcs];
 }
 
@@ -1120,7 +1138,9 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
         [btn addTarget:self action:@selector(modeTapped:) forControlEvents:UIControlEventTouchUpInside];
 
         // Height only — width is managed by FillEqually stack distribution
-        [btn.heightAnchor constraintEqualToConstant:modeBtnHeight].active = YES;
+        if (HAAutoLayoutAvailable()) {
+            [btn.heightAnchor constraintEqualToConstant:modeBtnHeight].active = YES;
+        }
 
         BOOL isActive = [mode isEqualToString:currentMode];
         if (isActive) {
@@ -1226,27 +1246,24 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
     if (!vc) return;
 
     NSString *entityId = self.entity.entityId; // capture before block
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:nil message:nil
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
+    NSMutableArray *titles = [NSMutableArray arrayWithCapacity:options.count];
     for (NSString *option in options) {
         BOOL isActive = [option isEqualToString:current];
-        NSString *title = isActive
+        [titles addObject:isActive
             ? [NSString stringWithFormat:@"\u2713 %@", [option capitalizedString]]
-            : [option capitalizedString];
-        UIAlertAction *action = [UIAlertAction actionWithTitle:title
-                                                         style:UIAlertActionStyleDefault
-                                                       handler:^(UIAlertAction *a) {
-            [HAHaptics lightImpact];
-            [[HAConnectionManager sharedManager] callService:service inDomain:@"climate"
-                                                    withData:@{serviceKey: option}
-                                                    entityId:entityId];
-        }];
-        [sheet addAction:action];
+            : [option capitalizedString]];
     }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-    sheet.popoverPresentationController.sourceView = sender;
-    sheet.popoverPresentationController.sourceRect = sender.bounds;
-    [vc presentViewController:sheet animated:YES completion:nil];
+
+    [vc ha_showActionSheetWithTitle:nil
+                        cancelTitle:@"Cancel"
+                       actionTitles:titles
+                         sourceView:sender
+                            handler:^(NSInteger index) {
+        [HAHaptics lightImpact];
+        [[HAConnectionManager sharedManager] callService:service inDomain:@"climate"
+                                                withData:@{serviceKey: options[(NSUInteger)index]}
+                                                entityId:entityId];
+    }];
 }
 
 #pragma mark - Actions

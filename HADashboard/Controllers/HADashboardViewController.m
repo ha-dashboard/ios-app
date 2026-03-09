@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HADashboardViewController.h"
 #import "HALog.h"
 #import "HAAuthManager.h"
@@ -44,6 +45,7 @@
 #import "HAHistoryManager.h"
 #import "HASunBasedTheme.h"
 #import <QuartzCore/QuartzCore.h>
+#import "UIViewController+HAAlert.h"
 
 static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 
@@ -159,11 +161,17 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
         tapArea.translatesAutoresizingMaskIntoConstraints = NO;
         tapArea.backgroundColor = [UIColor clearColor];
         [self.view insertSubview:tapArea belowSubview:self.viewPicker];
-        [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[t]|" options:0 metrics:nil views:@{@"t": tapArea}]];
-        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:tapArea attribute:NSLayoutAttributeTop
-            relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeTop multiplier:1 constant:0]];
-        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:tapArea attribute:NSLayoutAttributeHeight
-            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:120]];
+        if (HAAutoLayoutAvailable()) {
+            [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[t]|" options:0 metrics:nil views:@{@"t": tapArea}]];
+        }
+        if (HAAutoLayoutAvailable()) {
+            [self.view addConstraint:[NSLayoutConstraint constraintWithItem:tapArea attribute:NSLayoutAttributeTop
+                relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeTop multiplier:1 constant:0]];
+        }
+        if (HAAutoLayoutAvailable()) {
+            [self.view addConstraint:[NSLayoutConstraint constraintWithItem:tapArea attribute:NSLayoutAttributeHeight
+                relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:120]];
+        }
         [tapArea addGestureRecognizer:self.kioskExitTap];
     }
 
@@ -305,6 +313,42 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     self.backgroundGradient.frame = self.view.bounds;
+
+    if (!HAAutoLayoutAvailable()) {
+        CGRect bounds = self.view.bounds;
+
+        // Connection bar: full width, below nav bar (≈64pt), 0 or 24pt tall
+        CGFloat connY = 64.0;
+        CGFloat connH = self.connectionBarHeight.constant;
+        self.connectionBar.frame = CGRectMake(0, connY, bounds.size.width, connH);
+        self.connectionLabel.frame = self.connectionBar.bounds;
+
+        // View picker: below safe area / nav bar
+        CGFloat pickerY = connY + connH + 16.0;
+        CGFloat pickerH = 32.0;
+        if (!self.viewPicker.hidden) {
+            self.viewPicker.frame = CGRectMake(12, pickerY, bounds.size.width - 24, pickerH);
+        }
+
+        // Collection view: fill remaining space
+        CGFloat cvTop;
+        if (!self.viewPicker.hidden) {
+            cvTop = CGRectGetMaxY(self.viewPicker.frame) + 12.0;
+        } else {
+            cvTop = pickerY;
+        }
+        self.collectionView.frame = CGRectMake(0, cvTop, bounds.size.width, bounds.size.height - cvTop);
+
+        // Status label + spinner: centered in view
+        CGSize statusSize = [self.statusLabel sizeThatFits:CGSizeMake(bounds.size.width - 40, CGFLOAT_MAX)];
+        self.statusLabel.frame = CGRectMake((bounds.size.width - statusSize.width) / 2,
+                                            bounds.size.height / 2 - 20,
+                                            statusSize.width, statusSize.height);
+        CGSize spinSize = self.spinner.frame.size;
+        self.spinner.frame = CGRectMake((bounds.size.width - spinSize.width) / 2,
+                                        CGRectGetMaxY(self.statusLabel.frame) + 12,
+                                        spinSize.width, spinSize.height);
+    }
 }
 
 - (void)didReceiveMemoryWarning {
@@ -388,21 +432,31 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     self.connectionLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.connectionBar addSubview:self.connectionLabel];
 
-    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.connectionBar attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
-    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.connectionBar attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeTrailing multiplier:1 constant:0]];
-    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.connectionBar attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeTop multiplier:1 constant:64]];
+    if (HAAutoLayoutAvailable()) {
+        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.connectionBar attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.connectionBar attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeTrailing multiplier:1 constant:0]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.connectionBar attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeTop multiplier:1 constant:64]];
+    }
 
     self.connectionBarHeight = [NSLayoutConstraint constraintWithItem:self.connectionBar attribute:NSLayoutAttributeHeight
         relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:0];
     [self.connectionBar addConstraint:self.connectionBarHeight];
 
-    [self.connectionBar addConstraint:[NSLayoutConstraint constraintWithItem:self.connectionLabel attribute:NSLayoutAttributeCenterX
-        relatedBy:NSLayoutRelationEqual toItem:self.connectionBar attribute:NSLayoutAttributeCenterX multiplier:1 constant:0]];
-    [self.connectionBar addConstraint:[NSLayoutConstraint constraintWithItem:self.connectionLabel attribute:NSLayoutAttributeCenterY
-        relatedBy:NSLayoutRelationEqual toItem:self.connectionBar attribute:NSLayoutAttributeCenterY multiplier:1 constant:0]];
+    if (HAAutoLayoutAvailable()) {
+        [self.connectionBar addConstraint:[NSLayoutConstraint constraintWithItem:self.connectionLabel attribute:NSLayoutAttributeCenterX
+            relatedBy:NSLayoutRelationEqual toItem:self.connectionBar attribute:NSLayoutAttributeCenterX multiplier:1 constant:0]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.connectionBar addConstraint:[NSLayoutConstraint constraintWithItem:self.connectionLabel attribute:NSLayoutAttributeCenterY
+            relatedBy:NSLayoutRelationEqual toItem:self.connectionBar attribute:NSLayoutAttributeCenterY multiplier:1 constant:0]];
+    }
 }
 
 - (void)showConnectionBar:(BOOL)show message:(NSString *)message {
@@ -426,17 +480,27 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 
     // Pin below safe area with 16pt padding (matches side padding in kiosk mode)
     if (@available(iOS 11.0, *)) {
-        self.viewPickerTopConstraint = [self.viewPicker.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:16];
+        if (HAAutoLayoutAvailable()) {
+            self.viewPickerTopConstraint = [self.viewPicker.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:16];
+        }
     } else {
-        self.viewPickerTopConstraint = [self.viewPicker.topAnchor constraintEqualToAnchor:self.topLayoutGuide.bottomAnchor constant:16];
+        if (HAAutoLayoutAvailable()) {
+            self.viewPickerTopConstraint = [self.viewPicker.topAnchor constraintEqualToAnchor:self.topLayoutGuide.bottomAnchor constant:16];
+        }
     }
     [self.view addConstraint:self.viewPickerTopConstraint];
-    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.viewPicker attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeLeading multiplier:1 constant:12]];
-    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.viewPicker attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeTrailing multiplier:1 constant:-12]];
-    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.viewPicker attribute:NSLayoutAttributeHeight
-        relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:32]];
+    if (HAAutoLayoutAvailable()) {
+        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.viewPicker attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeLeading multiplier:1 constant:12]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.viewPicker attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeTrailing multiplier:1 constant:-12]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.viewPicker attribute:NSLayoutAttributeHeight
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:32]];
+    }
 }
 
 - (void)setupCollectionView {
@@ -460,10 +524,14 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     [self.collectionView addSubview:self.refreshControl];
     self.collectionView.alwaysBounceVertical = YES;
 
-    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.collectionView attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
-    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.collectionView attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeTrailing multiplier:1 constant:0]];
+    if (HAAutoLayoutAvailable()) {
+        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.collectionView attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.collectionView attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeTrailing multiplier:1 constant:0]];
+    }
 
     // Two competing top constraints: one below picker (normal), one at safe area top (kiosk)
     self.collectionViewTopToPickerConstraint = [NSLayoutConstraint constraintWithItem:self.collectionView attribute:NSLayoutAttributeTop
@@ -491,29 +559,49 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     // iOS 9 bug where addConstraint: activates the constraint regardless
     // of the .active property, causing a "Unable to simultaneously satisfy
     // constraints" warning at launch.
-    self.collectionViewTopToPickerConstraint.active = NO;
-    self.collectionViewTopToViewConstraint.active = NO;
-    self.collectionViewTopToSafeAreaConstraint.active = YES;
+    if (HAAutoLayoutAvailable()) {
+        self.collectionViewTopToPickerConstraint.active = NO;
+    }
+    if (HAAutoLayoutAvailable()) {
+        self.collectionViewTopToViewConstraint.active = NO;
+    }
+    if (HAAutoLayoutAvailable()) {
+        self.collectionViewTopToSafeAreaConstraint.active = YES;
+    }
 
-    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.collectionView attribute:NSLayoutAttributeBottom
-        relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeBottom multiplier:1 constant:0]];
+    if (HAAutoLayoutAvailable()) {
+        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.collectionView attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeBottom multiplier:1 constant:0]];
+    }
 }
 
 - (void)updateCollectionViewTopConstraintForPicker:(BOOL)pickerVisible {
     BOOL kiosk = [[HAAuthManager sharedManager] isKioskMode];
-    self.collectionViewTopToPickerConstraint.active = NO;
-    self.collectionViewTopToViewConstraint.active = NO;
-    self.collectionViewTopToSafeAreaConstraint.active = NO;
+    if (HAAutoLayoutAvailable()) {
+        self.collectionViewTopToPickerConstraint.active = NO;
+    }
+    if (HAAutoLayoutAvailable()) {
+        self.collectionViewTopToViewConstraint.active = NO;
+    }
+    if (HAAutoLayoutAvailable()) {
+        self.collectionViewTopToSafeAreaConstraint.active = NO;
+    }
 
     if (pickerVisible) {
         // Always position below picker when it's visible (including kiosk mode)
-        self.collectionViewTopToPickerConstraint.active = YES;
+        if (HAAutoLayoutAvailable()) {
+            self.collectionViewTopToPickerConstraint.active = YES;
+        }
     } else if (kiosk) {
         // Kiosk mode without picker: use view constraint (has 12pt padding)
-        self.collectionViewTopToViewConstraint.active = YES;
+        if (HAAutoLayoutAvailable()) {
+            self.collectionViewTopToViewConstraint.active = YES;
+        }
     } else {
         // Normal mode without picker: pin to safe area
-        self.collectionViewTopToSafeAreaConstraint.active = YES;
+        if (HAAutoLayoutAvailable()) {
+            self.collectionViewTopToSafeAreaConstraint.active = YES;
+        }
     }
 }
 
@@ -656,14 +744,22 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     self.spinner.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.spinner];
 
-    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.statusLabel attribute:NSLayoutAttributeCenterX
-        relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeCenterX multiplier:1 constant:0]];
-    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.statusLabel attribute:NSLayoutAttributeCenterY
-        relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeCenterY multiplier:1 constant:-20]];
-    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.spinner attribute:NSLayoutAttributeCenterX
-        relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeCenterX multiplier:1 constant:0]];
-    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.spinner attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:self.statusLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:12]];
+    if (HAAutoLayoutAvailable()) {
+        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.statusLabel attribute:NSLayoutAttributeCenterX
+            relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeCenterX multiplier:1 constant:0]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.statusLabel attribute:NSLayoutAttributeCenterY
+            relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeCenterY multiplier:1 constant:-20]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.spinner attribute:NSLayoutAttributeCenterX
+            relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeCenterX multiplier:1 constant:0]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.spinner attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.statusLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:12]];
+    }
 }
 
 - (void)showLoading:(BOOL)loading message:(NSString *)message {
@@ -684,12 +780,14 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
             self.skeletonView = [[HASkeletonView alloc] init];
             self.skeletonView.translatesAutoresizingMaskIntoConstraints = NO;
             [self.view insertSubview:self.skeletonView belowSubview:self.connectionBar ?: self.view];
-            [NSLayoutConstraint activateConstraints:@[
-                [self.skeletonView.leadingAnchor constraintEqualToAnchor:self.collectionView.leadingAnchor],
-                [self.skeletonView.trailingAnchor constraintEqualToAnchor:self.collectionView.trailingAnchor],
-                [self.skeletonView.topAnchor constraintEqualToAnchor:self.collectionView.topAnchor],
-                [self.skeletonView.bottomAnchor constraintEqualToAnchor:self.collectionView.bottomAnchor],
-            ]];
+            if (HAAutoLayoutAvailable()) {
+                [NSLayoutConstraint activateConstraints:@[
+                    [self.skeletonView.leadingAnchor constraintEqualToAnchor:self.collectionView.leadingAnchor],
+                    [self.skeletonView.trailingAnchor constraintEqualToAnchor:self.collectionView.trailingAnchor],
+                    [self.skeletonView.topAnchor constraintEqualToAnchor:self.collectionView.topAnchor],
+                    [self.skeletonView.bottomAnchor constraintEqualToAnchor:self.collectionView.bottomAnchor],
+                ]];
+            }
         }
         self.skeletonView.hidden = NO;
         self.skeletonView.alpha = 1.0;
@@ -1282,8 +1380,12 @@ static const CGFloat kRowUnitHeight = 56.0;
 - (void)kioskHideTimerFired {
     if ([[HAAuthManager sharedManager] isKioskMode]) {
         [self.navigationController setNavigationBarHidden:YES animated:YES];
-        self.collectionViewTopToPickerConstraint.active = NO;
-        self.collectionViewTopToViewConstraint.active = YES;
+        if (HAAutoLayoutAvailable()) {
+            self.collectionViewTopToPickerConstraint.active = NO;
+        }
+        if (HAAutoLayoutAvailable()) {
+            self.collectionViewTopToViewConstraint.active = YES;
+        }
         [UIView animateWithDuration:0.3 animations:^{
             [self.view layoutIfNeeded];
         }];
@@ -1337,35 +1439,24 @@ static const CGFloat kRowUnitHeight = 56.0;
 - (void)titleTapped:(UIButton *)sender {
     if (!self.availableDashboards || self.availableDashboards.count <= 1) return;
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:nil
-                                                                   message:nil
-                                                            preferredStyle:UIAlertControllerStyleActionSheet];
-
     NSString *currentPath = [[HAAuthManager sharedManager] selectedDashboardPath];
-
+    NSMutableArray *titles = [NSMutableArray arrayWithCapacity:self.availableDashboards.count];
     for (NSDictionary *dashboard in self.availableDashboards) {
         NSString *title = dashboard[@"title"] ?: @"Untitled";
         NSString *urlPath = dashboard[@"url_path"];
-
         BOOL isSelected = [urlPath isEqualToString:currentPath] ||
                           (urlPath == nil && currentPath == nil);
-        NSString *displayTitle = isSelected ? [NSString stringWithFormat:@"\u2713 %@", title] : title;
-
-        UIAlertAction *action = [UIAlertAction actionWithTitle:displayTitle
-                                                         style:UIAlertActionStyleDefault
-                                                       handler:^(UIAlertAction *a) {
-            [self switchToDashboard:urlPath title:title];
-        }];
-        [alert addAction:action];
+        [titles addObject:isSelected ? [NSString stringWithFormat:@"\u2713 %@", title] : title];
     }
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-
-    // iPad: present as popover from title button
-    alert.popoverPresentationController.sourceView = self.titleButton;
-    alert.popoverPresentationController.sourceRect = self.titleButton.bounds;
-
-    [self presentViewController:alert animated:YES completion:nil];
+    [self ha_showActionSheetWithTitle:nil
+                          cancelTitle:@"Cancel"
+                         actionTitles:titles
+                           sourceView:self.titleButton
+                              handler:^(NSInteger index) {
+        NSDictionary *dashboard = self.availableDashboards[(NSUInteger)index];
+        [self switchToDashboard:dashboard[@"url_path"] title:dashboard[@"title"] ?: @"Untitled"];
+    }];
 }
 
 - (void)switchToDashboard:(NSString *)urlPath title:(NSString *)title {

@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HAMarkdownCardCell.h"
 #import "HADashboardConfig.h"
 #import "HATheme.h"
@@ -34,15 +35,17 @@ static const CGFloat kTitleHeight = 24.0;
         self.contentLabel.translatesAutoresizingMaskIntoConstraints = NO;
         [self.contentView addSubview:self.contentLabel];
 
-        [NSLayoutConstraint activateConstraints:@[
-            [self.titleLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kPadding],
-            [self.titleLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding],
-            [self.titleLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding],
-
-            [self.contentLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding],
-            [self.contentLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding],
-            [self.contentLabel.bottomAnchor constraintLessThanOrEqualToAnchor:self.contentView.bottomAnchor constant:-kPadding],
-        ]];
+        if (HAAutoLayoutAvailable()) {
+            [NSLayoutConstraint activateConstraints:@[
+                [self.titleLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kPadding],
+                [self.titleLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding],
+                [self.titleLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding],
+    
+                [self.contentLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding],
+                [self.contentLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding],
+                [self.contentLabel.bottomAnchor constraintLessThanOrEqualToAnchor:self.contentView.bottomAnchor constant:-kPadding],
+            ]];
+        }
     }
     return self;
 }
@@ -71,9 +74,13 @@ static const CGFloat kTitleHeight = 24.0;
         }
     }
     if (!self.titleLabel.hidden) {
-        [self.contentLabel.topAnchor constraintEqualToAnchor:self.titleLabel.bottomAnchor constant:6].active = YES;
+        if (HAAutoLayoutAvailable()) {
+            [self.contentLabel.topAnchor constraintEqualToAnchor:self.titleLabel.bottomAnchor constant:6].active = YES;
+        }
     } else {
-        [self.contentLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kPadding].active = YES;
+        if (HAAutoLayoutAvailable()) {
+            [self.contentLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kPadding].active = YES;
+        }
     }
 
     // text_only mode: no background/border
@@ -184,6 +191,21 @@ static const CGFloat kTitleHeight = 24.0;
     CGFloat contentHeight = MAX(20, lineCount * 18); // ~18pt per line
     CGFloat titleExtra = hasTitle ? kTitleHeight + 6 : 0;
     return kPadding + titleExtra + contentHeight + kPadding;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat labelW = w - kPadding * 2;
+        CGFloat y = kPadding;
+        if (!self.titleLabel.hidden) {
+            self.titleLabel.frame = CGRectMake(kPadding, y, labelW, kTitleHeight);
+            y = CGRectGetMaxY(self.titleLabel.frame) + 6;
+        }
+        CGSize contentSize = [self.contentLabel sizeThatFits:CGSizeMake(labelW, CGFLOAT_MAX)];
+        self.contentLabel.frame = CGRectMake(kPadding, y, labelW, contentSize.height);
+    }
 }
 
 - (void)prepareForReuse {

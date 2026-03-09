@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HAFanEntityCell.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
@@ -73,37 +74,55 @@
     [self.contentView addSubview:self.speedSlider];
 
     // Switch: top-right
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.toggleSwitch attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.toggleSwitch attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTop multiplier:1 constant:padding]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.toggleSwitch attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.toggleSwitch attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTop multiplier:1 constant:padding]];
+    }
 
     // Preset button: below name
-    [NSLayoutConstraint activateConstraints:@[
-        [self.presetButton.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
-        [self.presetButton.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:2],
-        // Oscillate + direction: right of preset, same Y
-        [self.oscillateButton.leadingAnchor constraintEqualToAnchor:self.presetButton.trailingAnchor constant:8],
-        [self.oscillateButton.centerYAnchor constraintEqualToAnchor:self.presetButton.centerYAnchor],
-        [self.directionButton.leadingAnchor constraintEqualToAnchor:self.oscillateButton.trailingAnchor constant:4],
-        [self.directionButton.centerYAnchor constraintEqualToAnchor:self.presetButton.centerYAnchor],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.presetButton.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
+            [self.presetButton.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:2],
+            // Oscillate + direction: right of preset, same Y
+            [self.oscillateButton.leadingAnchor constraintEqualToAnchor:self.presetButton.trailingAnchor constant:8],
+            [self.oscillateButton.centerYAnchor constraintEqualToAnchor:self.presetButton.centerYAnchor],
+            [self.directionButton.leadingAnchor constraintEqualToAnchor:self.oscillateButton.trailingAnchor constant:4],
+            [self.directionButton.centerYAnchor constraintEqualToAnchor:self.presetButton.centerYAnchor],
+        ]];
+    }
 
     // Speed slider: bottom
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.speedSlider attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.speedSlider attribute:NSLayoutAttributeBottom
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.speedSlider attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.speedSlider attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
+    }
 
     // Speed label: right of slider
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.speedLabel attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.speedSlider attribute:NSLayoutAttributeTrailing multiplier:1 constant:8]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.speedLabel attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.speedLabel attribute:NSLayoutAttributeCenterY
-        relatedBy:NSLayoutRelationEqual toItem:self.speedSlider attribute:NSLayoutAttributeCenterY multiplier:1 constant:0]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.speedLabel attribute:NSLayoutAttributeWidth
-        relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:44]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.speedLabel attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.speedSlider attribute:NSLayoutAttributeTrailing multiplier:1 constant:8]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.speedLabel attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.speedLabel attribute:NSLayoutAttributeCenterY
+            relatedBy:NSLayoutRelationEqual toItem:self.speedSlider attribute:NSLayoutAttributeCenterY multiplier:1 constant:0]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.speedLabel attribute:NSLayoutAttributeWidth
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:44]];
+    }
 
     // Speed +/- buttons (right side, above/below speed label)
     CGFloat btnSize = 24.0;
@@ -123,16 +142,18 @@
     [self.speedDownButton addTarget:self action:@selector(speedDownTapped) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:self.speedDownButton];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self.speedUpButton.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-2],
-        [self.speedUpButton.bottomAnchor constraintEqualToAnchor:self.speedSlider.topAnchor constant:-2],
-        [self.speedUpButton.widthAnchor constraintEqualToConstant:btnSize],
-        [self.speedUpButton.heightAnchor constraintEqualToConstant:btnSize],
-        [self.speedDownButton.trailingAnchor constraintEqualToAnchor:self.speedUpButton.leadingAnchor constant:-2],
-        [self.speedDownButton.centerYAnchor constraintEqualToAnchor:self.speedUpButton.centerYAnchor],
-        [self.speedDownButton.widthAnchor constraintEqualToConstant:btnSize],
-        [self.speedDownButton.heightAnchor constraintEqualToConstant:btnSize],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.speedUpButton.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-2],
+            [self.speedUpButton.bottomAnchor constraintEqualToAnchor:self.speedSlider.topAnchor constant:-2],
+            [self.speedUpButton.widthAnchor constraintEqualToConstant:btnSize],
+            [self.speedUpButton.heightAnchor constraintEqualToConstant:btnSize],
+            [self.speedDownButton.trailingAnchor constraintEqualToAnchor:self.speedUpButton.leadingAnchor constant:-2],
+            [self.speedDownButton.centerYAnchor constraintEqualToAnchor:self.speedUpButton.centerYAnchor],
+            [self.speedDownButton.widthAnchor constraintEqualToConstant:btnSize],
+            [self.speedDownButton.heightAnchor constraintEqualToConstant:btnSize],
+        ]];
+    }
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
@@ -256,6 +277,40 @@
 - (void)speedDownTapped {
     [HAHaptics lightImpact];
     [self callService:@"decrease_speed" inDomain:@"fan"];
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat h = self.contentView.bounds.size.height;
+        CGFloat padding = 10.0;
+
+        // Toggle: top-right
+        CGSize switchSize = [self.toggleSwitch sizeThatFits:CGSizeMake(60, 31)];
+        self.toggleSwitch.frame = CGRectMake(w - padding - switchSize.width, padding, switchSize.width, switchSize.height);
+
+        // Preset button: below name
+        CGSize presetSize = [self.presetButton sizeThatFits:CGSizeMake(w / 2.0, CGFLOAT_MAX)];
+        self.presetButton.frame = CGRectMake(padding, CGRectGetMaxY(self.nameLabel.frame) + 2, presetSize.width, presetSize.height);
+
+        // Oscillate + direction: right of preset
+        CGSize oscSize = [self.oscillateButton sizeThatFits:CGSizeMake(60, CGFLOAT_MAX)];
+        self.oscillateButton.frame = CGRectMake(CGRectGetMaxX(self.presetButton.frame) + 8, self.presetButton.frame.origin.y, oscSize.width, oscSize.height);
+        CGSize dirSize = [self.directionButton sizeThatFits:CGSizeMake(30, CGFLOAT_MAX)];
+        self.directionButton.frame = CGRectMake(CGRectGetMaxX(self.oscillateButton.frame) + 4, self.presetButton.frame.origin.y, dirSize.width, dirSize.height);
+
+        // Speed slider: bottom
+        self.speedSlider.frame = CGRectMake(padding, h - padding - 31, w - padding * 2 - 52, 31);
+
+        // Speed label: right of slider
+        self.speedLabel.frame = CGRectMake(w - padding - 44, h - padding - 31, 44, 31);
+
+        // Speed +/- buttons: above slider, right
+        CGFloat btnSize = 24.0;
+        self.speedUpButton.frame = CGRectMake(w - 2 - btnSize, h - padding - 31 - 2 - btnSize, btnSize, btnSize);
+        self.speedDownButton.frame = CGRectMake(CGRectGetMinX(self.speedUpButton.frame) - 2 - btnSize, self.speedUpButton.frame.origin.y, btnSize, btnSize);
+    }
 }
 
 - (void)prepareForReuse {

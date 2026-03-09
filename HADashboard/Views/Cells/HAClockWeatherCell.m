@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HAClockWeatherCell.h"
 #import "HAEntity.h"
 #import "HADashboardConfig.h"
@@ -109,59 +110,93 @@ static const CGFloat kBottomPadding = 12.0;
     // --- Layout ---
 
     // Weather icon (MDI fallback / Lottie placeholder position)
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.weatherIconLabel attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.weatherIconLabel attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTop multiplier:1 constant:padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.weatherIconLabel attribute:NSLayoutAttributeWidth
-        relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:iconSize]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.weatherIconLabel attribute:NSLayoutAttributeHeight
-        relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:iconSize]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.weatherIconLabel attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.weatherIconLabel attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTop multiplier:1 constant:padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.weatherIconLabel attribute:NSLayoutAttributeWidth
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:iconSize]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.weatherIconLabel attribute:NSLayoutAttributeHeight
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:iconSize]];
+    }
 
     // Condition label: right of icon, aligned to top
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.conditionLabel attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.weatherIconLabel attribute:NSLayoutAttributeTrailing multiplier:1 constant:8]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.conditionLabel attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.conditionLabel attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTop multiplier:1 constant:padding]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.conditionLabel attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.weatherIconLabel attribute:NSLayoutAttributeTrailing multiplier:1 constant:8]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.conditionLabel attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.conditionLabel attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTop multiplier:1 constant:padding]];
+    }
 
     // Humidity: below condition
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.humidityLabel attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.conditionLabel attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.humidityLabel attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.humidityLabel attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:self.conditionLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:2]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.humidityLabel attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.conditionLabel attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.humidityLabel attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.humidityLabel attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.conditionLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:2]];
+    }
 
     // Clock: right of icon, below humidity
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.clockLabel attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.conditionLabel attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.clockLabel attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.clockLabel attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:self.humidityLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:4]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.clockLabel attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.conditionLabel attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.clockLabel attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.clockLabel attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.humidityLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:4]];
+    }
 
     // Date: below clock
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.dateLabel attribute:NSLayoutAttributeLeading
-        relatedBy:NSLayoutRelationEqual toItem:self.conditionLabel attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.dateLabel attribute:NSLayoutAttributeTrailing
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.dateLabel attribute:NSLayoutAttributeTop
-        relatedBy:NSLayoutRelationEqual toItem:self.clockLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:0]];
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.dateLabel attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.conditionLabel attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.dateLabel attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    }
+    if (HAAutoLayoutAvailable()) {
+        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.dateLabel attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.clockLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:0]];
+    }
 
     // Forecast bar: pinned to bottom, must not overlap date label or icon
-    self.forecastHeightConstraint = [self.forecastBarView.heightAnchor constraintEqualToConstant:28.0];
-    NSLayoutConstraint *forecastBelowDate = [self.forecastBarView.topAnchor constraintGreaterThanOrEqualToAnchor:self.dateLabel.bottomAnchor constant:kForecastGap];
-    NSLayoutConstraint *forecastBelowIcon = [self.forecastBarView.topAnchor constraintGreaterThanOrEqualToAnchor:self.weatherIconLabel.bottomAnchor constant:kForecastGap];
-    [NSLayoutConstraint activateConstraints:@[
-        [self.forecastBarView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
-        [self.forecastBarView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
-        [self.forecastBarView.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-padding],
-        self.forecastHeightConstraint,
-        forecastBelowDate,
-        forecastBelowIcon,
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        self.forecastHeightConstraint = [self.forecastBarView.heightAnchor constraintEqualToConstant:28.0];
+        NSLayoutConstraint *forecastBelowDate = [self.forecastBarView.topAnchor constraintGreaterThanOrEqualToAnchor:self.dateLabel.bottomAnchor constant:kForecastGap];
+        NSLayoutConstraint *forecastBelowIcon = [self.forecastBarView.topAnchor constraintGreaterThanOrEqualToAnchor:self.weatherIconLabel.bottomAnchor constant:kForecastGap];
+        [NSLayoutConstraint activateConstraints:@[
+            [self.forecastBarView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
+            [self.forecastBarView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
+            [self.forecastBarView.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-padding],
+            self.forecastHeightConstraint,
+            forecastBelowDate,
+            forecastBelowIcon,
+        ]];
+    }
 
     // Initialize formatters
     self.clockFormatter = [[NSDateFormatter alloc] init];
@@ -656,6 +691,45 @@ static const CGFloat kBottomPadding = 12.0;
         anim.repeatCount = HUGE_VALF;
         anim.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
         [self.weatherIconLabel.layer addAnimation:anim forKey:key];
+    }
+}
+
+#pragma mark - Layout
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat h = self.contentView.bounds.size.height;
+        CGFloat padding = 12.0;
+        CGFloat iconSize = 80.0;
+
+        // Weather icon: top-left
+        self.weatherIconLabel.frame = CGRectMake(padding, padding, iconSize, iconSize);
+        if (self.lottieView) {
+            self.lottieView.frame = self.weatherIconLabel.frame;
+        }
+
+        // Text column: right of icon
+        CGFloat textX = padding + iconSize + 8;
+        CGFloat textW = w - textX - padding;
+
+        CGSize condSize = [self.conditionLabel sizeThatFits:CGSizeMake(textW, CGFLOAT_MAX)];
+        self.conditionLabel.frame = CGRectMake(textX, padding, textW, condSize.height);
+
+        CGSize humidSize = [self.humidityLabel sizeThatFits:CGSizeMake(textW, CGFLOAT_MAX)];
+        self.humidityLabel.frame = CGRectMake(textX, CGRectGetMaxY(self.conditionLabel.frame) + 2, textW, humidSize.height);
+
+        CGSize clockSize = [self.clockLabel sizeThatFits:CGSizeMake(textW, CGFLOAT_MAX)];
+        self.clockLabel.frame = CGRectMake(textX, CGRectGetMaxY(self.humidityLabel.frame) + 4, textW, clockSize.height);
+
+        CGSize dateSize = [self.dateLabel sizeThatFits:CGSizeMake(textW, CGFLOAT_MAX)];
+        self.dateLabel.frame = CGRectMake(textX, CGRectGetMaxY(self.clockLabel.frame), textW, dateSize.height);
+
+        // Forecast bar: bottom area
+        CGFloat forecastH = h - kTopContentHeight - kForecastGap - padding;
+        if (forecastH < 20) forecastH = 20;
+        self.forecastBarView.frame = CGRectMake(padding, kTopContentHeight + kForecastGap, w - padding * 2, forecastH);
     }
 }
 

@@ -1,3 +1,5 @@
+#import "HAAutoLayout.h"
+#import "HAStackView.h"
 #import "HAGlanceItemView.h"
 #import "HAEntity.h"
 #import "HATheme.h"
@@ -14,7 +16,7 @@ static const CGFloat kVerticalPadding = 6.0;
 @property (nonatomic, strong) UILabel *iconLabel;
 @property (nonatomic, strong) UILabel *nameLabel;
 @property (nonatomic, strong) UILabel *stateLabel;
-@property (nonatomic, strong) UIStackView *stack;
+@property (nonatomic, strong) HAStackView *stack;
 @property (nonatomic, weak, readwrite) HAEntity *entity;
 @property (nonatomic, copy, readwrite) NSDictionary *actionConfig;
 @end
@@ -49,19 +51,31 @@ static const CGFloat kVerticalPadding = 6.0;
     self.stateLabel.numberOfLines = 1;
     self.stateLabel.lineBreakMode = NSLineBreakByTruncatingTail;
 
-    self.stack = [[UIStackView alloc] initWithArrangedSubviews:@[self.iconLabel, self.nameLabel, self.stateLabel]];
-    self.stack.axis = UILayoutConstraintAxisVertical;
-    self.stack.alignment = UIStackViewAlignmentCenter;
+    self.stack = [[HAStackView alloc] initWithArrangedSubviews:@[self.iconLabel, self.nameLabel, self.stateLabel]];
+    self.stack.axis = 1;
+    self.stack.alignment = 3;
     self.stack.spacing = kVerticalSpacing;
     self.stack.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:self.stack];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self.stack.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
-        [self.stack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-        [self.stack.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.leadingAnchor constant:2],
-        [self.stack.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor constant:-2],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.stack.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+            [self.stack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+            [self.stack.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.leadingAnchor constant:2],
+            [self.stack.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor constant:-2],
+        ]];
+    }
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGSize stackSize = [self.stack sizeThatFits:self.bounds.size];
+        self.stack.frame = CGRectMake((self.bounds.size.width - stackSize.width) / 2.0,
+                                      (self.bounds.size.height - stackSize.height) / 2.0,
+                                      stackSize.width, stackSize.height);
+    }
 }
 
 - (void)configureWithEntity:(HAEntity *)entity

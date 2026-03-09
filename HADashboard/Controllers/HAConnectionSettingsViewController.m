@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HAConnectionSettingsViewController.h"
 #import "HAAuthManager.h"
 #import "HAConnectionFormView.h"
@@ -39,16 +40,20 @@
     UIScrollView *scrollView = [[UIScrollView alloc] init];
     scrollView.translatesAutoresizingMaskIntoConstraints = NO;
     scrollView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
+    scrollView.tag = 100;
     [self.view addSubview:scrollView];
-    [NSLayoutConstraint activateConstraints:@[
-        [scrollView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
-        [scrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
-        [scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-        [scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [scrollView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+            [scrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+            [scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+            [scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        ]];
+    }
 
     UIView *container = [[UIView alloc] init];
     container.translatesAutoresizingMaskIntoConstraints = NO;
+    container.tag = 101;
     [scrollView addSubview:container];
 
     self.connectionForm = [[HAConnectionFormView alloc] initWithFrame:CGRectZero];
@@ -56,36 +61,66 @@
     self.connectionForm.translatesAutoresizingMaskIntoConstraints = NO;
     [container addSubview:self.connectionForm];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self.connectionForm.topAnchor constraintEqualToAnchor:container.topAnchor],
-        [self.connectionForm.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-        [self.connectionForm.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
-        [self.connectionForm.bottomAnchor constraintEqualToAnchor:container.bottomAnchor],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.connectionForm.topAnchor constraintEqualToAnchor:container.topAnchor],
+            [self.connectionForm.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
+            [self.connectionForm.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
+            [self.connectionForm.bottomAnchor constraintEqualToAnchor:container.bottomAnchor],
+        ]];
+    }
 
     // ScrollView content: container pinned to scroll edges
-    [NSLayoutConstraint activateConstraints:@[
-        [container.topAnchor constraintEqualToAnchor:scrollView.topAnchor constant:24],
-        [container.bottomAnchor constraintLessThanOrEqualToAnchor:scrollView.bottomAnchor constant:-padding],
-        [container.widthAnchor constraintLessThanOrEqualToConstant:maxWidth],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [container.topAnchor constraintEqualToAnchor:scrollView.topAnchor constant:24],
+            [container.bottomAnchor constraintLessThanOrEqualToAnchor:scrollView.bottomAnchor constant:-padding],
+            [container.widthAnchor constraintLessThanOrEqualToConstant:maxWidth],
+        ]];
+    }
 
     // Horizontal: centered with max width
-    NSLayoutConstraint *centerX = [container.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor];
-    centerX.active = YES;
-    NSLayoutConstraint *leadingGE = [container.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor constant:padding];
-    leadingGE.active = YES;
-    NSLayoutConstraint *trailingLE = [container.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor constant:-padding];
-    trailingLE.active = YES;
-    NSLayoutConstraint *preferWidth = [container.widthAnchor constraintEqualToConstant:maxWidth];
-    preferWidth.priority = UILayoutPriorityDefaultHigh;
-    preferWidth.active = YES;
+    if (HAAutoLayoutAvailable()) {
+        NSLayoutConstraint *centerX = [container.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor];
+        centerX.active = YES;
+        NSLayoutConstraint *leadingGE = [container.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor constant:padding];
+        leadingGE.active = YES;
+        NSLayoutConstraint *trailingLE = [container.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor constant:-padding];
+        trailingLE.active = YES;
+        NSLayoutConstraint *preferWidth = [container.widthAnchor constraintEqualToConstant:maxWidth];
+        preferWidth.priority = UILayoutPriorityDefaultHigh;
+        preferWidth.active = YES;
 
-    // iOS 9 scroll content width: pin container width to scroll view width
-    // (on iOS 11+ this would use frameLayoutGuide, but we keep it simple)
-    NSLayoutConstraint *scrollWidth = [container.leadingAnchor constraintEqualToAnchor:scrollView.leadingAnchor constant:padding];
-    scrollWidth.priority = UILayoutPriorityDefaultLow;
-    scrollWidth.active = YES;
+        // iOS 9 scroll content width: pin container width to scroll view width
+        // (on iOS 11+ this would use frameLayoutGuide, but we keep it simple)
+        NSLayoutConstraint *scrollWidth = [container.leadingAnchor constraintEqualToAnchor:scrollView.leadingAnchor constant:padding];
+        scrollWidth.priority = UILayoutPriorityDefaultLow;
+        scrollWidth.active = YES;
+    }
+}
+
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGRect bounds = self.view.bounds;
+        CGFloat padding = 20.0;
+        CGFloat maxWidth = 500.0;
+
+        UIScrollView *scrollView = (UIScrollView *)[self.view viewWithTag:100];
+        scrollView.frame = bounds;
+
+        UIView *container = [scrollView viewWithTag:101];
+        CGFloat containerWidth = MIN(maxWidth, bounds.size.width - padding * 2);
+        CGFloat containerX = (bounds.size.width - containerWidth) / 2;
+
+        // Connection form fills container
+        CGSize formSize = [self.connectionForm sizeThatFits:CGSizeMake(containerWidth, CGFLOAT_MAX)];
+        self.connectionForm.frame = CGRectMake(0, 0, containerWidth, formSize.height);
+
+        CGFloat containerHeight = formSize.height;
+        container.frame = CGRectMake(containerX, 24, containerWidth, containerHeight);
+        scrollView.contentSize = CGSizeMake(bounds.size.width, 24 + containerHeight + padding);
+    }
 }
 
 #pragma mark - HAConnectionFormDelegate

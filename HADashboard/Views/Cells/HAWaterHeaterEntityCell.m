@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HAWaterHeaterEntityCell.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
@@ -45,27 +46,29 @@
     [self.modeButton addTarget:self action:@selector(modeTapped) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:self.modeButton];
 
-    [NSLayoutConstraint activateConstraints:@[
-        // Temp label centered
-        [self.tempLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-        [self.tempLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:8],
-        // Current temp below target
-        [self.currentTempLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-        [self.currentTempLabel.topAnchor constraintEqualToAnchor:self.tempLabel.bottomAnchor constant:2],
-        // - button left of temp
-        [self.minusButton.trailingAnchor constraintEqualToAnchor:self.tempLabel.leadingAnchor constant:-12],
-        [self.minusButton.centerYAnchor constraintEqualToAnchor:self.tempLabel.centerYAnchor],
-        [self.minusButton.widthAnchor constraintEqualToConstant:36],
-        [self.minusButton.heightAnchor constraintEqualToConstant:36],
-        // + button right of temp
-        [self.plusButton.leadingAnchor constraintEqualToAnchor:self.tempLabel.trailingAnchor constant:12],
-        [self.plusButton.centerYAnchor constraintEqualToAnchor:self.tempLabel.centerYAnchor],
-        [self.plusButton.widthAnchor constraintEqualToConstant:36],
-        [self.plusButton.heightAnchor constraintEqualToConstant:36],
-        // Mode button at bottom
-        [self.modeButton.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-        [self.modeButton.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-padding],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            // Temp label centered
+            [self.tempLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
+            [self.tempLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:8],
+            // Current temp below target
+            [self.currentTempLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
+            [self.currentTempLabel.topAnchor constraintEqualToAnchor:self.tempLabel.bottomAnchor constant:2],
+            // - button left of temp
+            [self.minusButton.trailingAnchor constraintEqualToAnchor:self.tempLabel.leadingAnchor constant:-12],
+            [self.minusButton.centerYAnchor constraintEqualToAnchor:self.tempLabel.centerYAnchor],
+            [self.minusButton.widthAnchor constraintEqualToConstant:36],
+            [self.minusButton.heightAnchor constraintEqualToConstant:36],
+            // + button right of temp
+            [self.plusButton.leadingAnchor constraintEqualToAnchor:self.tempLabel.trailingAnchor constant:12],
+            [self.plusButton.centerYAnchor constraintEqualToAnchor:self.tempLabel.centerYAnchor],
+            [self.plusButton.widthAnchor constraintEqualToConstant:36],
+            [self.plusButton.heightAnchor constraintEqualToConstant:36],
+            // Mode button at bottom
+            [self.modeButton.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
+            [self.modeButton.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-padding],
+        ]];
+    }
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
@@ -105,6 +108,37 @@
     self.modeButton.enabled = available;
 
     self.contentView.backgroundColor = [HATheme cellBackgroundColor];
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat padding = 10.0;
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat h = self.contentView.bounds.size.height;
+        CGFloat nameMaxY = CGRectGetMaxY(self.nameLabel.frame);
+        // Temp label centered
+        CGSize tempSize = [self.tempLabel sizeThatFits:CGSizeMake(w, CGFLOAT_MAX)];
+        CGFloat tempY = nameMaxY + 8;
+        self.tempLabel.frame = CGRectMake((w - tempSize.width) / 2, tempY, tempSize.width, tempSize.height);
+        // Current temp below
+        CGSize curSize = [self.currentTempLabel sizeThatFits:CGSizeMake(w, CGFLOAT_MAX)];
+        self.currentTempLabel.frame = CGRectMake((w - curSize.width) / 2,
+                                                  CGRectGetMaxY(self.tempLabel.frame) + 2,
+                                                  curSize.width, curSize.height);
+        // +/- buttons flanking temp
+        self.minusButton.frame = CGRectMake(CGRectGetMinX(self.tempLabel.frame) - 12 - 36,
+                                            CGRectGetMidY(self.tempLabel.frame) - 18, 36, 36);
+        self.plusButton.frame = CGRectMake(CGRectGetMaxX(self.tempLabel.frame) + 12,
+                                           CGRectGetMidY(self.tempLabel.frame) - 18, 36, 36);
+        // Mode button at bottom center
+        if (!self.modeButton.hidden) {
+            CGSize modeSize = [self.modeButton sizeThatFits:CGSizeMake(w, CGFLOAT_MAX)];
+            self.modeButton.frame = CGRectMake((w - modeSize.width) / 2,
+                                               h - padding - modeSize.height,
+                                               modeSize.width, modeSize.height);
+        }
+    }
 }
 
 #pragma mark - Actions

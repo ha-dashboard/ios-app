@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HAGraphCardCell.h"
 #import "HAGraphView.h"
 #import "HAEntity.h"
@@ -124,53 +125,94 @@ static NSArray<UIColor *> *sColorPalette;
     [self.contentView addSubview:self.statsLabel];
 
     CGFloat pad = 12;
-    // Icon constraints (fixed width, vertically centered with name)
-    NSLayoutConstraint *iconLeading = [self.iconLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:pad];
-    NSLayoutConstraint *iconCenterY = [self.iconLabel.centerYAnchor constraintEqualToAnchor:self.nameLabel.centerYAnchor];
-    NSLayoutConstraint *iconWidth = [self.iconLabel.widthAnchor constraintEqualToConstant:22];
+    if (HAAutoLayoutAvailable()) {
+        // Icon constraints (fixed width, vertically centered with name)
+        NSLayoutConstraint *iconLeading = [self.iconLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:pad];
+        NSLayoutConstraint *iconCenterY = [self.iconLabel.centerYAnchor constraintEqualToAnchor:self.nameLabel.centerYAnchor];
+        NSLayoutConstraint *iconWidth = [self.iconLabel.widthAnchor constraintEqualToConstant:22];
 
-    // Name label: leading anchored to icon when visible, to content edge when not
-    // We use two constraints and toggle active state
-    NSLayoutConstraint *nameLeadingToIcon = [self.nameLabel.leadingAnchor constraintEqualToAnchor:self.iconLabel.trailingAnchor constant:4];
-    NSLayoutConstraint *nameLeadingToEdge = [self.nameLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:pad];
-    // Start with nameLeadingToEdge active (icon hidden by default)
-    nameLeadingToEdge.active = YES;
-    nameLeadingToIcon.active = NO;
-    // Store for later toggling
-    objc_setAssociatedObject(self, "nameLeadingToIcon", nameLeadingToIcon, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(self, "nameLeadingToEdge", nameLeadingToEdge, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        // Name label: leading anchored to icon when visible, to content edge when not
+        NSLayoutConstraint *nameLeadingToIcon = [self.nameLabel.leadingAnchor constraintEqualToAnchor:self.iconLabel.trailingAnchor constant:4];
+        NSLayoutConstraint *nameLeadingToEdge = [self.nameLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:pad];
+        nameLeadingToEdge.active = YES;
+        nameLeadingToIcon.active = NO;
+        objc_setAssociatedObject(self, "nameLeadingToIcon", nameLeadingToIcon, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(self, "nameLeadingToEdge", nameLeadingToEdge, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-    // Graph bottom: either to stats or to content bottom
-    self.graphBottomToStats = [self.graphView.bottomAnchor constraintEqualToAnchor:self.statsLabel.topAnchor constant:-2];
-    self.graphBottomToContent = [self.graphView.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor];
-    self.graphBottomToContent.active = YES;
-    self.graphBottomToStats.active = NO;
+        // Graph bottom: either to stats or to content bottom
+        self.graphBottomToStats = [self.graphView.bottomAnchor constraintEqualToAnchor:self.statsLabel.topAnchor constant:-2];
+        self.graphBottomToContent = [self.graphView.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor];
+        self.graphBottomToContent.active = YES;
+        self.graphBottomToStats.active = NO;
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self.nameLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:pad],
-        [self.nameLabel.trailingAnchor constraintEqualToAnchor:self.secondaryLabel.leadingAnchor constant:-8],
+        [NSLayoutConstraint activateConstraints:@[
+            [self.nameLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:pad],
+            [self.nameLabel.trailingAnchor constraintEqualToAnchor:self.secondaryLabel.leadingAnchor constant:-8],
 
-        iconLeading, iconCenterY, iconWidth,
+            iconLeading, iconCenterY, iconWidth,
+    
+            [self.valueLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:2],
+            [self.valueLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:pad],
+    
+            [self.unitLabel.leadingAnchor constraintEqualToAnchor:self.valueLabel.trailingAnchor constant:4],
+            [self.unitLabel.lastBaselineAnchor constraintEqualToAnchor:self.valueLabel.lastBaselineAnchor],
+    
+            [self.secondaryLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:pad],
+            [self.secondaryLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-pad],
+            [self.secondaryLabel.widthAnchor constraintLessThanOrEqualToConstant:140],
+    
+            [self.graphView.topAnchor constraintEqualToAnchor:self.valueLabel.bottomAnchor constant:8],
+            [self.graphView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
+            [self.graphView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
+    
+            [self.statsLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:pad],
+            [self.statsLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-pad],
+            [self.statsLabel.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-4],
+            [self.statsLabel.heightAnchor constraintEqualToConstant:16],
+        ]];
+    }
+}
 
-        [self.valueLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:2],
-        [self.valueLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:pad],
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat h = self.contentView.bounds.size.height;
+        CGFloat pad = 12;
 
-        [self.unitLabel.leadingAnchor constraintEqualToAnchor:self.valueLabel.trailingAnchor constant:4],
-        [self.unitLabel.lastBaselineAnchor constraintEqualToAnchor:self.valueLabel.lastBaselineAnchor],
+        // Icon label: top-left
+        self.iconLabel.frame = CGRectMake(pad, pad, 22, 22);
 
-        [self.secondaryLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:pad],
-        [self.secondaryLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-pad],
-        [self.secondaryLabel.widthAnchor constraintLessThanOrEqualToConstant:140],
+        // Name label: right of icon (or at left edge if icon hidden)
+        CGFloat nameX = self.iconLabel.hidden ? pad : (pad + 22 + 4);
+        CGSize nameSize = [self.nameLabel sizeThatFits:CGSizeMake(w - nameX - pad - 148, CGFLOAT_MAX)];
+        self.nameLabel.frame = CGRectMake(nameX, pad, w - nameX - pad - 148, nameSize.height);
 
-        [self.graphView.topAnchor constraintEqualToAnchor:self.valueLabel.bottomAnchor constant:8],
-        [self.graphView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
-        [self.graphView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
+        // Secondary label: top-right
+        if (!self.secondaryLabel.hidden) {
+            CGSize secSize = [self.secondaryLabel sizeThatFits:CGSizeMake(140, CGFLOAT_MAX)];
+            self.secondaryLabel.frame = CGRectMake(w - pad - MIN(secSize.width, 140), pad, MIN(secSize.width, 140), secSize.height);
+        }
 
-        [self.statsLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:pad],
-        [self.statsLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-pad],
-        [self.statsLabel.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-4],
-        [self.statsLabel.heightAnchor constraintEqualToConstant:16],
-    ]];
+        // Value label: below name
+        CGSize valSize = [self.valueLabel sizeThatFits:CGSizeMake(w / 2.0, CGFLOAT_MAX)];
+        self.valueLabel.frame = CGRectMake(pad, CGRectGetMaxY(self.nameLabel.frame) + 2, valSize.width, valSize.height);
+
+        // Unit label: after value
+        CGSize unitSize = [self.unitLabel sizeThatFits:CGSizeMake(60, CGFLOAT_MAX)];
+        self.unitLabel.frame = CGRectMake(CGRectGetMaxX(self.valueLabel.frame) + 4, CGRectGetMaxY(self.valueLabel.frame) - unitSize.height, unitSize.width, unitSize.height);
+
+        // Stats label: bottom
+        CGFloat statsH = self.statsLabel.hidden ? 0 : 16;
+        if (!self.statsLabel.hidden) {
+            self.statsLabel.frame = CGRectMake(pad, h - 4 - statsH, w - pad * 2, statsH);
+        }
+
+        // Graph view: fills between value and stats/bottom
+        CGFloat graphTop = CGRectGetMaxY(self.valueLabel.frame) + 8;
+        CGFloat graphBottom = self.statsLabel.hidden ? h : (h - 4 - statsH - 2);
+        self.graphView.frame = CGRectMake(0, graphTop, w, graphBottom - graphTop);
+    }
 }
 
 - (void)prepareForReuse {

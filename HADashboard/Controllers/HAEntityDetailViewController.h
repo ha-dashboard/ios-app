@@ -1,4 +1,5 @@
 #import <UIKit/UIKit.h>
+#import "HAStackView.h"
 
 @class HAEntity;
 @class HAEntityDetailViewController;
@@ -45,6 +46,6 @@
 
 /// Container view inside the scroll view where domain sections, history,
 /// and attributes are added. Subclasses and external code add views here.
-@property (nonatomic, strong, readonly) UIStackView *contentStack;
+@property (nonatomic, strong, readonly) HAStackView *contentStack;
 
 @end

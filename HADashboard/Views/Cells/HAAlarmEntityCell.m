@@ -1,3 +1,5 @@
+#import "HAAutoLayout.h"
+#import "HAStackView.h"
 #import "HAAlarmEntityCell.h"
 #import "HAEntity.h"
 #import "HAEntityAttributes.h"
@@ -148,10 +150,12 @@ static const NSInteger kKeypadTagEnter = 11;
     CGFloat totalHeight = 4.0 * kKeypadButtonSize + 3.0 * kKeypadButtonSpacing;
 
     // Size the container
-    [NSLayoutConstraint activateConstraints:@[
-        [self.keypadContainer.widthAnchor constraintEqualToConstant:totalWidth],
-        [self.keypadContainer.heightAnchor constraintEqualToConstant:totalHeight],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.keypadContainer.widthAnchor constraintEqualToConstant:totalWidth],
+            [self.keypadContainer.heightAnchor constraintEqualToConstant:totalHeight],
+        ]];
+    }
 
     for (NSInteger row = 0; row < 4; row++) {
         for (NSInteger col = 0; col < 3; col++) {
@@ -190,12 +194,14 @@ static const NSInteger kKeypadTagEnter = 11;
             CGFloat x = col * (kKeypadButtonSize + kKeypadButtonSpacing);
             CGFloat y = row * (kKeypadButtonSize + kKeypadButtonSpacing);
 
-            [NSLayoutConstraint activateConstraints:@[
-                [btn.leadingAnchor constraintEqualToAnchor:self.keypadContainer.leadingAnchor constant:x],
-                [btn.topAnchor constraintEqualToAnchor:self.keypadContainer.topAnchor constant:y],
-                [btn.widthAnchor constraintEqualToConstant:kKeypadButtonSize],
-                [btn.heightAnchor constraintEqualToConstant:kKeypadButtonSize],
-            ]];
+            if (HAAutoLayoutAvailable()) {
+                [NSLayoutConstraint activateConstraints:@[
+                    [btn.leadingAnchor constraintEqualToAnchor:self.keypadContainer.leadingAnchor constant:x],
+                    [btn.topAnchor constraintEqualToAnchor:self.keypadContainer.topAnchor constant:y],
+                    [btn.widthAnchor constraintEqualToConstant:kKeypadButtonSize],
+                    [btn.heightAnchor constraintEqualToConstant:kKeypadButtonSize],
+                ]];
+            }
         }
     }
 }
@@ -204,32 +210,38 @@ static const NSInteger kKeypadTagEnter = 11;
     UIView *cv = self.contentView;
 
     // Alarm state badge: below name, left-aligned pill
-    [NSLayoutConstraint activateConstraints:@[
-        [self.alarmStateLabel.leadingAnchor constraintEqualToAnchor:cv.leadingAnchor constant:kPadding],
-        [self.alarmStateLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:4],
-        [self.alarmStateLabel.heightAnchor constraintEqualToConstant:24],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.alarmStateLabel.leadingAnchor constraintEqualToAnchor:cv.leadingAnchor constant:kPadding],
+            [self.alarmStateLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:4],
+            [self.alarmStateLabel.heightAnchor constraintEqualToConstant:24],
+        ]];
+    }
 
     // Action buttons: UIStackView row below alarm state
-    UIStackView *buttonStack = [[UIStackView alloc] initWithArrangedSubviews:@[
+    HAStackView *buttonStack = [[HAStackView alloc] initWithArrangedSubviews:@[
         self.armAwayButton, self.armHomeButton, self.armNightButton,
         self.armVacationButton, self.armBypassButton, self.disarmButton
     ]];
-    buttonStack.axis = UILayoutConstraintAxisHorizontal;
+    buttonStack.axis = 0;
     buttonStack.spacing = kActionButtonSpacing;
     buttonStack.translatesAutoresizingMaskIntoConstraints = NO;
     [cv addSubview:buttonStack];
 
     for (UIButton *btn in buttonStack.arrangedSubviews) {
-        [btn.heightAnchor constraintEqualToConstant:kActionButtonHeight].active = YES;
+        if (HAAutoLayoutAvailable()) {
+            [btn.heightAnchor constraintEqualToConstant:kActionButtonHeight].active = YES;
+        }
     }
 
-    [NSLayoutConstraint activateConstraints:@[
-        [buttonStack.leadingAnchor constraintGreaterThanOrEqualToAnchor:cv.leadingAnchor constant:kPadding],
-        [buttonStack.trailingAnchor constraintLessThanOrEqualToAnchor:cv.trailingAnchor constant:-kPadding],
-        [buttonStack.topAnchor constraintEqualToAnchor:self.alarmStateLabel.bottomAnchor constant:8],
-        [buttonStack.centerXAnchor constraintEqualToAnchor:cv.centerXAnchor],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [buttonStack.leadingAnchor constraintGreaterThanOrEqualToAnchor:cv.leadingAnchor constant:kPadding],
+            [buttonStack.trailingAnchor constraintLessThanOrEqualToAnchor:cv.trailingAnchor constant:-kPadding],
+            [buttonStack.topAnchor constraintEqualToAnchor:self.alarmStateLabel.bottomAnchor constant:8],
+            [buttonStack.centerXAnchor constraintEqualToAnchor:cv.centerXAnchor],
+        ]];
+    }
 
     // Night, Vacation, Bypass hidden by default — shown based on supported_features
     self.armNightButton.hidden = YES;
@@ -238,18 +250,22 @@ static const NSInteger kKeypadTagEnter = 11;
 
     // Code text field: centered below buttons
     CGFloat codeFieldWidth = 3.0 * kKeypadButtonSize + 2.0 * kKeypadButtonSpacing;
-    [NSLayoutConstraint activateConstraints:@[
-        [self.codeTextField.centerXAnchor constraintEqualToAnchor:cv.centerXAnchor],
-        [self.codeTextField.topAnchor constraintEqualToAnchor:buttonStack.bottomAnchor constant:8],
-        [self.codeTextField.widthAnchor constraintEqualToConstant:codeFieldWidth],
-        [self.codeTextField.heightAnchor constraintEqualToConstant:kCodeFieldHeight],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.codeTextField.centerXAnchor constraintEqualToAnchor:cv.centerXAnchor],
+            [self.codeTextField.topAnchor constraintEqualToAnchor:buttonStack.bottomAnchor constant:8],
+            [self.codeTextField.widthAnchor constraintEqualToConstant:codeFieldWidth],
+            [self.codeTextField.heightAnchor constraintEqualToConstant:kCodeFieldHeight],
+        ]];
+    }
 
     // Keypad container: centered below code field
-    [NSLayoutConstraint activateConstraints:@[
-        [self.keypadContainer.centerXAnchor constraintEqualToAnchor:cv.centerXAnchor],
-        [self.keypadContainer.topAnchor constraintEqualToAnchor:self.codeTextField.bottomAnchor constant:8],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.keypadContainer.centerXAnchor constraintEqualToAnchor:cv.centerXAnchor],
+            [self.keypadContainer.topAnchor constraintEqualToAnchor:self.codeTextField.bottomAnchor constant:8],
+        ]];
+    }
 }
 
 #pragma mark - Configuration
@@ -464,6 +480,58 @@ static const NSInteger kKeypadTagEnter = 11;
     [self submitCodeForService:self.pendingService ?: @"alarm_disarm"];
     [textField resignFirstResponder];
     return YES;
+}
+
+#pragma mark - Layout
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat w = self.contentView.bounds.size.width;
+        CGFloat padding = kPadding;
+
+        // alarmStateLabel: below nameLabel, left-aligned
+        CGSize alarmSize = [self.alarmStateLabel sizeThatFits:CGSizeMake(w - padding * 2, CGFLOAT_MAX)];
+        self.alarmStateLabel.frame = CGRectMake(padding, CGRectGetMaxY(self.nameLabel.frame) + 4, alarmSize.width + 4, 24);
+
+        // Action buttons: row below alarm state, centered
+        NSMutableArray *visibleBtns = [NSMutableArray array];
+        for (UIButton *btn in @[self.armAwayButton, self.armHomeButton, self.armNightButton,
+                                 self.armVacationButton, self.armBypassButton, self.disarmButton]) {
+            if (!btn.hidden) [visibleBtns addObject:btn];
+        }
+        CGFloat btnY = CGRectGetMaxY(self.alarmStateLabel.frame) + 8;
+        CGFloat totalBtnW = visibleBtns.count * kActionButtonWidth + MAX(0, (CGFloat)visibleBtns.count - 1) * kActionButtonSpacing;
+        CGFloat btnX = (w - totalBtnW) / 2.0;
+        for (UIButton *btn in visibleBtns) {
+            btn.frame = CGRectMake(btnX, btnY, kActionButtonWidth, kActionButtonHeight);
+            btnX += kActionButtonWidth + kActionButtonSpacing;
+        }
+
+        // Code text field: centered below buttons
+        CGFloat codeFieldWidth = 3.0 * kKeypadButtonSize + 2.0 * kKeypadButtonSpacing;
+        CGFloat codeY = btnY + kActionButtonHeight + 8;
+        self.codeTextField.frame = CGRectMake((w - codeFieldWidth) / 2.0, codeY, codeFieldWidth, kCodeFieldHeight);
+
+        // Keypad container: centered below code field
+        CGFloat keypadW = 3.0 * kKeypadButtonSize + 2.0 * kKeypadButtonSpacing;
+        CGFloat keypadH = 4.0 * kKeypadButtonSize + 3.0 * kKeypadButtonSpacing;
+        CGFloat keypadY = CGRectGetMaxY(self.codeTextField.frame) + 8;
+        self.keypadContainer.frame = CGRectMake((w - keypadW) / 2.0, keypadY, keypadW, keypadH);
+
+        // Keypad buttons inside container
+        NSInteger btnIdx = 0;
+        for (NSInteger row = 0; row < 4; row++) {
+            for (NSInteger col = 0; col < 3; col++) {
+                if (btnIdx < (NSInteger)self.keypadButtons.count) {
+                    CGFloat x = col * (kKeypadButtonSize + kKeypadButtonSpacing);
+                    CGFloat y = row * (kKeypadButtonSize + kKeypadButtonSpacing);
+                    self.keypadButtons[btnIdx].frame = CGRectMake(x, y, kKeypadButtonSize, kKeypadButtonSize);
+                }
+                btnIdx++;
+            }
+        }
+    }
 }
 
 #pragma mark - Reuse

@@ -1,3 +1,4 @@
+#import "HAAutoLayout.h"
 #import "HAStatisticCardCell.h"
 #import "HAEntity.h"
 #import "HADashboardConfig.h"
@@ -55,21 +56,23 @@
     self.statNameLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.contentView addSubview:self.statNameLabel];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self.statIconLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:12],
-        [self.statIconLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:12],
-
-        [self.statValueLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-        [self.statValueLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:16],
-
-        [self.statTypeLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-        [self.statTypeLabel.topAnchor constraintEqualToAnchor:self.statValueLabel.bottomAnchor constant:2],
-
-        [self.statNameLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-        [self.statNameLabel.topAnchor constraintEqualToAnchor:self.statTypeLabel.bottomAnchor constant:2],
-        [self.statNameLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:8],
-        [self.statNameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-8],
-    ]];
+    if (HAAutoLayoutAvailable()) {
+        [NSLayoutConstraint activateConstraints:@[
+            [self.statIconLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:12],
+            [self.statIconLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:12],
+    
+            [self.statValueLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
+            [self.statValueLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:16],
+    
+            [self.statTypeLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
+            [self.statTypeLabel.topAnchor constraintEqualToAnchor:self.statValueLabel.bottomAnchor constant:2],
+    
+            [self.statNameLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
+            [self.statNameLabel.topAnchor constraintEqualToAnchor:self.statTypeLabel.bottomAnchor constant:2],
+            [self.statNameLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:8],
+            [self.statNameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-8],
+        ]];
+    }
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
@@ -111,6 +114,27 @@
 
     self.contentView.backgroundColor = [HATheme cellBackgroundColor];
     self.alpha = entity.isAvailable ? 1.0 : 0.5;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!HAAutoLayoutAvailable()) {
+        CGFloat w = self.contentView.bounds.size.width;
+        // Icon top-left
+        self.statIconLabel.frame = CGRectMake(12, 12, 28, 28);
+        // Value centered
+        CGSize valSize = [self.statValueLabel sizeThatFits:CGSizeMake(w, CGFLOAT_MAX)];
+        self.statValueLabel.frame = CGRectMake((w - valSize.width) / 2, 16, valSize.width, valSize.height);
+        // Stat type below value
+        CGSize typeSize = [self.statTypeLabel sizeThatFits:CGSizeMake(w, CGFLOAT_MAX)];
+        CGFloat typeY = CGRectGetMaxY(self.statValueLabel.frame) + 2;
+        self.statTypeLabel.frame = CGRectMake((w - typeSize.width) / 2, typeY, typeSize.width, typeSize.height);
+        // Name below type
+        CGFloat nameW = w - 16;
+        CGSize nameSize = [self.statNameLabel sizeThatFits:CGSizeMake(nameW, CGFLOAT_MAX)];
+        CGFloat nameY = CGRectGetMaxY(self.statTypeLabel.frame) + 2;
+        self.statNameLabel.frame = CGRectMake((w - nameSize.width) / 2, nameY, nameSize.width, nameSize.height);
+    }
 }
 
 - (void)prepareForReuse {
