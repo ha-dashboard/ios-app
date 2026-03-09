@@ -996,6 +996,8 @@ static const CGFloat kGraphHeight = 160.0;
         // Content stack: inset within scroll view
         CGSize stackSize = [self.contentStack sizeThatFits:CGSizeMake(stackWidth, CGFLOAT_MAX)];
         self.contentStack.frame = CGRectMake(kHeaderPadding, 8, stackWidth, stackSize.height);
+        [self.contentStack setNeedsLayout];
+        [self.contentStack layoutIfNeeded];
         self.scrollView.contentSize = CGSizeMake(bounds.size.width, 8 + stackSize.height + 16);
 
         // Layout history container internals

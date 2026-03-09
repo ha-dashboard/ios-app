@@ -204,6 +204,8 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
         // Stack: fill remaining space minus chips
         CGFloat stackH = self.contentView.bounds.size.height - y - chipH;
         self.stackView.frame = CGRectMake(0, y, w, stackH);
+        [self.stackView setNeedsLayout];
+        [self.stackView layoutIfNeeded];
 
         // Scene chips
         if (chipH > 0) {
