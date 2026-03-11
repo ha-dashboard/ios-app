@@ -208,16 +208,25 @@ build_device() {
     fi
     echo "   Compiled $COMPILED files" >&2
 
-    # Link against Xcode 13 SDK with platform_version override
+    # Assemble the iOS 5.1 C runtime startup stub (provides _start for LC_UNIXTHREAD)
+    echo "   Assembling crt_start_armv7.s..." >&2
+    "$CLANG" \
+        --target=armv7-apple-ios5.1 \
+        -isysroot "$XCODE13_SDK" \
+        -c "$PROJECT_DIR/HADashboard/Compat/crt_start_armv7.s" \
+        -o "$BUILD_DIR/armv7-obj/crt_start_armv7.o"
+
+    # Link against Xcode 13 SDK with -nostartfiles (we provide our own _start)
     echo "   Linking armv7..." >&2
     "$CLANG" \
         --target=armv7-apple-ios5.1 \
         -isysroot "$XCODE13_SDK" \
+        -nostartfiles \
         -framework Foundation -framework UIKit -framework CoreFoundation \
         -framework CoreGraphics -framework CoreText -framework QuartzCore \
         -framework Security -framework CFNetwork \
         -fobjc-arc -dead_strip \
-        -Xlinker -platform_version -Xlinker ios -Xlinker 7.0 -Xlinker "$SDK_VER" \
+        -Xlinker -platform_version -Xlinker ios -Xlinker 5.1 -Xlinker "$SDK_VER" \
         "$BUILD_DIR/armv7-obj"/*.o \
         -o "$BUILD_DIR/armv7-thin"
 
