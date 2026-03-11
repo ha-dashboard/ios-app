@@ -112,7 +112,7 @@ build_rosettasim() {
         ARCHS=x86_64 \
         VALID_ARCHS=x86_64 \
         ONLY_ACTIVE_ARCH=NO \
-        IPHONEOS_DEPLOYMENT_TARGET=5.1 \
+        IPHONEOS_DEPLOYMENT_TARGET=9.0 \
         "PRODUCT_BUNDLE_IDENTIFIER=$BUNDLE_ID" \
         "MARKETING_VERSION=$APP_VERSION" \
         "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" \
@@ -282,11 +282,12 @@ build_device() {
         -output "$APP/HA Dashboard.tmp"
     mv "$APP/HA Dashboard.tmp" "$APP/HA Dashboard"
 
-    # Recompile LaunchScreen for iOS 9 compatibility
+    # Recompile LaunchScreen for iOS 9 (storyboard launch screens require iOS 8+;
+    # iOS 5 uses Default.png instead, so this only needs to work on iOS 9+)
     echo "   Recompiling LaunchScreen for iOS 9..." >&2
     xcrun ibtool --compile "$APP/LaunchScreen.storyboardc" \
         "$PROJECT_DIR/HADashboard/LaunchScreen.storyboard" \
-        --minimum-deployment-target 5.1 \
+        --minimum-deployment-target 9.0 \
         --target-device ipad --target-device iphone 2>/dev/null
 
     # Patch Info.plist
