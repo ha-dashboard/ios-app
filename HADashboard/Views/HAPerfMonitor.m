@@ -269,7 +269,13 @@ static const NSTimeInterval kFlushInterval = 10.0;
 
     // Compute stats + write on background queue (sort, format, file I/O)
     NSFileHandle *handle = self.logHandle;
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+    long queuePriority;
+    if (@available(iOS 8.0, *)) {
+        queuePriority = QOS_CLASS_UTILITY;
+    } else {
+        queuePriority = DISPATCH_QUEUE_PRIORITY_LOW;
+    }
+    dispatch_async(dispatch_get_global_queue(queuePriority, 0), ^{
         double fpsAvg = 0, fpsMin = 999, fpsP1 = 999;
         if (count > 0) {
             double totalInterval = 0, maxInterval = 0;
