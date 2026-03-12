@@ -52,7 +52,7 @@
     if ([iconName hasPrefix:@"mdi:"]) iconName = [iconName substringFromIndex:4];
     NSString *glyph = iconName ? [HAIconMapper glyphForIconName:iconName] : nil;
     if (!glyph) glyph = [HAIconMapper glyphForIconName:@"clipboard-list"] ?: @"\U0001F4CB";
-    [HAIconMapper setGlyph:glyph onLabel:self.iconLabel];
+    self.iconLabel.text = glyph;
 
     // Item count from state
     NSString *state = entity.state;

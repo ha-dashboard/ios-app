@@ -314,7 +314,7 @@ static const CGFloat kPadding        = 12.0;
         glyph = [HAIconMapper glyphForIconName:iconName];
     }
     if (!glyph) glyph = [HAEntityDisplayHelper iconGlyphForEntity:entity];
-    [HAIconMapper setGlyph:glyph ?: @"?" onLabel:self.iconLabel];
+    self.iconLabel.text = glyph ?: @"?";
 
     UIColor *iconColor = [HAEntityDisplayHelper iconColorForEntity:entity];
     self.iconLabel.textColor = iconColor;

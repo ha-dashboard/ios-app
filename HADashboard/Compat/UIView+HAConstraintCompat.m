@@ -1,5 +1,7 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import <CoreText/CoreText.h>
+#import "HAIconMapper.h"
 
 /// On iOS 5.x, the entire Auto Layout system is missing: UIView has no
 /// addConstraint:, no translatesAutoresizingMaskIntoConstraints, no layout
@@ -204,6 +206,96 @@ static void HAInstallConstraintStubs(void) {
                             imp_implementationWithBlock(^id(id cls) {
                                 return [UIColor colorWithRed:r green:g blue:b alpha:a];
                             }), "@@:");
+        }
+    }
+
+    // ── UILabel drawTextInRect: swizzle for MDI icon rendering on iOS 5 ──
+    // iOS 5's text engine can't render Supplementary Private Use Area codepoints
+    // (U+F0000+) used by Material Design Icons. Instead of checking at every call
+    // site, swizzle drawTextInRect: to detect MDI font + SMP text and render via
+    // CoreText automatically. On iOS 6+ this swizzle is not installed.
+    if ([[UIDevice currentDevice].systemVersion integerValue] < 6) {
+        Class labelClass = [UILabel class];
+        SEL drawSel = @selector(drawTextInRect:);
+        Method origMethod = class_getInstanceMethod(labelClass, drawSel);
+        if (origMethod) {
+            typedef void (*DrawIMP)(id, SEL, CGRect);
+            __block DrawIMP origDraw = (DrawIMP)method_getImplementation(origMethod);
+
+            IMP newIMP = imp_implementationWithBlock(^(UILabel *self, CGRect rect) {
+                // Check if this label uses the MDI font and has SMP text (surrogate pairs)
+                NSString *mdiFontName = [HAIconMapper mdiFontName];
+                NSString *text = self.text;
+                BOOL isMDI = (mdiFontName && text.length > 0 &&
+                              [self.font.fontName isEqualToString:mdiFontName]);
+
+                if (!isMDI || text.length == 0) {
+                    origDraw(self, drawSel, rect);
+                    return;
+                }
+
+                // Check for surrogate pairs (SMP codepoints)
+                BOOL hasSurrogates = NO;
+                for (NSUInteger i = 0; i < text.length; i++) {
+                    unichar c = [text characterAtIndex:i];
+                    if (CFStringIsSurrogateHighCharacter(c)) { hasSurrogates = YES; break; }
+                }
+
+                if (!hasSurrogates) {
+                    origDraw(self, drawSel, rect);
+                    return;
+                }
+
+                // Render via CoreText
+                CGContextRef ctx = UIGraphicsGetCurrentContext();
+                if (!ctx) return;
+
+                CTFontRef ctFont = CTFontCreateWithName((__bridge CFStringRef)mdiFontName,
+                                                         self.font.pointSize, NULL);
+                if (!ctFont) { origDraw(self, drawSel, rect); return; }
+
+                // Get glyphs from the text
+                UniChar chars[4];
+                NSInteger charCount = MIN(text.length, 4);
+                [text getCharacters:chars range:NSMakeRange(0, charCount)];
+
+                CGGlyph glyphs[4] = {0};
+                if (!CTFontGetGlyphsForCharacters(ctFont, chars, glyphs, charCount)) {
+                    CFRelease(ctFont);
+                    origDraw(self, drawSel, rect);
+                    return;
+                }
+
+                // Get glyph metrics for centering
+                CGRect bbox = CTFontGetBoundingRectsForGlyphs(ctFont, kCTFontOrientationDefault,
+                                                               glyphs, NULL, 1);
+
+                // Flip context for CoreText
+                CGContextSaveGState(ctx);
+                CGContextSetTextMatrix(ctx, CGAffineTransformIdentity);
+                CGContextTranslateCTM(ctx, 0, rect.size.height);
+                CGContextScaleCTM(ctx, 1.0, -1.0);
+
+                // Center glyph in rect, respecting text alignment
+                CGFloat dx, dy;
+                if (self.textAlignment == NSTextAlignmentCenter) {
+                    dx = (rect.size.width - bbox.size.width) / 2.0 - bbox.origin.x;
+                } else if (self.textAlignment == NSTextAlignmentRight) {
+                    dx = rect.size.width - bbox.size.width - bbox.origin.x;
+                } else {
+                    dx = -bbox.origin.x;
+                }
+                dy = (rect.size.height - bbox.size.height) / 2.0 - bbox.origin.y;
+
+                CGContextSetFillColorWithColor(ctx, self.textColor.CGColor);
+                CGPoint position = CGPointMake(dx, dy);
+                CTFontDrawGlyphs(ctFont, glyphs, &position, 1, ctx);
+
+                CGContextRestoreGState(ctx);
+                CFRelease(ctFont);
+            });
+
+            method_setImplementation(origMethod, newIMP);
         }
     }
 }

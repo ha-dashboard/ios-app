@@ -343,9 +343,12 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     if (!HAAutoLayoutAvailable()) {
         CGRect bounds = self.view.bounds;
 
-        // Connection bar: full width, below nav bar (≈64pt)
-        // Frame height is managed by showConnectionBar:, just read current value
-        CGFloat connY = 64.0;
+        // Connection bar: full width, below nav bar
+        // Account for actual nav bar visibility (kiosk mode hides it)
+        CGFloat connY = 20.0; // status bar
+        if (self.navigationController && !self.navigationController.navigationBarHidden) {
+            connY += self.navigationController.navigationBar.frame.size.height;
+        }
         CGFloat connH = self.connectionBar.frame.size.height;
         if (self.connectionBar.frame.size.width != bounds.size.width) {
             self.connectionBar.frame = CGRectMake(0, connY, bounds.size.width, connH);

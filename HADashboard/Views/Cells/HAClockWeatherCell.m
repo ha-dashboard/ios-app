@@ -644,7 +644,7 @@ static const CGFloat kBottomPadding = 12.0;
 
     NSString *mdiIconName = [HAWeatherHelper mdiIconNameForCondition:condition];
     NSString *glyph = [HAIconMapper glyphForIconName:mdiIconName];
-    [HAIconMapper setGlyph:glyph ?: @"\u2601" onLabel:self.weatherIconLabel];
+    self.weatherIconLabel.text = glyph ?: @"\u2601";
     [self animateWeatherIconForCondition:condition];
 }
 

@@ -93,7 +93,7 @@
         glyph = [HAIconMapper glyphForIconName:iconName];
     }
     if (!glyph) glyph = [HAEntityDisplayHelper iconGlyphForEntity:entity];
-    [HAIconMapper setGlyph:glyph ?: @"?" onLabel:self.statIconLabel];
+    self.statIconLabel.text = glyph ?: @"?";
 
     // Name
     self.statNameLabel.text = [HAEntityDisplayHelper displayNameForEntity:entity configItem:configItem nameOverride:nil];

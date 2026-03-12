@@ -348,7 +348,7 @@
     self.nameLabel.text = [HAEntityDisplayHelper displayNameForEntity:entity configItem:nil nameOverride:nil];
     self.nameLabel.textColor = [HATheme primaryTextColor];
     self.stateLabel.textColor = [HATheme secondaryTextColor];
-    [HAIconMapper setGlyph:[HAEntityDisplayHelper iconGlyphForEntity:entity] onLabel:self.iconLabel];
+    self.iconLabel.text = [HAEntityDisplayHelper iconGlyphForEntity:entity];
     // state_color: tint icon by entity active state. Default NO for entities card rows.
     if (self.stateColor) {
         self.iconLabel.textColor = [HAEntityDisplayHelper iconColorForEntity:entity];

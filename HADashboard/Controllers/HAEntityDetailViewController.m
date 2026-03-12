@@ -940,7 +940,7 @@ static const CGFloat kGraphHeight = 160.0;
     if (!entity) return;
 
     NSString *glyph = [HAEntityDisplayHelper iconGlyphForEntity:entity];
-    [HAIconMapper setGlyph:glyph onLabel:self.iconLabel];
+    self.iconLabel.text = glyph;
     self.iconLabel.textColor = [HAEntityDisplayHelper iconColorForEntity:entity];
 
     // Multi-entity: show card title instead of single entity name

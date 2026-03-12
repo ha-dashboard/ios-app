@@ -104,7 +104,7 @@
         glyph = [HAIconMapper glyphForIconName:iconName];
     }
     if (!glyph) glyph = [HAEntityDisplayHelper iconGlyphForEntity:entity];
-    [HAIconMapper setGlyph:glyph ?: @"?" onLabel:self.entityIconLabel];
+    self.entityIconLabel.text = glyph ?: @"?";
 
     // state_color: default false, true for lights (matching HA frontend)
     BOOL stateColor = NO;

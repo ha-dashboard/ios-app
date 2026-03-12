@@ -444,7 +444,7 @@
         glyph = [HAIconMapper glyphForIconName:iconName];
     }
     if (!glyph) glyph = [HAEntityDisplayHelper iconGlyphForEntity:entity];
-    [HAIconMapper setGlyph:glyph ?: @"?" onLabel:self.tileIconLabel];
+    self.tileIconLabel.text = glyph ?: @"?";
 
     // Entity picture: show circular image instead of icon when configured
     [[HAHTTPClient sharedClient] cancelTask:self.pictureTask];

@@ -387,7 +387,7 @@ static NSArray<UIColor *> *sColorPalette;
     if (iconName.length > 0) {
         NSString *glyph = [HAIconMapper glyphForIconName:iconName];
         if (glyph) {
-            [HAIconMapper setGlyph:glyph onLabel:self.iconLabel];
+            self.iconLabel.text = glyph;
             self.iconLabel.hidden = NO;
             // Switch name label leading to icon
             NSLayoutConstraint *toIcon = objc_getAssociatedObject(self, "nameLeadingToIcon");
