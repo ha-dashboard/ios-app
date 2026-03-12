@@ -342,11 +342,15 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     if (!HAAutoLayoutAvailable()) {
         CGRect bounds = self.view.bounds;
 
-        // Connection bar: full width, below nav bar
-        // Account for actual nav bar visibility (kiosk mode hides it)
-        CGFloat connY = 20.0; // status bar
-        if (self.navigationController && !self.navigationController.navigationBarHidden) {
-            connY += self.navigationController.navigationBar.frame.size.height;
+        // Connection bar: full width, at top of view.
+        // Pre-iOS 7: view starts below nav bar (no edgesForExtendedLayout).
+        // iOS 7+: view extends under nav bar, so offset by nav bar height.
+        CGFloat connY = 0;
+        if (HASystemMajorVersion() >= 7) {
+            connY = 20.0; // status bar
+            if (self.navigationController && !self.navigationController.navigationBarHidden) {
+                connY += self.navigationController.navigationBar.frame.size.height;
+            }
         }
         CGFloat connH = self.connectionBar.frame.size.height;
         if (self.connectionBar.frame.size.width != bounds.size.width) {
@@ -551,13 +555,16 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 }
 
 - (void)setupCollectionView {
-    // Start with flow layout; will switch to columnar when sections view is detected
-    UICollectionViewFlowLayout *layout = [[UICollectionViewFlowLayout alloc] init];
+    // Start with flow layout; will switch to columnar when sections view is detected.
+    // Use NSClassFromString to get the runtime class — on iOS 5, PSTCollectionView
+    // creates UICollectionViewFlowLayout dynamically, so the compile-time class ref
+    // points to a different (empty) class than the runtime one.
+    UICollectionViewFlowLayout *layout = [[NSClassFromString(@"UICollectionViewFlowLayout") alloc] init];
     layout.minimumInteritemSpacing = 6;
     layout.minimumLineSpacing = 6;
     layout.sectionInset = UIEdgeInsetsMake(4, 16, 16, 16);
 
-    self.collectionView = [[UICollectionView alloc] initWithFrame:CGRectZero collectionViewLayout:layout];
+    self.collectionView = [[NSClassFromString(@"UICollectionView") alloc] initWithFrame:CGRectZero collectionViewLayout:layout];
     self.collectionView.backgroundColor = [UIColor clearColor];
     self.collectionView.dataSource = self;
     self.collectionView.delegate = self;
