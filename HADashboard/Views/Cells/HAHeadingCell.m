@@ -65,7 +65,7 @@
         // Strip "mdi:" prefix
         NSString *iconName = icon;
         if ([iconName hasPrefix:@"mdi:"]) iconName = [iconName substringFromIndex:4];
-        self.iconLabel.text = [HAIconMapper glyphForIconName:iconName];
+        [HAIconMapper setGlyph:[HAIconMapper glyphForIconName:iconName] onLabel:self.iconLabel];
     } else {
         self.iconLabel.text = nil;
     }

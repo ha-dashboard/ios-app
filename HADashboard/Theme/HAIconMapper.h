@@ -20,4 +20,14 @@
 /// Convenience: returns a glyph string for a domain's default icon.
 + (NSString *)glyphForDomain:(NSString *)domain;
 
+/// Render an MDI icon name to a UIImage using CoreText. Works on iOS 5+
+/// where UILabel can't render Supplementary Private Use Area codepoints.
+/// Returns nil if the icon name is not recognized or the font isn't loaded.
++ (UIImage *)imageForIconName:(NSString *)mdiName size:(CGFloat)size color:(UIColor *)color;
+
+/// Set an MDI glyph on a UILabel. On iOS 6+, sets text directly (UILabel can
+/// render SMP codepoints). On iOS 5, renders via CoreText into a background
+/// image since UILabel's old text engine can't handle the Private Use Area.
++ (void)setGlyph:(NSString *)glyphString onLabel:(UILabel *)label;
+
 @end

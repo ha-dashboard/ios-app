@@ -132,6 +132,16 @@ static void HAInstallConstraintStubs(void) {
                         imp_implementationWithBlock(^id(id s) { return nil; }), "@@:");
     }
 
+    // UIView content priority methods (iOS 6+) — no-op on iOS 5
+    if (!class_getInstanceMethod(uiview, @selector(setContentHuggingPriority:forAxis:))) {
+        class_addMethod(uiview, @selector(setContentHuggingPriority:forAxis:),
+                        imp_implementationWithBlock(^(id s, float p, NSInteger a) {}), "v@:fi");
+    }
+    if (!class_getInstanceMethod(uiview, @selector(setContentCompressionResistancePriority:forAxis:))) {
+        class_addMethod(uiview, @selector(setContentCompressionResistancePriority:forAxis:),
+                        imp_implementationWithBlock(^(id s, float p, NSInteger a) {}), "v@:fi");
+    }
+
     // UITextView attributedText (iOS 6+)
     Class uitextview = [UITextView class];
     if (!class_getInstanceMethod(uitextview, @selector(setAttributedText:))) {

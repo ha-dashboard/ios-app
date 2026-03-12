@@ -519,6 +519,7 @@ case "$TARGET" in
         fi
         defaults write "$IPAD1_PLIST_BASE" HADashboard -string "$HA_DASHBOARD"
         defaults write "$IPAD1_PLIST_BASE" HAKioskMode -bool "$([ "$KIOSK_MODE" = "YES" ] && echo true || echo false)"
+        defaults write "$IPAD1_PLIST_BASE" HALogMinLevel -int 0
         [[ -n "$DEMO_MODE" ]] && defaults write "$IPAD1_PLIST_BASE" HADemoMode -bool true
         plutil -convert binary1 "$IPAD1_PLIST"
 

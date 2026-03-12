@@ -76,7 +76,7 @@
     }
 
     if (glyph) {
-        self.iconLabel.text = glyph;
+        [HAIconMapper setGlyph:glyph onLabel:self.iconLabel];
         self.iconLabel.hidden = NO;
         self.titleLeadingNoIcon.active = NO;
         self.titleLeadingWithIcon.active = YES;

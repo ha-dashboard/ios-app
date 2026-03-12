@@ -113,7 +113,7 @@ static const CGFloat kVerticalPadding = 6.0;
         if (!glyph && entity) {
             glyph = [HAEntityDisplayHelper iconGlyphForEntity:entity];
         }
-        self.iconLabel.text = glyph ?: @"?";
+        [HAIconMapper setGlyph:glyph ?: @"?" onLabel:self.iconLabel];
 
         // State color: tint icon based on entity active state
         if (stateColor && entity) {

@@ -1478,6 +1478,17 @@ static const CGFloat kRowUnitHeight = 56.0;
 
 /// Renders an MDI glyph as a template UIImage suitable for UIBarButtonItem.
 - (UIImage *)renderMDIIcon:(NSString *)name size:(CGFloat)size {
+    // On iOS 5, UILabel/NSString text rendering can't handle Supplementary
+    // Private Use Area codepoints. Use CoreText-based rendering instead.
+    UIImage *image = [HAIconMapper imageForIconName:name size:size color:[UIColor blackColor]];
+    if (image) {
+        if ([image respondsToSelector:@selector(imageWithRenderingMode:)]) {
+            return [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+        }
+        return image;
+    }
+
+    // Fallback: try text-based rendering (works for BMP codepoints on any iOS)
     NSString *glyph = [HAIconMapper glyphForIconName:name];
     if (!glyph) return nil;
     UIFont *font = [HAIconMapper mdiFontOfSize:size];
@@ -1496,7 +1507,7 @@ static const CGFloat kRowUnitHeight = 56.0;
         [glyph drawAtPoint:CGPointZero withFont:font];
 #pragma clang diagnostic pop
     }
-    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    image = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
     if ([image respondsToSelector:@selector(imageWithRenderingMode:)]) {
         return [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
@@ -2410,7 +2421,12 @@ heightForHeaderInSection:(NSInteger)section {
     }
 
     UIGraphicsBeginImageContextWithOptions(window.bounds.size, YES, window.screen.scale);
-    [window drawViewHierarchyInRect:window.bounds afterScreenUpdates:YES];
+    if ([window respondsToSelector:@selector(drawViewHierarchyInRect:afterScreenUpdates:)]) {
+        [window drawViewHierarchyInRect:window.bounds afterScreenUpdates:YES];
+    } else {
+        // iOS 5-6 fallback: render layer into context
+        [window.layer renderInContext:UIGraphicsGetCurrentContext()];
+    }
     UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
 
