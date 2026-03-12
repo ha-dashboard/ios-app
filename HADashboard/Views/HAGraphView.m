@@ -3,6 +3,7 @@
 #import "HATheme.h"
 #import <sys/utsname.h>
 #import "UIFont+HACompat.h"
+#import "NSString+HACompat.h"
 
 // Cached date formatters used by axis labels, tooltip, and gesture handlers.
 // Format is set per-use since it depends on the visible time range.
@@ -444,7 +445,7 @@ static NSDateFormatter *sCachedTimeFmt(void) {
     UIFont *labelFont = [UIFont ha_systemFontOfSize:11 weight:UIFontWeightMedium];
     for (NSDictionary *entity in self.timelineData) {
         NSString *label = entity[@"label"] ?: @"";
-        CGSize sz = [label sizeWithAttributes:@{NSFontAttributeName: labelFont}];
+        CGSize sz = [label ha_sizeWithAttributes:@{NSFontAttributeName: labelFont}];
         if (sz.width > labelWidth) labelWidth = sz.width;
     }
     // Clamp label width
@@ -1158,7 +1159,7 @@ static NSDateFormatter *sCachedTimeFmt(void) {
         UIFont *labelFont = [UIFont ha_systemFontOfSize:11 weight:UIFontWeightMedium];
         for (NSDictionary *entity in self.timelineData) {
             NSString *label = entity[@"label"] ?: @"";
-            CGSize sz = [label sizeWithAttributes:@{NSFontAttributeName: labelFont}];
+            CGSize sz = [label ha_sizeWithAttributes:@{NSFontAttributeName: labelFont}];
             if (sz.width > labelWidth) labelWidth = sz.width;
         }
         CGFloat w = self.bounds.size.width;
@@ -1315,7 +1316,7 @@ static NSDateFormatter *sCachedTimeFmt(void) {
                 [attrStr appendAttributedString:lineAttr];
 
                 // Track width for sizing
-                CGSize lineSize = [line sizeWithAttributes:@{NSFontAttributeName: [UIFont ha_monospacedDigitSystemFontOfSize:12 weight:UIFontWeightBold]}];
+                CGSize lineSize = [line ha_sizeWithAttributes:@{NSFontAttributeName: [UIFont ha_monospacedDigitSystemFontOfSize:12 weight:UIFontWeightBold]}];
                 if (lineSize.width > maxWidth) maxWidth = lineSize.width;
 
                 visibleCount++;
@@ -1368,7 +1369,7 @@ static NSDateFormatter *sCachedTimeFmt(void) {
             self.tooltipValueLabel.text = valueText;
 
             // Size tooltip to fit content
-            CGFloat tooltipW = MAX(100, MIN(180, [valueText sizeWithAttributes:@{NSFontAttributeName: self.tooltipValueLabel.font}].width + 20));
+            CGFloat tooltipW = MAX(100, MIN(180, [valueText ha_sizeWithAttributes:@{NSFontAttributeName: self.tooltipValueLabel.font}].width + 20));
             CGFloat tooltipH = 36;
             CGFloat tooltipX = x - tooltipW / 2.0;
             tooltipX = MAX(2, MIN(w - tooltipW - 2, tooltipX));
@@ -1543,7 +1544,7 @@ static NSDateFormatter *sCachedTimeFmt(void) {
                     [attrStr appendAttributedString:lineAttr];
 
                     // Track width for sizing
-                    CGSize lineSize = [line sizeWithAttributes:@{NSFontAttributeName: [UIFont ha_monospacedDigitSystemFontOfSize:12 weight:UIFontWeightBold]}];
+                    CGSize lineSize = [line ha_sizeWithAttributes:@{NSFontAttributeName: [UIFont ha_monospacedDigitSystemFontOfSize:12 weight:UIFontWeightBold]}];
                     if (lineSize.width > maxWidth) maxWidth = lineSize.width;
 
                     visibleCount++;

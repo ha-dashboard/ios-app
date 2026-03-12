@@ -111,9 +111,29 @@ static void HAInstallConstraintStubs(void) {
 
     // UIView safeAreaLayoutGuide stub (iOS 11+)
     if (!class_getInstanceMethod(uiview, @selector(safeAreaLayoutGuide))) {
-        // Return self — so view.safeAreaLayoutGuide.topAnchor resolves to
-        // view.topAnchor which is our dummy anchor returning nil constraints
         IMP selfReturn = imp_implementationWithBlock(^id(id s) { return s; });
         class_addMethod(uiview, @selector(safeAreaLayoutGuide), selfReturn, "@@:");
     }
+
+    // UIView tintColor (iOS 7+) — cosmetic property, no-op on iOS 5-6
+    if (!class_getInstanceMethod(uiview, @selector(setTintColor:))) {
+        class_addMethod(uiview, @selector(setTintColor:),
+                        imp_implementationWithBlock(^(id s, id c) {}), "v@:@");
+    }
+    if (!class_getInstanceMethod(uiview, @selector(tintColor))) {
+        class_addMethod(uiview, @selector(tintColor),
+                        imp_implementationWithBlock(^id(id s) { return nil; }), "@@:");
+    }
+
+    // UIImage imageWithRenderingMode: (iOS 7+) — return self on iOS 5-6
+    Class uiimage = [UIImage class];
+    if (!class_getInstanceMethod(uiimage, @selector(imageWithRenderingMode:))) {
+        class_addMethod(uiimage, @selector(imageWithRenderingMode:),
+                        imp_implementationWithBlock(^id(id s, NSInteger mode) { return s; }), "@@:l");
+    }
+
+    // UIStatusBarStyleLightContent is enum value 1 — no runtime stub needed (compiled as integer)
+
+    // UINavigationBar barTintColor (iOS 7+) — already guarded with respondsToSelector:
+    // UIBarButtonItem tintColor follows UIView tintColor stub above
 }

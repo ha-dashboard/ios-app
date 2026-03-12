@@ -6,6 +6,7 @@
 #import "HAIconMapper.h"
 #import "HAEntityDisplayHelper.h"
 #import "UIFont+HACompat.h"
+#import "NSString+HACompat.h"
 
 // HA web badge constants (from ha-badge.ts)
 static const CGFloat kBadgeHeight = 36.0;   // --ha-badge-size: 36px
@@ -194,7 +195,7 @@ static const CGFloat kArcNameLabelHeight = 16.0;
                     [valueLabel.trailingAnchor constraintLessThanOrEqualToAnchor:badge.trailingAnchor constant:-kBadgeHPad],
                 ]];
             }
-            nameWidth = ceil([name sizeWithAttributes:@{NSFontAttributeName: nameLabel.font}].width);
+            nameWidth = ceil([name ha_sizeWithAttributes:@{NSFontAttributeName: nameLabel.font}].width);
         } else {
             // No name: icon + value centered on single line (chip style)
             if (HAAutoLayoutAvailable()) {
@@ -209,7 +210,7 @@ static const CGFloat kArcNameLabelHeight = 16.0;
         }
 
         // Measure badge width (ceil + 4pt buffer prevents truncation from rounding)
-        CGFloat valWidth = ceil([valueText sizeWithAttributes:@{NSFontAttributeName: valueLabel.font}].width);
+        CGFloat valWidth = ceil([valueText ha_sizeWithAttributes:@{NSFontAttributeName: valueLabel.font}].width);
         CGFloat iconW = icon.length > 0 ? kBadgeIconSize : 0;
         CGFloat infoWidth = MAX(nameWidth, valWidth) + 4.0;
         CGFloat badgeWidth = (kBadgeHPad - 4) + iconW + kBadgeGap + infoWidth + kBadgeHPad;
@@ -444,7 +445,7 @@ static const CGFloat kArcNameLabelHeight = 16.0;
     valueLabel.textAlignment = NSTextAlignmentCenter;
 
     // Size the value label to fit the text, then center it
-    CGSize valSize = [valueText sizeWithAttributes:@{NSFontAttributeName: valueLabel.font}];
+    CGSize valSize = [valueText ha_sizeWithAttributes:@{NSFontAttributeName: valueLabel.font}];
     CGFloat valWidth = MIN(valSize.width + 2, kArcDiameter - kArcLineWidth * 2);
     valueLabel.frame = CGRectMake(centerX - valWidth / 2.0,
                                   centerY - valSize.height / 2.0,
@@ -566,8 +567,8 @@ static const CGFloat kArcNameLabelHeight = 16.0;
     [badge addSubview:nameLabel];
     [badge addSubview:valueLabel];
 
-    CGFloat nameWidth = ceil([name sizeWithAttributes:@{NSFontAttributeName: nameLabel.font}].width);
-    CGFloat valWidth = ceil([valueText sizeWithAttributes:@{NSFontAttributeName: valueLabel.font}].width);
+    CGFloat nameWidth = ceil([name ha_sizeWithAttributes:@{NSFontAttributeName: nameLabel.font}].width);
+    CGFloat valWidth = ceil([valueText ha_sizeWithAttributes:@{NSFontAttributeName: valueLabel.font}].width);
     CGFloat iconW = icon.length > 0 ? kBadgeIconSize : 0;
     CGFloat infoWidth = MAX(nameWidth, valWidth) + 4.0;
     CGFloat badgeWidth = (kBadgeHPad - 4) + iconW + kBadgeGap + infoWidth + kBadgeHPad;

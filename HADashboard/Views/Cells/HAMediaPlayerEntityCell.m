@@ -12,6 +12,7 @@
 #import "UIView+HAUtilities.h"
 #import "UIViewController+HAAlert.h"
 #import "UIFont+HACompat.h"
+#import "NSString+HACompat.h"
 
 static const CGFloat kIconCircleSize = 36.0;
 static const CGFloat kIconFontSize   = 20.0;
@@ -471,7 +472,7 @@ static const CGFloat kPadding        = 12.0;
     [c2 setFill]; UIRectFill(CGRectMake(0, size / 2, size, size / 2));
     // Draw a music note symbol
     NSDictionary *attrs = @{NSFontAttributeName: [UIFont systemFontOfSize:28], NSForegroundColorAttributeName: [UIColor whiteColor]};
-    [@"\u266B" drawAtPoint:CGPointMake(size / 2 - 10, size / 2 - 16) withAttributes:attrs];
+    [@"\u266B" ha_drawAtPoint:CGPointMake(size / 2 - 10, size / 2 - 16) withAttributes:attrs];
     UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
     return image;

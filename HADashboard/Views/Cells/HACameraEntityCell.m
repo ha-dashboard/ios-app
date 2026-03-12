@@ -11,6 +11,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import <objc/runtime.h>
 #import "UIFont+HACompat.h"
+#import "NSString+HACompat.h"
 
 static const NSTimeInterval kSnapshotRefreshInterval = 5.0;
 static const NSInteger kMaxConsecutiveFailuresBeforeClear = 3;
@@ -904,8 +905,8 @@ static HACameraStreamMode currentStreamMode(void) {
         UIRectFill(CGRectMake(0, 0, w, h));
         NSDictionary *attrs = @{NSFontAttributeName: [UIFont systemFontOfSize:14], NSForegroundColorAttributeName: [UIColor colorWithWhite:0.5 alpha:1]};
         NSString *label = [NSString stringWithFormat:@"📷 %@", [self.entity friendlyName] ?: @"Camera"];
-        CGSize sz = [label sizeWithAttributes:attrs];
-        [label drawAtPoint:CGPointMake((w - sz.width) / 2, (h - sz.height) / 2) withAttributes:attrs];
+        CGSize sz = [label ha_sizeWithAttributes:attrs];
+        [label ha_drawAtPoint:CGPointMake((w - sz.width) / 2, (h - sz.height) / 2) withAttributes:attrs];
         self.snapshotView.image = UIGraphicsGetImageFromCurrentImageContext();
         UIGraphicsEndImageContext();
         [self.loadingSpinner stopAnimating];

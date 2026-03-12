@@ -1285,6 +1285,7 @@
 		EBD8CB00237F8FC98D238AD0 /* testUpdateScAvailable__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 71979ECD6E791263ADD86F38 /* testUpdateScAvailable__dark_gradient@2x.png */; };
 		EC22AAC9BB9F13CC2EB50C68 /* HAInputTextEntityCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 55A663AB7C65725C76FF1C30 /* HAInputTextEntityCell.m */; };
 		EC93AE7B2C8DACB29052E691 /* UIFont+HACompat.m in Sources */ = {isa = PBXBuildFile; fileRef = B34F8A266EBC2CFC3D781C54 /* UIFont+HACompat.m */; };
+		EC93AE7C2C8DACB29052E692 /* NSString+HACompat.m in Sources */ = {isa = PBXBuildFile; fileRef = B34F8A276EBC2CFC3D781C55 /* NSString+HACompat.m */; };
 		ECA8A3A3BE786D187A87386B /* testSensorBattery__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = C6A624CB60325DAFA85BA3E4 /* testSensorBattery__light@2x.png */; };
 		ED1125408B8C1B6A44EA69E9 /* HAClimateEntityCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 695E20B62974A974A8BF894A /* HAClimateEntityCell.m */; };
 		ED4F4AFC94B23EB3C865E277 /* testAlarmScVacation__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 86A9163B7A7E6540610BBCC1 /* testAlarmScVacation__light@2x.png */; };
@@ -1575,6 +1576,7 @@
 		1F33698AAB4041ED812932F3 /* LOTBezierPath.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LOTBezierPath.h; sourceTree = "<group>"; };
 		1F4B9E92432E828A2187A5D3 /* testSwitchTile_default__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testSwitchTile_default__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		1FBB8516B91BDF3F257BD87D /* UIFont+HACompat.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UIFont+HACompat.h"; sourceTree = "<group>"; };
+		1FBB8517B91BDF3F257BD87E /* NSString+HACompat.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "NSString+HACompat.h"; sourceTree = "<group>"; };
 		2008ECA3266F4394EFFFB70C /* HAConnectionSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAConnectionSettingsViewController.h; sourceTree = "<group>"; };
 		201D16E50C821377284D84CB /* testSensorEnergy__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testSensorEnergy__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		203A7C7506E8EFAC82C0FC08 /* testMediaPlayerScOff__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testMediaPlayerScOff__light@2x.png"; sourceTree = "<group>"; };
@@ -2455,6 +2457,7 @@
 		B2E9BE9E634EBDD348E992B6 /* testGlance3Columns_glance3Columns_dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testGlance3Columns_glance3Columns_dark_gradient@2x.png"; sourceTree = "<group>"; };
 		B3222F20A31863F6521B0049 /* HAKeychainHelper.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAKeychainHelper.m; sourceTree = "<group>"; };
 		B34F8A266EBC2CFC3D781C54 /* UIFont+HACompat.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "UIFont+HACompat.m"; sourceTree = "<group>"; };
+		B34F8A276EBC2CFC3D781C55 /* NSString+HACompat.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "NSString+HACompat.m"; sourceTree = "<group>"; };
 		B39905AFF92C9E0D68E45A75 /* testSwitchButton_showStateTrue__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testSwitchButton_showStateTrue__light@2x.png"; sourceTree = "<group>"; };
 		B39C346D6532737B1AA88E6F /* testSensorSectionTemperature_sensorSectionTemp_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testSensorSectionTemperature_sensorSectionTemp_gradient@2x.png"; sourceTree = "<group>"; };
 		B3A64BD39188A2237A4312C3 /* testPersonNotHome_personNotHome_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testPersonNotHome_personNotHome_gradient@2x.png"; sourceTree = "<group>"; };
@@ -3212,6 +3215,8 @@
 				59EC671C3BECF73DF58BC37C /* HAStackView.m */,
 				1FBB8516B91BDF3F257BD87D /* UIFont+HACompat.h */,
 				B34F8A266EBC2CFC3D781C54 /* UIFont+HACompat.m */,
+				1FBB8517B91BDF3F257BD87E /* NSString+HACompat.h */,
+				B34F8A276EBC2CFC3D781C55 /* NSString+HACompat.m */,
 				8AE7A3308B46432F358C52B6 /* UIView+HAConstraintCompat.m */,
 				422042EE63C686CF15ABB797 /* UIViewController+HAAlert.h */,
 				4B3EC18B00E1D14EF036B60F /* UIViewController+HAAlert.m */,
@@ -6345,6 +6350,7 @@
 				5C51E7D6BA4C24E400865C56 /* UIColor+Expanded.h in Sources */,
 				333584F44414AB03372A649F /* UIColor+Expanded.m in Sources */,
 				EC93AE7B2C8DACB29052E691 /* UIFont+HACompat.m in Sources */,
+				EC93AE7C2C8DACB29052E692 /* NSString+HACompat.m in Sources */,
 				0D86DD299350C007AB317A7C /* UIView+HAConstraintCompat.m in Sources */,
 				C4AA171224C0C7145EA3D6AC /* UIView+HAUtilities.m in Sources */,
 				53BBD2339E4C809754AC95D6 /* UIViewController+HAAlert.m in Sources */,
