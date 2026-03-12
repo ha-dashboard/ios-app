@@ -70,35 +70,13 @@ static void HAInstallConstraintStubs(void) {
         }
     }
 
-    // NSLayoutConstraint stubs (iOS 6+)
-    Class nslc = NSClassFromString(@"NSLayoutConstraint");
-    if (!nslc) {
-        nslc = objc_allocateClassPair([NSObject class], "NSLayoutConstraint", 0);
-        if (nslc) {
-            IMP nilRet = imp_implementationWithBlock(^id(id s, ...) { return nil; });
-            IMP voidRet = imp_implementationWithBlock(^(id s, ...) {});
-            // Instance
-            class_addMethod(nslc, @selector(setActive:),
-                            imp_implementationWithBlock(^(id s, BOOL a) {}), "v@:B");
-            class_addMethod(nslc, @selector(isActive),
-                            imp_implementationWithBlock(^BOOL(id s) { return NO; }), "B@:");
-            class_addMethod(nslc, @selector(setConstant:),
-                            imp_implementationWithBlock(^(id s, CGFloat c) {}), "v@:d");
-            class_addMethod(nslc, @selector(constant),
-                            imp_implementationWithBlock(^CGFloat(id s) { return 0; }), "d@:");
-            class_addMethod(nslc, @selector(setPriority:),
-                            imp_implementationWithBlock(^(id s, float p) {}), "v@:f");
-            // Class
-            Class meta = object_getClass(nslc);
-            class_addMethod(meta, @selector(constraintWithItem:attribute:relatedBy:toItem:attribute:multiplier:constant:),
-                            nilRet, "@@:@l@l@dd");
-            class_addMethod(meta, @selector(constraintsWithVisualFormat:options:metrics:views:),
-                            imp_implementationWithBlock(^id(id s, ...) { return @[]; }), "@@:@l@@");
-            class_addMethod(meta, @selector(activateConstraints:), voidRet, "v@:@");
-            class_addMethod(meta, @selector(deactivateConstraints:), voidRet, "v@:@");
-            objc_registerClassPair(nslc);
-        }
-    }
+    // NSLayoutConstraint: do NOT create a dummy class. On iOS 5,
+    // NSClassFromString(@"NSLayoutConstraint") returns nil, which makes
+    // HAAutoLayoutAvailable() return NO, skipping all guarded constraint code.
+    // Messages sent to the nil class (e.g. [NSLayoutConstraint activateConstraints:])
+    // are safe no-ops in ObjC. Creating a dummy class would make
+    // HAAutoLayoutAvailable() return YES, causing the guarded code to execute
+    // with nil constraints from our dummy anchors — crashing in @[nil, ...] arrays.
 
     // UIViewController layout guide stubs (iOS 7+)
     Class uivc = [UIViewController class];
