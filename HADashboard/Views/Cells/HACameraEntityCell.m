@@ -466,11 +466,7 @@ static HACameraStreamMode currentStreamMode(void) {
     closeButton.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.6];
     closeButton.layer.cornerRadius = 18;
     closeButton.clipsToBounds = YES;
-    NSString *closeGlyph = [HAIconMapper glyphForIconName:@"close"] ?: @"✕";
-    UIFont *closeFont = [HAIconMapper mdiFontOfSize:18];
-    [closeButton setAttributedTitle:[[NSAttributedString alloc] initWithString:closeGlyph
-        attributes:@{HAFontAttributeName: closeFont, HAForegroundColorAttributeName: [UIColor whiteColor]}]
-        forState:UIControlStateNormal];
+    [HAIconMapper setIconName:@"close" onButton:closeButton size:18 color:[UIColor whiteColor]];
     closeButton.frame = CGRectMake(fullscreen.view.bounds.size.width - 50, 40, 36, 36);
     closeButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleBottomMargin;
     [closeButton addTarget:self action:@selector(dismissFullscreenButton:) forControlEvents:UIControlEventTouchUpInside];
@@ -503,15 +499,13 @@ static HACameraStreamMode currentStreamMode(void) {
             self.hlsPlayer.volume = savedVol;
         }
 
-        NSString *initialGlyph = startMuted ? muteGlyph : unmuteGlyph;
+        NSString *initialIcon = startMuted ? @"volume-off" : @"volume-high";
         UIButton *muteButton = [UIButton buttonWithType:UIButtonTypeCustom];
         muteButton.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.6];
         muteButton.layer.cornerRadius = 18;
         muteButton.clipsToBounds = YES;
         muteButton.tag = 8001;
-        [muteButton setAttributedTitle:[[NSAttributedString alloc] initWithString:initialGlyph
-            attributes:@{HAFontAttributeName: iconFont, HAForegroundColorAttributeName: [UIColor whiteColor]}]
-            forState:UIControlStateNormal];
+        [HAIconMapper setIconName:initialIcon onButton:muteButton size:18 color:[UIColor whiteColor]];
         muteButton.frame = CGRectMake(fullscreen.view.bounds.size.width - 50,
                                       fullscreen.view.bounds.size.height - 50, 36, 36);
         muteButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleTopMargin;

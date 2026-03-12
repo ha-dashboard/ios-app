@@ -118,15 +118,30 @@ static const CGFloat kHeadingGap = 2.0;
         NSString *iconName = headingIcon;
         if ([iconName hasPrefix:@"mdi:"]) iconName = [iconName substringFromIndex:4];
         NSString *glyph = [HAIconMapper glyphForIconName:iconName];
-        if (glyph) {
-            NSMutableAttributedString *heading = [[NSMutableAttributedString alloc] initWithString:glyph
-                attributes:@{HAFontAttributeName: [HAIconMapper mdiFontOfSize:16],
-                             HAForegroundColorAttributeName: [HATheme secondaryTextColor]}];
+        if (glyph && HASystemMajorVersion() >= 6) {
+            NSMutableAttributedString *heading = [[NSMutableAttributedString alloc]
+                initWithAttributedString:[HAIconMapper attributedGlyph:glyph fontSize:16 color:[HATheme secondaryTextColor]]];
             [heading appendAttributedString:[[NSAttributedString alloc] initWithString:
                 [NSString stringWithFormat:@"  %@", configItem.displayName]
                 attributes:@{HAFontAttributeName: [UIFont ha_systemFontOfSize:17 weight:HAFontWeightSemibold],
                              HAForegroundColorAttributeName: [HATheme sectionHeaderColor]}]];
             self.headingLabel.attributedText = heading;
+        } else if (glyph) {
+            // iOS 5: can't inline MDI glyph in attributed string (SMP rendering broken).
+            // Use a UIImageView prefix for the icon.
+            self.headingLabel.text = [NSString stringWithFormat:@"    %@", configItem.displayName];
+            self.headingLabel.font = [UIFont ha_systemFontOfSize:17 weight:HAFontWeightSemibold];
+            self.headingLabel.textColor = [HATheme sectionHeaderColor];
+            static const NSInteger kHeadingIconTag = 9998;
+            UIImageView *hIcon = (UIImageView *)[self.headingLabel viewWithTag:kHeadingIconTag];
+            if (!hIcon) {
+                hIcon = [[UIImageView alloc] init];
+                hIcon.tag = kHeadingIconTag;
+                hIcon.contentMode = UIViewContentModeCenter;
+                [self.headingLabel addSubview:hIcon];
+            }
+            hIcon.image = [HAIconMapper imageForIconName:iconName size:16 color:[HATheme secondaryTextColor]];
+            hIcon.frame = CGRectMake(0, 1, 18, 18);
         } else {
             self.headingLabel.text = configItem.displayName;
         }

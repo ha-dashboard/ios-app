@@ -287,11 +287,7 @@ static const CGFloat kButtonSpacing  = 12.0;
 
     // Set the robot-vacuum MDI glyph
     NSString *glyph = [HAIconMapper glyphForIconName:@"robot-vacuum"] ?: @"\u2699"; // fallback gear
-    NSAttributedString *iconAttr = [[NSAttributedString alloc] initWithString:glyph
-        attributes:@{
-            HAFontAttributeName: [HAIconMapper mdiFontOfSize:kIconFontSize],
-            HAForegroundColorAttributeName: iconColor
-        }];
+    NSAttributedString *iconAttr = [HAIconMapper attributedGlyph:glyph fontSize:kIconFontSize color:iconColor];
     self.iconLabel.attributedText = iconAttr;
 }
 
@@ -338,11 +334,7 @@ static const CGFloat kButtonSpacing  = 12.0;
 
 - (void)setButton:(UIButton *)button iconName:(NSString *)iconName {
     NSString *glyph = [HAIconMapper glyphForIconName:iconName] ?: @"?";
-    NSAttributedString *attr = [[NSAttributedString alloc] initWithString:glyph
-        attributes:@{
-            HAFontAttributeName: [HAIconMapper mdiFontOfSize:kButtonIconSize],
-            HAForegroundColorAttributeName: [HATheme primaryTextColor]
-        }];
+    NSAttributedString *attr = [HAIconMapper attributedGlyph:glyph fontSize:kButtonIconSize color:[HATheme primaryTextColor]];
     [button setAttributedTitle:attr forState:UIControlStateNormal];
 }
 

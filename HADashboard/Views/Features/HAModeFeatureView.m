@@ -148,10 +148,9 @@
         btn.tag = (NSInteger)i;
 
         // Try to get an icon for this mode, fall back to text
-        NSString *iconGlyph = [self iconGlyphForMode:mode type:self.featureType];
-        if (iconGlyph) {
-            [btn setTitle:iconGlyph forState:UIControlStateNormal];
-            btn.titleLabel.font = [HAIconMapper mdiFontOfSize:16];
+        NSString *iconName = [self iconNameForMode:mode type:self.featureType];
+        if (iconName) {
+            [HAIconMapper setIconName:iconName onButton:btn size:16 color:[HATheme primaryTextColor]];
         } else {
             NSString *displayName = [self displayNameForMode:mode];
             [btn setTitle:displayName forState:UIControlStateNormal];
@@ -303,27 +302,29 @@
     return [formatted capitalizedString];
 }
 
-- (NSString *)iconGlyphForMode:(NSString *)mode type:(NSString *)featureType {
-    // HVAC mode icons (match HA web frontend)
+- (NSString *)iconNameForMode:(NSString *)mode type:(NSString *)featureType {
     if ([featureType isEqualToString:@"climate-hvac-modes"]) {
-        if ([mode isEqualToString:@"heat"])       return [HAIconMapper glyphForIconName:@"fire"];
-        if ([mode isEqualToString:@"cool"])       return [HAIconMapper glyphForIconName:@"snowflake"];
-        if ([mode isEqualToString:@"heat_cool"])  return [HAIconMapper glyphForIconName:@"sun-snowflake-variant"];
-        if ([mode isEqualToString:@"auto"])       return [HAIconMapper glyphForIconName:@"thermostat-auto"];
-        if ([mode isEqualToString:@"dry"])        return [HAIconMapper glyphForIconName:@"water-percent"];
-        if ([mode isEqualToString:@"fan_only"])   return [HAIconMapper glyphForIconName:@"fan"];
-        if ([mode isEqualToString:@"off"])        return [HAIconMapper glyphForIconName:@"power"];
+        if ([mode isEqualToString:@"heat"])       return @"fire";
+        if ([mode isEqualToString:@"cool"])       return @"snowflake";
+        if ([mode isEqualToString:@"heat_cool"])  return @"sun-snowflake-variant";
+        if ([mode isEqualToString:@"auto"])       return @"thermostat-auto";
+        if ([mode isEqualToString:@"dry"])        return @"water-percent";
+        if ([mode isEqualToString:@"fan_only"])   return @"fan";
+        if ([mode isEqualToString:@"off"])        return @"power";
     }
-    // Alarm mode icons
     if ([featureType isEqualToString:@"alarm-modes"]) {
-        if ([mode isEqualToString:@"armed_home"])     return [HAIconMapper glyphForIconName:@"shield-home"];
-        if ([mode isEqualToString:@"armed_away"])     return [HAIconMapper glyphForIconName:@"shield-lock"];
-        if ([mode isEqualToString:@"armed_night"])    return [HAIconMapper glyphForIconName:@"shield-moon"];
-        if ([mode isEqualToString:@"armed_vacation"]) return [HAIconMapper glyphForIconName:@"shield-airplane"];
-        if ([mode isEqualToString:@"disarmed"])       return [HAIconMapper glyphForIconName:@"shield-off"];
+        if ([mode isEqualToString:@"armed_home"])     return @"shield-home";
+        if ([mode isEqualToString:@"armed_away"])     return @"shield-lock";
+        if ([mode isEqualToString:@"armed_night"])    return @"shield-moon";
+        if ([mode isEqualToString:@"armed_vacation"]) return @"shield-airplane";
+        if ([mode isEqualToString:@"disarmed"])       return @"shield-off";
     }
-    // Fan mode and preset mode — no standard icons, use text labels
     return nil;
+}
+
+- (NSString *)iconGlyphForMode:(NSString *)mode type:(NSString *)featureType {
+    NSString *name = [self iconNameForMode:mode type:featureType];
+    return name ? [HAIconMapper glyphForIconName:name] : nil;
 }
 
 @end

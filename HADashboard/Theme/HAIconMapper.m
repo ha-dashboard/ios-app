@@ -391,15 +391,9 @@ static NSDictionary<NSString *, NSString *> *_domainIconMap = nil;
             }];
     }
 
-    // iOS 5: render glyph to image. NSTextAttachment is iOS 7+, so we can't
-    // use inline image attachments. Instead, return an empty string — the caller
-    // should use a separate UIImageView for the icon on iOS 5.
-    // For best effort, return the raw glyph (will show as □ but won't crash).
-    return [[NSAttributedString alloc] initWithString:glyphString
-        attributes:@{
-            HAFontAttributeName: [self mdiFontOfSize:fontSize],
-            HAForegroundColorAttributeName: color ?: [UIColor blackColor]
-        }];
+    // iOS 5: SMP codepoints render as □ in UILabel. Omit the icon rather
+    // than showing broken squares — graceful degradation.
+    return [[NSAttributedString alloc] initWithString:@""];
 }
 
 @end

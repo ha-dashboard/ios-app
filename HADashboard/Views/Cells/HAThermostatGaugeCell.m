@@ -990,9 +990,8 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
                 self.tempLabel.text = @"--";
             }
             if (targetTemp && ![mode isEqualToString:@"off"]) {
-                NSMutableAttributedString *targetAttr = [[NSMutableAttributedString alloc] initWithString:tempIcon
-                    attributes:@{HAFontAttributeName: [HAIconMapper mdiFontOfSize:secondarySize],
-                                 HAForegroundColorAttributeName: [HATheme secondaryTextColor]}];
+                NSMutableAttributedString *targetAttr = [[NSMutableAttributedString alloc]
+                    initWithAttributedString:[HAIconMapper attributedGlyph:tempIcon fontSize:secondarySize color:[HATheme secondaryTextColor]]];
                 [targetAttr appendAttributedString:[[NSAttributedString alloc]
                     initWithString:[NSString stringWithFormat:@" %.1f %@", targetTemp.doubleValue, self.tempUnitString]
                     attributes:@{HAFontAttributeName: [UIFont ha_systemFontOfSize:secondarySize weight:HAFontWeightMedium],
@@ -1014,9 +1013,8 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
                 self.tempLabel.text = @"--";
             }
             if (currentTemp) {
-                NSMutableAttributedString *currentAttr = [[NSMutableAttributedString alloc] initWithString:tempIcon
-                    attributes:@{HAFontAttributeName: [HAIconMapper mdiFontOfSize:secondarySize],
-                                 HAForegroundColorAttributeName: [HATheme secondaryTextColor]}];
+                NSMutableAttributedString *currentAttr = [[NSMutableAttributedString alloc]
+                    initWithAttributedString:[HAIconMapper attributedGlyph:tempIcon fontSize:secondarySize color:[HATheme secondaryTextColor]]];
                 [currentAttr appendAttributedString:[[NSAttributedString alloc]
                     initWithString:[NSString stringWithFormat:@" %.1f %@", currentTemp.doubleValue, self.tempUnitString]
                     attributes:@{HAFontAttributeName: [UIFont ha_systemFontOfSize:secondarySize weight:HAFontWeightMedium],

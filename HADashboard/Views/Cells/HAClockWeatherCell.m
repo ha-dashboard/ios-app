@@ -444,7 +444,7 @@ static const CGFloat kBottomPadding = 12.0;
 
     NSString *unit = [entity weatherTemperatureUnit] ?: @"°";
     UIFont *textFont = [UIFont systemFontOfSize:11];
-    UIFont *iconFont = [HAIconMapper mdiFontOfSize:14];
+    CGFloat iconFontSize = 14;
     UIColor *textColor = [HATheme secondaryTextColor];
     CGFloat barHeight = 28.0;
     CGFloat rowY = 0;
@@ -487,9 +487,13 @@ static const CGFloat kBottomPadding = 12.0;
 
         // Weather icon
         UILabel *iconLabel = [[UILabel alloc] initWithFrame:CGRectMake(x, rowY, 20, barHeight)];
-        iconLabel.text = dayGlyph ?: @"?";
-        iconLabel.font = dayGlyph ? iconFont : textFont;
-        iconLabel.textColor = textColor;
+        if (dayGlyph) {
+            iconLabel.attributedText = [HAIconMapper attributedGlyph:dayGlyph fontSize:iconFontSize color:textColor];
+        } else {
+            iconLabel.text = @"?";
+            iconLabel.font = textFont;
+            iconLabel.textColor = textColor;
+        }
         iconLabel.textAlignment = NSTextAlignmentCenter;
         [self.forecastBarView addSubview:iconLabel];
         x += 24;

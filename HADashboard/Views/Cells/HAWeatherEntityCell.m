@@ -228,7 +228,7 @@ static const NSInteger kDefaultForecastRows = 5;
 
     NSString *unit = [entity weatherTemperatureUnit] ?: @"\u00B0";
     UIFont *textFont = [UIFont systemFontOfSize:11];
-    UIFont *iconFont = [HAIconMapper mdiFontOfSize:14];
+    CGFloat iconFontSize = 14;
     UIColor *textColor = [HATheme secondaryTextColor];
     CGFloat rowHeight = 24.0;
     CGFloat rowY = 0;
@@ -274,9 +274,13 @@ static const NSInteger kDefaultForecastRows = 5;
 
         // Weather icon
         UILabel *iconLabel = [[UILabel alloc] initWithFrame:CGRectMake(x, rowY, 20, rowHeight)];
-        iconLabel.text = dayGlyph ?: @"?";
-        iconLabel.font = dayGlyph ? iconFont : textFont;
-        iconLabel.textColor = textColor;
+        if (dayGlyph) {
+            iconLabel.attributedText = [HAIconMapper attributedGlyph:dayGlyph fontSize:iconFontSize color:textColor];
+        } else {
+            iconLabel.text = @"?";
+            iconLabel.font = textFont;
+            iconLabel.textColor = textColor;
+        }
         iconLabel.textAlignment = NSTextAlignmentCenter;
         [self.forecastContainer addSubview:iconLabel];
         x += 24;

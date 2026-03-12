@@ -258,9 +258,8 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
         if ([iconName hasPrefix:@"mdi:"]) iconName = [iconName substringFromIndex:4];
         NSString *glyph = [HAIconMapper glyphForIconName:iconName];
         if (glyph) {
-            NSMutableAttributedString *heading = [[NSMutableAttributedString alloc] initWithString:glyph
-                attributes:@{HAFontAttributeName: [HAIconMapper mdiFontOfSize:16],
-                             HAForegroundColorAttributeName: [HATheme secondaryTextColor]}];
+            NSMutableAttributedString *heading = [[NSMutableAttributedString alloc]
+                initWithAttributedString:[HAIconMapper attributedGlyph:glyph fontSize:16 color:[HATheme secondaryTextColor]]];
             [heading appendAttributedString:[[NSAttributedString alloc] initWithString:
                 [NSString stringWithFormat:@"  %@", configItem.displayName]
                 attributes:@{HAFontAttributeName: [UIFont ha_systemFontOfSize:17 weight:HAFontWeightSemibold],

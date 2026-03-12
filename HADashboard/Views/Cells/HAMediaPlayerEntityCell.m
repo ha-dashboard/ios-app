@@ -272,14 +272,7 @@ static const CGFloat kPadding        = 12.0;
     btn.translatesAutoresizingMaskIntoConstraints = NO;
     [btn addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
 
-    NSString *glyph = [HAIconMapper glyphForIconName:iconName];
-    UIFont *iconFont = [HAIconMapper mdiFontOfSize:kBtnIconSize];
-    NSDictionary *attrs = @{
-        HAFontAttributeName: iconFont,
-        HAForegroundColorAttributeName: [HATheme primaryTextColor],
-    };
-    NSAttributedString *attrTitle = [[NSAttributedString alloc] initWithString:(glyph ?: @"?") attributes:attrs];
-    [btn setAttributedTitle:attrTitle forState:UIControlStateNormal];
+    [HAIconMapper setIconName:iconName onButton:btn size:kBtnIconSize color:[HATheme primaryTextColor]];
 
     [self.contentView addSubview:btn];
     return btn;
@@ -287,14 +280,7 @@ static const CGFloat kPadding        = 12.0;
 
 /// Update a transport button's icon glyph (e.g. switching play <-> pause).
 - (void)setButton:(UIButton *)btn iconName:(NSString *)iconName color:(UIColor *)color {
-    NSString *glyph = [HAIconMapper glyphForIconName:iconName];
-    UIFont *iconFont = [HAIconMapper mdiFontOfSize:kBtnIconSize];
-    NSDictionary *attrs = @{
-        HAFontAttributeName: iconFont,
-        HAForegroundColorAttributeName: color ?: [HATheme primaryTextColor],
-    };
-    NSAttributedString *attrTitle = [[NSAttributedString alloc] initWithString:(glyph ?: @"?") attributes:attrs];
-    [btn setAttributedTitle:attrTitle forState:UIControlStateNormal];
+    [HAIconMapper setIconName:iconName onButton:btn size:kBtnIconSize color:color ?: [HATheme primaryTextColor]];
 }
 
 #pragma mark - Preferred Height
@@ -397,12 +383,8 @@ static const CGFloat kPadding        = 12.0;
 
     // Mute button icon
     NSString *muteIcon = muted ? @"volume-off" : @"volume-high";
-    NSString *muteGlyph = [HAIconMapper glyphForIconName:muteIcon];
-    UIFont *muteFont = [HAIconMapper mdiFontOfSize:16];
     UIColor *muteColor = muted ? [UIColor systemRedColor] : [HATheme secondaryTextColor];
-    NSDictionary *muteAttrs = @{HAFontAttributeName: muteFont, HAForegroundColorAttributeName: muteColor};
-    [self.muteButton setAttributedTitle:[[NSAttributedString alloc] initWithString:(muteGlyph ?: @"🔊") attributes:muteAttrs]
-                               forState:UIControlStateNormal];
+    [HAIconMapper setIconName:muteIcon onButton:self.muteButton size:16 color:muteColor];
     self.muteButton.enabled = available;
 
     // ── Progress slider (seek-capable) ──
@@ -436,21 +418,14 @@ static const CGFloat kPadding        = 12.0;
 
     // ── Shuffle button ──
     BOOL shuffle = [entity mediaShuffle];
-    NSString *shuffleGlyph = [HAIconMapper glyphForIconName:@"shuffle-variant"];
-    UIFont *ctrlFont = [HAIconMapper mdiFontOfSize:14];
     UIColor *shuffleColor = shuffle ? [UIColor systemBlueColor] : [HATheme secondaryTextColor];
-    [self.shuffleButton setAttributedTitle:[[NSAttributedString alloc] initWithString:(shuffleGlyph ?: @"🔀")
-                                                                           attributes:@{HAFontAttributeName: ctrlFont, HAForegroundColorAttributeName: shuffleColor}]
-                                  forState:UIControlStateNormal];
+    [HAIconMapper setIconName:@"shuffle-variant" onButton:self.shuffleButton size:14 color:shuffleColor];
 
     // ── Repeat button ──
     NSString *repeatMode = [entity mediaRepeat];
     NSString *repeatIconName = [repeatMode isEqualToString:@"one"] ? @"repeat-once" : @"repeat";
-    NSString *repeatGlyph = [HAIconMapper glyphForIconName:repeatIconName];
     UIColor *repeatColor = [repeatMode isEqualToString:@"off"] ? [HATheme secondaryTextColor] : [UIColor systemBlueColor];
-    [self.repeatButton setAttributedTitle:[[NSAttributedString alloc] initWithString:(repeatGlyph ?: @"🔁")
-                                                                          attributes:@{HAFontAttributeName: ctrlFont, HAForegroundColorAttributeName: repeatColor}]
-                                 forState:UIControlStateNormal];
+    [HAIconMapper setIconName:repeatIconName onButton:self.repeatButton size:14 color:repeatColor];
 
     // ── Card background ──
     if (playing) {
