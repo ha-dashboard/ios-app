@@ -1308,6 +1308,8 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
 
 - (void)prepareForReuse {
     [super prepareForReuse];
+    self.plusButton.hidden = YES;
+    self.minusButton.hidden = YES;
     self.nameLabel.attributedText = nil;
     self.tempLabel.text = nil;
     self.targetLabel.attributedText = nil;
