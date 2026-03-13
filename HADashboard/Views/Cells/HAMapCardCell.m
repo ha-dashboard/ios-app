@@ -22,14 +22,7 @@
     self.mapView.userInteractionEnabled = NO; // static map in card view
     [self.contentView addSubview:self.mapView];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.mapView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
-            [self.mapView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
-            [self.mapView.topAnchor constraintEqualToAnchor:self.contentView.topAnchor],
-            [self.mapView.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor],
-        ]];
-    }
+    HAPinEdgesFlush(self.mapView, self.contentView);
 }
 
 - (void)layoutSubviews {

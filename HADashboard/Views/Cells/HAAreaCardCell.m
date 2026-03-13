@@ -67,25 +67,23 @@
     [self.contentView addSubview:self.toggleStack];
 
     CGFloat pad = 12;
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.bgImageView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
-            [self.bgImageView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
-            [self.bgImageView.topAnchor constraintEqualToAnchor:self.contentView.topAnchor],
-            [self.bgImageView.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor],
-            [overlay.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
-            [overlay.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
-            [overlay.topAnchor constraintEqualToAnchor:self.contentView.topAnchor],
-            [overlay.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor],
-            [self.areaNameLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:pad],
-            [self.areaNameLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:pad],
-            [self.areaNameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-pad],
-            [self.sensorSummaryLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:pad],
-            [self.sensorSummaryLabel.topAnchor constraintEqualToAnchor:self.areaNameLabel.bottomAnchor constant:2],
-            [self.toggleStack.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-pad],
-            [self.toggleStack.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-pad],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.bgImageView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor]),
+        HACon([self.bgImageView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor]),
+        HACon([self.bgImageView.topAnchor constraintEqualToAnchor:self.contentView.topAnchor]),
+        HACon([self.bgImageView.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor]),
+        HACon([overlay.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor]),
+        HACon([overlay.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor]),
+        HACon([overlay.topAnchor constraintEqualToAnchor:self.contentView.topAnchor]),
+        HACon([overlay.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor]),
+        HACon([self.areaNameLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:pad]),
+        HACon([self.areaNameLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:pad]),
+        HACon([self.areaNameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-pad]),
+        HACon([self.sensorSummaryLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:pad]),
+        HACon([self.sensorSummaryLabel.topAnchor constraintEqualToAnchor:self.areaNameLabel.bottomAnchor constant:2]),
+        HACon([self.toggleStack.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-pad]),
+        HACon([self.toggleStack.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-pad]),
+    ]);
 }
 
 - (void)configureWithSection:(HADashboardConfigSection *)section

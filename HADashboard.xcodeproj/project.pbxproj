@@ -196,6 +196,7 @@
 		22D12E429523F54D75C9801C /* HARemoteCommandHandler.m in Sources */ = {isa = PBXBuildFile; fileRef = A14802F8505A2382BDB01198 /* HARemoteCommandHandler.m */; };
 		22D51F990B68D9B8DDF629FE /* testCoverScDoor__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 93C302EF73B6205CBCCE1134 /* testCoverScDoor__light@2x.png */; };
 		22DB1747614BCB6083F69E4E /* HAHistoryManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 9CD3CEE209D08615B35F52CB /* HAHistoryManager.m */; };
+		604940A5D221594B3D703982 /* HADateUtils.m in Sources */ = {isa = PBXBuildFile; fileRef = 407EE35949E0157B85577567 /* HADateUtils.m */; };
 		22F8E436FF96F1ADB7A59146 /* testLightTile_brightness__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 5EB409AD56E8C8FFCB5F3382 /* testLightTile_brightness__light@2x.png */; };
 		23546D9E9F0006F8E41478E1 /* testSceneSectionActivated_sceneSectionActivated_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 3BE78FC8FB4D9DBA1F295687 /* testSceneSectionActivated_sceneSectionActivated_gradient@2x.png */; };
 		236B588B1D9FD035D882F4F9 /* testBinarySensorTile_iconOverride__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = EBF81067B88C7FB16E117CD1 /* testBinarySensorTile_iconOverride__light@2x.png */; };
@@ -2192,6 +2193,8 @@
 		866A32E34127AE90FDA4BE03 /* PSTCollectionViewUpdateItem.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PSTCollectionViewUpdateItem.m; sourceTree = "<group>"; };
 		86769F6BE55AAED58CFB4494 /* testFanOnFull__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testFanOnFull__light@2x.png"; sourceTree = "<group>"; };
 		86821EF1EA2830D58D9D7495 /* HAHistoryManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAHistoryManager.h; sourceTree = "<group>"; };
+		B4404B2E9D608A665265D766 /* HADateUtils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HADateUtils.h; sourceTree = "<group>"; };
+		407EE35949E0157B85577567 /* HADateUtils.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HADateUtils.m; sourceTree = "<group>"; };
 		86A9163B7A7E6540610BBCC1 /* testAlarmScVacation__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testAlarmScVacation__light@2x.png"; sourceTree = "<group>"; };
 		86B02E27609090619C6890B6 /* HAEntityDisplayHelper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAEntityDisplayHelper.h; sourceTree = "<group>"; };
 		86B850684166965F87FDF0AE /* LOTShapeTrimPath.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = LOTShapeTrimPath.m; sourceTree = "<group>"; };
@@ -4297,6 +4300,8 @@
 				425C0ABCCCC9ACB1A5264B16 /* HAAPIClient.m */,
 				7376E6E3086B763C5C48BE5A /* HAConnectionManager.h */,
 				D923F28F7F9CA85F2AE6DC64 /* HAConnectionManager.m */,
+				B4404B2E9D608A665265D766 /* HADateUtils.h */,
+				407EE35949E0157B85577567 /* HADateUtils.m */,
 				8D76A5173454DC50DF024ECD /* HADeviceIntegrationManager.h */,
 				A73E5C753823A668AD897C35 /* HADeviceIntegrationManager.m */,
 				686118554AAFAFE6C0557915 /* HADeviceRegistration.h */,
@@ -6142,6 +6147,7 @@
 				577BE362309C38A4CC333DF5 /* HAHaptics.m in Sources */,
 				18CC68C2AE529079237629E3 /* HAHeadingCell.m in Sources */,
 				22DB1747614BCB6083F69E4E /* HAHistoryManager.m in Sources */,
+				604940A5D221594B3D703982 /* HADateUtils.m in Sources */,
 				2029BCEF07FC433C512FC8B6 /* HAHumidifierEntityCell.m in Sources */,
 				E541E6E43710645D9D3EF4B4 /* HAIconMapper.m in Sources */,
 				838ACBA6151615BD9CD35C83 /* HAImageEntityCell.m in Sources */,

@@ -35,25 +35,21 @@ static const CGFloat kMinColumnWidth = 70.0; // auto column calculation threshol
         self.titleLabel.hidden = YES;
         [self.contentView addSubview:self.titleLabel];
 
-        if (HAAutoLayoutAvailable()) {
-            [NSLayoutConstraint activateConstraints:@[
-                [self.titleLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kCardPadding],
-                [self.titleLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:12],
-                [self.titleLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-12],
-            ]];
-        }
+        HAActivateConstraints(@[
+            HACon([self.titleLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kCardPadding]),
+            HACon([self.titleLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:12]),
+            HACon([self.titleLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-12]),
+        ]);
 
         self.gridContainer = [[UIView alloc] init];
         self.gridContainer.translatesAutoresizingMaskIntoConstraints = NO;
         [self.contentView addSubview:self.gridContainer];
 
-        if (HAAutoLayoutAvailable()) {
-            [NSLayoutConstraint activateConstraints:@[
-                [self.gridContainer.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
-                [self.gridContainer.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
-                [self.gridContainer.bottomAnchor constraintLessThanOrEqualToAnchor:self.contentView.bottomAnchor],
-            ]];
-        }
+        HAActivateConstraints(@[
+            HACon([self.gridContainer.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor]),
+            HACon([self.gridContainer.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor]),
+            HACon([self.gridContainer.bottomAnchor constraintLessThanOrEqualToAnchor:self.contentView.bottomAnchor]),
+        ]);
     }
     return self;
 }
@@ -102,13 +98,9 @@ static const CGFloat kMinColumnWidth = 70.0; // auto column calculation threshol
         }
     }
     if (hasTitle) {
-        if (HAAutoLayoutAvailable()) {
-            [self.titleLabel.bottomAnchor constraintEqualToAnchor:self.gridContainer.topAnchor constant:-4].active = YES;
-        }
+        HASetConstraintActive([self.titleLabel.bottomAnchor constraintEqualToAnchor:self.gridContainer.topAnchor constant:-4], YES);
     } else {
-        if (HAAutoLayoutAvailable()) {
-            [self.gridContainer.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kCardPadding].active = YES;
-        }
+        HASetConstraintActive([self.gridContainer.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kCardPadding], YES);
     }
 
     // Create and layout item views

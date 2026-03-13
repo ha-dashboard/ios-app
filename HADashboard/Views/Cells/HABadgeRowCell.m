@@ -183,30 +183,26 @@ static const CGFloat kArcNameLabelHeight = 16.0;
             nameLabel.translatesAutoresizingMaskIntoConstraints = NO;
             [badge addSubview:nameLabel];
 
-            if (HAAutoLayoutAvailable()) {
-                [NSLayoutConstraint activateConstraints:@[
-                    [iconLabel.leadingAnchor constraintEqualToAnchor:badge.leadingAnchor constant:kBadgeHPad - 4],
-                    [iconLabel.centerYAnchor constraintEqualToAnchor:badge.centerYAnchor],
-                    [nameLabel.leadingAnchor constraintEqualToAnchor:iconLabel.trailingAnchor constant:kBadgeGap],
-                    [nameLabel.bottomAnchor constraintEqualToAnchor:badge.centerYAnchor constant:-1],
-                    [nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:badge.trailingAnchor constant:-kBadgeHPad],
-                    [valueLabel.leadingAnchor constraintEqualToAnchor:nameLabel.leadingAnchor],
-                    [valueLabel.topAnchor constraintEqualToAnchor:badge.centerYAnchor constant:1],
-                    [valueLabel.trailingAnchor constraintLessThanOrEqualToAnchor:badge.trailingAnchor constant:-kBadgeHPad],
-                ]];
-            }
+            HAActivateConstraints(@[
+                HACon([iconLabel.leadingAnchor constraintEqualToAnchor:badge.leadingAnchor constant:kBadgeHPad - 4]),
+                HACon([iconLabel.centerYAnchor constraintEqualToAnchor:badge.centerYAnchor]),
+                HACon([nameLabel.leadingAnchor constraintEqualToAnchor:iconLabel.trailingAnchor constant:kBadgeGap]),
+                HACon([nameLabel.bottomAnchor constraintEqualToAnchor:badge.centerYAnchor constant:-1]),
+                HACon([nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:badge.trailingAnchor constant:-kBadgeHPad]),
+                HACon([valueLabel.leadingAnchor constraintEqualToAnchor:nameLabel.leadingAnchor]),
+                HACon([valueLabel.topAnchor constraintEqualToAnchor:badge.centerYAnchor constant:1]),
+                HACon([valueLabel.trailingAnchor constraintLessThanOrEqualToAnchor:badge.trailingAnchor constant:-kBadgeHPad]),
+            ]);
             nameWidth = ceil([name ha_sizeWithAttributes:@{HAFontAttributeName: nameLabel.font}].width);
         } else {
             // No name: icon + value centered on single line (chip style)
-            if (HAAutoLayoutAvailable()) {
-                [NSLayoutConstraint activateConstraints:@[
-                    [iconLabel.leadingAnchor constraintEqualToAnchor:badge.leadingAnchor constant:kBadgeHPad - 4],
-                    [iconLabel.centerYAnchor constraintEqualToAnchor:badge.centerYAnchor],
-                    [valueLabel.leadingAnchor constraintEqualToAnchor:iconLabel.trailingAnchor constant:kBadgeGap],
-                    [valueLabel.centerYAnchor constraintEqualToAnchor:badge.centerYAnchor],
-                    [valueLabel.trailingAnchor constraintLessThanOrEqualToAnchor:badge.trailingAnchor constant:-kBadgeHPad],
-                ]];
-            }
+            HAActivateConstraints(@[
+                HACon([iconLabel.leadingAnchor constraintEqualToAnchor:badge.leadingAnchor constant:kBadgeHPad - 4]),
+                HACon([iconLabel.centerYAnchor constraintEqualToAnchor:badge.centerYAnchor]),
+                HACon([valueLabel.leadingAnchor constraintEqualToAnchor:iconLabel.trailingAnchor constant:kBadgeGap]),
+                HACon([valueLabel.centerYAnchor constraintEqualToAnchor:badge.centerYAnchor]),
+                HACon([valueLabel.trailingAnchor constraintLessThanOrEqualToAnchor:badge.trailingAnchor constant:-kBadgeHPad]),
+            ]);
         }
 
         // Measure badge width (ceil + 4pt buffer prevents truncation from rounding)
@@ -574,18 +570,17 @@ static const CGFloat kArcNameLabelHeight = 16.0;
     CGFloat badgeWidth = (kBadgeHPad - 4) + iconW + kBadgeGap + infoWidth + kBadgeHPad;
     badgeWidth = MAX(badgeWidth, kBadgeHeight);
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [iconLabel.leadingAnchor constraintEqualToAnchor:badge.leadingAnchor constant:kBadgeHPad - 4],
-            [iconLabel.centerYAnchor constraintEqualToAnchor:badge.centerYAnchor],
-            [nameLabel.leadingAnchor constraintEqualToAnchor:iconLabel.trailingAnchor constant:kBadgeGap],
-            [nameLabel.bottomAnchor constraintEqualToAnchor:badge.centerYAnchor constant:-1],
-            [nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:badge.trailingAnchor constant:-kBadgeHPad],
-            [valueLabel.leadingAnchor constraintEqualToAnchor:nameLabel.leadingAnchor],
-            [valueLabel.topAnchor constraintEqualToAnchor:badge.centerYAnchor constant:1],
-            [valueLabel.trailingAnchor constraintLessThanOrEqualToAnchor:badge.trailingAnchor constant:-kBadgeHPad],
-        ]];
-    } else {
+    HAActivateConstraints(@[
+        HACon([iconLabel.leadingAnchor constraintEqualToAnchor:badge.leadingAnchor constant:kBadgeHPad - 4]),
+        HACon([iconLabel.centerYAnchor constraintEqualToAnchor:badge.centerYAnchor]),
+        HACon([nameLabel.leadingAnchor constraintEqualToAnchor:iconLabel.trailingAnchor constant:kBadgeGap]),
+        HACon([nameLabel.bottomAnchor constraintEqualToAnchor:badge.centerYAnchor constant:-1]),
+        HACon([nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:badge.trailingAnchor constant:-kBadgeHPad]),
+        HACon([valueLabel.leadingAnchor constraintEqualToAnchor:nameLabel.leadingAnchor]),
+        HACon([valueLabel.topAnchor constraintEqualToAnchor:badge.centerYAnchor constant:1]),
+        HACon([valueLabel.trailingAnchor constraintLessThanOrEqualToAnchor:badge.trailingAnchor constant:-kBadgeHPad]),
+    ]);
+    if (!HAAutoLayoutAvailable()) {
         CGFloat midY = kBadgeHeight / 2.0;
         CGFloat iconX = kBadgeHPad - 4;
         iconLabel.frame = CGRectMake(iconX, midY - kBadgeIconSize / 2, kBadgeIconSize, kBadgeIconSize);

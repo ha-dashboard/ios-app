@@ -46,8 +46,6 @@
     self.valueLabel.textAlignment = NSTextAlignmentRight;
     if (HAAutoLayoutAvailable()) {
         [self.valueLabel setContentHuggingPriority:UILayoutPriorityRequired forAxis:0];
-    }
-    if (HAAutoLayoutAvailable()) {
         [self.valueLabel setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:0];
     }
     [self addSubview:self.valueLabel];
@@ -57,15 +55,15 @@
         NSLayoutConstraint *heightConstraint = [self.heightAnchor constraintEqualToConstant:[HASliderFeatureView preferredHeight]];
         heightConstraint.priority = UILayoutPriorityDefaultHigh;
 
-        [NSLayoutConstraint activateConstraints:@[
-            [self.slider.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12],
-            [self.slider.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.slider.trailingAnchor constraintEqualToAnchor:self.valueLabel.leadingAnchor constant:-8],
-            [self.valueLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-12],
-            [self.valueLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.valueLabel.widthAnchor constraintGreaterThanOrEqualToConstant:36],
-            heightConstraint,
-        ]];
+        HAActivateConstraints(@[
+            HACon([self.slider.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12]),
+            HACon([self.slider.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]),
+            HACon([self.slider.trailingAnchor constraintEqualToAnchor:self.valueLabel.leadingAnchor constant:-8]),
+            HACon([self.valueLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-12]),
+            HACon([self.valueLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]),
+            HACon([self.valueLabel.widthAnchor constraintGreaterThanOrEqualToConstant:36]),
+            HACon(heightConstraint),
+        ]);
     }
 }
 

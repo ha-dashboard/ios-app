@@ -39,66 +39,40 @@
     self.positionLabel.textAlignment = NSTextAlignmentRight;
 
     // Position label: top-right
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.positionLabel attribute:NSLayoutAttributeTrailing
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.positionLabel attribute:NSLayoutAttributeTop
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTop multiplier:1 constant:padding]];
-    }
+    HAActivateConstraints(@[
+        HACon([NSLayoutConstraint constraintWithItem:self.positionLabel attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]),
+        HACon([NSLayoutConstraint constraintWithItem:self.positionLabel attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTop multiplier:1 constant:padding]),
+    ]);
 
     // Buttons: bottom row, centered
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.stopButton attribute:NSLayoutAttributeCenterX
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeCenterX multiplier:1 constant:0]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.stopButton attribute:NSLayoutAttributeBottom
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.stopButton attribute:NSLayoutAttributeWidth
-            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:btnWidth]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.stopButton attribute:NSLayoutAttributeHeight
-            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:btnHeight]];
-    }
-
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.openButton attribute:NSLayoutAttributeTrailing
-            relatedBy:NSLayoutRelationEqual toItem:self.stopButton attribute:NSLayoutAttributeLeading multiplier:1 constant:-spacing]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.openButton attribute:NSLayoutAttributeCenterY
-            relatedBy:NSLayoutRelationEqual toItem:self.stopButton attribute:NSLayoutAttributeCenterY multiplier:1 constant:0]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.openButton attribute:NSLayoutAttributeWidth
-            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:btnWidth]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.openButton attribute:NSLayoutAttributeHeight
-            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:btnHeight]];
-    }
-
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.closeButton attribute:NSLayoutAttributeLeading
-            relatedBy:NSLayoutRelationEqual toItem:self.stopButton attribute:NSLayoutAttributeTrailing multiplier:1 constant:spacing]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.closeButton attribute:NSLayoutAttributeCenterY
-            relatedBy:NSLayoutRelationEqual toItem:self.stopButton attribute:NSLayoutAttributeCenterY multiplier:1 constant:0]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.closeButton attribute:NSLayoutAttributeWidth
-            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:btnWidth]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.closeButton attribute:NSLayoutAttributeHeight
-            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:btnHeight]];
-    }
+    HAActivateConstraints(@[
+        HACon([NSLayoutConstraint constraintWithItem:self.stopButton attribute:NSLayoutAttributeCenterX
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeCenterX multiplier:1 constant:0]),
+        HACon([NSLayoutConstraint constraintWithItem:self.stopButton attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]),
+        HACon([NSLayoutConstraint constraintWithItem:self.stopButton attribute:NSLayoutAttributeWidth
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:btnWidth]),
+        HACon([NSLayoutConstraint constraintWithItem:self.stopButton attribute:NSLayoutAttributeHeight
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:btnHeight]),
+        HACon([NSLayoutConstraint constraintWithItem:self.openButton attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.stopButton attribute:NSLayoutAttributeLeading multiplier:1 constant:-spacing]),
+        HACon([NSLayoutConstraint constraintWithItem:self.openButton attribute:NSLayoutAttributeCenterY
+            relatedBy:NSLayoutRelationEqual toItem:self.stopButton attribute:NSLayoutAttributeCenterY multiplier:1 constant:0]),
+        HACon([NSLayoutConstraint constraintWithItem:self.openButton attribute:NSLayoutAttributeWidth
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:btnWidth]),
+        HACon([NSLayoutConstraint constraintWithItem:self.openButton attribute:NSLayoutAttributeHeight
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:btnHeight]),
+        HACon([NSLayoutConstraint constraintWithItem:self.closeButton attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.stopButton attribute:NSLayoutAttributeTrailing multiplier:1 constant:spacing]),
+        HACon([NSLayoutConstraint constraintWithItem:self.closeButton attribute:NSLayoutAttributeCenterY
+            relatedBy:NSLayoutRelationEqual toItem:self.stopButton attribute:NSLayoutAttributeCenterY multiplier:1 constant:0]),
+        HACon([NSLayoutConstraint constraintWithItem:self.closeButton attribute:NSLayoutAttributeWidth
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:btnWidth]),
+        HACon([NSLayoutConstraint constraintWithItem:self.closeButton attribute:NSLayoutAttributeHeight
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:btnHeight]),
+    ]);
 
     // Position slider — between buttons and name area
     self.positionSlider = [[UISlider alloc] init];
@@ -112,13 +86,11 @@
     [self.positionSlider addTarget:self action:@selector(posSliderTouchUp) forControlEvents:UIControlEventTouchUpOutside];
     [self.contentView addSubview:self.positionSlider];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.positionSlider.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
-            [self.positionSlider.trailingAnchor constraintEqualToAnchor:self.positionLabel.leadingAnchor constant:-8],
-            [self.positionSlider.bottomAnchor constraintEqualToAnchor:self.openButton.topAnchor constant:-6],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.positionSlider.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding]),
+        HACon([self.positionSlider.trailingAnchor constraintEqualToAnchor:self.positionLabel.leadingAnchor constant:-8]),
+        HACon([self.positionSlider.bottomAnchor constraintEqualToAnchor:self.openButton.topAnchor constant:-6]),
+    ]);
 
     // Tilt slider + label
     self.tiltLabel = [self labelWithFont:[UIFont ha_monospacedDigitSystemFontOfSize:10 weight:HAFontWeightRegular]
@@ -136,15 +108,13 @@
     [self.tiltSlider addTarget:self action:@selector(tiltSliderTouchUp) forControlEvents:UIControlEventTouchUpOutside];
     [self.contentView addSubview:self.tiltSlider];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.tiltLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
-            [self.tiltLabel.centerYAnchor constraintEqualToAnchor:self.positionSlider.centerYAnchor],
-            [self.tiltSlider.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
-            [self.tiltSlider.trailingAnchor constraintEqualToAnchor:self.tiltLabel.leadingAnchor constant:-4],
-            [self.tiltSlider.bottomAnchor constraintEqualToAnchor:self.positionSlider.topAnchor constant:-4],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.tiltLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding]),
+        HACon([self.tiltLabel.centerYAnchor constraintEqualToAnchor:self.positionSlider.centerYAnchor]),
+        HACon([self.tiltSlider.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding]),
+        HACon([self.tiltSlider.trailingAnchor constraintEqualToAnchor:self.tiltLabel.leadingAnchor constant:-4]),
+        HACon([self.tiltSlider.bottomAnchor constraintEqualToAnchor:self.positionSlider.topAnchor constant:-4]),
+    ]);
 }
 
 - (UIButton *)makeButtonWithTitle:(NSString *)title action:(SEL)action {

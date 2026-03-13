@@ -54,44 +54,36 @@
     CGFloat padding = 10.0;
 
     // Current temp: left side, vertically centered
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.currentTempLabel attribute:NSLayoutAttributeLeading
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.currentTempLabel attribute:NSLayoutAttributeTop
-            relatedBy:NSLayoutRelationEqual toItem:self.nameLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:2]];
-    }
+    HAActivateConstraints(@[
+        HACon([NSLayoutConstraint constraintWithItem:self.currentTempLabel attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]),
+        HACon([NSLayoutConstraint constraintWithItem:self.currentTempLabel attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.nameLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:2]),
+    ]);
 
     // Mode label: below current temp
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.modeLabel attribute:NSLayoutAttributeLeading
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.modeLabel attribute:NSLayoutAttributeTop
-            relatedBy:NSLayoutRelationEqual toItem:self.currentTempLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:2]];
-    }
+    HAActivateConstraints(@[
+        HACon([NSLayoutConstraint constraintWithItem:self.modeLabel attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]),
+        HACon([NSLayoutConstraint constraintWithItem:self.modeLabel attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.currentTempLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:2]),
+    ]);
 
     // Stepper: bottom-right
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.tempStepper attribute:NSLayoutAttributeTrailing
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.tempStepper attribute:NSLayoutAttributeBottom
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
-    }
+    HAActivateConstraints(@[
+        HACon([NSLayoutConstraint constraintWithItem:self.tempStepper attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]),
+        HACon([NSLayoutConstraint constraintWithItem:self.tempStepper attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]),
+    ]);
 
     // Target label: above stepper
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.targetTempLabel attribute:NSLayoutAttributeTrailing
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.targetTempLabel attribute:NSLayoutAttributeBottom
-            relatedBy:NSLayoutRelationEqual toItem:self.tempStepper attribute:NSLayoutAttributeTop multiplier:1 constant:-4]];
-    }
+    HAActivateConstraints(@[
+        HACon([NSLayoutConstraint constraintWithItem:self.targetTempLabel attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]),
+        HACon([NSLayoutConstraint constraintWithItem:self.targetTempLabel attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.tempStepper attribute:NSLayoutAttributeTop multiplier:1 constant:-4]),
+    ]);
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {

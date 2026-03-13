@@ -98,17 +98,15 @@ static NSString *const kModeToken   = @"token";
     self.discoveryStack.translatesAutoresizingMaskIntoConstraints = NO;
     [self.discoverySection addSubview:self.discoveryStack];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [discoveryTitle.topAnchor constraintEqualToAnchor:self.discoverySection.topAnchor],
-            [discoveryTitle.leadingAnchor constraintEqualToAnchor:self.discoverySection.leadingAnchor],
-            [discoveryTitle.trailingAnchor constraintEqualToAnchor:self.discoverySection.trailingAnchor],
-            [self.discoveryStack.topAnchor constraintEqualToAnchor:discoveryTitle.bottomAnchor constant:6],
-            [self.discoveryStack.leadingAnchor constraintEqualToAnchor:self.discoverySection.leadingAnchor],
-            [self.discoveryStack.trailingAnchor constraintEqualToAnchor:self.discoverySection.trailingAnchor],
-            [self.discoveryStack.bottomAnchor constraintEqualToAnchor:self.discoverySection.bottomAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([discoveryTitle.topAnchor constraintEqualToAnchor:self.discoverySection.topAnchor]),
+        HACon([discoveryTitle.leadingAnchor constraintEqualToAnchor:self.discoverySection.leadingAnchor]),
+        HACon([discoveryTitle.trailingAnchor constraintEqualToAnchor:self.discoverySection.trailingAnchor]),
+        HACon([self.discoveryStack.topAnchor constraintEqualToAnchor:discoveryTitle.bottomAnchor constant:6]),
+        HACon([self.discoveryStack.leadingAnchor constraintEqualToAnchor:self.discoverySection.leadingAnchor]),
+        HACon([self.discoveryStack.trailingAnchor constraintEqualToAnchor:self.discoverySection.trailingAnchor]),
+        HACon([self.discoveryStack.bottomAnchor constraintEqualToAnchor:self.discoverySection.bottomAnchor]),
+    ]);
 
     // ── Server URL ─────────────────────────────────────────────────────
     UILabel *urlLabel = [[UILabel alloc] init];
@@ -159,14 +157,12 @@ static NSString *const kModeToken   = @"token";
     trustedHint.translatesAutoresizingMaskIntoConstraints = NO;
     [self.trustedContainer addSubview:trustedHint];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [trustedHint.topAnchor constraintEqualToAnchor:self.trustedContainer.topAnchor constant:8],
-            [trustedHint.leadingAnchor constraintEqualToAnchor:self.trustedContainer.leadingAnchor],
-            [trustedHint.trailingAnchor constraintEqualToAnchor:self.trustedContainer.trailingAnchor],
-            [trustedHint.bottomAnchor constraintEqualToAnchor:self.trustedContainer.bottomAnchor constant:-4],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([trustedHint.topAnchor constraintEqualToAnchor:self.trustedContainer.topAnchor constant:8]),
+        HACon([trustedHint.leadingAnchor constraintEqualToAnchor:self.trustedContainer.leadingAnchor]),
+        HACon([trustedHint.trailingAnchor constraintEqualToAnchor:self.trustedContainer.trailingAnchor]),
+        HACon([trustedHint.bottomAnchor constraintEqualToAnchor:self.trustedContainer.bottomAnchor constant:-4]),
+    ]);
 
     // ── Login mode container ───────────────────────────────────────────
     self.loginContainer = [[UIView alloc] init];
@@ -216,26 +212,24 @@ static NSString *const kModeToken   = @"token";
     loginHint.translatesAutoresizingMaskIntoConstraints = NO;
     [self.loginContainer addSubview:loginHint];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [userLabel.topAnchor constraintEqualToAnchor:self.loginContainer.topAnchor],
-            [userLabel.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor],
-            [self.usernameField.topAnchor constraintEqualToAnchor:userLabel.bottomAnchor constant:6],
-            [self.usernameField.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor],
-            [self.usernameField.trailingAnchor constraintEqualToAnchor:self.loginContainer.trailingAnchor],
-            [self.usernameField.heightAnchor constraintEqualToConstant:fieldHeight],
-            [passLabel.topAnchor constraintEqualToAnchor:self.usernameField.bottomAnchor constant:16],
-            [passLabel.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor],
-            [self.passwordField.topAnchor constraintEqualToAnchor:passLabel.bottomAnchor constant:6],
-            [self.passwordField.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor],
-            [self.passwordField.trailingAnchor constraintEqualToAnchor:self.loginContainer.trailingAnchor],
-            [self.passwordField.heightAnchor constraintEqualToConstant:fieldHeight],
-            [loginHint.topAnchor constraintEqualToAnchor:self.passwordField.bottomAnchor constant:8],
-            [loginHint.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor],
-            [loginHint.trailingAnchor constraintEqualToAnchor:self.loginContainer.trailingAnchor],
-            [loginHint.bottomAnchor constraintEqualToAnchor:self.loginContainer.bottomAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([userLabel.topAnchor constraintEqualToAnchor:self.loginContainer.topAnchor]),
+        HACon([userLabel.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor]),
+        HACon([self.usernameField.topAnchor constraintEqualToAnchor:userLabel.bottomAnchor constant:6]),
+        HACon([self.usernameField.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor]),
+        HACon([self.usernameField.trailingAnchor constraintEqualToAnchor:self.loginContainer.trailingAnchor]),
+        HACon([self.usernameField.heightAnchor constraintEqualToConstant:fieldHeight]),
+        HACon([passLabel.topAnchor constraintEqualToAnchor:self.usernameField.bottomAnchor constant:16]),
+        HACon([passLabel.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor]),
+        HACon([self.passwordField.topAnchor constraintEqualToAnchor:passLabel.bottomAnchor constant:6]),
+        HACon([self.passwordField.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor]),
+        HACon([self.passwordField.trailingAnchor constraintEqualToAnchor:self.loginContainer.trailingAnchor]),
+        HACon([self.passwordField.heightAnchor constraintEqualToConstant:fieldHeight]),
+        HACon([loginHint.topAnchor constraintEqualToAnchor:self.passwordField.bottomAnchor constant:8]),
+        HACon([loginHint.leadingAnchor constraintEqualToAnchor:self.loginContainer.leadingAnchor]),
+        HACon([loginHint.trailingAnchor constraintEqualToAnchor:self.loginContainer.trailingAnchor]),
+        HACon([loginHint.bottomAnchor constraintEqualToAnchor:self.loginContainer.bottomAnchor]),
+    ]);
 
     // ── Token mode container (hidden initially) ────────────────────────
     self.tokenContainer = [[UIView alloc] init];
@@ -269,21 +263,19 @@ static NSString *const kModeToken   = @"token";
     tokenHint.translatesAutoresizingMaskIntoConstraints = NO;
     [self.tokenContainer addSubview:tokenHint];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [tokenLabel.topAnchor constraintEqualToAnchor:self.tokenContainer.topAnchor],
-            [tokenLabel.leadingAnchor constraintEqualToAnchor:self.tokenContainer.leadingAnchor],
-            [tokenLabel.trailingAnchor constraintEqualToAnchor:self.tokenContainer.trailingAnchor],
-            [self.tokenField.topAnchor constraintEqualToAnchor:tokenLabel.bottomAnchor constant:6],
-            [self.tokenField.leadingAnchor constraintEqualToAnchor:self.tokenContainer.leadingAnchor],
-            [self.tokenField.trailingAnchor constraintEqualToAnchor:self.tokenContainer.trailingAnchor],
-            [self.tokenField.heightAnchor constraintEqualToConstant:fieldHeight],
-            [tokenHint.topAnchor constraintEqualToAnchor:self.tokenField.bottomAnchor constant:8],
-            [tokenHint.leadingAnchor constraintEqualToAnchor:self.tokenContainer.leadingAnchor],
-            [tokenHint.trailingAnchor constraintEqualToAnchor:self.tokenContainer.trailingAnchor],
-            [tokenHint.bottomAnchor constraintEqualToAnchor:self.tokenContainer.bottomAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([tokenLabel.topAnchor constraintEqualToAnchor:self.tokenContainer.topAnchor]),
+        HACon([tokenLabel.leadingAnchor constraintEqualToAnchor:self.tokenContainer.leadingAnchor]),
+        HACon([tokenLabel.trailingAnchor constraintEqualToAnchor:self.tokenContainer.trailingAnchor]),
+        HACon([self.tokenField.topAnchor constraintEqualToAnchor:tokenLabel.bottomAnchor constant:6]),
+        HACon([self.tokenField.leadingAnchor constraintEqualToAnchor:self.tokenContainer.leadingAnchor]),
+        HACon([self.tokenField.trailingAnchor constraintEqualToAnchor:self.tokenContainer.trailingAnchor]),
+        HACon([self.tokenField.heightAnchor constraintEqualToConstant:fieldHeight]),
+        HACon([tokenHint.topAnchor constraintEqualToAnchor:self.tokenField.bottomAnchor constant:8]),
+        HACon([tokenHint.leadingAnchor constraintEqualToAnchor:self.tokenContainer.leadingAnchor]),
+        HACon([tokenHint.trailingAnchor constraintEqualToAnchor:self.tokenContainer.trailingAnchor]),
+        HACon([tokenHint.bottomAnchor constraintEqualToAnchor:self.tokenContainer.bottomAnchor]),
+    ]);
 
     // ── Connect button ─────────────────────────────────────────────────
     self.connectButton = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -318,33 +310,29 @@ static NSString *const kModeToken   = @"token";
         self.connectButton, self.statusLabel,
     ];
     for (UIView *v in fullWidthViews) {
-        if (HAAutoLayoutAvailable()) {
-            [NSLayoutConstraint activateConstraints:@[
-                [v.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-                [v.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-            ]];
-        }
+        HAActivateConstraints(@[
+            HACon([v.leadingAnchor constraintEqualToAnchor:self.leadingAnchor]),
+            HACon([v.trailingAnchor constraintEqualToAnchor:self.trailingAnchor]),
+        ]);
     }
 
     // Status + spinner sit below the connect button but collapse when empty.
     // The bottom of the form is pinned to the connect button; the status area
     // hangs below and only takes space when populated.
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.discoverySection.topAnchor constraintEqualToAnchor:self.topAnchor],
-            [urlLabel.topAnchor constraintEqualToAnchor:self.discoverySection.bottomAnchor constant:sectionGap],
-            [self.serverURLField.topAnchor constraintEqualToAnchor:urlLabel.bottomAnchor constant:labelGap],
-            [self.serverURLField.heightAnchor constraintEqualToConstant:fieldHeight],
-            [self.authModeSegment.topAnchor constraintEqualToAnchor:self.serverURLField.bottomAnchor constant:sectionGap],
-            [self.authFieldsStack.topAnchor constraintEqualToAnchor:self.authModeSegment.bottomAnchor constant:sectionGap],
-            [self.connectButton.topAnchor constraintEqualToAnchor:self.authFieldsStack.bottomAnchor constant:24],
-            [self.connectButton.heightAnchor constraintEqualToConstant:fieldHeight],
-            [self.connectButton.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
-            [self.statusLabel.topAnchor constraintEqualToAnchor:self.connectButton.bottomAnchor constant:12],
-            [self.spinner.topAnchor constraintEqualToAnchor:self.statusLabel.bottomAnchor constant:6],
-            [self.spinner.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.discoverySection.topAnchor constraintEqualToAnchor:self.topAnchor]),
+        HACon([urlLabel.topAnchor constraintEqualToAnchor:self.discoverySection.bottomAnchor constant:sectionGap]),
+        HACon([self.serverURLField.topAnchor constraintEqualToAnchor:urlLabel.bottomAnchor constant:labelGap]),
+        HACon([self.serverURLField.heightAnchor constraintEqualToConstant:fieldHeight]),
+        HACon([self.authModeSegment.topAnchor constraintEqualToAnchor:self.serverURLField.bottomAnchor constant:sectionGap]),
+        HACon([self.authFieldsStack.topAnchor constraintEqualToAnchor:self.authModeSegment.bottomAnchor constant:sectionGap]),
+        HACon([self.connectButton.topAnchor constraintEqualToAnchor:self.authFieldsStack.bottomAnchor constant:24]),
+        HACon([self.connectButton.heightAnchor constraintEqualToConstant:fieldHeight]),
+        HACon([self.connectButton.bottomAnchor constraintEqualToAnchor:self.bottomAnchor]),
+        HACon([self.statusLabel.topAnchor constraintEqualToAnchor:self.connectButton.bottomAnchor constant:12]),
+        HACon([self.spinner.topAnchor constraintEqualToAnchor:self.statusLabel.bottomAnchor constant:6]),
+        HACon([self.spinner.centerXAnchor constraintEqualToAnchor:self.centerXAnchor]),
+    ]);
 }
 
 - (void)layoutSubviews {
@@ -609,22 +597,20 @@ static NSString *const kModeToken   = @"token";
     chevron.userInteractionEnabled = NO;
     [row addSubview:chevron];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [row.heightAnchor constraintEqualToConstant:48],
-            [icon.leadingAnchor constraintEqualToAnchor:row.leadingAnchor constant:12],
-            [icon.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
-            [icon.widthAnchor constraintEqualToConstant:24],
-            [nameLabel.leadingAnchor constraintEqualToAnchor:icon.trailingAnchor constant:10],
-            [nameLabel.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
-            [versionLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:nameLabel.trailingAnchor constant:8],
-            [versionLabel.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
-            [chevron.leadingAnchor constraintEqualToAnchor:versionLabel.trailingAnchor constant:8],
-            [chevron.trailingAnchor constraintEqualToAnchor:row.trailingAnchor constant:-12],
-            [chevron.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
-            [chevron.widthAnchor constraintEqualToConstant:12],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([row.heightAnchor constraintEqualToConstant:48]),
+        HACon([icon.leadingAnchor constraintEqualToAnchor:row.leadingAnchor constant:12]),
+        HACon([icon.centerYAnchor constraintEqualToAnchor:row.centerYAnchor]),
+        HACon([icon.widthAnchor constraintEqualToConstant:24]),
+        HACon([nameLabel.leadingAnchor constraintEqualToAnchor:icon.trailingAnchor constant:10]),
+        HACon([nameLabel.centerYAnchor constraintEqualToAnchor:row.centerYAnchor]),
+        HACon([versionLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:nameLabel.trailingAnchor constant:8]),
+        HACon([versionLabel.centerYAnchor constraintEqualToAnchor:row.centerYAnchor]),
+        HACon([chevron.leadingAnchor constraintEqualToAnchor:versionLabel.trailingAnchor constant:8]),
+        HACon([chevron.trailingAnchor constraintEqualToAnchor:row.trailingAnchor constant:-12]),
+        HACon([chevron.centerYAnchor constraintEqualToAnchor:row.centerYAnchor]),
+        HACon([chevron.widthAnchor constraintEqualToConstant:12]),
+    ]);
 
     return row;
 }

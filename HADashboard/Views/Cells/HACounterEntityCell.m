@@ -61,59 +61,40 @@
     [self.contentView addSubview:self.resetButton];
 
     // Value label: top-right
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.valueLabel attribute:NSLayoutAttributeTrailing
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.valueLabel attribute:NSLayoutAttributeTop
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTop multiplier:1 constant:padding]];
-    }
+    HAActivateConstraints(@[
+        HACon([NSLayoutConstraint constraintWithItem:self.valueLabel attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]),
+        HACon([NSLayoutConstraint constraintWithItem:self.valueLabel attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTop multiplier:1 constant:padding]),
+    ]);
 
     // Buttons: bottom row
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.incrementButton attribute:NSLayoutAttributeTrailing
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.incrementButton attribute:NSLayoutAttributeBottom
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.incrementButton attribute:NSLayoutAttributeWidth
-            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonSize]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.incrementButton attribute:NSLayoutAttributeHeight
-            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonSize]];
-    }
-
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.decrementButton attribute:NSLayoutAttributeTrailing
-            relatedBy:NSLayoutRelationEqual toItem:self.incrementButton attribute:NSLayoutAttributeLeading multiplier:1 constant:-buttonSpacing]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.decrementButton attribute:NSLayoutAttributeBottom
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.decrementButton attribute:NSLayoutAttributeWidth
-            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonSize]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.decrementButton attribute:NSLayoutAttributeHeight
-            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonSize]];
-    }
+    HAActivateConstraints(@[
+        HACon([NSLayoutConstraint constraintWithItem:self.incrementButton attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]),
+        HACon([NSLayoutConstraint constraintWithItem:self.incrementButton attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]),
+        HACon([NSLayoutConstraint constraintWithItem:self.incrementButton attribute:NSLayoutAttributeWidth
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonSize]),
+        HACon([NSLayoutConstraint constraintWithItem:self.incrementButton attribute:NSLayoutAttributeHeight
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonSize]),
+        HACon([NSLayoutConstraint constraintWithItem:self.decrementButton attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.incrementButton attribute:NSLayoutAttributeLeading multiplier:1 constant:-buttonSpacing]),
+        HACon([NSLayoutConstraint constraintWithItem:self.decrementButton attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]),
+        HACon([NSLayoutConstraint constraintWithItem:self.decrementButton attribute:NSLayoutAttributeWidth
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonSize]),
+        HACon([NSLayoutConstraint constraintWithItem:self.decrementButton attribute:NSLayoutAttributeHeight
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:buttonSize]),
+    ]);
 
     // Reset button: bottom-left
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.resetButton attribute:NSLayoutAttributeLeading
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.resetButton attribute:NSLayoutAttributeBottom
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
-    }
+    HAActivateConstraints(@[
+        HACon([NSLayoutConstraint constraintWithItem:self.resetButton attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]),
+        HACon([NSLayoutConstraint constraintWithItem:self.resetButton attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]),
+    ]);
 }
 
 - (void)layoutSubviews {

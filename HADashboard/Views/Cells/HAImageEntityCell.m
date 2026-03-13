@@ -26,14 +26,12 @@
     [self.contentView addSubview:self.imageView];
 
     CGFloat padding = 10.0;
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.imageView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
-            [self.imageView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
-            [self.imageView.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:4],
-            [self.imageView.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-padding],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.imageView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding]),
+        HACon([self.imageView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding]),
+        HACon([self.imageView.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:4]),
+        HACon([self.imageView.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-padding]),
+    ]);
 }
 
 - (void)layoutSubviews {

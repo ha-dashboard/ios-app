@@ -106,14 +106,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     scrollView.translatesAutoresizingMaskIntoConstraints = NO;
     scrollView.tag = 200;
     [self.view addSubview:scrollView];
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [scrollView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
-            [scrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
-            [scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-            [scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        ]];
-    }
+    HAPinEdgesFlush(scrollView, self.view);
 
     UIView *container = [[UIView alloc] init];
     container.translatesAutoresizingMaskIntoConstraints = NO;
@@ -175,15 +168,13 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     self.gradientSwitch.translatesAutoresizingMaskIntoConstraints = NO;
     [self.gradientToggleRow addSubview:self.gradientSwitch];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [gradientLabel.topAnchor constraintEqualToAnchor:self.gradientToggleRow.topAnchor],
-            [gradientLabel.leadingAnchor constraintEqualToAnchor:self.gradientToggleRow.leadingAnchor],
-            [gradientLabel.bottomAnchor constraintEqualToAnchor:self.gradientToggleRow.bottomAnchor],
-            [self.gradientSwitch.trailingAnchor constraintEqualToAnchor:self.gradientToggleRow.trailingAnchor],
-            [self.gradientSwitch.centerYAnchor constraintEqualToAnchor:gradientLabel.centerYAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([gradientLabel.topAnchor constraintEqualToAnchor:self.gradientToggleRow.topAnchor]),
+        HACon([gradientLabel.leadingAnchor constraintEqualToAnchor:self.gradientToggleRow.leadingAnchor]),
+        HACon([gradientLabel.bottomAnchor constraintEqualToAnchor:self.gradientToggleRow.bottomAnchor]),
+        HACon([self.gradientSwitch.trailingAnchor constraintEqualToAnchor:self.gradientToggleRow.trailingAnchor]),
+        HACon([self.gradientSwitch.centerYAnchor constraintEqualToAnchor:gradientLabel.centerYAnchor]),
+    ]);
 
     // Gradient options (preset picker, custom hex, preview)
     self.gradientOptionsContainer = [[UIView alloc] init];
@@ -238,22 +229,20 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     [self.hex2Field addTarget:self action:@selector(hexFieldChanged:) forControlEvents:UIControlEventEditingDidEnd];
     [self.customHexContainer addSubview:self.hex2Field];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.hex1Field.topAnchor constraintEqualToAnchor:self.customHexContainer.topAnchor],
-            [self.hex1Field.leadingAnchor constraintEqualToAnchor:self.customHexContainer.leadingAnchor],
-            [self.hex1Field.heightAnchor constraintEqualToConstant:36],
-            [arrowLabel.centerYAnchor constraintEqualToAnchor:self.hex1Field.centerYAnchor],
-            [arrowLabel.leadingAnchor constraintEqualToAnchor:self.hex1Field.trailingAnchor constant:8],
-            [arrowLabel.widthAnchor constraintEqualToConstant:20],
-            [self.hex2Field.topAnchor constraintEqualToAnchor:self.customHexContainer.topAnchor],
-            [self.hex2Field.leadingAnchor constraintEqualToAnchor:arrowLabel.trailingAnchor constant:8],
-            [self.hex2Field.trailingAnchor constraintEqualToAnchor:self.customHexContainer.trailingAnchor],
-            [self.hex2Field.heightAnchor constraintEqualToConstant:36],
-            [self.hex1Field.widthAnchor constraintEqualToAnchor:self.hex2Field.widthAnchor],
-            [self.hex2Field.bottomAnchor constraintEqualToAnchor:self.customHexContainer.bottomAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.hex1Field.topAnchor constraintEqualToAnchor:self.customHexContainer.topAnchor]),
+        HACon([self.hex1Field.leadingAnchor constraintEqualToAnchor:self.customHexContainer.leadingAnchor]),
+        HACon([self.hex1Field.heightAnchor constraintEqualToConstant:36]),
+        HACon([arrowLabel.centerYAnchor constraintEqualToAnchor:self.hex1Field.centerYAnchor]),
+        HACon([arrowLabel.leadingAnchor constraintEqualToAnchor:self.hex1Field.trailingAnchor constant:8]),
+        HACon([arrowLabel.widthAnchor constraintEqualToConstant:20]),
+        HACon([self.hex2Field.topAnchor constraintEqualToAnchor:self.customHexContainer.topAnchor]),
+        HACon([self.hex2Field.leadingAnchor constraintEqualToAnchor:arrowLabel.trailingAnchor constant:8]),
+        HACon([self.hex2Field.trailingAnchor constraintEqualToAnchor:self.customHexContainer.trailingAnchor]),
+        HACon([self.hex2Field.heightAnchor constraintEqualToConstant:36]),
+        HACon([self.hex1Field.widthAnchor constraintEqualToAnchor:self.hex2Field.widthAnchor]),
+        HACon([self.hex2Field.bottomAnchor constraintEqualToAnchor:self.customHexContainer.bottomAnchor]),
+    ]);
 
     // Gradient preview
     self.gradientPreview = [[UIView alloc] init];
@@ -268,23 +257,21 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     [self.gradientPreview.layer addSublayer:self.previewGradientLayer];
     [self updateGradientPreview];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [presetLabel.topAnchor constraintEqualToAnchor:self.gradientOptionsContainer.topAnchor],
-            [presetLabel.leadingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.leadingAnchor],
-            [self.gradientPresetSegment.topAnchor constraintEqualToAnchor:presetLabel.bottomAnchor constant:8],
-            [self.gradientPresetSegment.leadingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.leadingAnchor],
-            [self.gradientPresetSegment.trailingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.trailingAnchor],
-            [self.customHexContainer.topAnchor constraintEqualToAnchor:self.gradientPresetSegment.bottomAnchor constant:8],
-            [self.customHexContainer.leadingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.leadingAnchor],
-            [self.customHexContainer.trailingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.trailingAnchor],
-            [self.gradientPreview.topAnchor constraintEqualToAnchor:self.customHexContainer.bottomAnchor constant:8],
-            [self.gradientPreview.leadingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.leadingAnchor],
-            [self.gradientPreview.trailingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.trailingAnchor],
-            [self.gradientPreview.heightAnchor constraintEqualToConstant:60],
-            [self.gradientPreview.bottomAnchor constraintEqualToAnchor:self.gradientOptionsContainer.bottomAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([presetLabel.topAnchor constraintEqualToAnchor:self.gradientOptionsContainer.topAnchor]),
+        HACon([presetLabel.leadingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.leadingAnchor]),
+        HACon([self.gradientPresetSegment.topAnchor constraintEqualToAnchor:presetLabel.bottomAnchor constant:8]),
+        HACon([self.gradientPresetSegment.leadingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.leadingAnchor]),
+        HACon([self.gradientPresetSegment.trailingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.trailingAnchor]),
+        HACon([self.customHexContainer.topAnchor constraintEqualToAnchor:self.gradientPresetSegment.bottomAnchor constant:8]),
+        HACon([self.customHexContainer.leadingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.leadingAnchor]),
+        HACon([self.customHexContainer.trailingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.trailingAnchor]),
+        HACon([self.gradientPreview.topAnchor constraintEqualToAnchor:self.customHexContainer.bottomAnchor constant:8]),
+        HACon([self.gradientPreview.leadingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.leadingAnchor]),
+        HACon([self.gradientPreview.trailingAnchor constraintEqualToAnchor:self.gradientOptionsContainer.trailingAnchor]),
+        HACon([self.gradientPreview.heightAnchor constraintEqualToConstant:60]),
+        HACon([self.gradientPreview.bottomAnchor constraintEqualToAnchor:self.gradientOptionsContainer.bottomAnchor]),
+    ]);
 
     // ── DISPLAY section ───────────────────────────────────────────────
     self.displaySectionHeader = [self createSectionHeaderWithText:@"DISPLAY"];
@@ -446,51 +433,44 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     };
     NSDictionary *metrics = @{@"p": @16, @"sh": @32, @"hg": @10, @"fh": @44};
 
+    NSMutableArray *verticalConstraints = [NSMutableArray array];
     if (HAAutoLayoutAvailable()) {
-        [container addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
+        [verticalConstraints addObjectsFromArray:[NSLayoutConstraint constraintsWithVisualFormat:
             @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[demo]-p-[autoReload]-p-[camMute]-sh-[intHdr]-hg-[intSec]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
             options:0 metrics:metrics views:views]];
     }
+    HAActivateConstraints(verticalConstraints);
 
+    // Pin all views to container leading/trailing edges
     for (NSString *name in views) {
         UIView *v = views[name];
-        if (HAAutoLayoutAvailable()) {
-            [container addConstraint:[NSLayoutConstraint constraintWithItem:v attribute:NSLayoutAttributeLeading
-                relatedBy:NSLayoutRelationEqual toItem:container attribute:NSLayoutAttributeLeading multiplier:1 constant:0]];
-        }
-        if (HAAutoLayoutAvailable()) {
-            [container addConstraint:[NSLayoutConstraint constraintWithItem:v attribute:NSLayoutAttributeTrailing
-                relatedBy:NSLayoutRelationEqual toItem:container attribute:NSLayoutAttributeTrailing multiplier:1 constant:0]];
-        }
+        HAActivateConstraints(@[
+            HACon([NSLayoutConstraint constraintWithItem:v attribute:NSLayoutAttributeLeading
+                relatedBy:NSLayoutRelationEqual toItem:container attribute:NSLayoutAttributeLeading multiplier:1 constant:0]),
+            HACon([NSLayoutConstraint constraintWithItem:v attribute:NSLayoutAttributeTrailing
+                relatedBy:NSLayoutRelationEqual toItem:container attribute:NSLayoutAttributeTrailing multiplier:1 constant:0]),
+        ]);
     }
 
     // ScrollView content constraints
-    if (HAAutoLayoutAvailable()) {
-        [scrollView addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeTop
-            relatedBy:NSLayoutRelationEqual toItem:scrollView attribute:NSLayoutAttributeTop multiplier:1 constant:24]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [scrollView addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeBottom
-            relatedBy:NSLayoutRelationEqual toItem:scrollView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
-    }
+    HAActivateConstraints(@[
+        HACon([NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:scrollView attribute:NSLayoutAttributeTop multiplier:1 constant:24]),
+        HACon([NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:scrollView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]),
+    ]);
 
     // Horizontal: centered with max width
-    if (HAAutoLayoutAvailable()) {
-        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeLeading
-            relatedBy:NSLayoutRelationGreaterThanOrEqual toItem:self.view attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeTrailing
-            relatedBy:NSLayoutRelationLessThanOrEqual toItem:self.view attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeCenterX
-            relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeCenterX multiplier:1 constant:0]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [container addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeWidth
-            relatedBy:NSLayoutRelationLessThanOrEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:maxWidth]];
-    }
+    HAActivateConstraints(@[
+        HACon([NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationGreaterThanOrEqual toItem:self.view attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]),
+        HACon([NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationLessThanOrEqual toItem:self.view attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]),
+        HACon([NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeCenterX
+            relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeCenterX multiplier:1 constant:0]),
+        HACon([NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeWidth
+            relatedBy:NSLayoutRelationLessThanOrEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:maxWidth]),
+    ]);
 }
 
 #pragma mark - Section Helpers

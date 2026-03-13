@@ -121,21 +121,15 @@ static NSDateFormatter *sCachedTimeFmt(void) {
     self.legendContainer.hidden = YES;
     [self addSubview:self.legendContainer];
 
-    if (HAAutoLayoutAvailable()) {
-        self.legendHeightConstraint = [self.legendContainer.heightAnchor constraintEqualToConstant:0];
-    }
+    self.legendHeightConstraint = HAMakeConstraint([self.legendContainer.heightAnchor constraintEqualToConstant:0]);
     // Position legend above the time axis labels (18pt bottom padding when axis shown)
-    if (HAAutoLayoutAvailable()) {
-        self.legendBottomConstraint = [self.legendContainer.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-2];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.legendContainer.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:8],
-            [self.legendContainer.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-8],
-            self.legendBottomConstraint,
-            self.legendHeightConstraint,
-        ]];
-    }
+    self.legendBottomConstraint = HAMakeConstraint([self.legendContainer.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-2]);
+    HAActivateConstraints(@[
+        HACon([self.legendContainer.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:8]),
+        HACon([self.legendContainer.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-8]),
+        HACon(self.legendBottomConstraint),
+        HACon(self.legendHeightConstraint),
+    ]);
 
     // Crosshair line (vertical, 1px, hidden until inspection)
     _crosshairLine = [CALayer layer];
@@ -166,16 +160,14 @@ static NSDateFormatter *sCachedTimeFmt(void) {
     _tooltipTimeLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [_tooltipView addSubview:_tooltipTimeLabel];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [_tooltipValueLabel.topAnchor constraintEqualToAnchor:_tooltipView.topAnchor constant:3],
-            [_tooltipValueLabel.leadingAnchor constraintEqualToAnchor:_tooltipView.leadingAnchor constant:6],
-            [_tooltipValueLabel.trailingAnchor constraintEqualToAnchor:_tooltipView.trailingAnchor constant:-6],
-            [_tooltipTimeLabel.topAnchor constraintEqualToAnchor:_tooltipValueLabel.bottomAnchor constant:1],
-            [_tooltipTimeLabel.leadingAnchor constraintEqualToAnchor:_tooltipView.leadingAnchor constant:6],
-            [_tooltipTimeLabel.trailingAnchor constraintEqualToAnchor:_tooltipView.trailingAnchor constant:-6],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([_tooltipValueLabel.topAnchor constraintEqualToAnchor:_tooltipView.topAnchor constant:3]),
+        HACon([_tooltipValueLabel.leadingAnchor constraintEqualToAnchor:_tooltipView.leadingAnchor constant:6]),
+        HACon([_tooltipValueLabel.trailingAnchor constraintEqualToAnchor:_tooltipView.trailingAnchor constant:-6]),
+        HACon([_tooltipTimeLabel.topAnchor constraintEqualToAnchor:_tooltipValueLabel.bottomAnchor constant:1]),
+        HACon([_tooltipTimeLabel.leadingAnchor constraintEqualToAnchor:_tooltipView.leadingAnchor constant:6]),
+        HACon([_tooltipTimeLabel.trailingAnchor constraintEqualToAnchor:_tooltipView.trailingAnchor constant:-6]),
+    ]);
 
     [self addSubview:_tooltipView];
 }

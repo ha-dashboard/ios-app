@@ -59,14 +59,12 @@ static const CGFloat kVerticalPadding = 6.0;
     self.stack.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:self.stack];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.stack.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
-            [self.stack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.stack.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.leadingAnchor constant:2],
-            [self.stack.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor constant:-2],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.stack.centerXAnchor constraintEqualToAnchor:self.centerXAnchor]),
+        HACon([self.stack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]),
+        HACon([self.stack.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.leadingAnchor constant:2]),
+        HACon([self.stack.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor constant:-2]),
+    ]);
 }
 
 - (void)layoutSubviews {

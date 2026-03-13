@@ -34,14 +34,12 @@
     [self.activityButton addTarget:self action:@selector(activityTapped) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:self.activityButton];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.toggleSwitch.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
-            [self.toggleSwitch.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:padding],
-            [self.activityButton.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
-            [self.activityButton.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-padding],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.toggleSwitch.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding]),
+        HACon([self.toggleSwitch.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:padding]),
+        HACon([self.activityButton.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding]),
+        HACon([self.activityButton.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-padding]),
+    ]);
 }
 
 - (void)layoutSubviews {

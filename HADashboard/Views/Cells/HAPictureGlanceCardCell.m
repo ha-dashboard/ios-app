@@ -48,19 +48,14 @@
     [self.contentView addSubview:self.entityIconStack];
 
     CGFloat pad = 10;
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.bgImageView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
-            [self.bgImageView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
-            [self.bgImageView.topAnchor constraintEqualToAnchor:self.contentView.topAnchor],
-            [self.bgImageView.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor],
-            [self.titleLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:pad],
-            [self.titleLabel.bottomAnchor constraintEqualToAnchor:self.entityIconStack.topAnchor constant:-4],
-            [self.entityIconStack.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:pad],
-            [self.entityIconStack.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-pad],
-            [self.entityIconStack.heightAnchor constraintEqualToConstant:24],
-        ]];
-    }
+    HAPinEdgesFlush(self.bgImageView, self.contentView);
+    HAActivateConstraints(@[
+        HACon([self.titleLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:pad]),
+        HACon([self.titleLabel.bottomAnchor constraintEqualToAnchor:self.entityIconStack.topAnchor constant:-4]),
+        HACon([self.entityIconStack.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:pad]),
+        HACon([self.entityIconStack.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-pad]),
+        HACon([self.entityIconStack.heightAnchor constraintEqualToConstant:24]),
+    ]);
 }
 
 - (void)configureWithSection:(HADashboardConfigSection *)section

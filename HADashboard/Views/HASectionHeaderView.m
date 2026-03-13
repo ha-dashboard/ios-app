@@ -41,22 +41,16 @@
 
     // Layout: icon (fixed 24pt width) | 4pt gap | title
     // Two title leading constraints: with-icon (after icon) and no-icon (flush left).
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.iconLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:16],
-            [self.iconLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.iconLabel.widthAnchor constraintEqualToConstant:24],
-    
-            [self.titleLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-16],
-            [self.titleLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]
-        ]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        self.titleLeadingWithIcon = [self.titleLabel.leadingAnchor constraintEqualToAnchor:self.iconLabel.trailingAnchor constant:4];
-    }
-    if (HAAutoLayoutAvailable()) {
-        self.titleLeadingNoIcon = [self.titleLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:16];
-    }
+    HAActivateConstraints(@[
+        HACon([self.iconLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:16]),
+        HACon([self.iconLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]),
+        HACon([self.iconLabel.widthAnchor constraintEqualToConstant:24]),
+
+        HACon([self.titleLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-16]),
+        HACon([self.titleLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor])
+    ]);
+    self.titleLeadingWithIcon = HAMakeConstraint([self.titleLabel.leadingAnchor constraintEqualToAnchor:self.iconLabel.trailingAnchor constant:4]);
+    self.titleLeadingNoIcon = HAMakeConstraint([self.titleLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:16]);
     self.titleLeadingNoIcon.active = YES;
 }
 

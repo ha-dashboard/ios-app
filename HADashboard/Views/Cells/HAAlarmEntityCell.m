@@ -151,12 +151,10 @@ static const NSInteger kKeypadTagEnter = 11;
     CGFloat totalHeight = 4.0 * kKeypadButtonSize + 3.0 * kKeypadButtonSpacing;
 
     // Size the container
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.keypadContainer.widthAnchor constraintEqualToConstant:totalWidth],
-            [self.keypadContainer.heightAnchor constraintEqualToConstant:totalHeight],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.keypadContainer.widthAnchor constraintEqualToConstant:totalWidth]),
+        HACon([self.keypadContainer.heightAnchor constraintEqualToConstant:totalHeight]),
+    ]);
 
     for (NSInteger row = 0; row < 4; row++) {
         for (NSInteger col = 0; col < 3; col++) {
@@ -195,14 +193,12 @@ static const NSInteger kKeypadTagEnter = 11;
             CGFloat x = col * (kKeypadButtonSize + kKeypadButtonSpacing);
             CGFloat y = row * (kKeypadButtonSize + kKeypadButtonSpacing);
 
-            if (HAAutoLayoutAvailable()) {
-                [NSLayoutConstraint activateConstraints:@[
-                    [btn.leadingAnchor constraintEqualToAnchor:self.keypadContainer.leadingAnchor constant:x],
-                    [btn.topAnchor constraintEqualToAnchor:self.keypadContainer.topAnchor constant:y],
-                    [btn.widthAnchor constraintEqualToConstant:kKeypadButtonSize],
-                    [btn.heightAnchor constraintEqualToConstant:kKeypadButtonSize],
-                ]];
-            }
+            HAActivateConstraints(@[
+                HACon([btn.leadingAnchor constraintEqualToAnchor:self.keypadContainer.leadingAnchor constant:x]),
+                HACon([btn.topAnchor constraintEqualToAnchor:self.keypadContainer.topAnchor constant:y]),
+                HACon([btn.widthAnchor constraintEqualToConstant:kKeypadButtonSize]),
+                HACon([btn.heightAnchor constraintEqualToConstant:kKeypadButtonSize]),
+            ]);
         }
     }
 }
@@ -211,13 +207,11 @@ static const NSInteger kKeypadTagEnter = 11;
     UIView *cv = self.contentView;
 
     // Alarm state badge: below name, left-aligned pill
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.alarmStateLabel.leadingAnchor constraintEqualToAnchor:cv.leadingAnchor constant:kPadding],
-            [self.alarmStateLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:4],
-            [self.alarmStateLabel.heightAnchor constraintEqualToConstant:24],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.alarmStateLabel.leadingAnchor constraintEqualToAnchor:cv.leadingAnchor constant:kPadding]),
+        HACon([self.alarmStateLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:4]),
+        HACon([self.alarmStateLabel.heightAnchor constraintEqualToConstant:24]),
+    ]);
 
     // Action buttons: UIStackView row below alarm state
     HAStackView *buttonStack = [[HAStackView alloc] initWithArrangedSubviews:@[
@@ -230,19 +224,15 @@ static const NSInteger kKeypadTagEnter = 11;
     [cv addSubview:buttonStack];
 
     for (UIButton *btn in buttonStack.arrangedSubviews) {
-        if (HAAutoLayoutAvailable()) {
-            [btn.heightAnchor constraintEqualToConstant:kActionButtonHeight].active = YES;
-        }
+        HASetConstraintActive([btn.heightAnchor constraintEqualToConstant:kActionButtonHeight], YES);
     }
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [buttonStack.leadingAnchor constraintGreaterThanOrEqualToAnchor:cv.leadingAnchor constant:kPadding],
-            [buttonStack.trailingAnchor constraintLessThanOrEqualToAnchor:cv.trailingAnchor constant:-kPadding],
-            [buttonStack.topAnchor constraintEqualToAnchor:self.alarmStateLabel.bottomAnchor constant:8],
-            [buttonStack.centerXAnchor constraintEqualToAnchor:cv.centerXAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([buttonStack.leadingAnchor constraintGreaterThanOrEqualToAnchor:cv.leadingAnchor constant:kPadding]),
+        HACon([buttonStack.trailingAnchor constraintLessThanOrEqualToAnchor:cv.trailingAnchor constant:-kPadding]),
+        HACon([buttonStack.topAnchor constraintEqualToAnchor:self.alarmStateLabel.bottomAnchor constant:8]),
+        HACon([buttonStack.centerXAnchor constraintEqualToAnchor:cv.centerXAnchor]),
+    ]);
 
     // Night, Vacation, Bypass hidden by default — shown based on supported_features
     self.armNightButton.hidden = YES;
@@ -251,22 +241,18 @@ static const NSInteger kKeypadTagEnter = 11;
 
     // Code text field: centered below buttons
     CGFloat codeFieldWidth = 3.0 * kKeypadButtonSize + 2.0 * kKeypadButtonSpacing;
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.codeTextField.centerXAnchor constraintEqualToAnchor:cv.centerXAnchor],
-            [self.codeTextField.topAnchor constraintEqualToAnchor:buttonStack.bottomAnchor constant:8],
-            [self.codeTextField.widthAnchor constraintEqualToConstant:codeFieldWidth],
-            [self.codeTextField.heightAnchor constraintEqualToConstant:kCodeFieldHeight],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.codeTextField.centerXAnchor constraintEqualToAnchor:cv.centerXAnchor]),
+        HACon([self.codeTextField.topAnchor constraintEqualToAnchor:buttonStack.bottomAnchor constant:8]),
+        HACon([self.codeTextField.widthAnchor constraintEqualToConstant:codeFieldWidth]),
+        HACon([self.codeTextField.heightAnchor constraintEqualToConstant:kCodeFieldHeight]),
+    ]);
 
     // Keypad container: centered below code field
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.keypadContainer.centerXAnchor constraintEqualToAnchor:cv.centerXAnchor],
-            [self.keypadContainer.topAnchor constraintEqualToAnchor:self.codeTextField.bottomAnchor constant:8],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.keypadContainer.centerXAnchor constraintEqualToAnchor:cv.centerXAnchor]),
+        HACon([self.keypadContainer.topAnchor constraintEqualToAnchor:self.codeTextField.bottomAnchor constant:8]),
+    ]);
 }
 
 #pragma mark - Configuration

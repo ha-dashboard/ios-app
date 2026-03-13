@@ -28,18 +28,14 @@
     [self.valueButton addTarget:self action:@selector(valueTapped) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:self.valueButton];
 
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.valueButton attribute:NSLayoutAttributeLeading
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.valueButton attribute:NSLayoutAttributeTrailing
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.valueButton attribute:NSLayoutAttributeBottom
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
-    }
+    HAActivateConstraints(@[
+        HACon([NSLayoutConstraint constraintWithItem:self.valueButton attribute:NSLayoutAttributeLeading
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]),
+        HACon([NSLayoutConstraint constraintWithItem:self.valueButton attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]),
+        HACon([NSLayoutConstraint constraintWithItem:self.valueButton attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]),
+    ]);
 }
 
 - (void)layoutSubviews {
@@ -89,12 +85,12 @@
 
     picker.translatesAutoresizingMaskIntoConstraints = NO;
     [pickerVC.view addSubview:picker];
-    if (HAAutoLayoutAvailable()) {
-        [pickerVC.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[p]|" options:0 metrics:nil views:@{@"p": picker}]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [pickerVC.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[p]|" options:0 metrics:nil views:@{@"p": picker}]];
-    }
+    HAActivateConstraints(@[
+        HACon([picker.leadingAnchor constraintEqualToAnchor:pickerVC.view.leadingAnchor]),
+        HACon([picker.trailingAnchor constraintEqualToAnchor:pickerVC.view.trailingAnchor]),
+        HACon([picker.topAnchor constraintEqualToAnchor:pickerVC.view.topAnchor]),
+        HACon([picker.bottomAnchor constraintEqualToAnchor:pickerVC.view.bottomAnchor]),
+    ]);
 
     pickerVC.preferredContentSize = CGSizeMake(320, 216);
 

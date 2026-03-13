@@ -80,32 +80,23 @@ static const CGFloat kButtonSpacing  = 12.0;
     // to handle dynamic visibility (only configured commands shown).
 
     // Icon circle: centered horizontally, near top
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.iconCircle.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-            [self.iconCircle.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:padding + 4],
-            [self.iconCircle.widthAnchor constraintEqualToConstant:kIconCircleSize],
-            [self.iconCircle.heightAnchor constraintEqualToConstant:kIconCircleSize],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.iconCircle.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor]),
+        HACon([self.iconCircle.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:padding + 4]),
+        HACon([self.iconCircle.widthAnchor constraintEqualToConstant:kIconCircleSize]),
+        HACon([self.iconCircle.heightAnchor constraintEqualToConstant:kIconCircleSize]),
+    ]);
 
     // Icon label: centered inside circle
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.iconLabel.centerXAnchor constraintEqualToAnchor:self.iconCircle.centerXAnchor],
-            [self.iconLabel.centerYAnchor constraintEqualToAnchor:self.iconCircle.centerYAnchor],
-        ]];
-    }
+    HACenterIn(self.iconLabel, self.iconCircle, YES, YES);
 
     // Status label: below icon circle, centered
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.statusLabel2.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-            [self.statusLabel2.topAnchor constraintEqualToAnchor:self.iconCircle.bottomAnchor constant:4],
-            [self.statusLabel2.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:padding],
-            [self.statusLabel2.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.statusLabel2.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor]),
+        HACon([self.statusLabel2.topAnchor constraintEqualToAnchor:self.iconCircle.bottomAnchor constant:4]),
+        HACon([self.statusLabel2.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:padding]),
+        HACon([self.statusLabel2.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-padding]),
+    ]);
 
     // Buttons don't use auto layout — positioned in layoutSubviews for dynamic visibility
     self.playPauseButton.translatesAutoresizingMaskIntoConstraints = YES;

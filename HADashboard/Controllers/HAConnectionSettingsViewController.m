@@ -42,14 +42,12 @@
     scrollView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
     scrollView.tag = 100;
     [self.view addSubview:scrollView];
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [scrollView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
-            [scrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
-            [scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-            [scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([scrollView.topAnchor constraintEqualToAnchor:self.view.topAnchor]),
+        HACon([scrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]),
+        HACon([scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor]),
+        HACon([scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor]),
+    ]);
 
     UIView *container = [[UIView alloc] init];
     container.translatesAutoresizingMaskIntoConstraints = NO;
@@ -61,41 +59,32 @@
     self.connectionForm.translatesAutoresizingMaskIntoConstraints = NO;
     [container addSubview:self.connectionForm];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.connectionForm.topAnchor constraintEqualToAnchor:container.topAnchor],
-            [self.connectionForm.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-            [self.connectionForm.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
-            [self.connectionForm.bottomAnchor constraintEqualToAnchor:container.bottomAnchor],
-        ]];
-    }
+    HAPinEdgesFlush(self.connectionForm, container);
 
     // ScrollView content: container pinned to scroll edges
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [container.topAnchor constraintEqualToAnchor:scrollView.topAnchor constant:24],
-            [container.bottomAnchor constraintLessThanOrEqualToAnchor:scrollView.bottomAnchor constant:-padding],
-            [container.widthAnchor constraintLessThanOrEqualToConstant:maxWidth],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([container.topAnchor constraintEqualToAnchor:scrollView.topAnchor constant:24]),
+        HACon([container.bottomAnchor constraintLessThanOrEqualToAnchor:scrollView.bottomAnchor constant:-padding]),
+        HACon([container.widthAnchor constraintLessThanOrEqualToConstant:maxWidth]),
+    ]);
 
     // Horizontal: centered with max width
-    if (HAAutoLayoutAvailable()) {
-        NSLayoutConstraint *centerX = [container.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor];
-        centerX.active = YES;
-        NSLayoutConstraint *leadingGE = [container.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor constant:padding];
-        leadingGE.active = YES;
-        NSLayoutConstraint *trailingLE = [container.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor constant:-padding];
-        trailingLE.active = YES;
-        NSLayoutConstraint *preferWidth = [container.widthAnchor constraintEqualToConstant:maxWidth];
-        preferWidth.priority = UILayoutPriorityDefaultHigh;
-        preferWidth.active = YES;
+    HASetConstraintActive([container.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor], YES);
+    HASetConstraintActive([container.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor constant:padding], YES);
+    HASetConstraintActive([container.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor constant:-padding], YES);
 
-        // iOS 9 scroll content width: pin container width to scroll view width
-        // (on iOS 11+ this would use frameLayoutGuide, but we keep it simple)
-        NSLayoutConstraint *scrollWidth = [container.leadingAnchor constraintEqualToAnchor:scrollView.leadingAnchor constant:padding];
+    NSLayoutConstraint *preferWidth = HAMakeConstraint([container.widthAnchor constraintEqualToConstant:maxWidth]);
+    if (preferWidth) {
+        preferWidth.priority = UILayoutPriorityDefaultHigh;
+        HASetConstraintActive(preferWidth, YES);
+    }
+
+    // iOS 9 scroll content width: pin container width to scroll view width
+    // (on iOS 11+ this would use frameLayoutGuide, but we keep it simple)
+    NSLayoutConstraint *scrollWidth = HAMakeConstraint([container.leadingAnchor constraintEqualToAnchor:scrollView.leadingAnchor constant:padding]);
+    if (scrollWidth) {
         scrollWidth.priority = UILayoutPriorityDefaultLow;
-        scrollWidth.active = YES;
+        HASetConstraintActive(scrollWidth, YES);
     }
 }
 

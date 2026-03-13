@@ -31,17 +31,15 @@
     // Description label
     self.itemCountDescLabel = [self labelWithFont:[UIFont systemFontOfSize:11] color:[HATheme secondaryTextColor] lines:1];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.iconLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
-            [self.iconLabel.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
-            [self.iconLabel.widthAnchor constraintEqualToConstant:32],
-            [self.countLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
-            [self.countLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:2],
-            [self.itemCountDescLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
-            [self.itemCountDescLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:4],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.iconLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding]),
+        HACon([self.iconLabel.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor]),
+        HACon([self.iconLabel.widthAnchor constraintEqualToConstant:32]),
+        HACon([self.countLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding]),
+        HACon([self.countLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:2]),
+        HACon([self.itemCountDescLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding]),
+        HACon([self.itemCountDescLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:4]),
+    ]);
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {

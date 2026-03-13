@@ -86,14 +86,12 @@
     self.scrollView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
     UIScrollView *scrollView = self.scrollView;
     [self.view addSubview:scrollView];
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [scrollView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
-            [scrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
-            [scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-            [scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([scrollView.topAnchor constraintEqualToAnchor:self.view.topAnchor]),
+        HACon([scrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]),
+        HACon([scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor]),
+        HACon([scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor]),
+    ]);
 
     // ── Outer wrapper (scroll content, at least screen-height for centering) ──
     UIView *wrapper = [[UIView alloc] init];
@@ -104,31 +102,23 @@
     // wrapper directly to the scroll view (which acts as the content guide)
     // and use an equal-width constraint to the scroll view itself.
     if (@available(iOS 11.0, *)) {
-        if (HAAutoLayoutAvailable()) {
-            [NSLayoutConstraint activateConstraints:@[
-                [wrapper.topAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.topAnchor],
-                [wrapper.bottomAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.bottomAnchor],
-                [wrapper.leadingAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.leadingAnchor],
-                [wrapper.trailingAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.trailingAnchor],
-                [wrapper.widthAnchor constraintEqualToAnchor:scrollView.frameLayoutGuide.widthAnchor],
-            ]];
-        }
-        if (HAAutoLayoutAvailable()) {
-            [wrapper.heightAnchor constraintGreaterThanOrEqualToAnchor:scrollView.frameLayoutGuide.heightAnchor].active = YES;
-        }
+        HAActivateConstraints(@[
+            HACon([wrapper.topAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.topAnchor]),
+            HACon([wrapper.bottomAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.bottomAnchor]),
+            HACon([wrapper.leadingAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.leadingAnchor]),
+            HACon([wrapper.trailingAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.trailingAnchor]),
+            HACon([wrapper.widthAnchor constraintEqualToAnchor:scrollView.frameLayoutGuide.widthAnchor]),
+        ]);
+        HASetConstraintActive([wrapper.heightAnchor constraintGreaterThanOrEqualToAnchor:scrollView.frameLayoutGuide.heightAnchor], YES);
     } else {
-        if (HAAutoLayoutAvailable()) {
-            [NSLayoutConstraint activateConstraints:@[
-                [wrapper.topAnchor constraintEqualToAnchor:scrollView.topAnchor],
-                [wrapper.bottomAnchor constraintEqualToAnchor:scrollView.bottomAnchor],
-                [wrapper.leadingAnchor constraintEqualToAnchor:scrollView.leadingAnchor],
-                [wrapper.trailingAnchor constraintEqualToAnchor:scrollView.trailingAnchor],
-                [wrapper.widthAnchor constraintEqualToAnchor:scrollView.widthAnchor],
-            ]];
-        }
-        if (HAAutoLayoutAvailable()) {
-            [wrapper.heightAnchor constraintGreaterThanOrEqualToAnchor:scrollView.heightAnchor].active = YES;
-        }
+        HAActivateConstraints(@[
+            HACon([wrapper.topAnchor constraintEqualToAnchor:scrollView.topAnchor]),
+            HACon([wrapper.bottomAnchor constraintEqualToAnchor:scrollView.bottomAnchor]),
+            HACon([wrapper.leadingAnchor constraintEqualToAnchor:scrollView.leadingAnchor]),
+            HACon([wrapper.trailingAnchor constraintEqualToAnchor:scrollView.trailingAnchor]),
+            HACon([wrapper.widthAnchor constraintEqualToAnchor:scrollView.widthAnchor]),
+        ]);
+        HASetConstraintActive([wrapper.heightAnchor constraintGreaterThanOrEqualToAnchor:scrollView.heightAnchor], YES);
     }
 
     // ── Column (centered content holder) ───────────────────────────────
@@ -138,31 +128,31 @@
     [wrapper addSubview:column];
 
     // Center column horizontally with max width
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [column.centerXAnchor constraintEqualToAnchor:wrapper.centerXAnchor],
-            [column.widthAnchor constraintLessThanOrEqualToConstant:maxWidth],
-            [column.leadingAnchor constraintGreaterThanOrEqualToAnchor:wrapper.leadingAnchor constant:padding],
-            [column.trailingAnchor constraintLessThanOrEqualToAnchor:wrapper.trailingAnchor constant:-padding],
-        ]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        NSLayoutConstraint *preferWidth = [column.widthAnchor constraintEqualToConstant:maxWidth];
-        preferWidth.priority = UILayoutPriorityDefaultHigh;
-        preferWidth.active = YES;
+    HAActivateConstraints(@[
+        HACon([column.centerXAnchor constraintEqualToAnchor:wrapper.centerXAnchor]),
+        HACon([column.widthAnchor constraintLessThanOrEqualToConstant:maxWidth]),
+        HACon([column.leadingAnchor constraintGreaterThanOrEqualToAnchor:wrapper.leadingAnchor constant:padding]),
+        HACon([column.trailingAnchor constraintLessThanOrEqualToAnchor:wrapper.trailingAnchor constant:-padding]),
+    ]);
 
-        // Center column vertically (low priority so it yields when content > screen)
-        NSLayoutConstraint *centerY = [column.centerYAnchor constraintEqualToAnchor:wrapper.centerYAnchor];
+    NSLayoutConstraint *preferWidth = HAMakeConstraint([column.widthAnchor constraintEqualToConstant:maxWidth]);
+    if (preferWidth) {
+        preferWidth.priority = UILayoutPriorityDefaultHigh;
+        HASetConstraintActive(preferWidth, YES);
+    }
+
+    // Center column vertically (low priority so it yields when content > screen)
+    NSLayoutConstraint *centerY = HAMakeConstraint([column.centerYAnchor constraintEqualToAnchor:wrapper.centerYAnchor]);
+    if (centerY) {
         centerY.priority = UILayoutPriorityDefaultLow;
-        centerY.active = YES;
+        HASetConstraintActive(centerY, YES);
     }
+
     // Hard constraints: don't let it escape the wrapper
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [column.topAnchor constraintGreaterThanOrEqualToAnchor:wrapper.topAnchor constant:40],
-            [column.bottomAnchor constraintLessThanOrEqualToAnchor:wrapper.bottomAnchor constant:-20],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([column.topAnchor constraintGreaterThanOrEqualToAnchor:wrapper.topAnchor constant:40]),
+        HACon([column.bottomAnchor constraintLessThanOrEqualToAnchor:wrapper.bottomAnchor constant:-20]),
+    ]);
 
     // ── App icon ───────────────────────────────────────────────────────
     UIImageView *iconView = [[UIImageView alloc] init];
@@ -206,17 +196,15 @@
     [self.cardView addSubview:self.connectionForm];
 
     // Card internal layout
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [cardTitle.topAnchor constraintEqualToAnchor:self.cardView.topAnchor constant:cardPadding],
-            [cardTitle.leadingAnchor constraintEqualToAnchor:self.cardView.leadingAnchor constant:cardPadding],
-            [cardTitle.trailingAnchor constraintEqualToAnchor:self.cardView.trailingAnchor constant:-cardPadding],
-            [self.connectionForm.topAnchor constraintEqualToAnchor:cardTitle.bottomAnchor constant:24],
-            [self.connectionForm.leadingAnchor constraintEqualToAnchor:self.cardView.leadingAnchor constant:cardPadding],
-            [self.connectionForm.trailingAnchor constraintEqualToAnchor:self.cardView.trailingAnchor constant:-cardPadding],
-            [self.connectionForm.bottomAnchor constraintEqualToAnchor:self.cardView.bottomAnchor constant:-cardPadding],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([cardTitle.topAnchor constraintEqualToAnchor:self.cardView.topAnchor constant:cardPadding]),
+        HACon([cardTitle.leadingAnchor constraintEqualToAnchor:self.cardView.leadingAnchor constant:cardPadding]),
+        HACon([cardTitle.trailingAnchor constraintEqualToAnchor:self.cardView.trailingAnchor constant:-cardPadding]),
+        HACon([self.connectionForm.topAnchor constraintEqualToAnchor:cardTitle.bottomAnchor constant:24]),
+        HACon([self.connectionForm.leadingAnchor constraintEqualToAnchor:self.cardView.leadingAnchor constant:cardPadding]),
+        HACon([self.connectionForm.trailingAnchor constraintEqualToAnchor:self.cardView.trailingAnchor constant:-cardPadding]),
+        HACon([self.connectionForm.bottomAnchor constraintEqualToAnchor:self.cardView.bottomAnchor constant:-cardPadding]),
+    ]);
 
     // ── Demo mode (below card) ─────────────────────────────────────────
     UIView *demoRow = [[UIView alloc] init];
@@ -237,32 +225,28 @@
     self.demoSwitch.translatesAutoresizingMaskIntoConstraints = NO;
     [demoRow addSubview:self.demoSwitch];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [demoLabel.topAnchor constraintEqualToAnchor:demoRow.topAnchor],
-            [demoLabel.leadingAnchor constraintEqualToAnchor:demoRow.leadingAnchor],
-            [demoLabel.bottomAnchor constraintEqualToAnchor:demoRow.bottomAnchor],
-            [self.demoSwitch.trailingAnchor constraintEqualToAnchor:demoRow.trailingAnchor],
-            [self.demoSwitch.centerYAnchor constraintEqualToAnchor:demoLabel.centerYAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([demoLabel.topAnchor constraintEqualToAnchor:demoRow.topAnchor]),
+        HACon([demoLabel.leadingAnchor constraintEqualToAnchor:demoRow.leadingAnchor]),
+        HACon([demoLabel.bottomAnchor constraintEqualToAnchor:demoRow.bottomAnchor]),
+        HACon([self.demoSwitch.trailingAnchor constraintEqualToAnchor:demoRow.trailingAnchor]),
+        HACon([self.demoSwitch.centerYAnchor constraintEqualToAnchor:demoLabel.centerYAnchor]),
+    ]);
 
     // ── Column vertical layout: icon → card → demo ─────────────────────
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [iconView.topAnchor constraintEqualToAnchor:column.topAnchor],
-            [iconView.centerXAnchor constraintEqualToAnchor:column.centerXAnchor],
-            [iconView.widthAnchor constraintEqualToConstant:88],
-            [iconView.heightAnchor constraintEqualToConstant:88],
-            [self.cardView.topAnchor constraintEqualToAnchor:iconView.bottomAnchor constant:24],
-            [self.cardView.leadingAnchor constraintEqualToAnchor:column.leadingAnchor],
-            [self.cardView.trailingAnchor constraintEqualToAnchor:column.trailingAnchor],
-            [demoRow.topAnchor constraintEqualToAnchor:self.cardView.bottomAnchor constant:24],
-            [demoRow.leadingAnchor constraintEqualToAnchor:column.leadingAnchor constant:4],
-            [demoRow.trailingAnchor constraintEqualToAnchor:column.trailingAnchor constant:-4],
-            [demoRow.bottomAnchor constraintEqualToAnchor:column.bottomAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([iconView.topAnchor constraintEqualToAnchor:column.topAnchor]),
+        HACon([iconView.centerXAnchor constraintEqualToAnchor:column.centerXAnchor]),
+        HACon([iconView.widthAnchor constraintEqualToConstant:88]),
+        HACon([iconView.heightAnchor constraintEqualToConstant:88]),
+        HACon([self.cardView.topAnchor constraintEqualToAnchor:iconView.bottomAnchor constant:24]),
+        HACon([self.cardView.leadingAnchor constraintEqualToAnchor:column.leadingAnchor]),
+        HACon([self.cardView.trailingAnchor constraintEqualToAnchor:column.trailingAnchor]),
+        HACon([demoRow.topAnchor constraintEqualToAnchor:self.cardView.bottomAnchor constant:24]),
+        HACon([demoRow.leadingAnchor constraintEqualToAnchor:column.leadingAnchor constant:4]),
+        HACon([demoRow.trailingAnchor constraintEqualToAnchor:column.trailingAnchor constant:-4]),
+        HACon([demoRow.bottomAnchor constraintEqualToAnchor:column.bottomAnchor]),
+    ]);
 }
 
 - (void)viewDidLayoutSubviews {

@@ -47,29 +47,27 @@
     [self.modeButton addTarget:self action:@selector(modeTapped) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:self.modeButton];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            // Temp label centered
-            [self.tempLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-            [self.tempLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:8],
-            // Current temp below target
-            [self.currentTempLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-            [self.currentTempLabel.topAnchor constraintEqualToAnchor:self.tempLabel.bottomAnchor constant:2],
-            // - button left of temp
-            [self.minusButton.trailingAnchor constraintEqualToAnchor:self.tempLabel.leadingAnchor constant:-12],
-            [self.minusButton.centerYAnchor constraintEqualToAnchor:self.tempLabel.centerYAnchor],
-            [self.minusButton.widthAnchor constraintEqualToConstant:36],
-            [self.minusButton.heightAnchor constraintEqualToConstant:36],
-            // + button right of temp
-            [self.plusButton.leadingAnchor constraintEqualToAnchor:self.tempLabel.trailingAnchor constant:12],
-            [self.plusButton.centerYAnchor constraintEqualToAnchor:self.tempLabel.centerYAnchor],
-            [self.plusButton.widthAnchor constraintEqualToConstant:36],
-            [self.plusButton.heightAnchor constraintEqualToConstant:36],
-            // Mode button at bottom
-            [self.modeButton.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-            [self.modeButton.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-padding],
-        ]];
-    }
+    HAActivateConstraints(@[
+        // Temp label centered
+        HACon([self.tempLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor]),
+        HACon([self.tempLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:8]),
+        // Current temp below target
+        HACon([self.currentTempLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor]),
+        HACon([self.currentTempLabel.topAnchor constraintEqualToAnchor:self.tempLabel.bottomAnchor constant:2]),
+        // - button left of temp
+        HACon([self.minusButton.trailingAnchor constraintEqualToAnchor:self.tempLabel.leadingAnchor constant:-12]),
+        HACon([self.minusButton.centerYAnchor constraintEqualToAnchor:self.tempLabel.centerYAnchor]),
+        HACon([self.minusButton.widthAnchor constraintEqualToConstant:36]),
+        HACon([self.minusButton.heightAnchor constraintEqualToConstant:36]),
+        // + button right of temp
+        HACon([self.plusButton.leadingAnchor constraintEqualToAnchor:self.tempLabel.trailingAnchor constant:12]),
+        HACon([self.plusButton.centerYAnchor constraintEqualToAnchor:self.tempLabel.centerYAnchor]),
+        HACon([self.plusButton.widthAnchor constraintEqualToConstant:36]),
+        HACon([self.plusButton.heightAnchor constraintEqualToConstant:36]),
+        // Mode button at bottom
+        HACon([self.modeButton.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor]),
+        HACon([self.modeButton.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-padding]),
+    ]);
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {

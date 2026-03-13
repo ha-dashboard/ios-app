@@ -38,17 +38,15 @@ static const CGFloat kTitleHeight = 24.0;
         self.contentLabel.translatesAutoresizingMaskIntoConstraints = NO;
         [self.contentView addSubview:self.contentLabel];
 
-        if (HAAutoLayoutAvailable()) {
-            [NSLayoutConstraint activateConstraints:@[
-                [self.titleLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kPadding],
-                [self.titleLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding],
-                [self.titleLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding],
-    
-                [self.contentLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding],
-                [self.contentLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding],
-                [self.contentLabel.bottomAnchor constraintLessThanOrEqualToAnchor:self.contentView.bottomAnchor constant:-kPadding],
-            ]];
-        }
+        HAActivateConstraints(@[
+            HACon([self.titleLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kPadding]),
+            HACon([self.titleLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding]),
+            HACon([self.titleLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding]),
+
+            HACon([self.contentLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding]),
+            HACon([self.contentLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding]),
+            HACon([self.contentLabel.bottomAnchor constraintLessThanOrEqualToAnchor:self.contentView.bottomAnchor constant:-kPadding]),
+        ]);
     }
     return self;
 }
@@ -73,17 +71,13 @@ static const CGFloat kTitleHeight = 24.0;
     // Remove existing top constraint and re-add
     for (NSLayoutConstraint *c in self.contentView.constraints) {
         if (c.firstItem == self.contentLabel && c.firstAttribute == NSLayoutAttributeTop) {
-            c.active = NO;
+            HASetConstraintActive(c, NO);
         }
     }
     if (!self.titleLabel.hidden) {
-        if (HAAutoLayoutAvailable()) {
-            [self.contentLabel.topAnchor constraintEqualToAnchor:self.titleLabel.bottomAnchor constant:6].active = YES;
-        }
+        HASetConstraintActive([self.contentLabel.topAnchor constraintEqualToAnchor:self.titleLabel.bottomAnchor constant:6], YES);
     } else {
-        if (HAAutoLayoutAvailable()) {
-            [self.contentLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kPadding].active = YES;
-        }
+        HASetConstraintActive([self.contentLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kPadding], YES);
     }
 
     // text_only mode: no background/border

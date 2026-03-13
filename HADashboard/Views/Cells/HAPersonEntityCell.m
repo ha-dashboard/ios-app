@@ -39,32 +39,25 @@ static const CGFloat kAvatarSize = 40.0;
     // Location label (display-only)
     self.locationLabel = [self labelWithFont:[UIFont boldSystemFontOfSize:18] color:[HATheme primaryTextColor] lines:1];
 
-    // Avatar: top-right
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.avatarView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
-            [self.avatarView.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
-            [self.avatarView.widthAnchor constraintEqualToConstant:kAvatarSize],
-            [self.avatarView.heightAnchor constraintEqualToConstant:kAvatarSize],
-        ]];
-    }
-
     // GPS coordinates label (secondary, below location)
     self.gpsLabel = [self labelWithFont:[UIFont ha_monospacedDigitSystemFontOfSize:10 weight:HAFontWeightRegular]
                                   color:[HATheme secondaryTextColor] lines:1];
     self.gpsLabel.hidden = YES;
 
-    // Location label: below name, constrained before avatar
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.locationLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
-            [self.locationLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.avatarView.leadingAnchor constant:-8],
-            [self.locationLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:4],
-            [self.gpsLabel.leadingAnchor constraintEqualToAnchor:self.locationLabel.leadingAnchor],
-            [self.gpsLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.avatarView.leadingAnchor constant:-8],
-            [self.gpsLabel.topAnchor constraintEqualToAnchor:self.locationLabel.bottomAnchor constant:1],
-        ]];
-    }
+    HAActivateConstraints(@[
+        // Avatar: top-right
+        HACon([self.avatarView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding]),
+        HACon([self.avatarView.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor]),
+        HACon([self.avatarView.widthAnchor constraintEqualToConstant:kAvatarSize]),
+        HACon([self.avatarView.heightAnchor constraintEqualToConstant:kAvatarSize]),
+        // Location label: below name, constrained before avatar
+        HACon([self.locationLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding]),
+        HACon([self.locationLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.avatarView.leadingAnchor constant:-8]),
+        HACon([self.locationLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:4]),
+        HACon([self.gpsLabel.leadingAnchor constraintEqualToAnchor:self.locationLabel.leadingAnchor]),
+        HACon([self.gpsLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.avatarView.leadingAnchor constant:-8]),
+        HACon([self.gpsLabel.topAnchor constraintEqualToAnchor:self.locationLabel.bottomAnchor constant:1]),
+    ]);
 }
 
 - (void)layoutSubviews {

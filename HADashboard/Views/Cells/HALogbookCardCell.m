@@ -56,23 +56,21 @@ static const NSInteger kMaxEntries = 10;
         self.spinner.hidesWhenStopped = YES;
         [self.contentView addSubview:self.spinner];
 
-        if (HAAutoLayoutAvailable()) {
-            [NSLayoutConstraint activateConstraints:@[
-                [self.titleLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kPadding],
-                [self.titleLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding],
-                [self.titleLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding],
-    
-                [self.entryStack.topAnchor constraintEqualToAnchor:self.titleLabel.bottomAnchor constant:8],
-                [self.entryStack.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding],
-                [self.entryStack.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding],
-    
-                [self.emptyLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-                [self.emptyLabel.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
-    
-                [self.spinner.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-                [self.spinner.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
-            ]];
-        }
+        HAActivateConstraints(@[
+            HACon([self.titleLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kPadding]),
+            HACon([self.titleLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding]),
+            HACon([self.titleLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding]),
+
+            HACon([self.entryStack.topAnchor constraintEqualToAnchor:self.titleLabel.bottomAnchor constant:8]),
+            HACon([self.entryStack.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding]),
+            HACon([self.entryStack.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding]),
+
+            HACon([self.emptyLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor]),
+            HACon([self.emptyLabel.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor]),
+
+            HACon([self.spinner.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor]),
+            HACon([self.spinner.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor]),
+        ]);
     }
     return self;
 }
@@ -171,9 +169,7 @@ static const NSInteger kMaxEntries = 10;
 - (UIView *)createEntryRow:(NSDictionary *)entry {
     UIView *row = [[UIView alloc] init];
     row.translatesAutoresizingMaskIntoConstraints = NO;
-    if (HAAutoLayoutAvailable()) {
-        [row.heightAnchor constraintEqualToConstant:kRowHeight].active = YES;
-    }
+    HASetConstraintActive([row.heightAnchor constraintEqualToConstant:kRowHeight], YES);
 
     // Time label
     UILabel *timeLabel = [[UILabel alloc] init];
@@ -215,17 +211,15 @@ static const NSInteger kMaxEntries = 10;
         }
     }
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [timeLabel.leadingAnchor constraintEqualToAnchor:row.leadingAnchor],
-            [timeLabel.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
-            [timeLabel.widthAnchor constraintEqualToConstant:50],
-    
-            [msgLabel.leadingAnchor constraintEqualToAnchor:timeLabel.trailingAnchor constant:4],
-            [msgLabel.trailingAnchor constraintEqualToAnchor:row.trailingAnchor],
-            [msgLabel.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([timeLabel.leadingAnchor constraintEqualToAnchor:row.leadingAnchor]),
+        HACon([timeLabel.centerYAnchor constraintEqualToAnchor:row.centerYAnchor]),
+        HACon([timeLabel.widthAnchor constraintEqualToConstant:50]),
+
+        HACon([msgLabel.leadingAnchor constraintEqualToAnchor:timeLabel.trailingAnchor constant:4]),
+        HACon([msgLabel.trailingAnchor constraintEqualToAnchor:row.trailingAnchor]),
+        HACon([msgLabel.centerYAnchor constraintEqualToAnchor:row.centerYAnchor]),
+    ]);
 
     return row;
 }

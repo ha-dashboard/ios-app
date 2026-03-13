@@ -33,7 +33,7 @@
         if (HAAutoLayoutAvailable()) {
             NSLayoutConstraint *heightConstraint = [self.heightAnchor constraintEqualToConstant:[HAModeFeatureView preferredHeight]];
             heightConstraint.priority = UILayoutPriorityDefaultHigh;
-            [NSLayoutConstraint activateConstraints:@[heightConstraint]];
+            HAActivateConstraints(@[HACon(heightConstraint)]);
         }
     }
     return self;
@@ -124,19 +124,17 @@
     self.modeStack.translatesAutoresizingMaskIntoConstraints = NO;
     [self.scrollView addSubview:self.modeStack];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.scrollView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12],
-            [self.scrollView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-12],
-            [self.scrollView.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.scrollView.heightAnchor constraintEqualToConstant:30],
-            [self.modeStack.leadingAnchor constraintEqualToAnchor:self.scrollView.leadingAnchor],
-            [self.modeStack.trailingAnchor constraintEqualToAnchor:self.scrollView.trailingAnchor],
-            [self.modeStack.topAnchor constraintEqualToAnchor:self.scrollView.topAnchor],
-            [self.modeStack.bottomAnchor constraintEqualToAnchor:self.scrollView.bottomAnchor],
-            [self.modeStack.heightAnchor constraintEqualToAnchor:self.scrollView.heightAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.scrollView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12]),
+        HACon([self.scrollView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-12]),
+        HACon([self.scrollView.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]),
+        HACon([self.scrollView.heightAnchor constraintEqualToConstant:30]),
+        HACon([self.modeStack.leadingAnchor constraintEqualToAnchor:self.scrollView.leadingAnchor]),
+        HACon([self.modeStack.trailingAnchor constraintEqualToAnchor:self.scrollView.trailingAnchor]),
+        HACon([self.modeStack.topAnchor constraintEqualToAnchor:self.scrollView.topAnchor]),
+        HACon([self.modeStack.bottomAnchor constraintEqualToAnchor:self.scrollView.bottomAnchor]),
+        HACon([self.modeStack.heightAnchor constraintEqualToAnchor:self.scrollView.heightAnchor]),
+    ]);
 
     UIColor *activeColor = [HAEntityDisplayHelper iconColorForEntity:entity];
 
@@ -192,14 +190,12 @@
     [self.dropdownButton addTarget:self action:@selector(dropdownTapped:) forControlEvents:UIControlEventTouchUpInside];
     [self addSubview:self.dropdownButton];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.dropdownButton.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
-            [self.dropdownButton.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.dropdownButton.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.leadingAnchor constant:12],
-            [self.dropdownButton.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor constant:-12],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.dropdownButton.centerXAnchor constraintEqualToAnchor:self.centerXAnchor]),
+        HACon([self.dropdownButton.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]),
+        HACon([self.dropdownButton.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.leadingAnchor constant:12]),
+        HACon([self.dropdownButton.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor constant:-12]),
+    ]);
 }
 
 - (void)layoutSubviews {

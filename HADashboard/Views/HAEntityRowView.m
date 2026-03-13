@@ -139,28 +139,26 @@
     self.coverCloseButton = [self makeCoverButtonWithFallbackTitle:@"\u25BC" sfSymbolName:@"chevron.down" action:@selector(coverCloseTapped)];
 
     // Arrange buttons horizontally inside the container: [open 28][4][stop 28][4][close 28]
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.coverOpenButton.leadingAnchor constraintEqualToAnchor:self.coverButtonsContainer.leadingAnchor],
-            [self.coverOpenButton.centerYAnchor constraintEqualToAnchor:self.coverButtonsContainer.centerYAnchor],
-            [self.coverOpenButton.widthAnchor constraintEqualToConstant:28],
-            [self.coverOpenButton.heightAnchor constraintEqualToConstant:28],
-    
-            [self.coverStopButton.leadingAnchor constraintEqualToAnchor:self.coverOpenButton.trailingAnchor constant:4],
-            [self.coverStopButton.centerYAnchor constraintEqualToAnchor:self.coverButtonsContainer.centerYAnchor],
-            [self.coverStopButton.widthAnchor constraintEqualToConstant:28],
-            [self.coverStopButton.heightAnchor constraintEqualToConstant:28],
-    
-            [self.coverCloseButton.leadingAnchor constraintEqualToAnchor:self.coverStopButton.trailingAnchor constant:4],
-            [self.coverCloseButton.centerYAnchor constraintEqualToAnchor:self.coverButtonsContainer.centerYAnchor],
-            [self.coverCloseButton.widthAnchor constraintEqualToConstant:28],
-            [self.coverCloseButton.heightAnchor constraintEqualToConstant:28],
-            [self.coverCloseButton.trailingAnchor constraintEqualToAnchor:self.coverButtonsContainer.trailingAnchor],
-    
-            // Container height matches buttons
-            [self.coverButtonsContainer.heightAnchor constraintEqualToConstant:28]
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.coverOpenButton.leadingAnchor constraintEqualToAnchor:self.coverButtonsContainer.leadingAnchor]),
+        HACon([self.coverOpenButton.centerYAnchor constraintEqualToAnchor:self.coverButtonsContainer.centerYAnchor]),
+        HACon([self.coverOpenButton.widthAnchor constraintEqualToConstant:28]),
+        HACon([self.coverOpenButton.heightAnchor constraintEqualToConstant:28]),
+
+        HACon([self.coverStopButton.leadingAnchor constraintEqualToAnchor:self.coverOpenButton.trailingAnchor constant:4]),
+        HACon([self.coverStopButton.centerYAnchor constraintEqualToAnchor:self.coverButtonsContainer.centerYAnchor]),
+        HACon([self.coverStopButton.widthAnchor constraintEqualToConstant:28]),
+        HACon([self.coverStopButton.heightAnchor constraintEqualToConstant:28]),
+
+        HACon([self.coverCloseButton.leadingAnchor constraintEqualToAnchor:self.coverStopButton.trailingAnchor constant:4]),
+        HACon([self.coverCloseButton.centerYAnchor constraintEqualToAnchor:self.coverButtonsContainer.centerYAnchor]),
+        HACon([self.coverCloseButton.widthAnchor constraintEqualToConstant:28]),
+        HACon([self.coverCloseButton.heightAnchor constraintEqualToConstant:28]),
+        HACon([self.coverCloseButton.trailingAnchor constraintEqualToAnchor:self.coverButtonsContainer.trailingAnchor]),
+
+        // Container height matches buttons
+        HACon([self.coverButtonsContainer.heightAnchor constraintEqualToConstant:28])
+    ]);
 
     // Separator line
     self.separatorLine = [[UIView alloc] init];
@@ -170,13 +168,11 @@
 
     // Layout constraints
     // Icon: 24pt wide, 12pt from left, vertically centered
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.iconLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12],
-            [self.iconLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.iconLabel.widthAnchor constraintEqualToConstant:24]
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.iconLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12]),
+        HACon([self.iconLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]),
+        HACon([self.iconLabel.widthAnchor constraintEqualToConstant:24])
+    ]);
 
     // Secondary info label (below name, smaller font)
     self.secondaryInfoLabel = [[UILabel alloc] init];
@@ -189,87 +185,69 @@
 
     // Name label: starts after icon + 8pt, vertically centered.
     // When secondary_info is visible, name shifts up and secondary sits below.
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.nameLabel.leadingAnchor constraintEqualToAnchor:self.iconLabel.trailingAnchor constant:8],
-            [self.nameLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.secondaryInfoLabel.leadingAnchor constraintEqualToAnchor:self.nameLabel.leadingAnchor],
-            [self.secondaryInfoLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:1],
-            [self.secondaryInfoLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.stateLabel.leadingAnchor constant:-8],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.nameLabel.leadingAnchor constraintEqualToAnchor:self.iconLabel.trailingAnchor constant:8]),
+        HACon([self.nameLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]),
+        HACon([self.secondaryInfoLabel.leadingAnchor constraintEqualToAnchor:self.nameLabel.leadingAnchor]),
+        HACon([self.secondaryInfoLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:1]),
+        HACon([self.secondaryInfoLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.stateLabel.leadingAnchor constant:-8]),
+    ]);
     // Default trailing: name -> stateLabel
-    if (HAAutoLayoutAvailable()) {
-        self.nameLabelToStateLabelConstraint = [self.nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.stateLabel.leadingAnchor constant:-8];
-        self.nameLabelToStateLabelConstraint.active = YES;
-        // Slider-mode trailing: name -> inlineSlider
-        self.nameLabelToSliderConstraint = [self.nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.inlineSlider.leadingAnchor constant:-4];
-        self.nameLabelToSliderConstraint.active = NO;
-    }
+    self.nameLabelToStateLabelConstraint = HAMakeConstraint([self.nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.stateLabel.leadingAnchor constant:-8]);
+    self.nameLabelToStateLabelConstraint.active = YES;
+    // Slider-mode trailing: name -> inlineSlider
+    self.nameLabelToSliderConstraint = HAMakeConstraint([self.nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.inlineSlider.leadingAnchor constant:-4]);
+    self.nameLabelToSliderConstraint.active = NO;
 
     // State label: 16pt from right, vertically centered, max 65% of row width
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.stateLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-16],
-            [self.stateLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.stateLabel.widthAnchor constraintGreaterThanOrEqualToConstant:40],
-            [self.stateLabel.widthAnchor constraintLessThanOrEqualToAnchor:self.widthAnchor multiplier:0.65]
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.stateLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-16]),
+        HACon([self.stateLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]),
+        HACon([self.stateLabel.widthAnchor constraintGreaterThanOrEqualToConstant:40]),
+        HACon([self.stateLabel.widthAnchor constraintLessThanOrEqualToAnchor:self.widthAnchor multiplier:0.65])
+    ]);
 
     // Toggle switch: 16pt from right, vertically centered
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.toggleSwitch.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-16],
-            [self.toggleSwitch.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.toggleSwitch.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-16]),
+        HACon([self.toggleSwitch.centerYAnchor constraintEqualToAnchor:self.centerYAnchor])
+    ]);
 
     // Press button: 16pt from right, vertically centered, compact height
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.pressButton.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-16],
-            [self.pressButton.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.pressButton.heightAnchor constraintEqualToConstant:28]
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.pressButton.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-16]),
+        HACon([self.pressButton.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]),
+        HACon([self.pressButton.heightAnchor constraintEqualToConstant:28])
+    ]);
 
     // Cover buttons container: 16pt from right, vertically centered
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.coverButtonsContainer.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-16],
-            [self.coverButtonsContainer.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.coverButtonsContainer.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-16]),
+        HACon([self.coverButtonsContainer.centerYAnchor constraintEqualToAnchor:self.centerYAnchor])
+    ]);
 
     // Slider value label: rightmost, 60pt wide, 12pt from right edge
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.sliderValueLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-12],
-            [self.sliderValueLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.sliderValueLabel.widthAnchor constraintEqualToConstant:60]
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.sliderValueLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-12]),
+        HACon([self.sliderValueLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]),
+        HACon([self.sliderValueLabel.widthAnchor constraintEqualToConstant:60])
+    ]);
 
     // Inline slider: between name and value label, ~120pt wide, vertically centered
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.inlineSlider.trailingAnchor constraintEqualToAnchor:self.sliderValueLabel.leadingAnchor constant:-4],
-            [self.inlineSlider.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.inlineSlider.widthAnchor constraintGreaterThanOrEqualToConstant:80],
-            [self.inlineSlider.widthAnchor constraintLessThanOrEqualToConstant:160]
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.inlineSlider.trailingAnchor constraintEqualToAnchor:self.sliderValueLabel.leadingAnchor constant:-4]),
+        HACon([self.inlineSlider.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]),
+        HACon([self.inlineSlider.widthAnchor constraintGreaterThanOrEqualToConstant:80]),
+        HACon([self.inlineSlider.widthAnchor constraintLessThanOrEqualToConstant:160])
+    ]);
 
     // Separator line: 0.5pt height, full width, at bottom
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.separatorLine.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:16],
-            [self.separatorLine.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-16],
-            [self.separatorLine.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
-            [self.separatorLine.heightAnchor constraintEqualToConstant:0.5]
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.separatorLine.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:16]),
+        HACon([self.separatorLine.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-16]),
+        HACon([self.separatorLine.bottomAnchor constraintEqualToAnchor:self.bottomAnchor]),
+        HACon([self.separatorLine.heightAnchor constraintEqualToConstant:0.5])
+    ]);
 }
 
 - (void)layoutSubviews {
@@ -639,24 +617,16 @@
     self.inlineSlider.minimumTrackTintColor = [HATheme switchTintColor];
     self.inlineSlider.hidden = NO;
     self.sliderValueLabel.hidden = NO;
-    if (HAAutoLayoutAvailable()) {
-        self.nameLabelToStateLabelConstraint.active = NO;
-    }
-    if (HAAutoLayoutAvailable()) {
-        self.nameLabelToSliderConstraint.active = YES;
-    }
+    HASetConstraintActive(self.nameLabelToStateLabelConstraint, NO);
+    HASetConstraintActive(self.nameLabelToSliderConstraint, YES);
 }
 
 - (void)hideInlineSlider {
     self.inlineSlider.hidden = YES;
     self.sliderValueLabel.hidden = YES;
     self.sliderDragging = NO;
-    if (HAAutoLayoutAvailable()) {
-        self.nameLabelToSliderConstraint.active = NO;
-    }
-    if (HAAutoLayoutAvailable()) {
-        self.nameLabelToStateLabelConstraint.active = YES;
-    }
+    HASetConstraintActive(self.nameLabelToSliderConstraint, NO);
+    HASetConstraintActive(self.nameLabelToStateLabelConstraint, YES);
 }
 
 - (void)configureInlineSliderWithEntity:(HAEntity *)entity {

@@ -35,19 +35,17 @@
     self.valueLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:self.valueLabel];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.keyLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-            [self.keyLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.keyLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.valueLabel.leadingAnchor constant:-8],
-    
-            [self.valueLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-            [self.valueLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.valueLabel.widthAnchor constraintLessThanOrEqualToAnchor:self.widthAnchor multiplier:0.6],
-    
-            [self.heightAnchor constraintGreaterThanOrEqualToConstant:28],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.keyLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor]),
+        HACon([self.keyLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]),
+        HACon([self.keyLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.valueLabel.leadingAnchor constant:-8]),
+
+        HACon([self.valueLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor]),
+        HACon([self.valueLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]),
+        HACon([self.valueLabel.widthAnchor constraintLessThanOrEqualToAnchor:self.widthAnchor multiplier:0.6]),
+
+        HACon([self.heightAnchor constraintGreaterThanOrEqualToConstant:28]),
+    ]);
 }
 
 - (CGSize)sizeThatFits:(CGSize)size {

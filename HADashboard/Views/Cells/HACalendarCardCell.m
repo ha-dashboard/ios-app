@@ -179,50 +179,46 @@ static UIColor *sDefaultEventColor;
     self.listViewBtn.translatesAutoresizingMaskIntoConstraints = NO;
     [navBar addSubview:self.listViewBtn];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [navBar.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:8],
-            [navBar.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding],
-            [navBar.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding],
-            [navBar.heightAnchor constraintEqualToConstant:kNavBarHeight],
-    
-            [self.todayButton.leadingAnchor constraintEqualToAnchor:navBar.leadingAnchor],
-            [self.todayButton.centerYAnchor constraintEqualToAnchor:navBar.centerYAnchor],
-    
-            [self.prevButton.leadingAnchor constraintEqualToAnchor:self.todayButton.trailingAnchor constant:6],
-            [self.prevButton.centerYAnchor constraintEqualToAnchor:navBar.centerYAnchor],
-            [self.prevButton.widthAnchor constraintEqualToConstant:24],
-    
-            [self.nextButton.leadingAnchor constraintEqualToAnchor:self.prevButton.trailingAnchor constant:2],
-            [self.nextButton.centerYAnchor constraintEqualToAnchor:navBar.centerYAnchor],
-            [self.nextButton.widthAnchor constraintEqualToConstant:24],
-    
-            [self.dateRangeLabel.leadingAnchor constraintEqualToAnchor:self.nextButton.trailingAnchor constant:6],
-            [self.dateRangeLabel.centerYAnchor constraintEqualToAnchor:navBar.centerYAnchor],
-    
-            [self.listViewBtn.trailingAnchor constraintEqualToAnchor:navBar.trailingAnchor],
-            [self.listViewBtn.centerYAnchor constraintEqualToAnchor:navBar.centerYAnchor],
-            [self.listViewBtn.widthAnchor constraintEqualToConstant:28],
-    
-            [self.monthViewBtn.trailingAnchor constraintEqualToAnchor:self.listViewBtn.leadingAnchor constant:-4],
-            [self.monthViewBtn.centerYAnchor constraintEqualToAnchor:navBar.centerYAnchor],
-            [self.monthViewBtn.widthAnchor constraintEqualToConstant:28],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([navBar.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:8]),
+        HACon([navBar.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:kPadding]),
+        HACon([navBar.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-kPadding]),
+        HACon([navBar.heightAnchor constraintEqualToConstant:kNavBarHeight]),
+
+        HACon([self.todayButton.leadingAnchor constraintEqualToAnchor:navBar.leadingAnchor]),
+        HACon([self.todayButton.centerYAnchor constraintEqualToAnchor:navBar.centerYAnchor]),
+
+        HACon([self.prevButton.leadingAnchor constraintEqualToAnchor:self.todayButton.trailingAnchor constant:6]),
+        HACon([self.prevButton.centerYAnchor constraintEqualToAnchor:navBar.centerYAnchor]),
+        HACon([self.prevButton.widthAnchor constraintEqualToConstant:24]),
+
+        HACon([self.nextButton.leadingAnchor constraintEqualToAnchor:self.prevButton.trailingAnchor constant:2]),
+        HACon([self.nextButton.centerYAnchor constraintEqualToAnchor:navBar.centerYAnchor]),
+        HACon([self.nextButton.widthAnchor constraintEqualToConstant:24]),
+
+        HACon([self.dateRangeLabel.leadingAnchor constraintEqualToAnchor:self.nextButton.trailingAnchor constant:6]),
+        HACon([self.dateRangeLabel.centerYAnchor constraintEqualToAnchor:navBar.centerYAnchor]),
+
+        HACon([self.listViewBtn.trailingAnchor constraintEqualToAnchor:navBar.trailingAnchor]),
+        HACon([self.listViewBtn.centerYAnchor constraintEqualToAnchor:navBar.centerYAnchor]),
+        HACon([self.listViewBtn.widthAnchor constraintEqualToConstant:28]),
+
+        HACon([self.monthViewBtn.trailingAnchor constraintEqualToAnchor:self.listViewBtn.leadingAnchor constant:-4]),
+        HACon([self.monthViewBtn.centerYAnchor constraintEqualToAnchor:navBar.centerYAnchor]),
+        HACon([self.monthViewBtn.widthAnchor constraintEqualToConstant:28]),
+    ]);
 
     // --- Content container ---
     self.contentContainer = [[UIView alloc] init];
     self.contentContainer.translatesAutoresizingMaskIntoConstraints = NO;
     [self.contentView addSubview:self.contentContainer];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.contentContainer.topAnchor constraintEqualToAnchor:navBar.bottomAnchor constant:4],
-            [self.contentContainer.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
-            [self.contentContainer.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
-            [self.contentContainer.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.contentContainer.topAnchor constraintEqualToAnchor:navBar.bottomAnchor constant:4]),
+        HACon([self.contentContainer.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor]),
+        HACon([self.contentContainer.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor]),
+        HACon([self.contentContainer.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor]),
+    ]);
 
     self.listScrollView = [[UIScrollView alloc] init];
     self.listScrollView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -561,14 +557,12 @@ static UIColor *sDefaultEventColor;
     }
 
     [self.contentContainer addSubview:self.listScrollView];
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.listScrollView.topAnchor constraintEqualToAnchor:self.contentContainer.topAnchor],
-            [self.listScrollView.leadingAnchor constraintEqualToAnchor:self.contentContainer.leadingAnchor],
-            [self.listScrollView.trailingAnchor constraintEqualToAnchor:self.contentContainer.trailingAnchor],
-            [self.listScrollView.bottomAnchor constraintEqualToAnchor:self.contentContainer.bottomAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.listScrollView.topAnchor constraintEqualToAnchor:self.contentContainer.topAnchor]),
+        HACon([self.listScrollView.leadingAnchor constraintEqualToAnchor:self.contentContainer.leadingAnchor]),
+        HACon([self.listScrollView.trailingAnchor constraintEqualToAnchor:self.contentContainer.trailingAnchor]),
+        HACon([self.listScrollView.bottomAnchor constraintEqualToAnchor:self.contentContainer.bottomAnchor]),
+    ]);
     // Remove old scroll content
     for (UIView *v in self.listScrollView.subviews) [v removeFromSuperview];
 
@@ -861,12 +855,10 @@ static UIColor *sDefaultEventColor;
     label.translatesAutoresizingMaskIntoConstraints = NO;
     [self.contentContainer addSubview:label];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [label.centerXAnchor constraintEqualToAnchor:self.contentContainer.centerXAnchor],
-            [label.centerYAnchor constraintEqualToAnchor:self.contentContainer.centerYAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([label.centerXAnchor constraintEqualToAnchor:self.contentContainer.centerXAnchor]),
+        HACon([label.centerYAnchor constraintEqualToAnchor:self.contentContainer.centerYAnchor]),
+    ]);
 }
 
 #pragma mark - Reuse

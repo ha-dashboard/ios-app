@@ -75,16 +75,14 @@ static const CGFloat kGaugeEndAngle   = 2.0 * M_PI; // 3 o'clock (right)
 
         // Horizontal centering only; vertical positions are managed dynamically
         // in -updateGaugeArc based on computed arc geometry.
-        if (HAAutoLayoutAvailable()) {
-            [NSLayoutConstraint activateConstraints:@[
-                [self.valueLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-                [self.valueLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:kGaugePadding],
-                [self.valueLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-kGaugePadding],
-                [self.nameLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-                [self.nameLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:kGaugePadding],
-                [self.nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-kGaugePadding],
-            ]];
-        }
+        HAActivateConstraints(@[
+            HACon([self.valueLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor]),
+            HACon([self.valueLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:kGaugePadding]),
+            HACon([self.valueLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-kGaugePadding]),
+            HACon([self.nameLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor]),
+            HACon([self.nameLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:kGaugePadding]),
+            HACon([self.nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-kGaugePadding]),
+        ]);
     }
     return self;
 }
@@ -143,12 +141,8 @@ static const CGFloat kGaugeEndAngle   = 2.0 * M_PI; // 3 o'clock (right)
     if (self.valueLabelTopConstraint) {
         self.valueLabelTopConstraint.constant = valueLabelY;
     } else {
-        if (HAAutoLayoutAvailable()) {
-            self.valueLabelTopConstraint = [self.valueLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:valueLabelY];
-        }
-        if (HAAutoLayoutAvailable()) {
-            self.valueLabelTopConstraint.active = YES;
-        }
+        self.valueLabelTopConstraint = HAMakeConstraint([self.valueLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:valueLabelY]);
+        HASetConstraintActive(self.valueLabelTopConstraint, YES);
     }
 
     // Constrain value label width to the arc's inner chord at the label's vertical position.
@@ -161,12 +155,8 @@ static const CGFloat kGaugeEndAngle   = 2.0 * M_PI; // 3 o'clock (right)
     if (self.valueLabelWidthConstraint) {
         self.valueLabelWidthConstraint.constant = maxLabelWidth;
     } else {
-        if (HAAutoLayoutAvailable()) {
-            self.valueLabelWidthConstraint = [self.valueLabel.widthAnchor constraintLessThanOrEqualToConstant:maxLabelWidth];
-        }
-        if (HAAutoLayoutAvailable()) {
-            self.valueLabelWidthConstraint.active = YES;
-        }
+        self.valueLabelWidthConstraint = HAMakeConstraint([self.valueLabel.widthAnchor constraintLessThanOrEqualToConstant:maxLabelWidth]);
+        HASetConstraintActive(self.valueLabelWidthConstraint, YES);
     }
 
     // Name label just below the arc baseline
@@ -174,12 +164,8 @@ static const CGFloat kGaugeEndAngle   = 2.0 * M_PI; // 3 o'clock (right)
     if (self.nameLabelTopConstraint) {
         self.nameLabelTopConstraint.constant = nameLabelY;
     } else {
-        if (HAAutoLayoutAvailable()) {
-            self.nameLabelTopConstraint = [self.nameLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:nameLabelY];
-        }
-        if (HAAutoLayoutAvailable()) {
-            self.nameLabelTopConstraint.active = YES;
-        }
+        self.nameLabelTopConstraint = HAMakeConstraint([self.nameLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:nameLabelY]);
+        HASetConstraintActive(self.nameLabelTopConstraint, YES);
     }
 
     CGPoint center = CGPointMake(centerX, centerY);
@@ -420,15 +406,11 @@ static const CGFloat kGaugeEndAngle   = 2.0 * M_PI; // 3 o'clock (right)
     self.fillLayer = nil;
     // Reset dynamic vertical constraints so they are re-created on next layout.
     if (self.valueLabelTopConstraint) {
-        if (HAAutoLayoutAvailable()) {
-            self.valueLabelTopConstraint.active = NO;
-        }
+        HASetConstraintActive(self.valueLabelTopConstraint, NO);
         self.valueLabelTopConstraint = nil;
     }
     if (self.nameLabelTopConstraint) {
-        if (HAAutoLayoutAvailable()) {
-            self.nameLabelTopConstraint.active = NO;
-        }
+        HASetConstraintActive(self.nameLabelTopConstraint, NO);
         self.nameLabelTopConstraint = nil;
     }
     self.contentView.backgroundColor = [HATheme cellBackgroundColor];

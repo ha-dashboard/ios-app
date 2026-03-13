@@ -28,16 +28,14 @@
         self.titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
         [self.contentView addSubview:self.titleLabel];
 
-        if (HAAutoLayoutAvailable()) {
-            [NSLayoutConstraint activateConstraints:@[
-                [self.iconLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:16],
-                [self.iconLabel.widthAnchor constraintEqualToConstant:24],
-                [self.iconLabel.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
-                [self.titleLabel.leadingAnchor constraintEqualToAnchor:self.iconLabel.trailingAnchor constant:4],
-                [self.titleLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-16],
-                [self.titleLabel.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
-            ]];
-        }
+        HAActivateConstraints(@[
+            HACon([self.iconLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:16]),
+            HACon([self.iconLabel.widthAnchor constraintEqualToConstant:24]),
+            HACon([self.iconLabel.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor]),
+            HACon([self.titleLabel.leadingAnchor constraintEqualToAnchor:self.iconLabel.trailingAnchor constant:4]),
+            HACon([self.titleLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-16]),
+            HACon([self.titleLabel.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor]),
+        ]);
     }
     return self;
 }

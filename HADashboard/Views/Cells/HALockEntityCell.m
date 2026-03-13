@@ -34,16 +34,6 @@
     [self.lockButton addTarget:self action:@selector(lockButtonTapped) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:self.lockButton];
 
-    // State icon: right of name
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.lockStateLabel attribute:NSLayoutAttributeTrailing
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.lockStateLabel attribute:NSLayoutAttributeTop
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTop multiplier:1 constant:padding]];
-    }
-
     // Open button (unlatch/release — only shown when entity supports it)
     self.openButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.openButton setTitle:@"Open" forState:UIControlStateNormal];
@@ -56,33 +46,27 @@
     [self.openButton addTarget:self action:@selector(openButtonTapped) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:self.openButton];
 
-    // Lock button: bottom-right
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.lockButton attribute:NSLayoutAttributeTrailing
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.lockButton attribute:NSLayoutAttributeBottom
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.lockButton attribute:NSLayoutAttributeWidth
-            relatedBy:NSLayoutRelationGreaterThanOrEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:70]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.lockButton attribute:NSLayoutAttributeHeight
-            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:32]];
-    }
-
-    // Open button: left of lock button
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.openButton.trailingAnchor constraintEqualToAnchor:self.lockButton.leadingAnchor constant:-6],
-            [self.openButton.centerYAnchor constraintEqualToAnchor:self.lockButton.centerYAnchor],
-            [self.openButton.widthAnchor constraintGreaterThanOrEqualToConstant:60],
-            [self.openButton.heightAnchor constraintEqualToConstant:32],
-        ]];
-    }
+    HAActivateConstraints(@[
+        // State icon: right of name
+        HACon([NSLayoutConstraint constraintWithItem:self.lockStateLabel attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]),
+        HACon([NSLayoutConstraint constraintWithItem:self.lockStateLabel attribute:NSLayoutAttributeTop
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTop multiplier:1 constant:padding]),
+        // Lock button: bottom-right
+        HACon([NSLayoutConstraint constraintWithItem:self.lockButton attribute:NSLayoutAttributeTrailing
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]),
+        HACon([NSLayoutConstraint constraintWithItem:self.lockButton attribute:NSLayoutAttributeBottom
+            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding]),
+        HACon([NSLayoutConstraint constraintWithItem:self.lockButton attribute:NSLayoutAttributeWidth
+            relatedBy:NSLayoutRelationGreaterThanOrEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:70]),
+        HACon([NSLayoutConstraint constraintWithItem:self.lockButton attribute:NSLayoutAttributeHeight
+            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:32]),
+        // Open button: left of lock button
+        HACon([self.openButton.trailingAnchor constraintEqualToAnchor:self.lockButton.leadingAnchor constant:-6]),
+        HACon([self.openButton.centerYAnchor constraintEqualToAnchor:self.lockButton.centerYAnchor]),
+        HACon([self.openButton.widthAnchor constraintGreaterThanOrEqualToConstant:60]),
+        HACon([self.openButton.heightAnchor constraintEqualToConstant:32]),
+    ]);
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {

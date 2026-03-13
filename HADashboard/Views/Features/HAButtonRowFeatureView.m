@@ -40,13 +40,13 @@
     if (HAAutoLayoutAvailable()) {
         NSLayoutConstraint *heightConstraint = [self.heightAnchor constraintEqualToConstant:[HAButtonRowFeatureView preferredHeight]];
         heightConstraint.priority = UILayoutPriorityDefaultHigh;
-        [NSLayoutConstraint activateConstraints:@[
-            [self.buttonStack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12],
-            [self.buttonStack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-12],
-            [self.buttonStack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.buttonStack.heightAnchor constraintEqualToConstant:32],
-            heightConstraint,
-        ]];
+        HAActivateConstraints(@[
+            HACon([self.buttonStack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12]),
+            HACon([self.buttonStack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-12]),
+            HACon([self.buttonStack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]),
+            HACon([self.buttonStack.heightAnchor constraintEqualToConstant:32]),
+            HACon(heightConstraint),
+        ]);
     }
 }
 
@@ -202,9 +202,7 @@
 
     UIButton *minusBtn = [self makeButtonWithTitle:@"\u2212" tag:40]; // −
     minusBtn.enabled = available;
-    if (HAAutoLayoutAvailable()) {
-        [minusBtn.widthAnchor constraintEqualToConstant:44].active = YES;
-    }
+    HASetConstraintActive(HAMakeConstraint([minusBtn.widthAnchor constraintEqualToConstant:44]), YES);
     [minusBtn setContentHuggingPriority:UILayoutPriorityRequired forAxis:0];
 
     self.tempValueLabel = [[UILabel alloc] init];
@@ -222,9 +220,7 @@
 
     UIButton *plusBtn = [self makeButtonWithTitle:@"+" tag:41];
     plusBtn.enabled = available;
-    if (HAAutoLayoutAvailable()) {
-        [plusBtn.widthAnchor constraintEqualToConstant:44].active = YES;
-    }
+    HASetConstraintActive(HAMakeConstraint([plusBtn.widthAnchor constraintEqualToConstant:44]), YES);
     [plusBtn setContentHuggingPriority:UILayoutPriorityRequired forAxis:0];
 
     [self.buttonStack addArrangedSubview:minusBtn];

@@ -121,14 +121,12 @@ static const CGFloat kGraphHeight = 160.0;
     self.grabberView.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.grabberView];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.grabberView.topAnchor constraintEqualToAnchor:self.view.topAnchor constant:8],
-            [self.grabberView.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
-            [self.grabberView.widthAnchor constraintEqualToConstant:kGrabberWidth],
-            [self.grabberView.heightAnchor constraintEqualToConstant:kGrabberHeight],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.grabberView.topAnchor constraintEqualToAnchor:self.view.topAnchor constant:8]),
+        HACon([self.grabberView.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor]),
+        HACon([self.grabberView.widthAnchor constraintEqualToConstant:kGrabberWidth]),
+        HACon([self.grabberView.heightAnchor constraintEqualToConstant:kGrabberHeight]),
+    ]);
 }
 
 - (void)setupHeader {
@@ -166,27 +164,25 @@ static const CGFloat kGraphHeight = 160.0;
 
     CGFloat topOffset = 8 + kGrabberHeight + 12;
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.iconLabel.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:kHeaderPadding],
-            [self.iconLabel.topAnchor constraintEqualToAnchor:self.view.topAnchor constant:topOffset],
-            [self.iconLabel.widthAnchor constraintEqualToConstant:kIconSize + 4],
-            [self.iconLabel.heightAnchor constraintEqualToConstant:kIconSize + 4],
-    
-            [self.nameLabel.leadingAnchor constraintEqualToAnchor:self.iconLabel.trailingAnchor constant:10],
-            [self.nameLabel.topAnchor constraintEqualToAnchor:self.view.topAnchor constant:topOffset],
-            [self.nameLabel.trailingAnchor constraintEqualToAnchor:self.closeButton.leadingAnchor constant:-8],
-    
-            [self.stateLabel.leadingAnchor constraintEqualToAnchor:self.nameLabel.leadingAnchor],
-            [self.stateLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:2],
-            [self.stateLabel.trailingAnchor constraintEqualToAnchor:self.nameLabel.trailingAnchor],
-    
-            [self.closeButton.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-kHeaderPadding],
-            [self.closeButton.topAnchor constraintEqualToAnchor:self.view.topAnchor constant:topOffset],
-            [self.closeButton.widthAnchor constraintEqualToConstant:32],
-            [self.closeButton.heightAnchor constraintEqualToConstant:32],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.iconLabel.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:kHeaderPadding]),
+        HACon([self.iconLabel.topAnchor constraintEqualToAnchor:self.view.topAnchor constant:topOffset]),
+        HACon([self.iconLabel.widthAnchor constraintEqualToConstant:kIconSize + 4]),
+        HACon([self.iconLabel.heightAnchor constraintEqualToConstant:kIconSize + 4]),
+
+        HACon([self.nameLabel.leadingAnchor constraintEqualToAnchor:self.iconLabel.trailingAnchor constant:10]),
+        HACon([self.nameLabel.topAnchor constraintEqualToAnchor:self.view.topAnchor constant:topOffset]),
+        HACon([self.nameLabel.trailingAnchor constraintEqualToAnchor:self.closeButton.leadingAnchor constant:-8]),
+
+        HACon([self.stateLabel.leadingAnchor constraintEqualToAnchor:self.nameLabel.leadingAnchor]),
+        HACon([self.stateLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:2]),
+        HACon([self.stateLabel.trailingAnchor constraintEqualToAnchor:self.nameLabel.trailingAnchor]),
+
+        HACon([self.closeButton.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-kHeaderPadding]),
+        HACon([self.closeButton.topAnchor constraintEqualToAnchor:self.view.topAnchor constant:topOffset]),
+        HACon([self.closeButton.widthAnchor constraintEqualToConstant:32]),
+        HACon([self.closeButton.heightAnchor constraintEqualToConstant:32]),
+    ]);
 }
 
 - (void)setupScrollView {
@@ -205,20 +201,18 @@ static const CGFloat kGraphHeight = 160.0;
 
     CGFloat headerBottom = 8 + kGrabberHeight + 12 + kIconSize + 4 + 20 + 12;
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.scrollView.topAnchor constraintEqualToAnchor:self.view.topAnchor constant:headerBottom],
-            [self.scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-            [self.scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-            [self.scrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
-    
-            [self.contentStack.topAnchor constraintEqualToAnchor:self.scrollView.topAnchor constant:8],
-            [self.contentStack.leadingAnchor constraintEqualToAnchor:self.scrollView.leadingAnchor constant:kHeaderPadding],
-            [self.contentStack.trailingAnchor constraintEqualToAnchor:self.scrollView.trailingAnchor constant:-kHeaderPadding],
-            [self.contentStack.bottomAnchor constraintEqualToAnchor:self.scrollView.bottomAnchor constant:-16],
-            [self.contentStack.widthAnchor constraintEqualToAnchor:self.scrollView.widthAnchor constant:-2 * kHeaderPadding],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.scrollView.topAnchor constraintEqualToAnchor:self.view.topAnchor constant:headerBottom]),
+        HACon([self.scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor]),
+        HACon([self.scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor]),
+        HACon([self.scrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]),
+
+        HACon([self.contentStack.topAnchor constraintEqualToAnchor:self.scrollView.topAnchor constant:8]),
+        HACon([self.contentStack.leadingAnchor constraintEqualToAnchor:self.scrollView.leadingAnchor constant:kHeaderPadding]),
+        HACon([self.contentStack.trailingAnchor constraintEqualToAnchor:self.scrollView.trailingAnchor constant:-kHeaderPadding]),
+        HACon([self.contentStack.bottomAnchor constraintEqualToAnchor:self.scrollView.bottomAnchor constant:-16]),
+        HACon([self.contentStack.widthAnchor constraintEqualToAnchor:self.scrollView.widthAnchor constant:-2 * kHeaderPadding]),
+    ]);
 }
 
 - (void)setupHistorySection {
@@ -268,22 +262,20 @@ static const CGFloat kGraphHeight = 160.0;
     self.graphSpinner.hidesWhenStopped = YES;
     [self.historyContainer addSubview:self.graphSpinner];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.historySegment.topAnchor constraintEqualToAnchor:self.historyContainer.topAnchor],
-            [self.historySegment.leadingAnchor constraintEqualToAnchor:self.historyContainer.leadingAnchor],
-            [self.historySegment.trailingAnchor constraintEqualToAnchor:self.historyContainer.trailingAnchor],
-    
-            [self.graphView.topAnchor constraintEqualToAnchor:self.historySegment.bottomAnchor constant:8],
-            [self.graphView.leadingAnchor constraintEqualToAnchor:self.historyContainer.leadingAnchor],
-            [self.graphView.trailingAnchor constraintEqualToAnchor:self.historyContainer.trailingAnchor],
-            [self.graphView.heightAnchor constraintEqualToConstant:kGraphHeight],
-            [self.graphView.bottomAnchor constraintEqualToAnchor:self.historyContainer.bottomAnchor],
-    
-            [self.graphSpinner.centerXAnchor constraintEqualToAnchor:self.graphView.centerXAnchor],
-            [self.graphSpinner.centerYAnchor constraintEqualToAnchor:self.graphView.centerYAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.historySegment.topAnchor constraintEqualToAnchor:self.historyContainer.topAnchor]),
+        HACon([self.historySegment.leadingAnchor constraintEqualToAnchor:self.historyContainer.leadingAnchor]),
+        HACon([self.historySegment.trailingAnchor constraintEqualToAnchor:self.historyContainer.trailingAnchor]),
+
+        HACon([self.graphView.topAnchor constraintEqualToAnchor:self.historySegment.bottomAnchor constant:8]),
+        HACon([self.graphView.leadingAnchor constraintEqualToAnchor:self.historyContainer.leadingAnchor]),
+        HACon([self.graphView.trailingAnchor constraintEqualToAnchor:self.historyContainer.trailingAnchor]),
+        HACon([self.graphView.heightAnchor constraintEqualToConstant:kGraphHeight]),
+        HACon([self.graphView.bottomAnchor constraintEqualToAnchor:self.historyContainer.bottomAnchor]),
+
+        HACon([self.graphSpinner.centerXAnchor constraintEqualToAnchor:self.graphView.centerXAnchor]),
+        HACon([self.graphSpinner.centerYAnchor constraintEqualToAnchor:self.graphView.centerYAnchor]),
+    ]);
 }
 
 #pragma mark - Domain Section
@@ -710,24 +702,22 @@ static const CGFloat kGraphHeight = 160.0;
         [endPicker addTarget:self action:@selector(endDateChanged:) forControlEvents:UIControlEventValueChanged];
         [container addSubview:endPicker];
 
-        if (HAAutoLayoutAvailable()) {
-            [NSLayoutConstraint activateConstraints:@[
-                [fromLabel.topAnchor constraintEqualToAnchor:container.topAnchor constant:8],
-                [fromLabel.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-                [fromLabel.widthAnchor constraintEqualToConstant:40],
-                [startPicker.centerYAnchor constraintEqualToAnchor:fromLabel.centerYAnchor],
-                [startPicker.leadingAnchor constraintEqualToAnchor:fromLabel.trailingAnchor constant:4],
-                [toLabel.topAnchor constraintEqualToAnchor:fromLabel.bottomAnchor constant:8],
-                [toLabel.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-                [toLabel.widthAnchor constraintEqualToConstant:40],
-                [endPicker.centerYAnchor constraintEqualToAnchor:toLabel.centerYAnchor],
-                [endPicker.leadingAnchor constraintEqualToAnchor:toLabel.trailingAnchor constant:4],
-                [applyBtn.topAnchor constraintEqualToAnchor:toLabel.bottomAnchor constant:8],
-                [applyBtn.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
-                [applyBtn.bottomAnchor constraintEqualToAnchor:container.bottomAnchor constant:-4],
-                [container.heightAnchor constraintEqualToConstant:90],
-            ]];
-        }
+        HAActivateConstraints(@[
+            HACon([fromLabel.topAnchor constraintEqualToAnchor:container.topAnchor constant:8]),
+            HACon([fromLabel.leadingAnchor constraintEqualToAnchor:container.leadingAnchor]),
+            HACon([fromLabel.widthAnchor constraintEqualToConstant:40]),
+            HACon([startPicker.centerYAnchor constraintEqualToAnchor:fromLabel.centerYAnchor]),
+            HACon([startPicker.leadingAnchor constraintEqualToAnchor:fromLabel.trailingAnchor constant:4]),
+            HACon([toLabel.topAnchor constraintEqualToAnchor:fromLabel.bottomAnchor constant:8]),
+            HACon([toLabel.leadingAnchor constraintEqualToAnchor:container.leadingAnchor]),
+            HACon([toLabel.widthAnchor constraintEqualToConstant:40]),
+            HACon([endPicker.centerYAnchor constraintEqualToAnchor:toLabel.centerYAnchor]),
+            HACon([endPicker.leadingAnchor constraintEqualToAnchor:toLabel.trailingAnchor constant:4]),
+            HACon([applyBtn.topAnchor constraintEqualToAnchor:toLabel.bottomAnchor constant:8]),
+            HACon([applyBtn.trailingAnchor constraintEqualToAnchor:container.trailingAnchor]),
+            HACon([applyBtn.bottomAnchor constraintEqualToAnchor:container.bottomAnchor constant:-4]),
+            HACon([container.heightAnchor constraintEqualToConstant:90]),
+        ]);
     } else {
         // iOS 9-13 fallback: date buttons
         NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
@@ -750,22 +740,20 @@ static const CGFloat kGraphHeight = 160.0;
         [endBtn addTarget:self action:@selector(showEndDatePicker) forControlEvents:UIControlEventTouchUpInside];
         [container addSubview:endBtn];
 
-        if (HAAutoLayoutAvailable()) {
-            [NSLayoutConstraint activateConstraints:@[
-                [fromLabel.topAnchor constraintEqualToAnchor:container.topAnchor constant:8],
-                [fromLabel.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-                [startBtn.centerYAnchor constraintEqualToAnchor:fromLabel.centerYAnchor],
-                [startBtn.leadingAnchor constraintEqualToAnchor:fromLabel.trailingAnchor constant:4],
-                [toLabel.topAnchor constraintEqualToAnchor:fromLabel.bottomAnchor constant:8],
-                [toLabel.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-                [endBtn.centerYAnchor constraintEqualToAnchor:toLabel.centerYAnchor],
-                [endBtn.leadingAnchor constraintEqualToAnchor:toLabel.trailingAnchor constant:4],
-                [applyBtn.topAnchor constraintEqualToAnchor:toLabel.bottomAnchor constant:8],
-                [applyBtn.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
-                [applyBtn.bottomAnchor constraintEqualToAnchor:container.bottomAnchor constant:-4],
-                [container.heightAnchor constraintEqualToConstant:80],
-            ]];
-        }
+        HAActivateConstraints(@[
+            HACon([fromLabel.topAnchor constraintEqualToAnchor:container.topAnchor constant:8]),
+            HACon([fromLabel.leadingAnchor constraintEqualToAnchor:container.leadingAnchor]),
+            HACon([startBtn.centerYAnchor constraintEqualToAnchor:fromLabel.centerYAnchor]),
+            HACon([startBtn.leadingAnchor constraintEqualToAnchor:fromLabel.trailingAnchor constant:4]),
+            HACon([toLabel.topAnchor constraintEqualToAnchor:fromLabel.bottomAnchor constant:8]),
+            HACon([toLabel.leadingAnchor constraintEqualToAnchor:container.leadingAnchor]),
+            HACon([endBtn.centerYAnchor constraintEqualToAnchor:toLabel.centerYAnchor]),
+            HACon([endBtn.leadingAnchor constraintEqualToAnchor:toLabel.trailingAnchor constant:4]),
+            HACon([applyBtn.topAnchor constraintEqualToAnchor:toLabel.bottomAnchor constant:8]),
+            HACon([applyBtn.trailingAnchor constraintEqualToAnchor:container.trailingAnchor]),
+            HACon([applyBtn.bottomAnchor constraintEqualToAnchor:container.bottomAnchor constant:-4]),
+            HACon([container.heightAnchor constraintEqualToConstant:80]),
+        ]);
     }
 
     // Insert into content stack after historySegment

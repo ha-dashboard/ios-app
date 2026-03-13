@@ -49,22 +49,20 @@
     self.entityStateLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.contentView addSubview:self.entityStateLabel];
 
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.entityIconLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:12],
-            [self.entityIconLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-    
-            [self.entityStateLabel.topAnchor constraintEqualToAnchor:self.entityIconLabel.bottomAnchor constant:4],
-            [self.entityStateLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-            [self.entityStateLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:8],
-            [self.entityStateLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-8],
-    
-            [self.entityNameLabel.topAnchor constraintEqualToAnchor:self.entityStateLabel.bottomAnchor constant:2],
-            [self.entityNameLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor],
-            [self.entityNameLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:8],
-            [self.entityNameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-8],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.entityIconLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:12]),
+        HACon([self.entityIconLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor]),
+
+        HACon([self.entityStateLabel.topAnchor constraintEqualToAnchor:self.entityIconLabel.bottomAnchor constant:4]),
+        HACon([self.entityStateLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor]),
+        HACon([self.entityStateLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:8]),
+        HACon([self.entityStateLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-8]),
+
+        HACon([self.entityNameLabel.topAnchor constraintEqualToAnchor:self.entityStateLabel.bottomAnchor constant:2]),
+        HACon([self.entityNameLabel.centerXAnchor constraintEqualToAnchor:self.contentView.centerXAnchor]),
+        HACon([self.entityNameLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.leadingAnchor constant:8]),
+        HACon([self.entityNameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-8]),
+    ]);
 }
 
 - (void)layoutSubviews {
