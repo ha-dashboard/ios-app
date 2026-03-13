@@ -550,6 +550,15 @@ case "$TARGET" in
             # Refresh SpringBoard app cache
             uicache 2>/dev/null || true
 
+            # Clear all app caches (image cache, URL cache, tmp files)
+            APP_DATA=/var/mobile/Library
+            rm -rf \$APP_DATA/Caches/$BUNDLE_ID 2>/dev/null || true
+            rm -rf /var/mobile/tmp/$BUNDLE_ID* 2>/dev/null || true
+            # Also clear per-app Caches inside the data container if it exists
+            for d in /var/mobile/Applications/*/Library/Caches; do
+                [ -d \"\$d\" ] && rm -rf \"\$d\"/* 2>/dev/null || true
+            done
+
             # Write preferences
             PREFS_DIR=/var/mobile/Library/Preferences
             mkdir -p \$PREFS_DIR
@@ -640,6 +649,13 @@ case "$TARGET" in
             # Refresh SpringBoard app cache
             uicache
 
+            # Clear all app caches (image cache, URL cache, tmp files)
+            rm -rf /var/mobile/Library/Caches/$BUNDLE_ID 2>/dev/null || true
+            rm -rf /var/mobile/tmp/$BUNDLE_ID* 2>/dev/null || true
+            for d in /var/mobile/Applications/*/Library/Caches; do
+                [ -d \"\$d\" ] && rm -rf \"\$d\"/* 2>/dev/null || true
+            done
+
             # Copy merged preferences plist into place (transferred via SCP).
             # The plist was pre-merged on macOS to preserve existing user settings.
             PREFS_DIR=/var/mobile/Library/Preferences
@@ -725,6 +741,13 @@ case "$TARGET" in
             killall 'HA Dashboard' 2>/dev/null || true
 
             uicache
+
+            # Clear all app caches (image cache, URL cache, tmp files)
+            rm -rf /var/mobile/Library/Caches/$BUNDLE_ID 2>/dev/null || true
+            rm -rf /var/mobile/tmp/$BUNDLE_ID* 2>/dev/null || true
+            for d in /var/mobile/Applications/*/Library/Caches; do
+                [ -d \"\$d\" ] && rm -rf \"\$d\"/* 2>/dev/null || true
+            done
 
             PREFS_DIR=/var/mobile/Library/Preferences
             mkdir -p \$PREFS_DIR
