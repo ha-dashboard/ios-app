@@ -67,32 +67,25 @@
     [self.contentView addSubview:self.effectButton];
 
     CGFloat padding = 10.0;
+    UIView *cv = self.contentView;
 
     // Color mode label: below name label
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.colorModeLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
-            [self.colorModeLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:2],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.colorModeLabel.leadingAnchor constraintEqualToAnchor:cv.leadingAnchor constant:padding]),
+        HACon([self.colorModeLabel.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:2]),
+    ]);
 
     // Effect button: right of color mode label or top-right below switch
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.effectButton.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
-            [self.effectButton.centerYAnchor constraintEqualToAnchor:self.colorModeLabel.centerYAnchor],
-        ]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.effectButton.trailingAnchor constraintEqualToAnchor:cv.trailingAnchor constant:-padding]),
+        HACon([self.effectButton.centerYAnchor constraintEqualToAnchor:self.colorModeLabel.centerYAnchor]),
+    ]);
 
     // Switch: top-right
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.toggleSwitch attribute:NSLayoutAttributeTrailing
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.toggleSwitch attribute:NSLayoutAttributeTop
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTop multiplier:1 constant:padding]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.toggleSwitch.trailingAnchor constraintEqualToAnchor:cv.trailingAnchor constant:-padding]),
+        HACon([self.toggleSwitch.topAnchor constraintEqualToAnchor:cv.topAnchor constant:padding]),
+    ]);
 
     // Color temperature slider (warm ↔ cool)
     self.colorTempSlider = [[UISlider alloc] init];
@@ -112,59 +105,36 @@
     self.colorTempLabel.textAlignment = NSTextAlignmentRight;
     self.colorTempLabel.hidden = YES;
 
-    // Brightness slider: leading edge
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.brightnessSlider attribute:NSLayoutAttributeLeading
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
-    }
-
-    // Brightness slider bottom: pinned to contentView bottom (default) or above color temp slider
-    self.brightnessBottomConstraint = [NSLayoutConstraint constraintWithItem:self.brightnessSlider attribute:NSLayoutAttributeBottom
-        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-padding];
-    if (HAAutoLayoutAvailable()) {
-        self.brightnessBottomConstraint.active = YES;
-    }
+    // Brightness slider: leading edge + bottom (default, swapped when color temp visible)
+    HAActivateConstraints(@[
+        HACon([self.brightnessSlider.leadingAnchor constraintEqualToAnchor:cv.leadingAnchor constant:padding]),
+    ]);
+    self.brightnessBottomConstraint = HAMakeConstraint(
+        [self.brightnessSlider.bottomAnchor constraintEqualToAnchor:cv.bottomAnchor constant:-padding]);
+    HASetConstraintActive(self.brightnessBottomConstraint, YES);
 
     // Color temp slider: below brightness slider, pinned to bottom
-    if (HAAutoLayoutAvailable()) {
-        [NSLayoutConstraint activateConstraints:@[
-            [self.colorTempSlider.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:padding],
-            [self.colorTempLabel.leadingAnchor constraintEqualToAnchor:self.colorTempSlider.trailingAnchor constant:8],
-            [self.colorTempLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
-            [self.colorTempLabel.centerYAnchor constraintEqualToAnchor:self.colorTempSlider.centerYAnchor],
-            [self.colorTempLabel.widthAnchor constraintEqualToConstant:44],
-        ]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        self.colorTempBottomConstraint = [self.colorTempSlider.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-padding];
-    }
-    if (HAAutoLayoutAvailable()) {
-        self.colorTempBottomConstraint.active = NO;
-    } // activated when visible
-    if (HAAutoLayoutAvailable()) {
-        self.brightnessAboveColorTempConstraint = [self.brightnessSlider.bottomAnchor constraintEqualToAnchor:self.colorTempSlider.topAnchor constant:-6];
-    }
-    if (HAAutoLayoutAvailable()) {
-        self.brightnessAboveColorTempConstraint.active = NO;
-    }
+    HAActivateConstraints(@[
+        HACon([self.colorTempSlider.leadingAnchor constraintEqualToAnchor:cv.leadingAnchor constant:padding]),
+        HACon([self.colorTempLabel.leadingAnchor constraintEqualToAnchor:self.colorTempSlider.trailingAnchor constant:8]),
+        HACon([self.colorTempLabel.trailingAnchor constraintEqualToAnchor:cv.trailingAnchor constant:-padding]),
+        HACon([self.colorTempLabel.centerYAnchor constraintEqualToAnchor:self.colorTempSlider.centerYAnchor]),
+        HACon([self.colorTempLabel.widthAnchor constraintEqualToConstant:44]),
+    ]);
+    self.colorTempBottomConstraint = HAMakeConstraint(
+        [self.colorTempSlider.bottomAnchor constraintEqualToAnchor:cv.bottomAnchor constant:-padding]);
+    HASetConstraintActive(self.colorTempBottomConstraint, NO); // activated when visible
+    self.brightnessAboveColorTempConstraint = HAMakeConstraint(
+        [self.brightnessSlider.bottomAnchor constraintEqualToAnchor:self.colorTempSlider.topAnchor constant:-6]);
+    HASetConstraintActive(self.brightnessAboveColorTempConstraint, NO);
 
     // Brightness label: right of slider
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.brightnessLabel attribute:NSLayoutAttributeLeading
-            relatedBy:NSLayoutRelationEqual toItem:self.brightnessSlider attribute:NSLayoutAttributeTrailing multiplier:1 constant:8]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.brightnessLabel attribute:NSLayoutAttributeTrailing
-            relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.brightnessLabel attribute:NSLayoutAttributeCenterY
-            relatedBy:NSLayoutRelationEqual toItem:self.brightnessSlider attribute:NSLayoutAttributeCenterY multiplier:1 constant:0]];
-    }
-    if (HAAutoLayoutAvailable()) {
-        [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.brightnessLabel attribute:NSLayoutAttributeWidth
-            relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:44]];
-    }
+    HAActivateConstraints(@[
+        HACon([self.brightnessLabel.leadingAnchor constraintEqualToAnchor:self.brightnessSlider.trailingAnchor constant:8]),
+        HACon([self.brightnessLabel.trailingAnchor constraintEqualToAnchor:cv.trailingAnchor constant:-padding]),
+        HACon([self.brightnessLabel.centerYAnchor constraintEqualToAnchor:self.brightnessSlider.centerYAnchor]),
+        HACon([self.brightnessLabel.widthAnchor constraintEqualToConstant:44]),
+    ]);
 }
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
@@ -204,26 +174,14 @@
         self.colorTempLabel.text = [NSString stringWithFormat:@"%ldK", (long)self.colorTempSlider.value];
 
         // Swap constraints: brightness above color temp, color temp at bottom
-        if (HAAutoLayoutAvailable()) {
-            self.brightnessBottomConstraint.active = NO;
-        }
-        if (HAAutoLayoutAvailable()) {
-            self.brightnessAboveColorTempConstraint.active = YES;
-        }
-        if (HAAutoLayoutAvailable()) {
-            self.colorTempBottomConstraint.active = YES;
-        }
+        HASetConstraintActive(self.brightnessBottomConstraint, NO);
+        HASetConstraintActive(self.brightnessAboveColorTempConstraint, YES);
+        HASetConstraintActive(self.colorTempBottomConstraint, YES);
     } else {
         // Brightness at bottom (default)
-        if (HAAutoLayoutAvailable()) {
-            self.brightnessAboveColorTempConstraint.active = NO;
-        }
-        if (HAAutoLayoutAvailable()) {
-            self.colorTempBottomConstraint.active = NO;
-        }
-        if (HAAutoLayoutAvailable()) {
-            self.brightnessBottomConstraint.active = YES;
-        }
+        HASetConstraintActive(self.brightnessAboveColorTempConstraint, NO);
+        HASetConstraintActive(self.colorTempBottomConstraint, NO);
+        HASetConstraintActive(self.brightnessBottomConstraint, YES);
     }
 
     // Color mode display (Task 2.4)
@@ -369,15 +327,9 @@
     self.colorTempSlider.value = 4000;
     self.colorTempLabel.hidden = YES;
     // Reset constraints to default (brightness at bottom)
-    if (HAAutoLayoutAvailable()) {
-        self.brightnessAboveColorTempConstraint.active = NO;
-    }
-    if (HAAutoLayoutAvailable()) {
-        self.colorTempBottomConstraint.active = NO;
-    }
-    if (HAAutoLayoutAvailable()) {
-        self.brightnessBottomConstraint.active = YES;
-    }
+    HASetConstraintActive(self.brightnessAboveColorTempConstraint, NO);
+    HASetConstraintActive(self.colorTempBottomConstraint, NO);
+    HASetConstraintActive(self.brightnessBottomConstraint, YES);
     self.contentView.backgroundColor = [HATheme cellBackgroundColor];
     self.brightnessLabel.textColor = [HATheme secondaryTextColor];
     self.colorTempLabel.textColor = [HATheme secondaryTextColor];
