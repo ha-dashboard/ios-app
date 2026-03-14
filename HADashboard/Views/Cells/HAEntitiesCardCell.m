@@ -26,7 +26,9 @@ static const CGFloat kSceneChipHeight = 32.0;
 static const CGFloat kSceneChipSpacing = 8.0;
 static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
 
-@interface HAEntitiesCardCell ()
+@interface HAEntitiesCardCell () {
+    UILabel *_headingIconLabel;
+}
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UILabel *headingLabel;
 @property (nonatomic, strong) UISwitch *headerToggle;
@@ -72,6 +74,14 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
     self.contentView.backgroundColor = [HATheme cellBackgroundColor];
     self.contentView.layer.cornerRadius = 14.0;
     self.contentView.layer.masksToBounds = YES;
+
+    // Heading icon label (iOS 5: separate MDI font label for icon glyph)
+    _headingIconLabel = [[UILabel alloc] init];
+    _headingIconLabel.font = [HAIconMapper mdiFontOfSize:16];
+    _headingIconLabel.textColor = [HATheme secondaryTextColor];
+    _headingIconLabel.textAlignment = NSTextAlignmentCenter;
+    _headingIconLabel.hidden = YES;
+    [self addSubview:_headingIconLabel];
 
     // Heading label (above contentView, for grid headings like "Lights")
     self.headingLabel = [[UILabel alloc] init];
@@ -162,7 +172,12 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
 
     if (self.showsHeading) {
         CGFloat headingH = kHeadingHeight + kHeadingGap;
-        self.headingLabel.frame = CGRectMake(4, 0, self.bounds.size.width - 8, kHeadingHeight);
+        if (!_headingIconLabel.hidden) {
+            _headingIconLabel.frame = CGRectMake(4, 0, 24, kHeadingHeight);
+            self.headingLabel.frame = CGRectMake(30, 0, self.bounds.size.width - 38, kHeadingHeight);
+        } else {
+            self.headingLabel.frame = CGRectMake(4, 0, self.bounds.size.width - 8, kHeadingHeight);
+        }
         self.contentView.frame = CGRectMake(0, headingH,
             self.bounds.size.width, self.bounds.size.height - headingH);
     } else {
@@ -249,6 +264,7 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
         if ([iconName hasPrefix:@"mdi:"]) iconName = [iconName substringFromIndex:4];
         NSString *glyph = [HAIconMapper glyphForIconName:iconName];
         if (glyph && HASystemMajorVersion() >= 6) {
+            // iOS 6+: mixed icon+text attributed string in a single label
             NSMutableAttributedString *heading = [[NSMutableAttributedString alloc]
                 initWithAttributedString:[HAIconMapper attributedGlyph:glyph fontSize:16 color:[HATheme secondaryTextColor]]];
             [heading appendAttributedString:[[NSAttributedString alloc] initWithString:
@@ -256,7 +272,14 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
                 attributes:@{HAFontAttributeName: [UIFont ha_systemFontOfSize:17 weight:HAFontWeightSemibold],
                              HAForegroundColorAttributeName: [HATheme sectionHeaderColor]}]];
             self.headingLabel.attributedText = heading;
+            _headingIconLabel.hidden = YES;
+        } else if (glyph) {
+            // iOS 5: separate icon label (MDI font) + text label (system font)
+            _headingIconLabel.text = glyph;
+            _headingIconLabel.hidden = NO;
+            self.headingLabel.text = configItem.displayName;
         } else {
+            _headingIconLabel.hidden = YES;
             self.headingLabel.text = configItem.displayName;
         }
         self.headingLabel.hidden = NO;
@@ -778,6 +801,8 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
     self.headingLabel.text = nil;
     self.headingLabel.hidden = YES;
     self.headingLabel.textColor = [HATheme sectionHeaderColor];
+    _headingIconLabel.text = nil;
+    _headingIconLabel.hidden = YES;
     self.showsHeading = NO;
     self.headerToggle.hidden = YES;
     self.headerToggle.on = NO;

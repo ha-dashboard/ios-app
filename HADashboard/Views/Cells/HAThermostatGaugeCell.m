@@ -988,13 +988,17 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
                 self.tempLabel.text = @"--";
             }
             if (targetTemp && ![mode isEqualToString:@"off"]) {
-                NSMutableAttributedString *targetAttr = [[NSMutableAttributedString alloc]
-                    initWithAttributedString:[HAIconMapper attributedGlyph:tempIcon fontSize:secondarySize color:[HATheme secondaryTextColor]]];
-                [targetAttr appendAttributedString:[[NSAttributedString alloc]
-                    initWithString:[NSString stringWithFormat:@" %.1f %@", targetTemp.doubleValue, self.tempUnitString]
-                    attributes:@{HAFontAttributeName: [UIFont ha_systemFontOfSize:secondarySize weight:HAFontWeightMedium],
-                                 HAForegroundColorAttributeName: [HATheme secondaryTextColor]}]];
-                self.targetLabel.attributedText = targetAttr;
+                if (HASystemMajorVersion() >= 6) {
+                    NSMutableAttributedString *targetAttr = [[NSMutableAttributedString alloc]
+                        initWithAttributedString:[HAIconMapper attributedGlyph:tempIcon fontSize:secondarySize color:[HATheme secondaryTextColor]]];
+                    [targetAttr appendAttributedString:[[NSAttributedString alloc]
+                        initWithString:[NSString stringWithFormat:@" %.1f %@", targetTemp.doubleValue, self.tempUnitString]
+                        attributes:@{HAFontAttributeName: [UIFont ha_systemFontOfSize:secondarySize weight:HAFontWeightMedium],
+                                     HAForegroundColorAttributeName: [HATheme secondaryTextColor]}]];
+                    self.targetLabel.attributedText = targetAttr;
+                } else {
+                    self.targetLabel.text = [NSString stringWithFormat:@"%.1f %@", targetTemp.doubleValue, self.tempUnitString];
+                }
                 self.targetLabel.hidden = NO;
             } else {
                 self.targetLabel.hidden = YES;
@@ -1011,13 +1015,17 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
                 self.tempLabel.text = @"--";
             }
             if (currentTemp) {
-                NSMutableAttributedString *currentAttr = [[NSMutableAttributedString alloc]
-                    initWithAttributedString:[HAIconMapper attributedGlyph:tempIcon fontSize:secondarySize color:[HATheme secondaryTextColor]]];
-                [currentAttr appendAttributedString:[[NSAttributedString alloc]
-                    initWithString:[NSString stringWithFormat:@" %.1f %@", currentTemp.doubleValue, self.tempUnitString]
-                    attributes:@{HAFontAttributeName: [UIFont ha_systemFontOfSize:secondarySize weight:HAFontWeightMedium],
-                                 HAForegroundColorAttributeName: [HATheme secondaryTextColor]}]];
-                self.targetLabel.attributedText = currentAttr;
+                if (HASystemMajorVersion() >= 6) {
+                    NSMutableAttributedString *currentAttr = [[NSMutableAttributedString alloc]
+                        initWithAttributedString:[HAIconMapper attributedGlyph:tempIcon fontSize:secondarySize color:[HATheme secondaryTextColor]]];
+                    [currentAttr appendAttributedString:[[NSAttributedString alloc]
+                        initWithString:[NSString stringWithFormat:@" %.1f %@", currentTemp.doubleValue, self.tempUnitString]
+                        attributes:@{HAFontAttributeName: [UIFont ha_systemFontOfSize:secondarySize weight:HAFontWeightMedium],
+                                     HAForegroundColorAttributeName: [HATheme secondaryTextColor]}]];
+                    self.targetLabel.attributedText = currentAttr;
+                } else {
+                    self.targetLabel.text = [NSString stringWithFormat:@"%.1f %@", currentTemp.doubleValue, self.tempUnitString];
+                }
                 self.targetLabel.hidden = NO;
             } else {
                 self.targetLabel.hidden = YES;
