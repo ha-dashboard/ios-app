@@ -15,7 +15,9 @@
 static const CGFloat kHeadingHeight = 28.0;
 static const CGFloat kHeadingGap = 2.0;
 
-@interface HABaseEntityCell ()
+@interface HABaseEntityCell () {
+    UILabel *_headingIconLabel;
+}
 @property (nonatomic, assign) BOOL showsHeading;
 @end
 
@@ -28,6 +30,15 @@ static const CGFloat kHeadingGap = 2.0;
         self.contentView.layer.masksToBounds = YES;
         self.contentView.layer.borderWidth = 0.0;
         [self applyGradientBackground];
+
+        // Heading icon: separate UILabel for MDI glyph on iOS 5
+        // (iOS 5 can't render mixed fonts in a single attributed string)
+        _headingIconLabel = [[UILabel alloc] init];
+        _headingIconLabel.font = [HAIconMapper mdiFontOfSize:16];
+        _headingIconLabel.textColor = [HATheme secondaryTextColor];
+        _headingIconLabel.textAlignment = NSTextAlignmentCenter;
+        _headingIconLabel.hidden = YES;
+        [self addSubview:_headingIconLabel];
 
         // Heading label: added to the CELL (self), not contentView.
         // When visible, layoutSubviews pushes contentView down below it.
@@ -80,8 +91,13 @@ static const CGFloat kHeadingGap = 2.0;
 
     if (self.showsHeading) {
         CGFloat headingH = kHeadingHeight + kHeadingGap;
-        // Heading sits at top of cell bounds, no card background
-        self.headingLabel.frame = CGRectMake(4, 0, self.bounds.size.width - 8, kHeadingHeight);
+        // Position heading icon + title
+        if (!_headingIconLabel.hidden) {
+            _headingIconLabel.frame = CGRectMake(4, 0, 24, kHeadingHeight);
+            self.headingLabel.frame = CGRectMake(30, 0, self.bounds.size.width - 38, kHeadingHeight);
+        } else {
+            self.headingLabel.frame = CGRectMake(4, 0, self.bounds.size.width - 8, kHeadingHeight);
+        }
         // Push contentView below the heading
         self.contentView.frame = CGRectMake(0, headingH,
             self.bounds.size.width, self.bounds.size.height - headingH);
@@ -118,9 +134,7 @@ static const CGFloat kHeadingGap = 2.0;
         if ([iconName hasPrefix:@"mdi:"]) iconName = [iconName substringFromIndex:4];
         NSString *glyph = [HAIconMapper glyphForIconName:iconName];
         if (glyph && HASystemMajorVersion() >= 6) {
-            // Mixed icon+text attributed string — only works on iOS 6+ where UILabel
-            // supports attributedText natively. On iOS 5, a single label can't render
-            // two fonts (MDI for icon + system for text), so we skip the icon.
+            // iOS 6+: mixed icon+text attributed string in a single label
             NSMutableAttributedString *heading = [[NSMutableAttributedString alloc]
                 initWithAttributedString:[HAIconMapper attributedGlyph:glyph fontSize:16 color:[HATheme secondaryTextColor]]];
             [heading appendAttributedString:[[NSAttributedString alloc] initWithString:
@@ -128,7 +142,14 @@ static const CGFloat kHeadingGap = 2.0;
                 attributes:@{HAFontAttributeName: [UIFont ha_systemFontOfSize:17 weight:HAFontWeightSemibold],
                              HAForegroundColorAttributeName: [HATheme sectionHeaderColor]}]];
             self.headingLabel.attributedText = heading;
+            _headingIconLabel.hidden = YES;
+        } else if (glyph) {
+            // iOS 5: separate icon label (MDI font) + text label (system font)
+            _headingIconLabel.text = glyph;
+            _headingIconLabel.hidden = NO;
+            self.headingLabel.text = configItem.displayName;
         } else {
+            _headingIconLabel.hidden = YES;
             self.headingLabel.text = configItem.displayName;
         }
         self.headingLabel.hidden = NO;
