@@ -178,13 +178,16 @@
 - (void)prepareForReuse {
     [super prepareForReuse];
     self.versionLabel.text = nil;
-    self.versionLabel.textColor = [HATheme secondaryTextColor];
     self.updateButton.hidden = NO;
     self.updateButton.enabled = YES;
     self.skipButton.hidden = YES;
     self.summaryLabel.hidden = YES;
     self.summaryLabel.text = nil;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
+}
+
+- (void)resetThemeColors {
+    [super resetThemeColors];
+    self.versionLabel.textColor = [HATheme secondaryTextColor];
     self.updateButton.backgroundColor = [HATheme accentColor];
 }
 

@@ -86,7 +86,6 @@
     [[HAHTTPClient sharedClient] cancelTask:self.imageTask];
     self.imageTask = nil;
     self.imageView.image = nil;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
 }
 
 @end

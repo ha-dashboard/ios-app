@@ -207,12 +207,7 @@
         self.effectButton.hidden = YES;
     }
 
-    // Background tint when on
-    if (isOn) {
-        self.contentView.backgroundColor = [HATheme onTintColor];
-    } else {
-        self.contentView.backgroundColor = [HATheme cellBackgroundColor];
-    }
+    [self applyOnStateTint:isOn];
 }
 
 #pragma mark - Helpers
@@ -330,12 +325,15 @@
     HASetConstraintActive(self.brightnessAboveColorTempConstraint, NO);
     HASetConstraintActive(self.colorTempBottomConstraint, NO);
     HASetConstraintActive(self.brightnessBottomConstraint, YES);
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
-    self.brightnessLabel.textColor = [HATheme secondaryTextColor];
-    self.colorTempLabel.textColor = [HATheme secondaryTextColor];
     self.colorModeLabel.hidden = YES;
     self.colorModeLabel.text = nil;
     self.effectButton.hidden = YES;
+}
+
+- (void)resetThemeColors {
+    [super resetThemeColors];
+    self.brightnessLabel.textColor = [HATheme secondaryTextColor];
+    self.colorTempLabel.textColor = [HATheme secondaryTextColor];
 }
 
 @end

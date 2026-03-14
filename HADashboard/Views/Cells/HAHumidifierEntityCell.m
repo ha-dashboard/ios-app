@@ -200,11 +200,14 @@
     self.humiditySlider.enabled = YES;
     self.humidityLabel.text = nil;
     self.sliderDragging = NO;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
-    self.humidityLabel.textColor = [HATheme primaryTextColor];
     self.currentHumidityLabel.hidden = YES;
     self.currentHumidityLabel.text = nil;
     self.modeButton.hidden = YES;
+}
+
+- (void)resetThemeColors {
+    [super resetThemeColors];
+    self.humidityLabel.textColor = [HATheme primaryTextColor];
 }
 
 @end

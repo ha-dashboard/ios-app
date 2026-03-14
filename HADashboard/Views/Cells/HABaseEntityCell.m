@@ -199,11 +199,19 @@ static const CGFloat kHeadingGap = 2.0;
     self.headingLabel.hidden = YES;
     self.showsHeading = NO;
     self.contentView.alpha = 1.0;
-    [self applyGradientBackground];
-    // Refresh theme-dependent colors (labels set once in setupSubviews)
+    [self resetThemeColors];
+}
+
+- (void)resetThemeColors {
+    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
+    self.contentView.opaque = NO;
     self.nameLabel.textColor = [HATheme secondaryTextColor];
     self.stateLabel.textColor = [HATheme primaryTextColor];
     self.headingLabel.textColor = [HATheme sectionHeaderColor];
+}
+
+- (void)applyOnStateTint:(BOOL)isOn {
+    self.contentView.backgroundColor = isOn ? [HATheme onTintColor] : [HATheme cellBackgroundColor];
 }
 
 #pragma mark - Factory Helpers

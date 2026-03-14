@@ -89,7 +89,6 @@
 - (void)prepareForReuse {
     [super prepareForReuse];
     [self.mapView removeAnnotations:self.mapView.annotations];
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
 }
 
 @end

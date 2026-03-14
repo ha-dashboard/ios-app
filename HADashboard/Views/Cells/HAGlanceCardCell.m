@@ -142,8 +142,6 @@ static const CGFloat kMinColumnWidth = 70.0; // auto column calculation threshol
         [self.gridContainer addSubview:itemView];
         [self.itemViews addObject:itemView];
     }
-
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
 }
 
 - (void)itemTapped:(UITapGestureRecognizer *)gesture {
@@ -224,7 +222,6 @@ static const CGFloat kMinColumnWidth = 70.0; // auto column calculation threshol
     self.titleLabel.text = nil;
     self.titleLabel.hidden = YES;
     self.entityTapBlock = nil;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
 }
 
 @end

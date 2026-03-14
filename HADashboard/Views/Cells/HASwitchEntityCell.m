@@ -38,12 +38,7 @@
     self.toggleSwitch.on = entity.isOn;
     self.toggleSwitch.enabled = entity.isAvailable;
 
-    // Tint based on state
-    if (entity.isOn) {
-        self.contentView.backgroundColor = [HATheme onTintColor];
-    } else {
-        self.contentView.backgroundColor = [HATheme cellBackgroundColor];
-    }
+    [self applyOnStateTint:entity.isOn];
 }
 
 - (void)switchToggled:(UISwitch *)sender {
@@ -71,7 +66,6 @@
     [super prepareForReuse];
     self.toggleSwitch.on = NO;
     self.toggleSwitch.enabled = YES;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
 }
 
 @end

@@ -261,15 +261,15 @@ static const NSInteger kMaxEntries = 10;
 - (void)prepareForReuse {
     [super prepareForReuse];
     self.titleLabel.text = nil;
-    self.titleLabel.textColor = [HATheme primaryTextColor];
     self.loaded = NO;
     self.emptyLabel.hidden = YES;
     [self.spinner stopAnimating];
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
     for (UIView *v in [self.entryStack.arrangedSubviews copy]) {
         [self.entryStack removeArrangedSubview:v];
         [v removeFromSuperview];
     }
+    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
+    self.titleLabel.textColor = [HATheme primaryTextColor];
 }
 
 @end

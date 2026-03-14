@@ -88,7 +88,10 @@
     self.iconLabel.text = nil;
     self.countLabel.text = nil;
     self.itemCountDescLabel.text = nil;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
+}
+
+- (void)resetThemeColors {
+    [super resetThemeColors];
     self.countLabel.textColor = [HATheme primaryTextColor];
     self.itemCountDescLabel.textColor = [HATheme secondaryTextColor];
 }

@@ -169,10 +169,13 @@ static const NSTimeInterval kActivationFeedbackDuration = 1.5;
     self.activating = NO;
     self.activateButton.alpha = 1.0;
     self.feedbackLabel.alpha = 0.0;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
+    self.stopButton.hidden = YES;
+}
+
+- (void)resetThemeColors {
+    [super resetThemeColors];
     self.activateButton.backgroundColor = [HATheme accentColor];
     self.feedbackLabel.textColor = [HATheme successColor];
-    self.stopButton.hidden = YES;
     self.stopButton.backgroundColor = [HATheme destructiveColor];
 }
 

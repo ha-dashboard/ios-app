@@ -208,7 +208,6 @@
     [super prepareForReuse];
     self.lockStateLabel.text = nil;
     self.openButton.hidden = YES;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
 }
 
 @end

@@ -50,9 +50,7 @@
 
     // Color code binary sensors
     if ([[entity domain] isEqualToString:@"binary_sensor"]) {
-        self.contentView.backgroundColor = entity.isOn
-            ? [HATheme onTintColor]
-            : [HATheme cellBackgroundColor];
+        [self applyOnStateTint:entity.isOn];
     }
 }
 
@@ -74,7 +72,10 @@
     [super prepareForReuse];
     self.valueLabel.text = nil;
     self.unitLabel.text = nil;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
+}
+
+- (void)resetThemeColors {
+    [super resetThemeColors];
     self.valueLabel.textColor = [HATheme primaryTextColor];
     self.unitLabel.textColor = [HATheme secondaryTextColor];
 }

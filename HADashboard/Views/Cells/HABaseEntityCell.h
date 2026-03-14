@@ -21,6 +21,17 @@
 /// Returns the extra height needed for the heading area (0 if no heading).
 + (CGFloat)headingHeight;
 
+#pragma mark - Theme Helpers
+
+/// Reset theme-dependent colors for reuse. Base implementation resets
+/// contentView.backgroundColor, nameLabel, stateLabel, headingLabel colors.
+/// Override in subclasses (call super) to reset additional controls.
+- (void)resetThemeColors;
+
+/// Set contentView background based on on/off state.
+/// YES → onTintColor, NO → cellBackgroundColor.
+- (void)applyOnStateTint:(BOOL)isOn;
+
 #pragma mark - Factory Helpers
 
 /// Create a UILabel, add it to contentView, and configure for autolayout.

@@ -75,7 +75,7 @@
         self.activityButton.hidden = YES;
     }
 
-    self.contentView.backgroundColor = isOn ? [HATheme onTintColor] : [HATheme cellBackgroundColor];
+    [self applyOnStateTint:isOn];
 }
 
 - (void)switchToggled:(UISwitch *)sender {
@@ -99,7 +99,6 @@
     [super prepareForReuse];
     self.toggleSwitch.on = NO;
     self.activityButton.hidden = YES;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
 }
 
 @end
