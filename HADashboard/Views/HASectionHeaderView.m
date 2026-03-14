@@ -36,6 +36,7 @@
     self.titleLabel.font = [UIFont ha_systemFontOfSize:17 weight:HAFontWeightSemibold];
     self.titleLabel.textColor = [HATheme sectionHeaderColor];
     self.titleLabel.textAlignment = NSTextAlignmentLeft;
+    self.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
     self.titleLabel.numberOfLines = 1;
     self.titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:self.titleLabel];
