@@ -535,16 +535,12 @@
     self.tileIconLabel.hidden = NO;
     self.tileNameLabel.hidden = NO;
     self.tileStateLabel.hidden = NO;
-    self.tileIconLabel.textColor = [HATheme primaryTextColor];
-    self.tileStateLabel.textColor = [HATheme secondaryTextColor];
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
     // Force reset to normal mode — set flags to YES first so the guards
     // in apply*Mode: don't short-circuit when already NO.
     self.isVertical = YES;
     [self applyVerticalMode:NO];
     self.isCompact = YES;
     [self applyCompactMode:NO];
-    self.tileNameLabel.textColor = [HATheme primaryTextColor];
 
     // Clear entity picture
     [self.pictureTask cancel];
@@ -561,6 +557,13 @@
     self.featuresStack.hidden = YES;
 
     self.iconTapBlock = nil;
+}
+
+- (void)resetThemeColors {
+    [super resetThemeColors];
+    self.tileIconLabel.textColor = [HATheme primaryTextColor];
+    self.tileStateLabel.textColor = [HATheme secondaryTextColor];
+    self.tileNameLabel.textColor = [HATheme primaryTextColor];
 }
 
 #pragma mark - Icon Tap

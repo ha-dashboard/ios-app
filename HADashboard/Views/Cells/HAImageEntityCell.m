@@ -74,7 +74,6 @@
     [self.imageTask cancel];
     self.imageTask = nil;
     self.imageView.image = nil;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
 }
 
 @end

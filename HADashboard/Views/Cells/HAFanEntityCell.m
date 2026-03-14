@@ -193,12 +193,7 @@
         self.directionButton.hidden = YES;
     }
 
-    // Background tint when on
-    if (isOn) {
-        self.contentView.backgroundColor = [HATheme onTintColor];
-    } else {
-        self.contentView.backgroundColor = [HATheme cellBackgroundColor];
-    }
+    [self applyOnStateTint:isOn];
 }
 
 #pragma mark - Actions
@@ -271,7 +266,10 @@
     self.speedUpButton.hidden = YES;
     self.speedDownButton.hidden = YES;
     self.sliderDragging = NO;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
+}
+
+- (void)resetThemeColors {
+    [super resetThemeColors];
     self.speedLabel.textColor = [HATheme secondaryTextColor];
 }
 

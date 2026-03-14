@@ -128,7 +128,6 @@
         [self.entityIconStack removeArrangedSubview:v];
         [v removeFromSuperview];
     }
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
 }
 
 @end

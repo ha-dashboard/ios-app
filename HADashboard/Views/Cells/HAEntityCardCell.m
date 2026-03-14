@@ -126,11 +126,14 @@
     self.entityIconLabel.text = nil;
     self.entityNameLabel.text = nil;
     self.entityStateLabel.text = nil;
+    self.alpha = 1.0;
+}
+
+- (void)resetThemeColors {
+    [super resetThemeColors];
     self.entityIconLabel.textColor = [HATheme secondaryTextColor];
     self.entityStateLabel.textColor = [HATheme primaryTextColor];
     self.entityNameLabel.textColor = [HATheme primaryTextColor];
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
-    self.alpha = 1.0;
 }
 
 @end

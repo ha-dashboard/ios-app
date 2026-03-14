@@ -154,7 +154,6 @@
     self.currentTempLabel.text = nil;
     self.currentTempLabel.hidden = YES;
     self.modeButton.hidden = YES;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
 }
 
 @end

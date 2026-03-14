@@ -191,7 +191,6 @@ static const CGFloat kTitleHeight = 24.0;
     self.titleLabel.text = nil;
     self.titleLabel.hidden = YES;
     self.contentLabel.attributedText = nil;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
     self.contentView.layer.cornerRadius = 12.0;
 }
 

@@ -1318,7 +1318,6 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
     self.coloredArcLayer.strokeEnd = 0.0;
     self.fgArcLayer.strokeStart = 0.0;
     self.fgArcLayer.strokeEnd = 0.0;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
     self.availableModes = nil;
     self.currentMode = nil;
     self.currentAction = nil;
@@ -1349,8 +1348,10 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
     // Keep cachedGlowImage/cachedGlowColor/cachedGlowSize — bitmap is color-keyed, safe to reuse
     self.lastBuiltModes = nil;
     self.lastBuiltCurrentMode = nil;
+}
 
-    // Refresh theme colors (static on iOS 9-12)
+- (void)resetThemeColors {
+    [super resetThemeColors];
     self.tempLabel.textColor = [HATheme primaryTextColor];
     self.targetLabel.textColor = [HATheme secondaryTextColor];
     self.modeLabel.textColor = [HATheme secondaryTextColor];

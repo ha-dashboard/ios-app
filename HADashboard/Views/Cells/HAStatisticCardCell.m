@@ -119,7 +119,6 @@
     self.statValueLabel.text = nil;
     self.statTypeLabel.text = nil;
     self.statNameLabel.text = nil;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
     self.alpha = 1.0;
 }
 

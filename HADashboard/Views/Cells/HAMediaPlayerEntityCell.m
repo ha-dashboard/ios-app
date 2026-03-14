@@ -594,16 +594,8 @@ static const CGFloat kPadding        = 12.0;
     self.playPauseButton.alpha = 1.0;
     self.nextButton.alpha = 1.0;
     self.iconCircle.backgroundColor = nil;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
-    self.mpNameLabel.textColor = [HATheme primaryTextColor];
-    self.mpStateLabel.textColor = [HATheme secondaryTextColor];
-    self.mediaInfoLabel.textColor = [HATheme secondaryTextColor];
-    self.prevButton.backgroundColor = [HATheme buttonBackgroundColor];
-    self.playPauseButton.backgroundColor = [HATheme buttonBackgroundColor];
-    self.nextButton.backgroundColor = [HATheme buttonBackgroundColor];
     self.volumeSlider.value = 0;
     self.volumeLabel.text = nil;
-    self.volumeLabel.textColor = [HATheme secondaryTextColor];
     [self.artLoadTask cancel];
     self.artLoadTask = nil;
     self.albumArtView.image = nil;
@@ -612,6 +604,17 @@ static const CGFloat kPadding        = 12.0;
     self.progressSlider.hidden = YES;
     self.lastKnownDuration = 0;
     self.sourceButton.hidden = YES;
+}
+
+- (void)resetThemeColors {
+    [super resetThemeColors];
+    self.mpNameLabel.textColor = [HATheme primaryTextColor];
+    self.mpStateLabel.textColor = [HATheme secondaryTextColor];
+    self.mediaInfoLabel.textColor = [HATheme secondaryTextColor];
+    self.prevButton.backgroundColor = [HATheme buttonBackgroundColor];
+    self.playPauseButton.backgroundColor = [HATheme buttonBackgroundColor];
+    self.nextButton.backgroundColor = [HATheme buttonBackgroundColor];
+    self.volumeLabel.textColor = [HATheme secondaryTextColor];
 }
 
 @end

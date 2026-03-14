@@ -103,7 +103,10 @@ static const NSTimeInterval kPressFeedbackDuration = 1.5;
     self.pressing = NO;
     self.pressButton.alpha = 1.0;
     self.feedbackLabel.alpha = 0.0;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
+}
+
+- (void)resetThemeColors {
+    [super resetThemeColors];
     self.pressButton.backgroundColor = [HATheme accentColor];
     self.feedbackLabel.textColor = [HATheme successColor];
 }

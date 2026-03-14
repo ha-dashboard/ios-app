@@ -256,7 +256,10 @@
     self.tiltSlider.hidden = YES;
     self.tiltLabel.hidden = YES;
     self.isTrackingSlider = NO;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
+}
+
+- (void)resetThemeColors {
+    [super resetThemeColors];
     self.positionLabel.textColor = [HATheme secondaryTextColor];
     self.openButton.backgroundColor = [HATheme buttonBackgroundColor];
     self.stopButton.backgroundColor = [HATheme buttonBackgroundColor];

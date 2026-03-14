@@ -303,8 +303,11 @@ static const NSInteger kDefaultForecastRows = 5;
     self.conditionSymbol.text = nil;
     self.tempLabel.text = nil;
     self.detailsLabel.text = nil;
-    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
     for (UIView *v in self.forecastContainer.subviews) [v removeFromSuperview];
+}
+
+- (void)resetThemeColors {
+    [super resetThemeColors];
     self.tempLabel.textColor = [HATheme primaryTextColor];
     self.detailsLabel.textColor = [HATheme secondaryTextColor];
 }

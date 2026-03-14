@@ -209,7 +209,6 @@ static NSArray<UIColor *> *sColorPalette;
     self.graphBottomToStats.active = NO;
     self.graphBottomToContent.active = YES;
 
-    // Refresh theme colors (static on iOS 9-12)
     self.contentView.backgroundColor = [HATheme cellBackgroundColor];
     self.nameLabel.textColor = [HATheme secondaryTextColor];
     self.valueLabel.textColor = [HATheme primaryTextColor];
