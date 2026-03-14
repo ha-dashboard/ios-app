@@ -367,6 +367,9 @@ static NSString *const kModeToken   = @"token";
         self.authModeSegment.frame = CGRectMake(0, y, w, segSize.height);
         y = CGRectGetMaxY(self.authModeSegment.frame) + sectionGap;
 
+        // Layout container internals before measuring the stack
+        [self layoutContainersManually];
+
         // Auth fields stack
         CGSize stackSize = [self.authFieldsStack sizeThatFits:CGSizeMake(w, CGFLOAT_MAX)];
         self.authFieldsStack.frame = CGRectMake(0, y, w, stackSize.height);
@@ -385,6 +388,75 @@ static NSString *const kModeToken   = @"token";
         self.spinner.frame = CGRectMake((w - spinSize.width) / 2,
                                         CGRectGetMaxY(self.statusLabel.frame) + 6,
                                         spinSize.width, spinSize.height);
+    }
+}
+
+/// Frame-based layout for login/token/trusted containers when Auto Layout is disabled.
+/// The containers are inside an HAStackView which calls sizeThatFits: on each child,
+/// but the internal subviews have zero frames without constraints.
+- (void)layoutContainersManually {
+    CGFloat w = self.authFieldsStack.bounds.size.width;
+    if (w <= 0) w = self.bounds.size.width;
+    CGFloat fieldHeight = 44.0;
+    CGFloat labelGap = 6.0;
+
+    // ── Login container ───────────────────────────────────────────────
+    if (!self.loginContainer.hidden) {
+        CGFloat y = 0;
+        for (UIView *sub in self.loginContainer.subviews) {
+            if ([sub isKindOfClass:[UILabel class]]) {
+                CGSize s = [sub sizeThatFits:CGSizeMake(w, CGFLOAT_MAX)];
+                sub.frame = CGRectMake(0, y, w, s.height);
+                y = CGRectGetMaxY(sub.frame) + labelGap;
+            } else if ([sub isKindOfClass:[UITextField class]]) {
+                sub.frame = CGRectMake(0, y, w, fieldHeight);
+                y = CGRectGetMaxY(sub.frame) + 16;
+            }
+        }
+        // Adjust last gap (hint label gets 8pt, not 16)
+        CGFloat totalH = 0;
+        for (UIView *sub in self.loginContainer.subviews) {
+            CGFloat bottom = CGRectGetMaxY(sub.frame);
+            if (bottom > totalH) totalH = bottom;
+        }
+        self.loginContainer.frame = CGRectMake(self.loginContainer.frame.origin.x,
+                                                self.loginContainer.frame.origin.y,
+                                                w, totalH);
+    }
+
+    // ── Token container ───────────────────────────────────────────────
+    if (!self.tokenContainer.hidden) {
+        CGFloat y = 0;
+        for (UIView *sub in self.tokenContainer.subviews) {
+            if ([sub isKindOfClass:[UILabel class]]) {
+                CGSize s = [sub sizeThatFits:CGSizeMake(w, CGFLOAT_MAX)];
+                sub.frame = CGRectMake(0, y, w, s.height);
+                y = CGRectGetMaxY(sub.frame) + labelGap;
+            } else if ([sub isKindOfClass:[UITextField class]]) {
+                sub.frame = CGRectMake(0, y, w, fieldHeight);
+                y = CGRectGetMaxY(sub.frame) + 8;
+            }
+        }
+        CGFloat totalH = 0;
+        for (UIView *sub in self.tokenContainer.subviews) {
+            CGFloat bottom = CGRectGetMaxY(sub.frame);
+            if (bottom > totalH) totalH = bottom;
+        }
+        self.tokenContainer.frame = CGRectMake(self.tokenContainer.frame.origin.x,
+                                                self.tokenContainer.frame.origin.y,
+                                                w, totalH);
+    }
+
+    // ── Trusted container ─────────────────────────────────────────────
+    if (!self.trustedContainer.hidden) {
+        UIView *hint = self.trustedContainer.subviews.firstObject;
+        if (hint) {
+            CGSize s = [hint sizeThatFits:CGSizeMake(w, CGFLOAT_MAX)];
+            hint.frame = CGRectMake(0, 8, w, s.height);
+            self.trustedContainer.frame = CGRectMake(self.trustedContainer.frame.origin.x,
+                                                      self.trustedContainer.frame.origin.y,
+                                                      w, s.height + 12);
+        }
     }
 }
 
