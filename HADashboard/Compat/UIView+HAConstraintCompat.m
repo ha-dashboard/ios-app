@@ -356,6 +356,9 @@ static void HAInstallConstraintStubs(void) {
                 if (self) {
                     self.backgroundColor = [UIColor clearColor];
                     self.opaque = NO;
+                    // NSTextAlignmentNatural (4) doesn't exist on iOS 5 and may
+                    // cause garbled text rendering. Force left alignment.
+                    self.textAlignment = NSTextAlignmentLeft;
                 }
                 return self;
             });
