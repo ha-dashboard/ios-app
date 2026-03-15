@@ -35,6 +35,7 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 @property (nonatomic, copy) NSDictionary *pendingStrategyConfig; // stored for re-resolution after states/registries load
 @property (nonatomic, copy, readwrite) NSArray<NSDictionary *> *availableDashboards;
 @property (nonatomic, assign) NSInteger lovelaceMessageId;
+@property (nonatomic, copy) NSString *lovelaceRequestedPath; // dashboard path that lovelaceMessageId was sent for
 @property (nonatomic, assign) NSInteger dashboardListMessageId;
 @property (nonatomic, assign) NSInteger areaRegistryMessageId;
 @property (nonatomic, assign) NSInteger entityRegistryMessageId;
@@ -269,11 +270,20 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     self.devicesLoaded = NO;
     self.floorsLoaded = NO;
     self.lovelaceMessageId = 0;
+    self.lovelaceRequestedPath = nil;
     self.dashboardListMessageId = 0;
     self.areaRegistryMessageId = 0;
     self.entityRegistryMessageId = 0;
     self.deviceRegistryMessageId = 0;
     self.floorRegistryMessageId = 0;
+}
+
+- (void)clearEntityStore {
+    @synchronized(self.entityStore) {
+        [self.entityStore removeAllObjects];
+    }
+    self.lovelaceDashboard = nil;
+    HALogI(@"conn", @"Entity store and dashboard cleared");
 }
 
 #pragma mark - Data
@@ -385,6 +395,11 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     }
 
     if (self.wsClient.isAuthenticated) {
+        // Clear any pending strategy from a previous dashboard so that a
+        // concurrent fetchAllStates completion doesn't overwrite the new
+        // dashboard with a stale strategy resolution.
+        self.pendingStrategyConfig = nil;
+        self.lovelaceRequestedPath = [urlPath copy];
         self.lovelaceMessageId = [self.wsClient fetchLovelaceConfigForDashboard:urlPath];
     } else {
         HALogW(@"conn", @"Cannot fetch Lovelace — WebSocket not authenticated");
@@ -1045,9 +1060,24 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
                     }
                 }
 
-                // Cache the raw Lovelace config to disk
-                NSString *dashPath = [[HAAuthManager sharedManager] selectedDashboardPath];
+                // Cache the raw Lovelace config to disk using the path we
+                // requested, not the currently-selected path (which may have
+                // changed if the user switched dashboards while the request
+                // was in flight).
+                NSString *dashPath = self.lovelaceRequestedPath;
                 [[HADashboardConfigCache sharedCache] cacheConfig:result forDashboard:dashPath];
+
+                // If the user switched to a different dashboard while this
+                // response was in flight, discard it — the new dashboard's
+                // fetch will deliver the correct config.
+                NSString *currentPath = [[HAAuthManager sharedManager] selectedDashboardPath];
+                BOOL pathsMatch = (dashPath == currentPath) || [dashPath isEqualToString:currentPath];
+                if (!pathsMatch) {
+                    HALogI(@"conn", @"Discarding stale Lovelace response for '%@' (now viewing '%@')",
+                           dashPath ?: @"(default)", currentPath ?: @"(default)");
+                    self.lovelaceMessageId = 0;
+                    return;
+                }
 
                 // Check if this is a strategy-based dashboard
                 NSDictionary *strategy = result[@"strategy"];

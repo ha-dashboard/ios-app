@@ -10,6 +10,9 @@
 #import "HATheme.h"
 #import "HASwitch.h"
 #import "HALog.h"
+#import "HACacheManager.h"
+#import "HAEntityStateCache.h"
+#import "HAHistoryManager.h"
 
 
 // NSUserDefaults keys for device integration
@@ -57,6 +60,9 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 // Camera audio mute
 @property (nonatomic, strong) UIView *cameraMuteSection;
 @property (nonatomic, strong) UISwitch *cameraMuteSwitch;
+
+// Clear cache
+@property (nonatomic, strong) UIButton *clearCacheButton;
 
 // Device Integration
 @property (nonatomic, strong) UILabel *integrationSectionHeader;
@@ -316,6 +322,16 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     self.cameraMuteSwitch = camMuteSw;
     [container addSubview:self.cameraMuteSection];
 
+    // Clear cache button
+    self.clearCacheButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [self.clearCacheButton setTitle:@"Clear Cache & Reload" forState:UIControlStateNormal];
+    self.clearCacheButton.titleLabel.font = [UIFont systemFontOfSize:16];
+    self.clearCacheButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+    [self.clearCacheButton setTitleColor:[HATheme destructiveColor] forState:UIControlStateNormal];
+    self.clearCacheButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.clearCacheButton addTarget:self action:@selector(clearCacheTapped) forControlEvents:UIControlEventTouchUpInside];
+    [container addSubview:self.clearCacheButton];
+
     // ── DEVICE INTEGRATION section ────────────────────────────────────
     self.integrationSectionHeader = [self createSectionHeaderWithText:@"DEVICE INTEGRATION"];
     [container addSubview:self.integrationSectionHeader];
@@ -415,6 +431,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         @"demo":      self.demoSection,
         @"autoReload":self.autoReloadSection,
         @"camMute":   self.cameraMuteSection,
+        @"clrCache":  self.clearCacheButton,
         @"intHdr":    self.integrationSectionHeader,
         @"intSec":    self.integrationSection,
         @"aboutHdr":  self.aboutSectionHeader,
@@ -426,7 +443,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     NSDictionary *metrics = @{@"p": @16, @"sh": @32, @"hg": @10, @"fh": @44};
 
     [container addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[demo]-p-[autoReload]-p-[camMute]-sh-[intHdr]-hg-[intSec]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
+        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[demo]-p-[autoReload]-p-[camMute]-p-[clrCache(fh)]-sh-[intHdr]-hg-[intSec]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
         options:0 metrics:metrics views:views]];
 
     for (NSString *name in views) {
@@ -902,6 +919,35 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         });
     }
     [self updateConnectionSummary];
+}
+
+#pragma mark - Clear Cache
+
+- (void)clearCacheTapped {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Clear Cache"
+        message:@"This will clear all cached entity states and dashboard configs, then reload from the current source."
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Clear & Reload" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+        // Clear persistent disk caches
+        [[HACacheManager sharedManager] clearAllCaches];
+
+        // Clear in-memory caches
+        [[HAHistoryManager sharedManager] clearCache];
+
+        // Disconnect and clear in-memory entity store
+        HAConnectionManager *conn = [HAConnectionManager sharedManager];
+        [conn disconnect];
+        [conn clearEntityStore];
+
+        // Reconnect — loads from demo provider or real server depending on mode
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [conn connect];
+        });
+
+        HALogI(@"settings", @"Cache cleared and reload triggered");
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 #pragma mark - Logout

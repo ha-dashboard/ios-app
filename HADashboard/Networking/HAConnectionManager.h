@@ -44,6 +44,9 @@ extern NSString *const HAConnectionManagerDidReceiveRegistriesNotification;    /
 - (void)connect;
 - (void)disconnect;
 
+/// Remove all in-memory entities and dashboard config (used by "Clear Cache").
+- (void)clearEntityStore;
+
 /// Fetch all entity states via REST, then subscribe via WebSocket
 - (void)fetchAllStates;
 
