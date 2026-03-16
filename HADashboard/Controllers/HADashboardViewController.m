@@ -1025,6 +1025,15 @@ static const CGFloat kRowUnitHeight = 56.0;
     BOOL isSidebar = [view.viewType isEqualToString:@"sidebar"];
     BOOL isIPad = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad);
 
+    // Clear data source and sync the collection view before switching layouts.
+    // UIKit's setCollectionViewLayout: reconciles its cached section/item counts
+    // against the data source.  If the previous config had a different section
+    // structure (e.g. multi-section "sections" view → single-section masonry),
+    // the mismatch causes an NSInternalInconsistencyException.  We must nil the
+    // config AND call reloadData so UIKit's internal counts match (both zero).
+    self.dashboardConfig = nil;
+    [self.collectionView reloadData];
+
     if (isMasonry) {
         // Masonry view: shortest-column-first layout with HA breakpoints
         [self applyMasonryLayout];
