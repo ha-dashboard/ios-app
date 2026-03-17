@@ -56,6 +56,11 @@
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     [HALog logStartup:@"didFinishLaunching START"];
 
+    // Log app version and build number for diagnostics
+    NSString *appVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"?";
+    NSString *buildNumber = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"?";
+    HALogI(@"startup", @"App version: %@ (%@)", appVersion, buildNumber);
+
     // Performance monitor — opt-in via developer settings toggle or launch arg.
     // Default OFF to avoid CADisplayLink + timer overhead on production devices.
     if ([[NSUserDefaults standardUserDefaults] boolForKey:@"HAPerfMonitorEnabled"] ||

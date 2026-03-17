@@ -78,6 +78,8 @@
 		0A4C81F2E37EB6639DFA0EEF /* testEntitiesCard5Rows__gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = D1226B8BE48CEBB4B01DFEA6 /* testEntitiesCard5Rows__gradient@2x.png */; };
 		0A545760E10B96EDA3871C0A /* HAEntity+Humidifier.m in Sources */ = {isa = PBXBuildFile; fileRef = 8CE1309D6715AA7185FF825E /* HAEntity+Humidifier.m */; };
 		0ABD799AC8AFA8C64D8F29E4 /* HACacheTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A4ADBBFFA9D4D28AD62F59F /* HACacheTests.m */; };
+		CA116D12E4556E8037A7150E /* HADashboardRaceConditionTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 9F000368C64A97A3A5ADFAB3 /* HADashboardRaceConditionTests.m */; };
+		9F000368C64A97A3A5ADFAB3 /* HADashboardRaceConditionTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HADashboardRaceConditionTests.m; sourceTree = "<group>"; };
 		0B3364612241E7CB9F7389DF /* testInputDateTimeBoth__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = D72B4B8027BFC32A6F59E78D /* testInputDateTimeBoth__light@2x.png */; };
 		0BBB184B59BC16481A144018 /* HAEntity.m in Sources */ = {isa = PBXBuildFile; fileRef = 89DA3E5DCC67522C94EC97CF /* HAEntity.m */; };
 		0BE750FD2213FCDCE6552861 /* HAColumnarLayout.m in Sources */ = {isa = PBXBuildFile; fileRef = FC3CB8070AF3E191A023BE08 /* HAColumnarLayout.m */; };
@@ -4426,6 +4428,7 @@
 				328789DB337D0797BCDCDD9D /* HABaseSnapshotTestCase.h */,
 				CB202B450A9EBD9E273426E3 /* HABaseSnapshotTestCase.m */,
 				6A4ADBBFFA9D4D28AD62F59F /* HACacheTests.m */,
+				9F000368C64A97A3A5ADFAB3 /* HADashboardRaceConditionTests.m */,
 				2943BB830FEC55FCCEDF66F3 /* HAClassicLayoutTests.m */,
 				A8072BB3C22561E6A2C4170E /* HAClimateSnapshotTests.m */,
 				6F1BA5152B815D413B721C0B /* HACompositeSnapshotTests.m */,
@@ -5896,6 +5899,7 @@
 				6B96F455BB4F3F95F71499E9 /* HAAuthManagerTests.m in Sources */,
 				DA435C75D5CFF7853B085407 /* HABaseSnapshotTestCase.m in Sources */,
 				0ABD799AC8AFA8C64D8F29E4 /* HACacheTests.m in Sources */,
+				CA116D12E4556E8037A7150E /* HADashboardRaceConditionTests.m in Sources */,
 				D1159FB81724A845F116D1BE /* HAClassicLayoutTests.m in Sources */,
 				A324B257636E2DBD3E48BBCA /* HAClimateSnapshotTests.m in Sources */,
 				10EF3E7F400D8073D7E48296 /* HACompositeSnapshotTests.m in Sources */,

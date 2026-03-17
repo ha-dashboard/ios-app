@@ -261,6 +261,8 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
             // Show subtle "Connecting..." in connection bar while we establish live connection
             [self showConnectionBar:YES message:@"Connecting..."];
         } else {
+            HALogI(@"dash", @"Instant launch MISSED — cachedStates=%d, cachedDashboard=%d",
+                   (conn.allEntities.count > 0), (conn.lovelaceDashboard != nil));
             [self showLoading:YES message:@"Connecting..."];
         }
         [conn connect];
@@ -918,7 +920,21 @@ static const CGFloat kRowUnitHeight = 56.0;
 }
 
 - (void)rebuildDashboard {
-    if (!self.statesLoaded) return;
+    if (!self.statesLoaded) {
+        // The entity store may already have cached entities from loadCachedStateIfAvailable
+        // even though statesLoaded is NO (set only by the REST fetchAllStates completion).
+        // If we have entities, promote to statesLoaded so we can render immediately
+        // rather than showing a white screen until the REST call completes.
+        NSUInteger entityCount = [[HAConnectionManager sharedManager] allEntities].count;
+        if (entityCount > 0) {
+            HALogI(@"dash", @"rebuildDashboard: promoting statesLoaded (have %lu cached entities)", (unsigned long)entityCount);
+            self.statesLoaded = YES;
+        } else {
+            HALogD(@"dash", @"rebuildDashboard: SKIPPED (statesLoaded=NO, lovelaceFetchDone=%d, entities=0)",
+                   self.lovelaceFetchDone);
+            return;
+        }
+    }
     // Don't build until we know whether a Lovelace config exists — otherwise
     // we briefly flash the auto-generated "default" entity dump before the
     // real dashboard arrives.

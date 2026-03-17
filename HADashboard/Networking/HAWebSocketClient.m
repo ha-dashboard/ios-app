@@ -154,6 +154,10 @@
 
     if ([type isEqualToString:@"auth_ok"]) {
         self.authenticated = YES;
+        NSString *haVersion = message[@"ha_version"];
+        if (haVersion) {
+            HALogI(@"conn", @"Home Assistant version: %@", haVersion);
+        }
         dispatch_async(dispatch_get_main_queue(), ^{
             [self.delegate webSocketClientDidAuthenticate:self];
         });
