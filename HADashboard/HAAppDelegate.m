@@ -1,5 +1,6 @@
 #import "HAAppDelegate.h"
 #import "HAAuthManager.h"
+#import "HAProximityWakeController.h"
 #import "HAPerfMonitor.h"
 #import "HAConnectionManager.h"
 #import "HADashboardViewController.h"
@@ -21,6 +22,23 @@
 @end
 
 @implementation HAThemeAwareWindow
+
+- (void)sendEvent:(UIEvent *)event {
+    [super sendEvent:event];
+    // Notify HAProximityWakeController of user interaction so it can reset
+    // the idle timer or wake the screen. We only care about touch-began so
+    // rapid move/end events don't flood the notification center.
+    if (event.type == UIEventTypeTouches) {
+        for (UITouch *touch in [event allTouches]) {
+            if (touch.phase == UITouchPhaseBegan) {
+                [[NSNotificationCenter defaultCenter]
+                    postNotificationName:HAWindowUserDidInteractNotification object:nil];
+                break;
+            }
+        }
+    }
+}
+
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
     [super traitCollectionDidChange:previousTraitCollection];
     if (@available(iOS 13.0, *)) {

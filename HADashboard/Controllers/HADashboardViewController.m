@@ -44,6 +44,7 @@
 #import "HAHistoryManager.h"
 #import "HASunBasedTheme.h"
 #import "HAToastView.h"
+#import "HAProximityWakeController.h"
 #import <QuartzCore/QuartzCore.h>
 
 static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
@@ -70,6 +71,7 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 @property (nonatomic, assign) BOOL usesColumnarLayout;
 @property (nonatomic, strong) UITapGestureRecognizer *kioskExitTap;
 @property (nonatomic, strong) NSTimer *kioskHideTimer;
+@property (nonatomic, strong) HAProximityWakeController *proximityWakeController;
 @property (nonatomic, strong) NSLayoutConstraint *viewPickerTopConstraint;
 @property (nonatomic, strong) NSLayoutConstraint *collectionViewTopToPickerConstraint;
 @property (nonatomic, strong) NSLayoutConstraint *collectionViewTopToViewConstraint;
@@ -294,11 +296,26 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     }
 }
 
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    // viewWillAppear may fire before the view is in a window on iOS 9 (self.view.window is nil).
+    // Start the proximity wake controller now if it wasn't started there.
+    if (!self.proximityWakeController
+            && [[HAAuthManager sharedManager] isKioskMode]
+            && [[HAAuthManager sharedManager] proximityWakeEnabled]) {
+        self.proximityWakeController = [[HAProximityWakeController alloc]
+            initWithWindow:self.view.window];
+        [self.proximityWakeController start];
+    }
+}
+
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [self.kioskHideTimer invalidate];
     self.kioskHideTimer = nil;
+    [self.proximityWakeController stop];
+    self.proximityWakeController = nil;
 
     // Restore idle timer and nav bar when leaving dashboard
 #if !TARGET_OS_MACCATALYST
@@ -1275,6 +1292,18 @@ static const CGFloat kRowUnitHeight = 56.0;
 
 - (void)applyKioskMode {
     BOOL kiosk = [[HAAuthManager sharedManager] isKioskMode];
+    BOOL wakeOnTouch = kiosk && [[HAAuthManager sharedManager] proximityWakeEnabled];
+
+    if (wakeOnTouch) {
+        if (!self.proximityWakeController && self.view.window) {
+            self.proximityWakeController = [[HAProximityWakeController alloc]
+                initWithWindow:self.view.window];
+            [self.proximityWakeController start];
+        }
+    } else {
+        [self.proximityWakeController stop];
+        self.proximityWakeController = nil;
+    }
 #if !TARGET_OS_MACCATALYST
     [UIApplication sharedApplication].idleTimerDisabled = kiosk;
 #endif

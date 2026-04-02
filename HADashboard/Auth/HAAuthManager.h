@@ -25,6 +25,10 @@ typedef NS_ENUM(NSInteger, HAAuthMode) {
 /// Kiosk mode: hides nav bar, disables screen sleep
 @property (nonatomic, readonly, getter=isKioskMode) BOOL kioskMode;
 
+/// Wake on touch after idle: dims screen after 60 s inactivity, wakes on touch.
+/// Only active when kiosk mode is also enabled.
+@property (nonatomic, readonly) BOOL proximityWakeEnabled;
+
 /// Demo mode: uses bundled demo data instead of connecting to a real server
 @property (nonatomic, readonly, getter=isDemoMode) BOOL demoMode;
 
@@ -60,6 +64,7 @@ typedef NS_ENUM(NSInteger, HAAuthMode) {
 
 - (void)saveSelectedDashboardPath:(NSString *)urlPath;
 - (void)setKioskMode:(BOOL)enabled;
+- (void)setProximityWakeEnabled:(BOOL)enabled;
 - (void)setDemoMode:(BOOL)enabled;
 - (void)setAutoReloadDashboard:(BOOL)enabled;
 - (void)setCameraGlobalMute:(BOOL)muted;

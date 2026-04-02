@@ -11,7 +11,8 @@ static NSString *const kAuthModeKey      = @"ha_auth_mode";
 static NSString *const kRefreshTokenKey  = @"ha_refresh_token";
 static NSString *const kTokenExpiryKey   = @"ha_token_expiry";
 static NSString *const kSelectedDashboardKey = @"ha_selected_dashboard";
-static NSString *const kKioskModeKey     = @"ha_kiosk_mode";
+static NSString *const kKioskModeKey         = @"ha_kiosk_mode";
+static NSString *const kProximityWakeKey     = @"ha_proximity_wake";
 static NSString *const kDemoModeKey      = @"ha_demo_mode";
 static NSString *const kAutoReloadDashboardKey = @"ha_auto_reload_dashboard";
 static NSString *const kCameraGlobalMuteKey = @"HACameraGlobalMute";
@@ -54,6 +55,7 @@ static NSString *const kCameraGlobalMuteKey = @"HACameraGlobalMute";
         HALogD(@"auth", @"  keychain: refreshToken done");
         _selectedDashboardPath = [[NSUserDefaults standardUserDefaults] stringForKey:kSelectedDashboardKey];
         _kioskMode = [[NSUserDefaults standardUserDefaults] boolForKey:kKioskModeKey];
+        _proximityWakeEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:kProximityWakeKey];
         _demoMode = [[NSUserDefaults standardUserDefaults] boolForKey:kDemoModeKey];
         // Default to YES when key hasn't been explicitly set
         if ([[NSUserDefaults standardUserDefaults] objectForKey:kAutoReloadDashboardKey] != nil) {
@@ -280,6 +282,13 @@ static NSString *const kCameraGlobalMuteKey = @"HACameraGlobalMute";
 - (void)setKioskMode:(BOOL)enabled {
     _kioskMode = enabled;
     [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:kKioskModeKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    [[NSNotificationCenter defaultCenter] postNotificationName:HAAuthManagerDidUpdateNotification object:self];
+}
+
+- (void)setProximityWakeEnabled:(BOOL)enabled {
+    _proximityWakeEnabled = enabled;
+    [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:kProximityWakeKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
     [[NSNotificationCenter defaultCenter] postNotificationName:HAAuthManagerDidUpdateNotification object:self];
 }

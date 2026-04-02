@@ -50,6 +50,10 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 @property (nonatomic, strong) UIView *kioskSection;
 @property (nonatomic, strong) UISwitch *kioskSwitch;
 
+// Wake on touch (sub-setting of kiosk mode)
+@property (nonatomic, strong) UIView *proximityWakeSection;
+@property (nonatomic, strong) UISwitch *proximityWakeSwitch;
+
 // Demo mode
 @property (nonatomic, strong) UIView *demoSection;
 @property (nonatomic, strong) UISwitch *demoSwitch;
@@ -293,6 +297,19 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     self.kioskSwitch = kioskSw;
     [container addSubview:self.kioskSection];
 
+    // Wake on touch — sub-setting shown below kiosk, disabled when kiosk is off
+    BOOL kioskOn = [[HAAuthManager sharedManager] isKioskMode];
+    UISwitch *proxWakeSw = nil;
+    self.proximityWakeSection = [self createToggleSection:@"Wake on Touch"
+        helpText:@"Dims the screen after 60 seconds of inactivity. Touch anywhere to wake."
+        isOn:[[HAAuthManager sharedManager] proximityWakeEnabled]
+        target:self action:@selector(proximityWakeSwitchToggled:)
+        switchOut:&proxWakeSw];
+    proxWakeSw.enabled = kioskOn;
+    self.proximityWakeSection.alpha = kioskOn ? 1.0 : 0.4;
+    self.proximityWakeSwitch = proxWakeSw;
+    [container addSubview:self.proximityWakeSection];
+
     // Demo mode
     UISwitch *demoSw = nil;
     self.demoSection = [self createToggleSection:@"Demo Mode"
@@ -429,6 +446,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         @"themeStack":self.themeStack,
         @"dispHdr":   self.displaySectionHeader,
         @"kiosk":     self.kioskSection,
+        @"proxWake":  self.proximityWakeSection,
         @"demo":      self.demoSection,
         @"autoReload":self.autoReloadSection,
         @"camMute":   self.cameraMuteSection,
@@ -444,7 +462,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     NSDictionary *metrics = @{@"p": @16, @"sh": @32, @"hg": @10, @"fh": @44};
 
     [container addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[demo]-p-[autoReload]-p-[camMute]-p-[clrCache(fh)]-sh-[intHdr]-hg-[intSec]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
+        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[proxWake]-p-[demo]-p-[autoReload]-p-[camMute]-p-[clrCache(fh)]-sh-[intHdr]-hg-[intSec]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
         options:0 metrics:metrics views:views]];
 
     for (NSString *name in views) {
@@ -853,6 +871,20 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 
 - (void)kioskSwitchToggled:(UISwitch *)sender {
     [[HAAuthManager sharedManager] setKioskMode:sender.isOn];
+    // Enable/disable the dependent wake-on-touch sub-setting
+    self.proximityWakeSwitch.enabled = sender.isOn;
+    [UIView animateWithDuration:0.2 animations:^{
+        self.proximityWakeSection.alpha = sender.isOn ? 1.0 : 0.4;
+    }];
+    if (!sender.isOn && self.proximityWakeSwitch.isOn) {
+        // Turn off wake-on-touch when kiosk is disabled
+        [self.proximityWakeSwitch setOn:NO animated:YES];
+        [[HAAuthManager sharedManager] setProximityWakeEnabled:NO];
+    }
+}
+
+- (void)proximityWakeSwitchToggled:(UISwitch *)sender {
+    [[HAAuthManager sharedManager] setProximityWakeEnabled:sender.isOn];
 }
 
 - (void)autoReloadSwitchToggled:(UISwitch *)sender {
