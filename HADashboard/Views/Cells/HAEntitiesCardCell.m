@@ -171,36 +171,193 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
     }
 }
 
+static inline NSString *HANormalizeState(id val) {
+    if (!val) return @"";
+    NSString *str = [[val description] lowercaseString];
+    if ([str isEqualToString:@"1"] || [str isEqualToString:@"true"] || [str isEqualToString:@"on"]) {
+        return @"on";
+    }
+    if ([str isEqualToString:@"0"] || [str isEqualToString:@"false"] || [str isEqualToString:@"off"]) {
+        return @"off";
+    }
+    return str;
+}
+
++ (BOOL)meetsCondition:(NSDictionary *)condition
+              entities:(NSDictionary *)entities {
+    if (![condition isKindOfClass:[NSDictionary class]]) return YES;
+
+    NSString *condType = condition[@"condition"];
+    if (!condType && condition[@"entity"]) {
+        condType = @"state";
+    }
+
+    if ([condType isEqualToString:@"state"]) {
+        NSString *entityId = condition[@"entity"];
+        if (!entityId) return YES;
+
+        HAEntity *entity = entities[entityId];
+        NSString *currentState = entity.state;
+
+        id requiredStateRaw = condition[@"state"];
+        id requiredStateNotRaw = condition[@"state_not"];
+
+        if (requiredStateRaw) {
+            NSArray *requiredStates = [requiredStateRaw isKindOfClass:[NSArray class]]
+                                          ? (NSArray *)requiredStateRaw
+                                          : @[ [requiredStateRaw description] ];
+            BOOL matched = NO;
+            NSString *currNorm = HANormalizeState(currentState);
+            for (id req in requiredStates) {
+                if ([HANormalizeState(req) isEqualToString:currNorm]) {
+                    matched = YES;
+                    break;
+                }
+            }
+            if (!matched) return NO;
+        }
+
+        if (requiredStateNotRaw) {
+            NSArray *requiredStatesNot = [requiredStateNotRaw isKindOfClass:[NSArray class]]
+                                              ? (NSArray *)requiredStateNotRaw
+                                              : @[ [requiredStateNotRaw description] ];
+            NSString *currNorm = HANormalizeState(currentState);
+            for (id req in requiredStatesNot) {
+                if ([HANormalizeState(req) isEqualToString:currNorm]) {
+                    return NO;
+                }
+            }
+        }
+        return YES;
+    }
+
+    if ([condType isEqualToString:@"numeric_state"]) {
+        NSString *entityId = condition[@"entity"];
+        if (!entityId) return YES;
+
+        HAEntity *entity = entities[entityId];
+        NSString *currentState = entity.state;
+        if (!currentState) return NO;
+
+        double currentVal = [currentState doubleValue];
+        id aboveRaw = condition[@"above"];
+        id belowRaw = condition[@"below"];
+
+        if (aboveRaw) {
+            double aboveVal = [aboveRaw doubleValue];
+            if (currentVal <= aboveVal) return NO;
+        }
+        if (belowRaw) {
+            double belowVal = [belowRaw doubleValue];
+            if (currentVal >= belowVal) return NO;
+        }
+        return YES;
+    }
+
+    if ([condType isEqualToString:@"and"]) {
+        NSArray *subConditions = condition[@"conditions"];
+        if ([subConditions isKindOfClass:[NSArray class]]) {
+            for (NSDictionary *sub in subConditions) {
+                if (![self meetsCondition:sub entities:entities]) return NO;
+            }
+        }
+        return YES;
+    }
+
+    if ([condType isEqualToString:@"or"]) {
+        NSArray *subConditions = condition[@"conditions"];
+        if ([subConditions isKindOfClass:[NSArray class]]) {
+            if (subConditions.count == 0) return YES;
+            for (NSDictionary *sub in subConditions) {
+                if ([self meetsCondition:sub entities:entities]) return YES;
+            }
+            return NO;
+        }
+        return YES;
+    }
+
+    if ([condType isEqualToString:@"not"]) {
+        NSArray *subConditions = condition[@"conditions"];
+        if ([subConditions isKindOfClass:[NSArray class]]) {
+            for (NSDictionary *sub in subConditions) {
+                if ([self meetsCondition:sub entities:entities]) return NO;
+            }
+        }
+        return YES;
+    }
+
+    if ([condType isEqualToString:@"user"]) {
+        return YES; // always pass local dashboard
+    }
+
+    if ([condType isEqualToString:@"screen"]) {
+        NSString *query = condition[@"media_query"];
+        if ([query isKindOfClass:[NSString class]]) {
+            CGFloat width = [UIScreen mainScreen].bounds.size.width;
+            if ([query containsString:@"min-width"]) {
+                NSScanner *scanner = [NSScanner scannerWithString:query];
+                [scanner scanUpToString:@"min-width" intoString:nil];
+                [scanner scanString:@"min-width" intoString:nil];
+                [scanner scanUpToCharactersFromSet:[NSCharacterSet decimalDigitCharacterSet] intoString:nil];
+                NSInteger minWidth = 0;
+                if ([scanner scanInteger:&minWidth] && width < minWidth) {
+                    return NO;
+                }
+            }
+            if ([query containsString:@"max-width"]) {
+                NSScanner *scanner = [NSScanner scannerWithString:query];
+                [scanner scanUpToString:@"max-width" intoString:nil];
+                [scanner scanString:@"max-width" intoString:nil];
+                [scanner scanUpToCharactersFromSet:[NSCharacterSet decimalDigitCharacterSet] intoString:nil];
+                NSInteger maxWidth = 0;
+                if ([scanner scanInteger:&maxWidth] && width > maxWidth) {
+                    return NO;
+                }
+            }
+        }
+        return YES;
+    }
+
+    return YES;
+}
+
+- (BOOL)meetsCondition:(NSDictionary *)condition
+              entities:(NSDictionary *)entities {
+    return [[self class] meetsCondition:condition entities:entities];
+}
+
++ (NSInteger)visibleRowCountForRows:(NSArray *)rows
+                            entities:(NSDictionary *)entities {
+    NSInteger count = 0;
+    for (NSDictionary *row in rows) {
+        NSString *rowType = row[@"row_type"];
+        if ([rowType isEqualToString:@"conditional"]) {
+            NSArray *conditions = row[@"conditions"];
+            NSDictionary *innerRow = row[@"row"];
+            if ([conditions isKindOfClass:[NSArray class]] &&
+                [innerRow isKindOfClass:[NSDictionary class]]) {
+                BOOL allMet = YES;
+                for (NSDictionary *cond in conditions) {
+                    if (![self meetsCondition:cond entities:entities]) {
+                        allMet = NO;
+                        break;
+                    }
+                }
+                if (allMet) {
+                    count += [self visibleRowCountForRows:@[ innerRow ]
+                                                 entities:entities];
+                }
+            }
+        } else {
+            count++;
+        }
+    }
+    return count;
+}
+
 - (void)configureWithSection:(HADashboardConfigSection *)section
                     entities:(NSDictionary *)entityDict
                   configItem:(HADashboardConfigItem *)configItem {
-    // Fast-path: if same section and row count matches, just update entity states
-    // without rebuilding the entire cell structure (saves ~160ms on A5).
-    NSArray<NSString *> *entityIds = section.entityIds ?: @[];
-    if (self.lastConfiguredSection == section &&
-        self.rowViews.count == (NSUInteger)entityIds.count &&
-        self.rowViews.count > 0) {
-        for (NSUInteger i = 0; i < self.rowViews.count && i < entityIds.count; i++) {
-            HAEntity *entity = entityDict[entityIds[i]];
-            HAEntityRowView *rowView = self.rowViews[i];
-            NSString *nameOverride = section.nameOverrides[entityIds[i]];
-            if (nameOverride) {
-                [rowView configureWithEntity:entity nameOverride:nameOverride];
-            } else {
-                [rowView configureWithEntity:entity];
-            }
-        }
-        // Update header toggle state
-        if (self.headerToggle && !self.headerToggle.hidden) {
-            BOOL allOn = YES;
-            for (NSString *eid in entityIds) {
-                HAEntity *e = entityDict[eid];
-                if (e && ![e isOn]) { allOn = NO; break; }
-            }
-            [self.headerToggle setOn:allOn animated:NO];
-        }
-        return;
-    }
     self.lastConfiguredSection = section;
 
     // Configure heading (above card, from grid heading)
@@ -239,11 +396,8 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
     } else {
         self.titleLabel.hidden = YES;
     }
-    // Constraint activation deferred until after toggle visibility is determined (below)
 
-    // Header toggle: when explicitly configured, use that value.
-    // When absent, default to YES if card has title AND ≥2 toggleable entities
-    // (matches HA frontend's computeShowHeaderToggle behavior).
+    NSArray<NSString *> *entityIds = section.entityIds ?: @[];
 
     // Entity-filter card: filter entities by state at render time
     NSArray *stateFilter = section.customProperties[@"state_filter"];
@@ -263,14 +417,14 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
         entityIds = [filtered copy];
     }
 
-    NSInteger entityCount = entityIds.count;
-
+    // Header toggle: when explicitly configured, use that value.
+    // When absent, default to YES if card has title AND >=2 toggleable entities
     BOOL showToggle;
     id toggleProp = section.customProperties[@"showHeaderToggle"];
     if (toggleProp) {
         showToggle = [toggleProp boolValue];
     } else {
-        // Compute default: title present + ≥2 toggleable entities
+        // Compute default: title present + >=2 toggleable entities
         showToggle = NO;
         if (hasTitle) {
             NSInteger toggleCount = 0;
@@ -330,257 +484,250 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
     NSDictionary *chipNames = section.customProperties[@"sceneChipNames"];
     if (![chipNames isKindOfClass:[NSDictionary class]]) chipNames = nil;
 
-    NSInteger rowCount = entityCount;
-
-    // Pool-based row view management: reuse hidden views instead of creating/destroying.
-    // Each HAEntityRowView allocates 10+ subviews with 30+ constraints — expensive on iPad 2.
-    NSInteger poolSize = (NSInteger)self.rowViews.count;
-    // Create only the deficit
-    for (NSInteger i = poolSize; i < rowCount; i++) {
-        HAEntityRowView *rowView = [[HAEntityRowView alloc] initWithFrame:CGRectZero];
-        [self.rowViews addObject:rowView];
-        [self.stackView addArrangedSubview:rowView];
-    }
-    // Show needed rows, hide excess (keep in pool for reuse)
-    for (NSInteger i = 0; i < (NSInteger)self.rowViews.count; i++) {
-        self.rowViews[i].hidden = (i >= rowCount);
-    }
-
-    // Remove any previously added special row views (dividers, section headers)
+    // Clear stack view of all arranged subviews to rebuild dynamically in correct order
     for (UIView *sub in [self.stackView.arrangedSubviews copy]) {
+        [self.stackView removeArrangedSubview:sub];
         if (sub.tag == 999) { // tag 999 = special row
-            [self.stackView removeArrangedSubview:sub];
             [sub removeFromSuperview];
+        } else {
+            sub.hidden = YES;
         }
     }
 
-    // Check for orderedRows (includes divider/section special rows)
+    // Parse orderedRows
     NSArray *orderedRows = section.customProperties[@"orderedRows"];
-
-    // Configure each row view with its entity
-    __weak typeof(self) weakSelf = self;
-    NSInteger entityRowIdx = 0;
-    if (orderedRows.count > 0) {
-        // Ordered mode: iterate orderedRows, insert special views between entity rows
-        for (NSDictionary *rowInfo in orderedRows) {
-            NSString *rowType = rowInfo[@"row_type"];
-            if ([rowType isEqualToString:@"divider"]) {
-                UIView *divider = [[UIView alloc] init];
-                divider.backgroundColor = [HATheme controlBorderColor];
-                divider.tag = 999;
-                divider.translatesAutoresizingMaskIntoConstraints = NO;
-                [divider.heightAnchor constraintEqualToConstant:1].active = YES;
-                // Insert at correct position in stack
-                NSInteger insertIdx = MIN(entityRowIdx, (NSInteger)self.stackView.arrangedSubviews.count);
-                [self.stackView insertArrangedSubview:divider atIndex:insertIdx];
-                entityRowIdx++;
-                continue;
-            }
-            if ([rowType isEqualToString:@"section"]) {
-                UILabel *sectionLabel = [[UILabel alloc] init];
-                sectionLabel.text = rowInfo[@"label"] ?: @"";
-                sectionLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightSemibold];
-                sectionLabel.textColor = [HATheme sectionHeaderColor];
-                sectionLabel.tag = 999;
-                sectionLabel.translatesAutoresizingMaskIntoConstraints = NO;
-                UIEdgeInsets insets = UIEdgeInsetsMake(8, 10, 4, 10);
-                UIView *wrapper = [[UIView alloc] init];
-                wrapper.tag = 999;
-                [wrapper addSubview:sectionLabel];
-                sectionLabel.translatesAutoresizingMaskIntoConstraints = NO;
-                [NSLayoutConstraint activateConstraints:@[
-                    [sectionLabel.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor constant:insets.left],
-                    [sectionLabel.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor constant:-insets.right],
-                    [sectionLabel.topAnchor constraintEqualToAnchor:wrapper.topAnchor constant:insets.top],
-                    [sectionLabel.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor constant:-insets.bottom],
-                ]];
-                NSInteger insertIdx = MIN(entityRowIdx, (NSInteger)self.stackView.arrangedSubviews.count);
-                [self.stackView insertArrangedSubview:wrapper atIndex:insertIdx];
-                entityRowIdx++;
-                continue;
-            }
-            if ([rowType isEqualToString:@"weblink"]) {
-                UIButton *linkRow = [UIButton buttonWithType:UIButtonTypeSystem];
-                NSString *iconName = rowInfo[@"icon"];
-                NSString *name = rowInfo[@"name"] ?: rowInfo[@"url"] ?: @"Link";
-                if (iconName) {
-                    if ([iconName hasPrefix:@"mdi:"]) iconName = [iconName substringFromIndex:4];
-                    NSString *glyph = [HAIconMapper glyphForIconName:iconName];
-                    if (glyph) {
-                        name = [NSString stringWithFormat:@"%@  %@", glyph, name];
-                    }
-                }
-                [linkRow setTitle:name forState:UIControlStateNormal];
-                linkRow.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
-                linkRow.contentEdgeInsets = UIEdgeInsetsMake(0, 10, 0, 10);
-                linkRow.titleLabel.font = [UIFont systemFontOfSize:14];
-                [linkRow setTitleColor:[HATheme accentColor] forState:UIControlStateNormal];
-                linkRow.tag = 999;
-                linkRow.translatesAutoresizingMaskIntoConstraints = NO;
-                [linkRow.heightAnchor constraintEqualToConstant:36].active = YES;
-                // Store URL for tap — use objc_setAssociatedObject or just open on tap
-                NSString *url = rowInfo[@"url"];
-                [linkRow addTarget:self action:@selector(weblinkTapped:) forControlEvents:UIControlEventTouchUpInside];
-                if (url) linkRow.accessibilityValue = url; // store URL for retrieval
-                NSInteger insertIdx = MIN(entityRowIdx, (NSInteger)self.stackView.arrangedSubviews.count);
-                [self.stackView insertArrangedSubview:linkRow atIndex:insertIdx];
-                entityRowIdx++;
-                continue;
-            }
-            if ([rowType isEqualToString:@"button"]) {
-                UIButton *btnRow = [UIButton buttonWithType:UIButtonTypeSystem];
-                NSString *name = rowInfo[@"action_name"] ?: rowInfo[@"name"] ?: @"Run";
-                NSString *iconName = rowInfo[@"icon"];
-                if (iconName) {
-                    if ([iconName hasPrefix:@"mdi:"]) iconName = [iconName substringFromIndex:4];
-                    NSString *glyph = [HAIconMapper glyphForIconName:iconName];
-                    if (glyph) name = [NSString stringWithFormat:@"%@  %@", glyph, name];
-                }
-                [btnRow setTitle:name forState:UIControlStateNormal];
-                btnRow.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
-                btnRow.contentEdgeInsets = UIEdgeInsetsMake(0, 10, 0, 10);
-                btnRow.titleLabel.font = [UIFont systemFontOfSize:14];
-                btnRow.tag = 999;
-                btnRow.translatesAutoresizingMaskIntoConstraints = NO;
-                [btnRow.heightAnchor constraintEqualToConstant:36].active = YES;
-                // Wire tap action from config
-                NSDictionary *tapAction = rowInfo[@"tap_action"];
-                if ([tapAction isKindOfClass:[NSDictionary class]]) {
-                    objc_setAssociatedObject(btnRow, kButtonActionKey, tapAction, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                    [btnRow addTarget:self action:@selector(buttonRowTapped:) forControlEvents:UIControlEventTouchUpInside];
-                }
-                NSInteger insertIdx = MIN(entityRowIdx, (NSInteger)self.stackView.arrangedSubviews.count);
-                [self.stackView insertArrangedSubview:btnRow atIndex:insertIdx];
-                entityRowIdx++;
-                continue;
-            }
-            if ([rowType isEqualToString:@"buttons"]) {
-                UIStackView *btnStack = [[UIStackView alloc] init];
-                btnStack.axis = UILayoutConstraintAxisHorizontal;
-                btnStack.spacing = 8;
-                btnStack.distribution = UIStackViewDistributionFillEqually;
-                btnStack.tag = 999;
-                btnStack.translatesAutoresizingMaskIntoConstraints = NO;
-                [btnStack.heightAnchor constraintEqualToConstant:36].active = YES;
-                NSArray *entities = rowInfo[@"entities"];
-                if ([entities isKindOfClass:[NSArray class]]) {
-                    for (id btnEntry in entities) {
-                        NSString *entityId = nil;
-                        NSString *btnName = nil;
-                        if ([btnEntry isKindOfClass:[NSString class]]) {
-                            entityId = btnEntry;
-                            HAEntity *e = entityDict[entityId];
-                            btnName = [e friendlyName] ?: entityId;
-                        } else if ([btnEntry isKindOfClass:[NSDictionary class]]) {
-                            entityId = btnEntry[@"entity"];
-                            btnName = btnEntry[@"name"];
-                            if (!btnName) {
-                                HAEntity *e = entityDict[entityId];
-                                btnName = [e friendlyName] ?: entityId ?: @"Button";
-                            }
-                        }
-                        UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
-                        [btn setTitle:btnName forState:UIControlStateNormal];
-                        btn.titleLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightMedium];
-                        btn.backgroundColor = [HATheme buttonBackgroundColor];
-                        btn.layer.cornerRadius = 6;
-                        if (entityId) {
-                            objc_setAssociatedObject(btn, kButtonEntityIdKey, entityId, OBJC_ASSOCIATION_COPY_NONATOMIC);
-                            [btn addTarget:self action:@selector(buttonsRowEntityTapped:) forControlEvents:UIControlEventTouchUpInside];
-                        }
-                        [btnStack addArrangedSubview:btn];
-                    }
-                }
-                UIView *wrapper = [[UIView alloc] init];
-                wrapper.tag = 999;
-                [wrapper addSubview:btnStack];
-                btnStack.translatesAutoresizingMaskIntoConstraints = NO;
-                [NSLayoutConstraint activateConstraints:@[
-                    [btnStack.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor constant:10],
-                    [btnStack.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor constant:-10],
-                    [btnStack.topAnchor constraintEqualToAnchor:wrapper.topAnchor constant:4],
-                    [btnStack.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor constant:-4],
-                ]];
-                NSInteger insertIdx = MIN(entityRowIdx, (NSInteger)self.stackView.arrangedSubviews.count);
-                [self.stackView insertArrangedSubview:wrapper atIndex:insertIdx];
-                entityRowIdx++;
-                continue;
-            }
-            if ([rowType isEqualToString:@"conditional"]) {
-                // Evaluate conditions — if all match, render the inner row as an entity
-                NSArray *conditions = rowInfo[@"conditions"];
-                NSDictionary *innerRow = rowInfo[@"row"];
-                if ([conditions isKindOfClass:[NSArray class]] && [innerRow isKindOfClass:[NSDictionary class]]) {
-                    BOOL allMet = YES;
-                    for (NSDictionary *cond in conditions) {
-                        if (![cond isKindOfClass:[NSDictionary class]]) continue;
-                        NSString *condEntityId = cond[@"entity"];
-                        NSString *condState = cond[@"state"];
-                        if (condEntityId && condState) {
-                            HAEntity *condEntity = entityDict[condEntityId];
-                            if (!condEntity || ![condEntity.state isEqualToString:condState]) {
-                                allMet = NO;
-                                break;
-                            }
-                        }
-                    }
-                    if (allMet) {
-                        // The inner row is a regular entity — add to orderedRows as entity
-                        NSString *innerEntity = innerRow[@"entity"];
-                        if (innerEntity) {
-                            // This entity row will be rendered in the standard entity loop below
-                            entityRowIdx++;
-                            continue;
-                        }
-                    }
-                    // Condition not met or no inner entity — skip (insert nothing)
-                }
-                entityRowIdx++;
-                continue;
-            }
-            // Regular entity row — handled below in the entity loop
-            entityRowIdx++;
+    if (orderedRows.count == 0) {
+        NSMutableArray *temp = [NSMutableArray arrayWithCapacity:entityIds.count];
+        for (NSString *eid in entityIds) {
+            [temp addObject:@{@"entity" : eid}];
         }
+        orderedRows = [temp copy];
     }
 
-    // Reset entity row index for actual configuration
-    for (NSInteger i = 0; i < rowCount; i++) {
-        NSString *entityId = entityIds[i];
-        HAEntity *entity = entityDict[entityId];
-        HAEntityRowView *rowView = self.rowViews[i];
+    // Pool-based row view management setup
+    __block NSInteger rowViewUseIdx = 0;
+    __weak typeof(self) weakSelf = self;
 
-        // Per-entity row config (actions, secondary_info, attribute, state_color)
-        NSDictionary *entityRowConfigs = section.customProperties[@"entityRowConfigs"];
-        NSDictionary *rowCfg = entityRowConfigs[entityId];
-
-        // Set properties BEFORE configure (configure reads them)
-        // state_color: per-entity override > card-level > default NO
-        if (rowCfg[@"state_color"]) {
-            rowView.stateColor = [rowCfg[@"state_color"] boolValue];
+    HAEntityRowView * (^getOrCreateRowView)(void) = ^HAEntityRowView * {
+        if (rowViewUseIdx < (NSInteger)weakSelf.rowViews.count) {
+            HAEntityRowView *rv = weakSelf.rowViews[rowViewUseIdx++];
+            rv.hidden = NO;
+            return rv;
         } else {
-            rowView.stateColor = [section.customProperties[@"state_color"] boolValue];
+            HAEntityRowView *rv = [[HAEntityRowView alloc] initWithFrame:CGRectZero];
+            [weakSelf.rowViews addObject:rv];
+            [weakSelf.stackView addSubview:rv]; // load into hierarchy
+            rowViewUseIdx++;
+            return rv;
         }
-        rowView.secondaryInfo = rowCfg[@"secondary_info"];
-        rowView.secondaryInfoFormat = rowCfg[@"format"];
-        rowView.attributeOverride = rowCfg[@"attribute"];
+    };
 
-        NSString *nameOverride = section.nameOverrides[entityId];
-        if (nameOverride) {
-            [rowView configureWithEntity:entity nameOverride:nameOverride];
-        } else {
-            [rowView configureWithEntity:entity];
+    // Recursive block to render rows in order
+    __block void (^renderRowBlock)(NSDictionary *rowInfo);
+    void (^renderRowBlockTmp)(NSDictionary *rowInfo) = ^(NSDictionary *rowInfo) {
+        NSString *rowType = rowInfo[@"row_type"];
+        if ([rowType isEqualToString:@"divider"]) {
+            UIView *divider = [[UIView alloc] init];
+            divider.backgroundColor = [HATheme controlBorderColor];
+            divider.tag = 999;
+            divider.translatesAutoresizingMaskIntoConstraints = NO;
+            [divider.heightAnchor constraintEqualToConstant:1].active = YES;
+            [weakSelf.stackView addArrangedSubview:divider];
+            return;
         }
-
-        // Per-entity action config
-        rowView.actionConfig = rowCfg;
-
-        rowView.entityTapBlock = ^(HAEntity *tappedEntity) {
-            if (weakSelf.entityTapBlock) {
-                weakSelf.entityTapBlock(tappedEntity);
+        if ([rowType isEqualToString:@"section"]) {
+            UILabel *sectionLabel = [[UILabel alloc] init];
+            sectionLabel.text = rowInfo[@"label"] ?: @"";
+            sectionLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightSemibold];
+            sectionLabel.textColor = [HATheme sectionHeaderColor];
+            sectionLabel.tag = 999;
+            sectionLabel.translatesAutoresizingMaskIntoConstraints = NO;
+            UIEdgeInsets insets = UIEdgeInsetsMake(8, 10, 4, 10);
+            UIView *wrapper = [[UIView alloc] init];
+            wrapper.tag = 999;
+            [wrapper addSubview:sectionLabel];
+            sectionLabel.translatesAutoresizingMaskIntoConstraints = NO;
+            [NSLayoutConstraint activateConstraints:@[
+                [sectionLabel.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor constant:insets.left],
+                [sectionLabel.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor constant:-insets.right],
+                [sectionLabel.topAnchor constraintEqualToAnchor:wrapper.topAnchor constant:insets.top],
+                [sectionLabel.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor constant:-insets.bottom],
+            ]];
+            [weakSelf.stackView addArrangedSubview:wrapper];
+            return;
+        }
+        if ([rowType isEqualToString:@"weblink"]) {
+            UIButton *linkRow = [UIButton buttonWithType:UIButtonTypeSystem];
+            NSString *iconName = rowInfo[@"icon"];
+            NSString *name = rowInfo[@"name"] ?: rowInfo[@"url"] ?: @"Link";
+            if (iconName) {
+                if ([iconName hasPrefix:@"mdi:"]) iconName = [iconName substringFromIndex:4];
+                NSString *glyph = [HAIconMapper glyphForIconName:iconName];
+                if (glyph) {
+                    name = [NSString stringWithFormat:@"%@  %@", glyph, name];
+                }
             }
-        };
+            [linkRow setTitle:name forState:UIControlStateNormal];
+            linkRow.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+            linkRow.contentEdgeInsets = UIEdgeInsetsMake(0, 10, 0, 10);
+            linkRow.titleLabel.font = [UIFont systemFontOfSize:14];
+            [linkRow setTitleColor:[HATheme accentColor] forState:UIControlStateNormal];
+            linkRow.tag = 999;
+            linkRow.translatesAutoresizingMaskIntoConstraints = NO;
+            [linkRow.heightAnchor constraintEqualToConstant:36].active = YES;
+            NSString *url = rowInfo[@"url"];
+            [linkRow addTarget:weakSelf action:@selector(weblinkTapped:) forControlEvents:UIControlEventTouchUpInside];
+            if (url) linkRow.accessibilityValue = url;
+            [weakSelf.stackView addArrangedSubview:linkRow];
+            return;
+        }
+        if ([rowType isEqualToString:@"button"]) {
+            UIButton *btnRow = [UIButton buttonWithType:UIButtonTypeSystem];
+            NSString *name = rowInfo[@"action_name"] ?: rowInfo[@"name"] ?: @"Run";
+            NSString *iconName = rowInfo[@"icon"];
+            if (iconName) {
+                if ([iconName hasPrefix:@"mdi:"]) iconName = [iconName substringFromIndex:4];
+                NSString *glyph = [HAIconMapper glyphForIconName:iconName];
+                if (glyph) name = [NSString stringWithFormat:@"%@  %@", glyph, name];
+            }
+            [btnRow setTitle:name forState:UIControlStateNormal];
+            btnRow.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+            btnRow.contentEdgeInsets = UIEdgeInsetsMake(0, 10, 0, 10);
+            btnRow.titleLabel.font = [UIFont systemFontOfSize:14];
+            btnRow.tag = 999;
+            btnRow.translatesAutoresizingMaskIntoConstraints = NO;
+            [btnRow.heightAnchor constraintEqualToConstant:36].active = YES;
+            NSDictionary *tapAction = rowInfo[@"tap_action"];
+            if ([tapAction isKindOfClass:[NSDictionary class]]) {
+                objc_setAssociatedObject(btnRow, kButtonActionKey, tapAction, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                [btnRow addTarget:weakSelf action:@selector(buttonRowTapped:) forControlEvents:UIControlEventTouchUpInside];
+            }
+            [weakSelf.stackView addArrangedSubview:btnRow];
+            return;
+        }
+        if ([rowType isEqualToString:@"buttons"]) {
+            UIStackView *btnStack = [[UIStackView alloc] init];
+            btnStack.axis = UILayoutConstraintAxisHorizontal;
+            btnStack.spacing = 8;
+            btnStack.distribution = UIStackViewDistributionFillEqually;
+            btnStack.tag = 999;
+            btnStack.translatesAutoresizingMaskIntoConstraints = NO;
+            [btnStack.heightAnchor constraintEqualToConstant:36].active = YES;
+            NSArray *entities = rowInfo[@"entities"];
+            if ([entities isKindOfClass:[NSArray class]]) {
+                for (id btnEntry in entities) {
+                    NSString *entityId = nil;
+                    NSString *btnName = nil;
+                    if ([btnEntry isKindOfClass:[NSString class]]) {
+                        entityId = btnEntry;
+                        HAEntity *e = entityDict[entityId];
+                        btnName = [e friendlyName] ?: entityId;
+                    } else if ([btnEntry isKindOfClass:[NSDictionary class]]) {
+                        entityId = btnEntry[@"entity"];
+                        btnName = btnEntry[@"name"];
+                        if (!btnName) {
+                            HAEntity *e = entityDict[entityId];
+                            btnName = [e friendlyName] ?: entityId ?: @"Button";
+                        }
+                    }
+                    UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
+                    [btn setTitle:btnName forState:UIControlStateNormal];
+                    btn.titleLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightMedium];
+                    btn.backgroundColor = [HATheme buttonBackgroundColor];
+                    btn.layer.cornerRadius = 6;
+                    if (entityId) {
+                        objc_setAssociatedObject(btn, kButtonEntityIdKey, entityId, OBJC_ASSOCIATION_COPY_NONATOMIC);
+                        [btn addTarget:weakSelf action:@selector(buttonsRowEntityTapped:) forControlEvents:UIControlEventTouchUpInside];
+                    }
+                    [btnStack addArrangedSubview:btn];
+                }
+            }
+            UIView *wrapper = [[UIView alloc] init];
+            wrapper.tag = 999;
+            [wrapper addSubview:btnStack];
+            btnStack.translatesAutoresizingMaskIntoConstraints = NO;
+            [NSLayoutConstraint activateConstraints:@[
+                [btnStack.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor constant:10],
+                [btnStack.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor constant:-10],
+                [btnStack.topAnchor constraintEqualToAnchor:wrapper.topAnchor constant:4],
+                [btnStack.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor constant:-4],
+            ]];
+            [weakSelf.stackView addArrangedSubview:wrapper];
+            return;
+        }
+        if ([rowType isEqualToString:@"conditional"]) {
+            NSArray *conditions = rowInfo[@"conditions"];
+            NSDictionary *innerRow = rowInfo[@"row"];
+            if ([conditions isKindOfClass:[NSArray class]] && [innerRow isKindOfClass:[NSDictionary class]]) {
+                BOOL allMet = YES;
+                for (NSDictionary *cond in conditions) {
+                    if (![weakSelf meetsCondition:cond entities:entityDict]) {
+                        allMet = NO;
+                        break;
+                    }
+                }
+                if (allMet) {
+                    renderRowBlock(innerRow);
+                }
+            }
+            return;
+        }
 
-        rowView.showsSeparator = (i < rowCount - 1);
+        // Regular entity row
+        NSString *entityId = rowInfo[@"entity"];
+        if (entityId) {
+            HAEntity *entity = entityDict[entityId];
+            HAEntityRowView *rowView = getOrCreateRowView();
+
+            NSDictionary *entityRowConfigs = section.customProperties[@"entityRowConfigs"];
+            NSDictionary *rowCfg = entityRowConfigs[entityId];
+
+            if (rowCfg[@"state_color"]) {
+                rowView.stateColor = [rowCfg[@"state_color"] boolValue];
+            } else {
+                rowView.stateColor = [section.customProperties[@"state_color"] boolValue];
+            }
+            rowView.secondaryInfo = rowCfg[@"secondary_info"];
+            rowView.secondaryInfoFormat = rowCfg[@"format"];
+            rowView.attributeOverride = rowCfg[@"attribute"];
+
+            NSString *nameOverride = section.nameOverrides[entityId];
+            if (nameOverride) {
+                [rowView configureWithEntity:entity nameOverride:nameOverride];
+            } else {
+                [rowView configureWithEntity:entity];
+            }
+
+            rowView.actionConfig = rowCfg;
+            rowView.entityTapBlock = ^(HAEntity *tappedEntity) {
+                if (weakSelf.entityTapBlock) {
+                    weakSelf.entityTapBlock(tappedEntity);
+                }
+            };
+            [weakSelf.stackView addArrangedSubview:rowView];
+        }
+    };
+    renderRowBlock = renderRowBlockTmp;
+
+    // Render all rows
+    for (NSDictionary *rowInfo in orderedRows) {
+        renderRowBlock(rowInfo);
+    }
+
+    // Set separator visibility on arranged subviews of type HAEntityRowView
+    NSMutableArray<HAEntityRowView *> *visibleEntityRows = [NSMutableArray array];
+    for (UIView *subview in self.stackView.arrangedSubviews) {
+        if ([subview isKindOfClass:[HAEntityRowView class]]) {
+            [visibleEntityRows addObject:(HAEntityRowView *)subview];
+        }
+    }
+    for (NSInteger i = 0; i < (NSInteger)visibleEntityRows.count; i++) {
+        visibleEntityRows[i].showsSeparator = (i < (NSInteger)visibleEntityRows.count - 1);
+    }
+
+    // Hide any unused row views in the pool
+    for (NSInteger i = rowViewUseIdx; i < (NSInteger)self.rowViews.count; i++) {
+        self.rowViews[i].hidden = YES;
     }
 
     // Scene chips
@@ -641,7 +788,18 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
 
 + (CGFloat)preferredHeightForSection:(HADashboardConfigSection *)section
                             entities:(NSDictionary *)entityDict {
-    NSInteger rowCount = (NSInteger)(section.entityIds.count);
+    NSArray *entityIds = section.entityIds ?: @[];
+    NSArray *orderedRows = section.customProperties[@"orderedRows"];
+    if (orderedRows.count == 0) {
+        NSMutableArray *temp = [NSMutableArray arrayWithCapacity:entityIds.count];
+        for (NSString *eid in entityIds) {
+            [temp addObject:@{@"entity" : eid}];
+        }
+        orderedRows = [temp copy];
+    }
+
+    NSInteger rowCount = [self visibleRowCountForRows:orderedRows
+                                             entities:entityDict];
     NSArray *sceneIds = section.customProperties[@"sceneEntityIds"];
     BOOL hasChips = [sceneIds isKindOfClass:[NSArray class]] && [(NSArray *)sceneIds count] > 0;
     BOOL hasTitle = section.title.length > 0;
