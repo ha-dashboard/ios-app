@@ -853,6 +853,23 @@ static const CGFloat kRowUnitHeight = 56.0;
     return MAX(cols, 1);
 }
 
+- (void)collectEntityIdsFromCondition:(NSDictionary *)condition
+                               intoSet:(NSMutableSet<NSString *> *)set {
+    if (![condition isKindOfClass:[NSDictionary class]]) return;
+
+    NSString *eid = condition[@"entity"];
+    if (eid) {
+        [set addObject:eid];
+    }
+
+    NSArray *subConditions = condition[@"conditions"];
+    if ([subConditions isKindOfClass:[NSArray class]]) {
+        for (NSDictionary *sub in subConditions) {
+            [self collectEntityIdsFromCondition:sub intoSet:set];
+        }
+    }
+}
+
 /// Remove items from dashboardConfig whose visibilityConditions aren't met.
 /// Also collects all condition entity IDs for change detection in entityDidUpdate:.
 - (void)filterConditionalItems:(NSDictionary<NSString *, HAEntity *> *)entities {
@@ -863,15 +880,13 @@ static const CGFloat kRowUnitHeight = 56.0;
     for (HADashboardConfigSection *section in self.dashboardConfig.sections) {
         for (HADashboardConfigItem *item in section.items) {
             for (NSDictionary *cond in item.visibilityConditions) {
-                NSString *eid = cond[@"entity"];
-                if (eid) [condIds addObject:eid];
+                [self collectEntityIdsFromCondition:cond intoSet:condIds];
             }
         }
     }
     for (HADashboardConfigItem *item in self.dashboardConfig.items) {
         for (NSDictionary *cond in item.visibilityConditions) {
-            NSString *eid = cond[@"entity"];
-            if (eid) [condIds addObject:eid];
+            [self collectEntityIdsFromCondition:cond intoSet:condIds];
         }
     }
     self.conditionEntityIds = [condIds copy];
@@ -908,25 +923,171 @@ static const CGFloat kRowUnitHeight = 56.0;
     self.dashboardConfig.items = filteredItems;
 }
 
+static inline NSString *HANormalizeState(id val) {
+    if (!val) return @"";
+    NSString *str = [[val description] lowercaseString];
+    if ([str isEqualToString:@"1"] || [str isEqualToString:@"true"] || [str isEqualToString:@"on"]) {
+        return @"on";
+    }
+    if ([str isEqualToString:@"0"] || [str isEqualToString:@"false"] || [str isEqualToString:@"off"]) {
+        return @"off";
+    }
+    return str;
+}
+
+- (BOOL)meetsCondition:(NSDictionary *)condition
+              entities:(NSDictionary<NSString *, HAEntity *> *)entities {
+    if (![condition isKindOfClass:[NSDictionary class]]) return YES;
+
+    NSString *condType = condition[@"condition"];
+    // Default to "state" if type is omitted but entity is present
+    if (!condType && condition[@"entity"]) {
+        condType = @"state";
+    }
+
+    if ([condType isEqualToString:@"state"]) {
+        NSString *entityId = condition[@"entity"];
+        if (!entityId) return YES;
+
+        HAEntity *entity = entities[entityId];
+        NSString *currentState = entity.state;
+
+        id requiredStateRaw = condition[@"state"];
+        id requiredStateNotRaw = condition[@"state_not"];
+
+        if (requiredStateRaw) {
+            NSArray *requiredStates = [requiredStateRaw isKindOfClass:[NSArray class]]
+                                          ? (NSArray *)requiredStateRaw
+                                          : @[ [requiredStateRaw description] ];
+            BOOL matched = NO;
+            NSString *currNorm = HANormalizeState(currentState);
+            for (id req in requiredStates) {
+                if ([HANormalizeState(req) isEqualToString:currNorm]) {
+                    matched = YES;
+                    break;
+                }
+            }
+            if (!matched) return NO;
+        }
+
+        if (requiredStateNotRaw) {
+            NSArray *requiredStatesNot = [requiredStateNotRaw isKindOfClass:[NSArray class]]
+                                              ? (NSArray *)requiredStateNotRaw
+                                              : @[ [requiredStateNotRaw description] ];
+            NSString *currNorm = HANormalizeState(currentState);
+            for (id req in requiredStatesNot) {
+                if ([HANormalizeState(req) isEqualToString:currNorm]) {
+                    return NO;
+                }
+            }
+        }
+        return YES;
+    }
+
+    if ([condType isEqualToString:@"numeric_state"]) {
+        NSString *entityId = condition[@"entity"];
+        if (!entityId) return YES;
+
+        HAEntity *entity = entities[entityId];
+        NSString *currentState = entity.state;
+        if (!currentState) return NO;
+
+        double currentVal = [currentState doubleValue];
+        id aboveRaw = condition[@"above"];
+        id belowRaw = condition[@"below"];
+
+        if (aboveRaw) {
+            double aboveVal = [aboveRaw doubleValue];
+            if (currentVal <= aboveVal) return NO;
+        }
+        if (belowRaw) {
+            double belowVal = [belowRaw doubleValue];
+            if (currentVal >= belowVal) return NO;
+        }
+        return YES;
+    }
+
+    if ([condType isEqualToString:@"and"]) {
+        NSArray *subConditions = condition[@"conditions"];
+        if ([subConditions isKindOfClass:[NSArray class]]) {
+            for (NSDictionary *sub in subConditions) {
+                if (![self meetsCondition:sub entities:entities]) {
+                    return NO;
+                }
+            }
+        }
+        return YES;
+    }
+
+    if ([condType isEqualToString:@"or"]) {
+        NSArray *subConditions = condition[@"conditions"];
+        if ([subConditions isKindOfClass:[NSArray class]]) {
+            if (subConditions.count == 0) return YES;
+            for (NSDictionary *sub in subConditions) {
+                if ([self meetsCondition:sub entities:entities]) {
+                    return YES;
+                }
+            }
+            return NO;
+        }
+        return YES;
+    }
+
+    if ([condType isEqualToString:@"not"]) {
+        NSArray *subConditions = condition[@"conditions"];
+        if ([subConditions isKindOfClass:[NSArray class]]) {
+            for (NSDictionary *sub in subConditions) {
+                if ([self meetsCondition:sub entities:entities]) {
+                    return NO;
+                }
+            }
+        }
+        return YES;
+    }
+
+    if ([condType isEqualToString:@"user"]) {
+        return YES; // always pass local dashboard
+    }
+
+    if ([condType isEqualToString:@"screen"]) {
+        NSString *query = condition[@"media_query"];
+        if ([query isKindOfClass:[NSString class]]) {
+            CGFloat width = self.view.bounds.size.width;
+            if ([query containsString:@"min-width"]) {
+                NSScanner *scanner = [NSScanner scannerWithString:query];
+                [scanner scanUpToString:@"min-width" intoString:nil];
+                [scanner scanString:@"min-width" intoString:nil];
+                [scanner scanUpToCharactersFromSet:[NSCharacterSet decimalDigitCharacterSet] intoString:nil];
+                NSInteger minWidth = 0;
+                if ([scanner scanInteger:&minWidth] && width < minWidth) {
+                    return NO;
+                }
+            }
+            if ([query containsString:@"max-width"]) {
+                NSScanner *scanner = [NSScanner scannerWithString:query];
+                [scanner scanUpToString:@"max-width" intoString:nil];
+                [scanner scanString:@"max-width" intoString:nil];
+                [scanner scanUpToCharactersFromSet:[NSCharacterSet decimalDigitCharacterSet] intoString:nil];
+                NSInteger maxWidth = 0;
+                if ([scanner scanInteger:&maxWidth] && width > maxWidth) {
+                    return NO;
+                }
+            }
+        }
+        return YES;
+    }
+
+    return YES;
+}
+
 /// Check if item's visibilityConditions are all met. nil conditions = always visible.
 - (BOOL)item:(HADashboardConfigItem *)item meetsConditions:(NSDictionary<NSString *, HAEntity *> *)entities {
     NSArray<NSDictionary *> *conditions = item.visibilityConditions;
     if (!conditions || conditions.count == 0) return YES;
 
     for (NSDictionary *condition in conditions) {
-        NSString *entityId = condition[@"entity"];
-        NSString *requiredState = condition[@"state"];
-        NSString *requiredStateNot = condition[@"state_not"];
-        if (!entityId) continue;
-
-        HAEntity *entity = entities[entityId];
-        NSString *currentState = entity.state;
-
-        if (requiredState && ![requiredState isEqualToString:currentState ?: @""]) {
-            return NO; // state doesn't match
-        }
-        if (requiredStateNot && [requiredStateNot isEqualToString:currentState ?: @""]) {
-            return NO; // state matches the "not" value
+        if (![self meetsCondition:condition entities:entities]) {
+            return NO;
         }
     }
     return YES;

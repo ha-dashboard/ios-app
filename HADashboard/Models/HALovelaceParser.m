@@ -180,6 +180,9 @@
                     item.columnSpan = (cs.items.count > 0) ? cs.items.firstObject.columnSpan : 12;
                     item.rowSpan = 1;
                     item.entitiesSection = cs;
+                    if (cs.items.count > 0) {
+                        item.visibilityConditions = cs.items.firstObject.visibilityConditions;
+                    }
                     // For composite cards inside grids with headings, set headingIcon
                     // so the cell renders the heading ABOVE the card (not as internal title).
                     // Graph cards render their title internally (name label), so skip
@@ -260,6 +263,54 @@
      sectionGridMax:(NSInteger)sectionGridMax
            sections:(NSMutableArray<HADashboardConfigSection *> *)sections
            allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems {
+
+    NSInteger startSectionCount = sections.count;
+    NSInteger startItemCount = allItems.count;
+
+    [self _processCard:card
+          sectionTitle:sectionTitle
+           sectionIcon:sectionIcon
+               columns:maxColumns
+           gridColumns:gridColumns
+        sectionGridMax:sectionGridMax
+              sections:sections
+              allItems:allItems];
+
+    NSArray *visibility = card[@"visibility"];
+    if ([card[@"type"] isEqualToString:@"conditional"] && !visibility) {
+        visibility = card[@"conditions"];
+    }
+
+    if ([visibility isKindOfClass:[NSArray class]] && visibility.count > 0) {
+        for (NSInteger i = startItemCount; i < allItems.count; i++) {
+            HADashboardConfigItem *item = allItems[i];
+            if (item.visibilityConditions) {
+                item.visibilityConditions = [item.visibilityConditions arrayByAddingObjectsFromArray:visibility];
+            } else {
+                item.visibilityConditions = visibility;
+            }
+        }
+        for (NSInteger i = startSectionCount; i < sections.count; i++) {
+            HADashboardConfigSection *sec = sections[i];
+            for (HADashboardConfigItem *item in sec.items) {
+                if (item.visibilityConditions) {
+                    item.visibilityConditions = [item.visibilityConditions arrayByAddingObjectsFromArray:visibility];
+                } else {
+                    item.visibilityConditions = visibility;
+                }
+            }
+        }
+    }
+}
+
++ (void)_processCard:(NSDictionary *)card
+        sectionTitle:(NSString *)sectionTitle
+         sectionIcon:(NSString *)sectionIcon
+             columns:(NSInteger)maxColumns
+         gridColumns:(NSInteger)gridColumns
+      sectionGridMax:(NSInteger)sectionGridMax
+            sections:(NSMutableArray<HADashboardConfigSection *> *)sections
+            allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems {
 
     NSString *cardType = card[@"type"];
 
