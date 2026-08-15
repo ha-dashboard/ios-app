@@ -1,6 +1,9 @@
 name: Export Xcode 13 SDK Stubs
 
 on:
+  push:
+    branches:
+      - codex/export-xcode13-sdk-stubs
   workflow_dispatch:
 
 jobs:
