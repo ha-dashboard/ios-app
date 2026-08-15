@@ -1,0 +1,27 @@
+name: Export Xcode 13 SDK Stubs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/cache/restore@v4
+        id: sdk-cache
+        with:
+          path: ~/.xcode13-sdk-stubs
+          key: xcode13-sdk-stubs-v1
+
+      - name: Verify cached SDK stubs
+        run: |
+          test "${{ steps.sdk-cache.outputs.cache-hit }}" = "true"
+          test -s ~/.xcode13-sdk-stubs/iPhoneOS-armv7-stubs.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xcode13-sdk-stubs
+          path: ~/.xcode13-sdk-stubs/iPhoneOS-armv7-stubs.tar.gz
+          if-no-files-found: error
