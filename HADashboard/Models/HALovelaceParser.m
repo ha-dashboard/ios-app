@@ -1195,6 +1195,14 @@
     NSArray *entities = card[@"entities"];
     if ([entities isKindOfClass:[NSArray class]]) {
         for (id entry in entities) {
+            if ([entry isKindOfClass:[NSDictionary class]] &&
+                [entry[@"type"] isEqualToString:@"conditional"]) {
+                NSDictionary *row = entry[@"row"];
+                if ([row isKindOfClass:[NSDictionary class]]) {
+                    [results addObjectsFromArray:[self extractEntitiesFromCard:row]];
+                }
+                continue;
+            }
             NSDictionary *parsed = [self parseEntityEntry:entry];
             if (parsed) [results addObject:parsed];
         }

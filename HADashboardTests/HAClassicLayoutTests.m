@@ -4,6 +4,7 @@
 #import "HASidebarLayout.h"
 #import "HALovelaceParser.h"
 #import "HADashboardConfig.h"
+#import "HAMarkdownCardCell.h"
 
 #pragma mark - Mock Data Source
 
@@ -421,7 +422,63 @@
         @"view_layout.position should be stored in section customProperties");
 }
 
-#pragma mark - Test 10: Masonry Empty Section
+#pragma mark - Test 10: Markdown Card Compatibility
+
+- (void)testMarkdownCard_preservesTemplateContentAndUsesPortableCodeFont {
+    NSString *content = @"<strong>Platform 1</strong><br>{{ state_attr(\"sensor.transit\", \"Dest0\") }}<br><ha-alert alert-type=\"info\">Service update</ha-alert>";
+    NSDictionary *dashboardDictionary = @{
+        @"views": @[@{
+            @"cards": @[@{
+                @"type": @"markdown",
+                @"title": @"Departures",
+                @"content": content
+            }]
+        }]
+    };
+
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dashboardDictionary];
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:1];
+    HADashboardConfigItem *item = config.items.firstObject;
+
+    XCTAssertEqualObjects(item.cardType, @"markdown");
+    XCTAssertEqualObjects(item.customProperties[@"markdown_content"], content);
+
+    HAMarkdownCardCell *cell = [[HAMarkdownCardCell alloc] initWithFrame:CGRectMake(0, 0, 320, 120)];
+    [cell configureWithConfigItem:item];
+    XCTAssertNotNil(cell, @"Markdown content must render with a font available on iOS 9 and later");
+}
+
+#pragma mark - Test 11: Conditional Entity Rows
+
+- (void)testEntitiesCard_withOnlyConditionalRow_isRetained {
+    NSDictionary *dashboardDictionary = @{
+        @"views": @[@{
+            @"cards": @[@{
+                @"type": @"entities",
+                @"entities": @[@{
+                    @"type": @"conditional",
+                    @"conditions": @[@{
+                        @"entity": @"input_boolean.show_light",
+                        @"state": @"on"
+                    }],
+                    @"row": @{
+                        @"entity": @"light.kitchen"
+                    }
+                }]
+            }]
+        }]
+    };
+
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dashboardDictionary];
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:1];
+    HADashboardConfigSection *section = config.sections.firstObject;
+
+    XCTAssertEqual(config.items.count, 1u);
+    XCTAssertEqualObjects(section.entityIds, (@[@"light.kitchen"]));
+    XCTAssertEqualObjects(section.customProperties[@"orderedRows"][0][@"row_type"], @"conditional");
+}
+
+#pragma mark - Test 12: Masonry Empty Section
 
 - (void)testMasonryLayout_emptySection {
     HAMasonryLayout *layout = [[HAMasonryLayout alloc] init];

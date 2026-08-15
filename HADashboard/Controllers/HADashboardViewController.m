@@ -870,6 +870,20 @@ static const CGFloat kRowUnitHeight = 56.0;
     }
 }
 
+- (void)collectEntityIdsFromConditionalRows:(NSArray *)rows
+                                    intoSet:(NSMutableSet<NSString *> *)set {
+    for (NSDictionary *row in rows) {
+        if (![row[@"row_type"] isEqualToString:@"conditional"]) continue;
+        for (NSDictionary *condition in row[@"conditions"]) {
+            [self collectEntityIdsFromCondition:condition intoSet:set];
+        }
+        NSDictionary *innerRow = row[@"row"];
+        if ([innerRow isKindOfClass:[NSDictionary class]]) {
+            [self collectEntityIdsFromConditionalRows:@[innerRow] intoSet:set];
+        }
+    }
+}
+
 /// Remove items from dashboardConfig whose visibilityConditions aren't met.
 /// Also collects all condition entity IDs for change detection in entityDidUpdate:.
 - (void)filterConditionalItems:(NSDictionary<NSString *, HAEntity *> *)entities {
@@ -882,6 +896,7 @@ static const CGFloat kRowUnitHeight = 56.0;
             for (NSDictionary *cond in item.visibilityConditions) {
                 [self collectEntityIdsFromCondition:cond intoSet:condIds];
             }
+            [self collectEntityIdsFromConditionalRows:section.customProperties[@"orderedRows"] intoSet:condIds];
         }
     }
     for (HADashboardConfigItem *item in self.dashboardConfig.items) {
