@@ -75,6 +75,11 @@ extern NSString *const HAConnectionManagerHADidStartNotification;              /
 - (void)sendCommand:(NSDictionary *)command
          completion:(void (^)(id result, NSError *error))completion;
 
+/// Render a Jinja template through the authenticated Home Assistant API.
+/// The completion is called on the main queue with rendered plain text.
+- (void)renderTemplate:(NSString *)templateString
+            completion:(void (^)(NSString *rendered, NSError *error))completion;
+
 /// Get a cached entity by ID
 - (HAEntity *)entityForId:(NSString *)entityId;
 

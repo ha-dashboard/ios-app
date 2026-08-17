@@ -24,6 +24,10 @@ typedef void (^HAAPIResponseBlock)(id _Nullable response, NSError * _Nullable er
            withData:(NSDictionary *)data
          completion:(HAAPIResponseBlock)completion;
 
+/// POST /api/template — render a Home Assistant Jinja template on the server.
+/// The completion response is the rendered plain-text result.
+- (void)renderTemplate:(NSString *)templateString completion:(HAAPIResponseBlock)completion;
+
 /// GET /api/calendars/<entity_id>?start=<ISO>&end=<ISO>
 - (NSURLSessionDataTask *)getCalendarEventsForEntityId:(NSString *)entityId
                                                  start:(NSString *)startISO

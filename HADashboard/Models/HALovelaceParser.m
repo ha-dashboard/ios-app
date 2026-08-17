@@ -251,6 +251,31 @@
     return config;
 }
 
++ (BOOL)_markdownContentContainsTemplate:(NSString *)content {
+    return [content rangeOfString:@"{{"].location != NSNotFound ||
+           [content rangeOfString:@"{%"].location != NSNotFound;
+}
+
++ (NSArray<NSString *> *)_templateDependenciesInMarkdown:(NSString *)content {
+    // Extract the common entity-reference forms so state changes only refresh
+    // templates that can depend on the changed entity. Server-side rendering
+    // remains authoritative for arbitrary Jinja expressions.
+    NSRegularExpression *expression = [NSRegularExpression
+        regularExpressionWithPattern:@"(?:state_attr|states|is_state)\\s*\\(\\s*['\\\"]([^'\\\"]+)"
+                              options:0
+                                error:NULL];
+    NSArray<NSTextCheckingResult *> *matches = [expression matchesInString:content
+                                                                     options:0
+                                                                       range:NSMakeRange(0, content.length)];
+    NSMutableOrderedSet<NSString *> *dependencies = [NSMutableOrderedSet orderedSet];
+    for (NSTextCheckingResult *match in matches) {
+        if (match.numberOfRanges < 2) continue;
+        NSString *entityId = [content substringWithRange:[match rangeAtIndex:1]];
+        if (entityId.length > 0) [dependencies addObject:entityId];
+    }
+    return dependencies.array;
+}
+
 /// Process a single Lovelace card into a config section with items.
 /// @param gridColumns If > 0, overrides the item's columnSpan (from a parent grid card's grid_options)
 /// @param sectionGridMax HA sections view grid max (typically 4). When > 0 and < 12,
@@ -333,7 +358,14 @@
         item.columnSpan = 12;
         item.rowSpan = 1;
         NSMutableDictionary *props = [NSMutableDictionary dictionary];
-        if ([card[@"content"] isKindOfClass:[NSString class]]) props[@"markdown_content"] = card[@"content"];
+        if ([card[@"content"] isKindOfClass:[NSString class]]) {
+            NSString *content = card[@"content"];
+            props[@"markdown_content"] = content;
+            if ([self _markdownContentContainsTemplate:content]) {
+                props[@"markdown_template"] = content;
+                props[@"markdown_template_dependencies"] = [self _templateDependenciesInMarkdown:content];
+            }
+        }
         if ([card[@"title"] isKindOfClass:[NSString class]]) props[@"markdown_title"] = card[@"title"];
         if ([card[@"text_only"] isKindOfClass:[NSNumber class]]) props[@"text_only"] = card[@"text_only"];
         if (props.count > 0) item.customProperties = [props copy];

@@ -87,6 +87,7 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 @property (nonatomic, strong) UIButton *titleButton;
 @property (nonatomic, strong) NSArray<NSDictionary *> *availableDashboards;
 @property (nonatomic, strong) NSDictionary<NSString *, NSArray<NSIndexPath *> *> *entityToIndexPaths;
+@property (nonatomic, strong) NSMutableSet<NSString *> *pendingMarkdownTemplateStrings;
 @property (nonatomic, assign) BOOL screenshotScheduled;
 @property (nonatomic, strong) HAToastView *kioskToast;
 @end
@@ -1154,6 +1155,7 @@ static inline NSString *HANormalizeState(id val) {
     [self showConnectionBar:NO message:nil];
     [self.refreshControl endRefreshing];
     [self.collectionView reloadData];
+    [self renderMarkdownTemplatesForEntityId:nil];
     [[HAPerfMonitor sharedMonitor] markRebuildEnd];
 
     // Screenshot trigger: when /tmp/take_screenshot exists, capture after layout settles
@@ -2285,6 +2287,63 @@ heightForHeaderInSection:(NSInteger)section {
     } completion:nil];
 }
 
+#pragma mark - Markdown Templates
+
+- (void)renderMarkdownTemplatesForEntityId:(NSString *)entityId {
+    if (!self.dashboardConfig) return;
+
+    NSMutableDictionary<NSString *, NSMutableArray<HADashboardConfigItem *> *> *itemsByTemplate = [NSMutableDictionary dictionary];
+    for (HADashboardConfigSection *section in self.dashboardConfig.sections) {
+        for (HADashboardConfigItem *item in section.items) {
+            if (![item.cardType isEqualToString:@"markdown"]) continue;
+            NSString *templateString = item.customProperties[@"markdown_template"];
+            if (![templateString isKindOfClass:[NSString class]] || templateString.length == 0) continue;
+
+            NSArray<NSString *> *dependencies = item.customProperties[@"markdown_template_dependencies"];
+            // Templates with statically discoverable entity IDs update narrowly.
+            // An arbitrary Jinja expression has no safe local dependency graph,
+            // so refresh it on state changes and let Home Assistant decide.
+            if (entityId && dependencies.count > 0 && ![dependencies containsObject:entityId]) continue;
+            if (!itemsByTemplate[templateString]) itemsByTemplate[templateString] = [NSMutableArray array];
+            [itemsByTemplate[templateString] addObject:item];
+        }
+    }
+
+    if (!self.pendingMarkdownTemplateStrings) {
+        self.pendingMarkdownTemplateStrings = [NSMutableSet set];
+    }
+    HAConnectionManager *connection = [HAConnectionManager sharedManager];
+    for (NSString *templateString in itemsByTemplate) {
+        if ([self.pendingMarkdownTemplateStrings containsObject:templateString]) continue;
+        [self.pendingMarkdownTemplateStrings addObject:templateString];
+        NSArray<HADashboardConfigItem *> *items = [itemsByTemplate[templateString] copy];
+        __weak typeof(self) weakSelf = self;
+        [connection renderTemplate:templateString completion:^(NSString *rendered, NSError *error) {
+            HADashboardViewController *strongSelf = weakSelf;
+            if (!strongSelf) return;
+            [strongSelf.pendingMarkdownTemplateStrings removeObject:templateString];
+            if (error || !rendered) {
+                HALogW(@"markdown", @"Template render failed: %@", error.localizedDescription);
+                return; // Keep the source visible rather than replacing it with stale data.
+            }
+
+            BOOL changed = NO;
+            for (HADashboardConfigItem *item in items) {
+                if (![item.customProperties[@"markdown_template"] isEqualToString:templateString]) continue;
+                if ([item.customProperties[@"markdown_content"] isEqualToString:rendered]) continue;
+                NSMutableDictionary *properties = [item.customProperties mutableCopy] ?: [NSMutableDictionary dictionary];
+                properties[@"markdown_content"] = rendered;
+                item.customProperties = [properties copy];
+                changed = YES;
+            }
+            if (changed) {
+                [strongSelf.collectionView.collectionViewLayout invalidateLayout];
+                [strongSelf.collectionView reloadData];
+            }
+        }];
+    }
+}
+
 #pragma mark - Notification
 
 - (void)registriesDidLoad:(NSNotification *)notification {
@@ -2300,6 +2359,8 @@ heightForHeaderInSection:(NSInteger)section {
 - (void)entityDidUpdate:(NSNotification *)notification {
     HAEntity *entity = notification.userInfo[@"entity"];
     if (!entity || !self.dashboardConfig) return;
+
+    [self renderMarkdownTemplatesForEntityId:entity.entityId];
 
     // Camera cells manage their own 5s refresh timer. Reloading them via the
     // standard path recycles the cell, killing the timer and causing black flashes

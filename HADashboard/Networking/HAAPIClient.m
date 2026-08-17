@@ -56,6 +56,24 @@
     [self POST:path body:data completion:completion];
 }
 
+- (void)renderTemplate:(NSString *)templateString completion:(HAAPIResponseBlock)completion {
+    if (templateString.length == 0) {
+        ha_dispatchMainCompletion(completion, @"", nil);
+        return;
+    }
+    NSURL *url = [NSURL URLWithString:@"template" relativeToURL:self.baseURL];
+    NSMutableURLRequest *request = [self requestWithURL:url method:@"POST"];
+    NSError *jsonError = nil;
+    request.HTTPBody = [NSJSONSerialization dataWithJSONObject:@{@"template": templateString}
+                                                        options:0
+                                                          error:&jsonError];
+    if (jsonError) {
+        ha_dispatchMainCompletion(completion, nil, jsonError);
+        return;
+    }
+    [self executePlainTextRequest:request completion:completion];
+}
+
 - (NSURLSessionDataTask *)getCalendarEventsForEntityId:(NSString *)entityId
                                                  start:(NSString *)startISO
                                                    end:(NSString *)endISO
@@ -178,6 +196,57 @@
 
     [task resume];
     return task;
+}
+
+/// /api/template returns UTF-8 text, unlike the JSON documents served by the
+/// other API endpoints. Keep its decoding isolated so existing callers retain
+/// their JSON response contract.
+- (void)executePlainTextRequest:(NSURLRequest *)request completion:(HAAPIResponseBlock)completion {
+    NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request
+        completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            if (error) {
+                ha_dispatchMainCompletion(completion, nil, error);
+                return;
+            }
+
+            NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
+            NSInteger statusCode = httpResponse.statusCode;
+            if (statusCode == 401 && !self.isRetrying401) {
+                self.isRetrying401 = YES;
+                [[HAAuthManager sharedManager] handleAuthFailureWithCompletion:^(NSString *newToken, NSError *refreshError) {
+                    self.isRetrying401 = NO;
+                    if (newToken) {
+                        self.token = newToken;
+                        NSMutableURLRequest *retry = [request mutableCopy];
+                        [retry setValue:[NSString stringWithFormat:@"Bearer %@", newToken]
+                            forHTTPHeaderField:@"Authorization"];
+                        [self executePlainTextRequest:retry completion:completion];
+                    } else {
+                        ha_dispatchMainCompletion(completion, nil, refreshError);
+                    }
+                }];
+                return;
+            }
+            if (statusCode < 200 || statusCode >= 300) {
+                NSString *message = statusCode == 401 ? @"Unauthorized — check your access token"
+                    : [NSString stringWithFormat:@"HTTP %ld", (long)statusCode];
+                NSError *httpError = [NSError errorWithDomain:@"HAAPIClient"
+                                                         code:statusCode
+                                                     userInfo:@{NSLocalizedDescriptionKey: message}];
+                ha_dispatchMainCompletion(completion, nil, httpError);
+                return;
+            }
+
+            NSString *rendered = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+            if (!rendered) {
+                NSError *decodeError = [NSError errorWithDomain:@"HAAPIClient" code:-4
+                    userInfo:@{NSLocalizedDescriptionKey: @"Template response was not UTF-8 text"}];
+                ha_dispatchMainCompletion(completion, nil, decodeError);
+                return;
+            }
+            ha_dispatchMainCompletion(completion, rendered, nil);
+        }];
+    [task resume];
 }
 
 @end

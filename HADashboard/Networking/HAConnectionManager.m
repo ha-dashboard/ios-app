@@ -595,6 +595,21 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     }
 }
 
+- (void)renderTemplate:(NSString *)templateString
+            completion:(void (^)(NSString *rendered, NSError *error))completion {
+    if (!self.apiClient) {
+        NSError *error = [NSError errorWithDomain:@"HAConnectionManager" code:-4
+            userInfo:@{NSLocalizedDescriptionKey: @"Home Assistant is not connected"}];
+        if (completion) completion(nil, error);
+        return;
+    }
+    [self.apiClient renderTemplate:templateString completion:^(id response, NSError *error) {
+        if (completion) {
+            completion([response isKindOfClass:[NSString class]] ? response : nil, error);
+        }
+    }];
+}
+
 - (NSInteger)subscribeToEventType:(NSString *)eventType
                           handler:(void (^)(NSDictionary *eventData))handler {
     return [self subscribeWithCommand:@{
