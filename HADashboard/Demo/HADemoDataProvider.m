@@ -1475,7 +1475,13 @@
                         @{@"type": @"markdown", @"title": @"Theme refresh",
                           @"content": @"Switch between Light and Dark in Settings. The card text must immediately change with the rest of the interface; it must never remain near-black on a dark card."},
                         @{@"type": @"markdown", @"text_only": @YES,
-                          @"content": @"## Expected result\\nAll Markdown content is legible after launch and after changing the app appearance."}
+                          @"content": @"## Expected result\\nAll Markdown content is legible after launch and after changing the app appearance."},
+                        // Verbatim structure and content style from issue #12: a grid
+                        // containing a folded HTML/Jinja transit Markdown card.
+                        @{@"type": @"grid", @"cards": @[
+                            @{@"type": @"markdown", @"title": @"xxtransitxx",
+                              @"content": @"<strong>Platform 1</strong><br>{{ state_attr(\\\"sensor.xtransitx_south\\\",\\\"Dest0\\\") }} due in {{ state_attr(\\\"sensor.xtransitx_south\\\",\\\"Wait0\\\") }} minutes <br>{{ state_attr(\\\"sensor.xtransitx_south\\\",\\\"Dest1\\\") }} due in {{ state_attr(\\\"sensor.xtransitx_south\\\",\\\"Wait1\\\") }} minutes <br>{{ state_attr(\\\"sensor.xtransitx_south\\\",\\\"Dest2\\\") }} due in {{ state_attr(\\\"sensor.xtransitx_south\\\",\\\"Wait2\\\") }} minutes <br><strong>Platform 2</strong><br>{{ state_attr(\\\"sensor.xtransitx_airport\\\",\\\"Dest0\\\") }} due in {{ state_attr(\\\"sensor.xtransitx_airport\\\",\\\"Wait0\\\") }} minutes <br><strong>Platform 3</strong><br>{{ state_attr(\\\"sensor.xtransitx_north\\\",\\\"Dest0\\\") }} due in {{ state_attr(\\\"sensor.xtransitx_north\\\",\\\"Wait0\\\") }} minutes <br>{{ state_attr(\\\"sensor.xtransitx_north\\\",\\\"Dest1\\\") }} due in {{ state_attr(\\\"sensor.xtransitx_north\\\",\\\"Wait1\\\") }} minutes <br>{{ state_attr(\\\"sensor.xtransitx_north\\\",\\\"Dest2\\\") }} due in {{ state_attr(\\\"sensor.xtransitx_north\\\",\\\"Wait2\\\") }} minutes <br><br><ha-alert alert-type=\\\"info\\\">{{state_attr(\\\"sensor.xtransitx_south\\\",\\\"MessageBoard\\\") }}</ha-alert><small>Last updated {{ state_attr(\\\"sensor.xtransitx_south\\\",\\\"LastUpdated\\\") }}</small>"}
+                        ]}
                     ]
                 }
             ]
