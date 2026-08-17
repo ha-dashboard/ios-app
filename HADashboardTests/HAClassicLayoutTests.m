@@ -491,6 +491,33 @@
         @"Markdown foreground color must match the active dark appearance");
 }
 
+- (void)testMarkdownCard_formatsNativeMarkdownSyntax {
+    NSString *content = @"# Heading\nThis has **bold**, *italic*, and `code`.";
+    NSDictionary *dashboardDictionary = @{
+        @"views": @[@{
+            @"cards": @[@{
+                @"type": @"markdown",
+                @"content": content
+            }]
+        }]
+    };
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dashboardDictionary];
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:1];
+    HAMarkdownCardCell *cell = [[HAMarkdownCardCell alloc] initWithFrame:CGRectMake(0, 0, 320, 120)];
+    [cell configureWithConfigItem:config.items.firstObject];
+
+    NSAttributedString *rendered = [cell valueForKeyPath:@"contentLabel.attributedText"];
+    XCTAssertEqualObjects(rendered.string, @"Heading\nThis has bold, italic, and code.");
+
+    NSRange boldRange = [rendered.string rangeOfString:@"bold"];
+    UIFont *boldFont = [rendered attribute:NSFontAttributeName atIndex:boldRange.location effectiveRange:NULL];
+    XCTAssertTrue((boldFont.fontDescriptor.symbolicTraits & UIFontDescriptorTraitBold) != 0);
+
+    NSRange italicRange = [rendered.string rangeOfString:@"italic"];
+    UIFont *italicFont = [rendered attribute:NSFontAttributeName atIndex:italicRange.location effectiveRange:NULL];
+    XCTAssertTrue((italicFont.fontDescriptor.symbolicTraits & UIFontDescriptorTraitItalic) != 0);
+}
+
 #pragma mark - Test 11: Conditional Entity Rows
 
 - (void)testEntitiesCard_withOnlyConditionalRow_isRetained {

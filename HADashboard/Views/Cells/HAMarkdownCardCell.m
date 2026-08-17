@@ -128,6 +128,7 @@ static const CGFloat kTitleHeight = 24.0;
     NSMutableAttributedString *result = [[NSMutableAttributedString alloc] init];
     UIFont *normalFont = [UIFont systemFontOfSize:13];
     UIFont *boldFont = [UIFont boldSystemFontOfSize:13];
+    UIFont *italicFont = [UIFont italicSystemFontOfSize:13];
     UIFont *codeFont = [UIFont fontWithName:@"Menlo-Regular" size:12] ?: [UIFont systemFontOfSize:12];
     UIFont *headingFont = [UIFont boldSystemFontOfSize:16];
     // NSAttributedString resolves dynamic UIColors when it is created rather
@@ -138,6 +139,7 @@ static const CGFloat kTitleHeight = 24.0;
 
     NSDictionary *normalAttrs = @{NSFontAttributeName: normalFont, NSForegroundColorAttributeName: textColor};
     NSDictionary *boldAttrs = @{NSFontAttributeName: boldFont, NSForegroundColorAttributeName: textColor};
+    NSDictionary *italicAttrs = @{NSFontAttributeName: italicFont, NSForegroundColorAttributeName: textColor};
     NSDictionary *codeAttrs = @{NSFontAttributeName: codeFont, NSForegroundColorAttributeName: codeColor};
     NSDictionary *headingAttrs = @{NSFontAttributeName: headingFont, NSForegroundColorAttributeName: textColor};
 
@@ -165,7 +167,10 @@ static const CGFloat kTitleHeight = 24.0;
 
         // Process inline formatting: **bold**, *italic*, `code`
         [self appendFormattedLine:line toResult:result
-                      normalAttrs:normalAttrs boldAttrs:boldAttrs codeAttrs:codeAttrs];
+                      normalAttrs:normalAttrs
+                        boldAttrs:boldAttrs
+                      italicAttrs:italicAttrs
+                        codeAttrs:codeAttrs];
     }
     return result;
 }
@@ -174,6 +179,7 @@ static const CGFloat kTitleHeight = 24.0;
                    toResult:(NSMutableAttributedString *)result
                 normalAttrs:(NSDictionary *)normalAttrs
                   boldAttrs:(NSDictionary *)boldAttrs
+                italicAttrs:(NSDictionary *)italicAttrs
                   codeAttrs:(NSDictionary *)codeAttrs {
     NSUInteger i = 0;
     NSUInteger len = line.length;
@@ -188,6 +194,17 @@ static const CGFloat kTitleHeight = 24.0;
                 NSString *boldText = [line substringWithRange:NSMakeRange(i + 2, end.location - i - 2)];
                 [result appendAttributedString:[[NSAttributedString alloc] initWithString:boldText attributes:boldAttrs]];
                 i = end.location + 2;
+                continue;
+            }
+        }
+
+        // *italic*
+        if (ch == '*') {
+            NSRange end = [line rangeOfString:@"*" options:0 range:NSMakeRange(i + 1, len - i - 1)];
+            if (end.location != NSNotFound) {
+                NSString *italicText = [line substringWithRange:NSMakeRange(i + 1, end.location - i - 1)];
+                [result appendAttributedString:[[NSAttributedString alloc] initWithString:italicText attributes:italicAttrs]];
+                i = end.location + 1;
                 continue;
             }
         }
