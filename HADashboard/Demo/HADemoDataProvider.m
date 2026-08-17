@@ -44,7 +44,8 @@
         @{@"title": @"Home",       @"url_path": @"demo-home"},
         @{@"title": @"Monitoring", @"url_path": @"demo-monitoring"},
         @{@"title": @"Media",      @"url_path": @"demo-media"},
-        @{@"title": @"Entity Showcase", @"url_path": @"demo-entities"}
+        @{@"title": @"Entity Showcase", @"url_path": @"demo-entities"},
+        @{@"title": @"Markdown Appearance", @"url_path": @"demo-markdown"}
     ];
 
     // Default dashboard is Home
@@ -1445,6 +1446,7 @@
     dashMap[@"demo-monitoring"] = [self createMonitoringDashboard];
     dashMap[@"demo-media"]      = [self createMediaDashboard];
     dashMap[@"demo-entities"]   = [self createEntityShowcaseDashboard];
+    dashMap[@"demo-markdown"]   = [self createMarkdownAppearanceDashboard];
 
     _dashboards = [dashMap copy];
     HALogI(@"demo", @"Created %lu demo dashboards", (unsigned long)_dashboards.count);
@@ -1456,6 +1458,31 @@
 }
 
 #pragma mark - Dashboard Builders
+
+- (HALovelaceDashboard *)createMarkdownAppearanceDashboard {
+    NSArray *views = @[
+        @{
+            @"title": @"Markdown Appearance",
+            @"path": @"markdown-appearance",
+            @"type": @"sections",
+            @"max_columns": @1,
+            @"sections": @[
+                @{
+                    @"title": @"Dark-mode regression check",
+                    @"cards": @[
+                        @{@"type": @"markdown", @"title": @"Readable in every appearance",
+                          @"content": @"# Markdown is visible\\nThis sentence, **bold text**, and `inline code` must be readable in dark mode.\\n- Normal text stays high contrast\\n- Code uses the secondary text color"},
+                        @{@"type": @"markdown", @"title": @"Theme refresh",
+                          @"content": @"Switch between Light and Dark in Settings. The card text must immediately change with the rest of the interface; it must never remain near-black on a dark card."},
+                        @{@"type": @"markdown", @"text_only": @YES,
+                          @"content": @"## Expected result\\nAll Markdown content is legible after launch and after changing the app appearance."}
+                    ]
+                }
+            ]
+        }
+    ];
+    return [[HALovelaceDashboard alloc] initWithDictionary:@{@"title": @"Markdown Appearance", @"views": views}];
+}
 
 - (HALovelaceDashboard *)createHomeDashboard {
     NSArray *views = @[
