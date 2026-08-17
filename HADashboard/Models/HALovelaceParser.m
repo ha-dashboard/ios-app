@@ -327,7 +327,10 @@
         section.cardType = @"markdown";
         HADashboardConfigItem *item = [[HADashboardConfigItem alloc] init];
         item.cardType = @"markdown";
-        item.columnSpan = 1;
+        // Markdown is prose content, not a compact entity tile. Give it the
+        // full grid width so text can wrap normally instead of being clipped
+        // into a one-column sliver.
+        item.columnSpan = 12;
         item.rowSpan = 1;
         NSMutableDictionary *props = [NSMutableDictionary dictionary];
         if ([card[@"content"] isKindOfClass:[NSString class]]) props[@"markdown_content"] = card[@"content"];

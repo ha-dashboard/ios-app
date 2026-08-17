@@ -443,6 +443,7 @@
 
     XCTAssertEqualObjects(item.cardType, @"markdown");
     XCTAssertEqualObjects(item.customProperties[@"markdown_content"], content);
+    XCTAssertEqual(item.columnSpan, 12, @"Standalone Markdown cards must use the full grid width");
 
     HAMarkdownCardCell *cell = [[HAMarkdownCardCell alloc] initWithFrame:CGRectMake(0, 0, 320, 120)];
     [cell configureWithConfigItem:item];

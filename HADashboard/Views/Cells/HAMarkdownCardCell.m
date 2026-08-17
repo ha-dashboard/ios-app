@@ -214,9 +214,14 @@ static const CGFloat kTitleHeight = 24.0;
     NSString *content = props[@"markdown_content"] ?: @"";
     BOOL hasTitle = [props[@"markdown_title"] isKindOfClass:[NSString class]] && [props[@"markdown_title"] length] > 0;
 
-    // Estimate height from content line count
-    NSUInteger lineCount = [[content componentsSeparatedByString:@"\n"] count];
-    CGFloat contentHeight = MAX(20, lineCount * 18); // ~18pt per line
+    // Measure against the actual card width. A line-count estimate clips
+    // ordinary Markdown paragraphs as soon as they wrap on narrower phones.
+    CGFloat textWidth = MAX(1, width - (2 * kPadding));
+    CGRect textBounds = [content boundingRectWithSize:CGSizeMake(textWidth, CGFLOAT_MAX)
+                                               options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
+                                            attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:13]}
+                                               context:nil];
+    CGFloat contentHeight = MAX(20, ceil(textBounds.size.height));
     CGFloat titleExtra = hasTitle ? kTitleHeight + 6 : 0;
     return kPadding + titleExtra + contentHeight + kPadding;
 }
