@@ -8,6 +8,7 @@ static const CGFloat kTitleHeight = 24.0;
 @interface HAMarkdownCardCell ()
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UILabel *contentLabel;
+@property (nonatomic, copy) NSString *markdownContent;
 @end
 
 @implementation HAMarkdownCardCell
@@ -33,6 +34,11 @@ static const CGFloat kTitleHeight = 24.0;
         self.contentLabel.lineBreakMode = NSLineBreakByWordWrapping;
         self.contentLabel.translatesAutoresizingMaskIntoConstraints = NO;
         [self.contentView addSubview:self.contentLabel];
+
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(themeDidChange:)
+                                                     name:HAThemeDidChangeNotification
+                                                   object:nil];
 
         [NSLayoutConstraint activateConstraints:@[
             [self.titleLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kPadding],
@@ -60,8 +66,8 @@ static const CGFloat kTitleHeight = 24.0;
     }
 
     // Content: render markdown as attributed string
-    NSString *content = props[@"markdown_content"] ?: @"";
-    self.contentLabel.attributedText = [self attributedStringFromMarkdown:content];
+    self.markdownContent = props[@"markdown_content"] ?: @"";
+    [self refreshMarkdownContent];
 
     // Top constraint for content depends on title visibility
     // Remove existing top constraint and re-add
@@ -87,6 +93,32 @@ static const CGFloat kTitleHeight = 24.0;
     }
 }
 
+- (void)themeDidChange:(NSNotification *)notification {
+    [self refreshMarkdownContent];
+    self.titleLabel.textColor = [HATheme primaryTextColor];
+    self.contentView.backgroundColor = [HATheme cellBackgroundColor];
+}
+
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+    if (@available(iOS 13.0, *)) {
+        if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
+            [self refreshMarkdownContent];
+        }
+    }
+}
+
+- (void)refreshMarkdownContent {
+    self.contentLabel.attributedText = [self attributedStringFromMarkdown:self.markdownContent ?: @""];
+}
+
+- (UIColor *)resolvedColorForCurrentTraitCollection:(UIColor *)color {
+    if (@available(iOS 13.0, *)) {
+        return [color resolvedColorWithTraitCollection:self.traitCollection];
+    }
+    return color;
+}
+
 /// Simple markdown-to-attributed-string conversion.
 /// Supports: **bold**, *italic*, `code`, # headings, - lists.
 /// Does NOT support Jinja2 templates.
@@ -98,8 +130,11 @@ static const CGFloat kTitleHeight = 24.0;
     UIFont *boldFont = [UIFont boldSystemFontOfSize:13];
     UIFont *codeFont = [UIFont fontWithName:@"Menlo-Regular" size:12] ?: [UIFont systemFontOfSize:12];
     UIFont *headingFont = [UIFont boldSystemFontOfSize:16];
-    UIColor *textColor = [HATheme primaryTextColor];
-    UIColor *codeColor = [HATheme secondaryTextColor];
+    // NSAttributedString resolves dynamic UIColors when it is created rather
+    // than when UILabel draws. Resolve against the cell's current traits and
+    // rebuild on appearance changes so dark-mode markdown remains legible.
+    UIColor *textColor = [self resolvedColorForCurrentTraitCollection:[HATheme primaryTextColor]];
+    UIColor *codeColor = [self resolvedColorForCurrentTraitCollection:[HATheme secondaryTextColor]];
 
     NSDictionary *normalAttrs = @{NSFontAttributeName: normalFont, NSForegroundColorAttributeName: textColor};
     NSDictionary *boldAttrs = @{NSFontAttributeName: boldFont, NSForegroundColorAttributeName: textColor};
@@ -190,8 +225,13 @@ static const CGFloat kTitleHeight = 24.0;
     [super prepareForReuse];
     self.titleLabel.text = nil;
     self.titleLabel.hidden = YES;
+    self.markdownContent = nil;
     self.contentLabel.attributedText = nil;
     self.contentView.layer.cornerRadius = 12.0;
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 @end

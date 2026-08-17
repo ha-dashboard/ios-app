@@ -5,6 +5,7 @@
 #import "HALovelaceParser.h"
 #import "HADashboardConfig.h"
 #import "HAMarkdownCardCell.h"
+#import "HATheme.h"
 
 #pragma mark - Mock Data Source
 
@@ -446,6 +447,47 @@
     HAMarkdownCardCell *cell = [[HAMarkdownCardCell alloc] initWithFrame:CGRectMake(0, 0, 320, 120)];
     [cell configureWithConfigItem:item];
     XCTAssertNotNil(cell, @"Markdown content must render with a font available on iOS 9 and later");
+}
+
+- (void)testMarkdownCard_refreshesAttributedTextColorWhenAppearanceChanges {
+    NSDictionary *dashboardDictionary = @{
+        @"views": @[@{
+            @"cards": @[@{
+                @"type": @"markdown",
+                @"content": @"**Visible markdown**"
+            }]
+        }]
+    };
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dashboardDictionary];
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:1];
+    HAMarkdownCardCell *cell = [[HAMarkdownCardCell alloc] initWithFrame:CGRectMake(0, 0, 320, 120)];
+
+    if (@available(iOS 13.0, *)) {
+        cell.overrideUserInterfaceStyle = UIUserInterfaceStyleLight;
+    }
+    [cell configureWithConfigItem:config.items.firstObject];
+
+    NSAttributedString *lightText = [cell valueForKeyPath:@"contentLabel.attributedText"];
+    UIColor *lightColor = [lightText attribute:NSForegroundColorAttributeName atIndex:0 effectiveRange:NULL];
+
+    if (@available(iOS 13.0, *)) {
+        cell.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
+        [cell layoutIfNeeded];
+    } else {
+        [HATheme setCurrentMode:HAThemeModeDark];
+    }
+
+    NSAttributedString *darkText = [cell valueForKeyPath:@"contentLabel.attributedText"];
+    UIColor *darkColor = [darkText attribute:NSForegroundColorAttributeName atIndex:0 effectiveRange:NULL];
+    UIColor *expectedDarkColor = [HATheme primaryTextColor];
+    if (@available(iOS 13.0, *)) {
+        expectedDarkColor = [expectedDarkColor resolvedColorWithTraitCollection:cell.traitCollection];
+    }
+
+    XCTAssertNotEqualObjects(lightColor, darkColor,
+        @"Markdown attributes must be regenerated after an appearance change");
+    XCTAssertEqualObjects(darkColor, expectedDarkColor,
+        @"Markdown foreground color must match the active dark appearance");
 }
 
 #pragma mark - Test 11: Conditional Entity Rows

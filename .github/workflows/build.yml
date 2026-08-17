@@ -6,6 +6,12 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Marketing version to upload to TestFlight (for example, 1.2.5)'
+        required: true
+        type: string
 
 env:
   SCHEME: HADashboard
@@ -41,6 +47,8 @@ jobs:
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/v}"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ inputs.release_version }}"
           else
             VERSION="0.0.0-dev"
           fi
@@ -175,7 +183,7 @@ jobs:
   # ── Universal armv7+arm64 release ────────────────────────────────────
   archive-release:
     needs: build-and-test
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_version != '')
     runs-on: macos-latest
     timeout-minutes: 45
     permissions:
@@ -200,7 +208,11 @@ jobs:
       - name: Set version from tag
         id: version
         run: |
-          VERSION="${GITHUB_REF#refs/tags/v}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ inputs.release_version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
           BUILD_NUMBER=$(git rev-list --count HEAD)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
@@ -494,6 +506,7 @@ jobs:
 
       # ── GitHub Release ──────────────────────────────────────────────
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
