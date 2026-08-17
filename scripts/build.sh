@@ -139,16 +139,17 @@ build_device() {
         echo "Xcode 26 not found at $XCODE26" >&2
         exit 1
     fi
-    if [ ! -d "$XCODE13" ]; then
-        echo "Xcode 13.2.1 not found at $XCODE13 (needed for armv7 linking)" >&2
-        exit 1
-    fi
-
     export DEVELOPER_DIR="$XCODE26/Contents/Developer"
     local CLANG="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
     local DSYMUTIL="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/dsymutil"
     local XCODE26_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-    local XCODE13_SDK="$XCODE13/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk"
+    local XCODE13_SDK="${XCODE13_SDK_PATH:-$XCODE13/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk}"
+    if [ ! -d "$XCODE13_SDK" ]; then
+        echo "Xcode 13.2.1 SDK not found at $XCODE13_SDK" >&2
+        echo "Set XCODE13_SDK_PATH to an extracted iPhoneOS.sdk if using cached SDK stubs." >&2
+        exit 1
+    fi
+    echo "   armv7 link SDK: $XCODE13_SDK" >&2
     local SDK_VER=$(plutil -extract Version raw "$XCODE26_SDK/SDKSettings.plist")
     local SRC_ICON="$PROJECT_DIR/HADashboard/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
 

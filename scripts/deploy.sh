@@ -6,8 +6,8 @@ set -euo pipefail
 #   scripts/deploy.sh sim          # Build + run in iPad 10th gen simulator
 #   scripts/deploy.sh sim iphone   # Build + run in iPhone 15 Pro simulator
 #   scripts/deploy.sh iphone       # Build + deploy + launch on physical iPhone
-#   scripts/deploy.sh mini5        # Build + deploy to iPad Mini 5 (WiFi, devicectl)
-#   scripts/deploy.sh mini4        # Build + deploy to iPad Mini 4 (WiFi, ios-deploy)
+#   scripts/deploy.sh mini5        # Build + deploy to iPad Mini 5 (wired devicectl)
+#   scripts/deploy.sh mini4        # Build + deploy to iPad Mini 4 (WiFi, ideviceinstaller)
 #   scripts/deploy.sh ipad2        # Build + deploy to iPad 2 via WiFi SSH (jailbroken)
 #   scripts/deploy.sh ipad3        # Build + deploy to iPad 3 via WiFi SSH (jailbroken)
 #   scripts/deploy.sh mac          # Build + launch Mac Catalyst app locally
@@ -111,8 +111,8 @@ if [[ -z "$TARGET" ]]; then
     echo "  sim-ios93      iOS 9.3 iPad Pro simulator (RosettaSim, x86_64)"
     echo "  sim-ios103     iOS 10.3 iPad Pro 10.5\" simulator (RosettaSim, x86_64)"
     echo "  iphone         Physical iPhone (via devicectl)"
-    echo "  mini5          iPad Mini 5 — iPadOS 26 (devicectl, WiFi)"
-    echo "  mini4          iPad Mini 4 — iPadOS 15 (ios-deploy, WiFi)"
+    echo "  mini5          iPad Mini 5 — iPadOS 26 (wired devicectl)"
+    echo "  mini4          iPad Mini 4 — iPadOS 15 (WiFi, ideviceinstaller)"
     echo "  ipad2          iPad 2 — iOS 9 (WiFi SSH, jailbroken)"
     echo "  ipad2-usb      iPad 2 — iOS 9 (Unraid USB fallback)"
     echo "  ipad3          iPad 3 — (WiFi SSH, jailbroken)"
@@ -468,24 +468,30 @@ case "$TARGET" in
         ;;
 
     mini4)
-        if ! command -v pymobiledevice3 &>/dev/null; then
-            echo "❌ pymobiledevice3 not found. Install: pip install pymobiledevice3"
+        if ! command -v ideviceinstaller &>/dev/null; then
+            echo "❌ ideviceinstaller not found. Install libimobiledevice"
             exit 1
         fi
 
-        echo "📱 Deploying to iPad Mini 4 (pymobiledevice3)..."
+        if [[ -z "$IPAD_MINI4_UDID" ]]; then
+            echo "❌ IPAD_MINI4_UDID is not configured"
+            exit 1
+        fi
 
-        echo "   Installing..."
-        if ! pymobiledevice3 apps install --udid "$IPAD_MINI4_UDID" "$APP" 2>&1; then
+        echo "📱 Deploying to iPad Mini 4 (WiFi via MobileInstallation)..."
+        _MINI4_PACKAGE_DIR="$(mktemp -d /tmp/hadashboard-mini4.XXXXXX)"
+        mkdir "$_MINI4_PACKAGE_DIR/Payload"
+        cp -R "$APP" "$_MINI4_PACKAGE_DIR/Payload/"
+        _MINI4_IPA="$_MINI4_PACKAGE_DIR/HA-Dashboard.ipa"
+        (cd "$_MINI4_PACKAGE_DIR" && zip -qry "$_MINI4_IPA" Payload)
+
+        echo "   Upgrading without uninstalling (preserves the app container)..."
+        if ! ideviceinstaller -n -u "$IPAD_MINI4_UDID" upgrade "$_MINI4_IPA"; then
             echo "❌ iPad Mini 4 install failed"
             exit 1
         fi
 
-        echo "   Launching with dashboard: ${HA_DASHBOARD:-default}..."
-        pymobiledevice3 developer dvt launch --kill-existing \
-            --udid "$IPAD_MINI4_UDID" \
-            "$BUNDLE_ID ${LAUNCH_ARGS[*]}" 2>&1
-        echo "✅ Running on iPad Mini 4"
+        echo "✅ Upgraded iPad Mini 4; launch HA Dashboard on the device to retain its existing settings"
         ;;
 
     ipad2|ipad3|ipad4)
@@ -511,10 +517,44 @@ case "$TARGET" in
 
         _IPAD_SSH="sshpass -p ${_IPAD_PASS} ssh -o StrictHostKeyChecking=no ${_SSH_OPTS} root@${_IPAD_IP}"
         _IPAD_SCP="sshpass -p ${_IPAD_PASS} scp ${_SCP_EXTRA} -o StrictHostKeyChecking=no ${_SSH_OPTS}"
+        _IPAD_SSH_ARGS=(sshpass -p "$_IPAD_PASS" ssh -o StrictHostKeyChecking=no)
+        [[ -n "$_SSH_OPTS" ]] && _IPAD_SSH_ARGS+=($_SSH_OPTS)
+        _IPAD_SSH_ARGS+=("root@$_IPAD_IP")
 
         if ! $_IPAD_SSH "echo ok" &>/dev/null; then
             echo "❌ Cannot SSH to $_IPAD_LABEL at $_IPAD_IP"
             echo "   Ensure iPad is jailbroken, OpenSSH is installed, and WiFi is connected"
+            exit 1
+        fi
+
+        # Keep a recoverable on-device copy before replacing the app or its
+        # launch preferences. A failed backup is a hard stop.
+        _BACKUP_ID="$(date +%Y%m%d-%H%M%S)"
+        _BACKUP_DIR="/var/mobile/Library/HADashboard-backups/$BUNDLE_ID/$_BACKUP_ID"
+        echo "   Backing up existing app and preferences..."
+        if ! "${_IPAD_SSH_ARGS[@]}" "
+            set -e
+            mkdir -p '$_BACKUP_DIR'
+            echo 'backup: directory ready'
+            if [ -d '/Applications/HA Dashboard.app' ]; then
+                tar czf '$_BACKUP_DIR/HA-Dashboard.app-before.tar.gz' -C /Applications 'HA Dashboard.app'
+                echo 'backup: application archived'
+            fi
+            if [ -f '/var/mobile/Library/Preferences/$BUNDLE_ID.plist' ]; then
+                cp '/var/mobile/Library/Preferences/$BUNDLE_ID.plist' '$_BACKUP_DIR/preferences-before.plist'
+                echo 'backup: preferences copied'
+                if command -v shasum >/dev/null 2>&1; then
+                    shasum -a 256 '$_BACKUP_DIR/preferences-before.plist' > '$_BACKUP_DIR/preferences-before.sha256'
+                elif command -v openssl >/dev/null 2>&1; then
+                    openssl dgst -sha256 '$_BACKUP_DIR/preferences-before.plist' > '$_BACKUP_DIR/preferences-before.sha256'
+                else
+                    echo 'No SHA-256 utility is available for preference backup' >&2
+                    exit 1
+                fi
+                echo 'backup: preferences checksummed'
+            fi
+        "; then
+            echo "❌ Could not create a verified backup on $_IPAD_LABEL; no deployment was attempted"
             exit 1
         fi
 
@@ -568,12 +608,9 @@ case "$TARGET" in
             killall 'HA Dashboard' 2>/dev/null || true
             uicache 2>/dev/null || true
 
-            # Clear all app caches
+            # Clear only this app's caches. Other apps and their data remain untouched.
             rm -rf /var/mobile/Library/Caches/$BUNDLE_ID 2>/dev/null || true
             rm -rf /var/mobile/tmp/$BUNDLE_ID* 2>/dev/null || true
-            for d in /var/mobile/Applications/*/Library/Caches; do
-                [ -d \"\$d\" ] && rm -rf \"\$d\"/* 2>/dev/null || true
-            done
 
             PREFS_DIR=/var/mobile/Library/Preferences
             mkdir -p \$PREFS_DIR
@@ -581,7 +618,6 @@ case "$TARGET" in
             chmod 644 \$PREFS_DIR/$BUNDLE_ID.plist
             chown mobile:mobile \$PREFS_DIR/$BUNDLE_ID.plist
 
-            killall cfprefsd 2>/dev/null || true
             rm -f /tmp/ha-log.txt
             sleep 2
             open $BUNDLE_ID 2>/dev/null || true
@@ -593,6 +629,7 @@ case "$TARGET" in
         echo "── $_IPAD_LABEL log ─────────────────────────────────────"
         $_IPAD_SSH "cat /var/mobile/Documents/ha-log.txt 2>/dev/null || echo '(no log file found)'"
         echo "────────────────────────────────────────────────────────"
+        echo "   Backup retained at: $_BACKUP_DIR"
         echo ""
         echo "✅ Deployed to $_IPAD_LABEL (WiFi)"
         ;;
