@@ -544,6 +544,26 @@
     XCTAssertFalse([rendered.string containsString:@"<"]);
 }
 
+- (void)testMarkdownCard_formatsSafeBlocksAndAlerts {
+    NSString *content = @"> quoted\n1. numbered\n---\n<p>paragraph</p><div>division</div><pre>let x = 1;</pre><ha-alert alert-type=\"warning\">Careful</ha-alert>";
+    NSDictionary *dashboardDictionary = @{
+        @"views": @[@{ @"cards": @[@{ @"type": @"markdown", @"content": content }] }]
+    };
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dashboardDictionary];
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:1];
+    HAMarkdownCardCell *cell = [[HAMarkdownCardCell alloc] initWithFrame:CGRectMake(0, 0, 320, 240)];
+    [cell configureWithConfigItem:config.items.firstObject];
+
+    NSAttributedString *rendered = [cell valueForKeyPath:@"contentLabel.attributedText"];
+    XCTAssertEqualObjects(rendered.string, @"│ quoted\n1. numbered\n────────\nparagraph\ndivision\nlet x = 1;\nCareful");
+    NSRange codeRange = [rendered.string rangeOfString:@"let x = 1;"];
+    UIFont *codeFont = [rendered attribute:NSFontAttributeName atIndex:codeRange.location effectiveRange:NULL];
+    XCTAssertTrue([codeFont.fontName.lowercaseString containsString:@"menlo"] || [codeFont.fontName.lowercaseString containsString:@"mono"]);
+    NSRange alertRange = [rendered.string rangeOfString:@"Careful"];
+    XCTAssertNotNil([rendered attribute:NSBackgroundColorAttributeName atIndex:alertRange.location effectiveRange:NULL]);
+    XCTAssertFalse([rendered.string containsString:@"<"]);
+}
+
 #pragma mark - Test 11: Conditional Entity Rows
 
 - (void)testEntitiesCard_withOnlyConditionalRow_isRetained {

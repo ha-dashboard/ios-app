@@ -6,6 +6,8 @@ static const CGFloat kPadding = 12.0;
 static const CGFloat kTitleHeight = 24.0;
 static NSString * const kSmallOpenMarker = @"\uE000";
 static NSString * const kSmallCloseMarker = @"\uE001";
+static NSString * const kAlertOpenMarker = @"\uE002";
+static NSString * const kAlertCloseMarker = @"\uE003";
 
 @interface HAMarkdownCardCell ()
 @property (nonatomic, strong) UILabel *titleLabel;
@@ -122,7 +124,8 @@ static NSString * const kSmallCloseMarker = @"\uE001";
 }
 
 /// Simple markdown-to-attributed-string conversion.
-/// Supports: **bold**, *italic*, `code`, # headings, - lists.
+/// Supports a deliberately small, safe subset: **bold**, *italic*, `code`,
+/// # headings, unordered/numbered lists, blockquotes, and horizontal rules.
 /// Does NOT support Jinja2 templates.
 - (NSAttributedString *)attributedStringFromMarkdown:(NSString *)markdown {
     if (!markdown || markdown.length == 0) return [[NSAttributedString alloc] init];
@@ -151,9 +154,29 @@ static NSString * const kSmallCloseMarker = @"\uE001";
     NSDictionary *headingAttrs = @{NSFontAttributeName: headingFont, NSForegroundColorAttributeName: textColor};
 
     NSArray *lines = [markdown componentsSeparatedByString:@"\n"];
+    BOOL codeBlockOpen = NO;
     for (NSUInteger i = 0; i < lines.count; i++) {
         NSString *line = lines[i];
         if (i > 0) [result appendAttributedString:[[NSAttributedString alloc] initWithString:@"\n" attributes:normalAttrs]];
+
+        if (codeBlockOpen) {
+            NSRange close = [line rangeOfString:@"`"];
+            if (close.location != NSNotFound) {
+                if (close.location > 0) [result appendAttributedString:[[NSAttributedString alloc] initWithString:[line substringToIndex:close.location] attributes:codeAttrs]];
+                codeBlockOpen = NO;
+                if (NSMaxRange(close) < line.length) [self appendFormattedLine:[line substringFromIndex:NSMaxRange(close)] toResult:result normalAttrs:normalAttrs boldAttrs:boldAttrs italicAttrs:italicAttrs codeAttrs:codeAttrs];
+            } else {
+                [result appendAttributedString:[[NSAttributedString alloc] initWithString:line attributes:codeAttrs]];
+            }
+            continue;
+        }
+        NSRange openingCode = [line rangeOfString:@"`"];
+        if (openingCode.location != NSNotFound && [line rangeOfString:@"`" options:0 range:NSMakeRange(NSMaxRange(openingCode), line.length - NSMaxRange(openingCode))].location == NSNotFound) {
+            if (openingCode.location > 0) [self appendFormattedLine:[line substringToIndex:openingCode.location] toResult:result normalAttrs:normalAttrs boldAttrs:boldAttrs italicAttrs:italicAttrs codeAttrs:codeAttrs];
+            if (NSMaxRange(openingCode) < line.length) [result appendAttributedString:[[NSAttributedString alloc] initWithString:[line substringFromIndex:NSMaxRange(openingCode)] attributes:codeAttrs]];
+            codeBlockOpen = YES;
+            continue;
+        }
 
         // Heading
         if ([line hasPrefix:@"# "]) {
@@ -167,9 +190,25 @@ static NSString * const kSmallCloseMarker = @"\uE001";
             continue;
         }
 
+        if ([line hasPrefix:@"> "]) {
+            line = [NSString stringWithFormat:@"│ %@", [line substringFromIndex:2]];
+        }
+
+        if ([line isEqualToString:@"---"] || [line isEqualToString:@"***"] || [line isEqualToString:@"___"]) {
+            [result appendAttributedString:[[NSAttributedString alloc] initWithString:@"────────" attributes:@{NSFontAttributeName: normalFont, NSForegroundColorAttributeName: codeColor}]];
+            continue;
+        }
+
         // List items
         if ([line hasPrefix:@"- "] || [line hasPrefix:@"* "]) {
             line = [NSString stringWithFormat:@"\u2022 %@", [line substringFromIndex:2]];
+        } else {
+            NSRegularExpression *numberedList = [NSRegularExpression regularExpressionWithPattern:@"^[0-9]+\\.\\s+" options:0 error:NULL];
+            NSTextCheckingResult *match = [numberedList firstMatchInString:line options:0 range:NSMakeRange(0, line.length)];
+            if (match) {
+                NSString *prefix = [line substringWithRange:match.range];
+                line = [NSString stringWithFormat:@"%@%@", prefix, [line substringFromIndex:NSMaxRange(match.range)]];
+            }
         }
 
         // Process inline formatting: **bold**, *italic*, `code`
@@ -180,6 +219,7 @@ static NSString * const kSmallCloseMarker = @"\uE001";
                         codeAttrs:codeAttrs];
     }
     [self applySmallMarkersToResult:result];
+    [self applyAlertMarkersToResult:result textColor:textColor];
     return result;
 }
 
@@ -194,6 +234,14 @@ static NSString * const kSmallCloseMarker = @"\uE001";
     converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:@"**"];
     expression = [NSRegularExpression regularExpressionWithPattern:@"</?(em|i)>" options:NSRegularExpressionCaseInsensitive error:NULL];
     converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:@"*"];
+    expression = [NSRegularExpression regularExpressionWithPattern:@"<(p|div)(?:\\s+[^>]*)?>" options:NSRegularExpressionCaseInsensitive error:NULL];
+    converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:@""];
+    expression = [NSRegularExpression regularExpressionWithPattern:@"</(p|div)>" options:NSRegularExpressionCaseInsensitive error:NULL];
+    converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:@"\n"];
+    expression = [NSRegularExpression regularExpressionWithPattern:@"<(?:(code|pre))(?:\\s+[^>]*)?>" options:NSRegularExpressionCaseInsensitive error:NULL];
+    converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:@"`"];
+    expression = [NSRegularExpression regularExpressionWithPattern:@"</(?:code|pre)>" options:NSRegularExpressionCaseInsensitive error:NULL];
+    converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:@"`"];
     expression = [NSRegularExpression regularExpressionWithPattern:@"<small>" options:NSRegularExpressionCaseInsensitive error:NULL];
     converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:kSmallOpenMarker];
     expression = [NSRegularExpression regularExpressionWithPattern:@"</small>" options:NSRegularExpressionCaseInsensitive error:NULL];
@@ -201,9 +249,37 @@ static NSString * const kSmallCloseMarker = @"\uE001";
     // ha-alert is a presentational wrapper. Keep its text, while deliberately
     // ignoring attributes such as alert-type rather than executing/rendering
     // arbitrary HTML.
-    expression = [NSRegularExpression regularExpressionWithPattern:@"</?ha-alert(?:\\s+[^>]*)?>" options:NSRegularExpressionCaseInsensitive error:NULL];
-    converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:@""];
+    expression = [NSRegularExpression regularExpressionWithPattern:@"<ha-alert(?:\\s+[^>]*)?>" options:NSRegularExpressionCaseInsensitive error:NULL];
+    converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:kAlertOpenMarker];
+    expression = [NSRegularExpression regularExpressionWithPattern:@"</ha-alert>" options:NSRegularExpressionCaseInsensitive error:NULL];
+    converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:kAlertCloseMarker];
     return converted;
+}
+
+- (void)applyAlertMarkersToResult:(NSMutableAttributedString *)result textColor:(UIColor *)textColor {
+    while (YES) {
+        NSRange openRange = [result.string rangeOfString:kAlertOpenMarker];
+        if (openRange.location == NSNotFound) break;
+        NSRange closeRange = [result.string rangeOfString:kAlertCloseMarker options:0 range:NSMakeRange(NSMaxRange(openRange), result.length - NSMaxRange(openRange))];
+        if (closeRange.location == NSNotFound) {
+            [result deleteCharactersInRange:openRange];
+            break;
+        }
+        NSRange contentRange = NSMakeRange(NSMaxRange(openRange), closeRange.location - NSMaxRange(openRange));
+        if (contentRange.length > 0) {
+            UIColor *background = [UIColor colorWithRed:0.16 green:0.48 blue:0.78 alpha:0.16];
+            [result addAttributes:@{NSBackgroundColorAttributeName: background,
+                                    NSForegroundColorAttributeName: textColor}
+                              range:contentRange];
+        }
+        [result deleteCharactersInRange:closeRange];
+        [result deleteCharactersInRange:openRange];
+    }
+    NSRange closeRange = [result.string rangeOfString:kAlertCloseMarker];
+    while (closeRange.location != NSNotFound) {
+        [result deleteCharactersInRange:closeRange];
+        closeRange = [result.string rangeOfString:kAlertCloseMarker];
+    }
 }
 
 - (void)applySmallMarkersToResult:(NSMutableAttributedString *)result {
@@ -294,6 +370,8 @@ static NSString * const kSmallCloseMarker = @"\uE001";
     NSRegularExpression *lineBreak = [NSRegularExpression regularExpressionWithPattern:@"<br\\s*/?>" options:NSRegularExpressionCaseInsensitive error:NULL];
     content = [lineBreak stringByReplacingMatchesInString:content options:0 range:NSMakeRange(0, content.length) withTemplate:@"\n"];
     NSRegularExpression *tags = [NSRegularExpression regularExpressionWithPattern:@"</?(strong|b|em|i|small|ha-alert)(?:\\s+[^>]*)?>" options:NSRegularExpressionCaseInsensitive error:NULL];
+    content = [tags stringByReplacingMatchesInString:content options:0 range:NSMakeRange(0, content.length) withTemplate:@""];
+    tags = [NSRegularExpression regularExpressionWithPattern:@"</?(p|div|code|pre)(?:\\s+[^>]*)?>" options:NSRegularExpressionCaseInsensitive error:NULL];
     content = [tags stringByReplacingMatchesInString:content options:0 range:NSMakeRange(0, content.length) withTemplate:@""];
     BOOL hasTitle = [props[@"markdown_title"] isKindOfClass:[NSString class]] && [props[@"markdown_title"] length] > 0;
 
