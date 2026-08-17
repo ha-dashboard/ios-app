@@ -123,9 +123,7 @@ static const NSInteger kKeypadTagEnter = 11;
     UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
     [button setTitle:title forState:UIControlStateNormal];
     button.titleLabel.font = [UIFont systemFontOfSize:11 weight:UIFontWeightMedium];
-    // Pill-shaped with tinted background instead of solid color blocks
-    button.backgroundColor = [color colorWithAlphaComponent:0.15];
-    [button setTitleColor:color forState:UIControlStateNormal];
+    [self applyActionButtonStyle:button color:color];
     button.layer.cornerRadius = kActionButtonHeight / 2.0; // pill shape
     button.layer.masksToBounds = YES;
     button.contentEdgeInsets = UIEdgeInsetsMake(4, 12, 4, 12);
@@ -133,6 +131,16 @@ static const NSInteger kKeypadTagEnter = 11;
     [button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:button];
     return button;
+}
+
+// Keep the foreground and background paired.  These cells are reused as an
+// alarm changes state; resetting only the background made it solid while the
+// title stayed the same colour, which hid labels on recycled cells.
+- (void)applyActionButtonStyle:(UIButton *)button color:(UIColor *)color {
+    button.backgroundColor = [color colorWithAlphaComponent:0.15];
+    [button setTitleColor:color forState:UIControlStateNormal];
+    [button setTitleColor:[color colorWithAlphaComponent:0.45]
+                 forState:UIControlStateDisabled];
 }
 
 - (void)buildKeypad {
@@ -256,6 +264,15 @@ static const NSInteger kKeypadTagEnter = 11;
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
     [super configureWithEntity:entity configItem:configItem];
+
+    // Re-apply the paired style during every configuration so reuse and theme
+    // changes cannot leave a foreground colour on a matching solid background.
+    [self applyActionButtonStyle:self.armAwayButton color:[HATheme destructiveColor]];
+    [self applyActionButtonStyle:self.armHomeButton color:[HATheme warningColor]];
+    [self applyActionButtonStyle:self.armNightButton color:[HATheme destructiveColor]];
+    [self applyActionButtonStyle:self.armVacationButton color:[HATheme destructiveColor]];
+    [self applyActionButtonStyle:self.armBypassButton color:[HATheme warningColor]];
+    [self applyActionButtonStyle:self.disarmButton color:[HATheme successColor]];
 
     NSString *state = [entity alarmState];
     BOOL isArmed = [state hasPrefix:@"armed"];
@@ -472,12 +489,12 @@ static const NSInteger kKeypadTagEnter = 11;
     [super prepareForReuse];
     self.alarmStateLabel.text = nil;
     self.alarmStateLabel.textColor = [HATheme primaryTextColor];
-    self.armAwayButton.backgroundColor = [HATheme destructiveColor];
-    self.armHomeButton.backgroundColor = [HATheme warningColor];
-    self.armNightButton.backgroundColor = [HATheme destructiveColor];
-    self.armVacationButton.backgroundColor = [HATheme destructiveColor];
-    self.armBypassButton.backgroundColor = [HATheme warningColor];
-    self.disarmButton.backgroundColor = [HATheme successColor];
+    [self applyActionButtonStyle:self.armAwayButton color:[HATheme destructiveColor]];
+    [self applyActionButtonStyle:self.armHomeButton color:[HATheme warningColor]];
+    [self applyActionButtonStyle:self.armNightButton color:[HATheme destructiveColor]];
+    [self applyActionButtonStyle:self.armVacationButton color:[HATheme destructiveColor]];
+    [self applyActionButtonStyle:self.armBypassButton color:[HATheme warningColor]];
+    [self applyActionButtonStyle:self.disarmButton color:[HATheme successColor]];
     self.armNightButton.hidden = YES;
     self.armVacationButton.hidden = YES;
     self.armBypassButton.hidden = YES;

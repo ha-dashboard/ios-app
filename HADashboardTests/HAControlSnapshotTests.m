@@ -139,6 +139,24 @@
     [self verifyView:cell identifier:@"alarmTriggered"];
 }
 
+- (void)testAlarmActionButtonsRemainReadableAfterReuse {
+    HAEntity *entity = [HASnapshotTestHelpers alarmDisarmed];
+    HADashboardConfigItem *item = [HASnapshotTestHelpers itemWithEntityId:@"alarm_control_panel.home_alarm"
+                                                                cardType:@"alarm"
+                                                              columnSpan:6
+                                                             headingIcon:nil
+                                                             displayName:nil];
+    HAAlarmEntityCell *cell = [[HAAlarmEntityCell alloc] initWithFrame:CGRectMake(0, 0, floor(kSubGridUnit * 6), kStandardCellHeight)];
+
+    // The production failure occurred only after a collection-view reuse.
+    [cell prepareForReuse];
+    [cell configureWithEntity:entity configItem:item];
+
+    UIButton *awayButton = [cell valueForKey:@"armAwayButton"];
+    XCTAssertNotNil([awayButton titleColorForState:UIControlStateNormal]);
+    XCTAssertEqualWithAccuracy(CGColorGetAlpha(awayButton.backgroundColor.CGColor), 0.15, 0.001);
+}
+
 #pragma mark - Vacuum (HAVacuumEntityCell)
 
 - (void)testVacuumDocked {
