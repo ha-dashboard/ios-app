@@ -4,6 +4,8 @@
 
 static const CGFloat kPadding = 12.0;
 static const CGFloat kTitleHeight = 24.0;
+static NSString * const kSmallOpenMarker = @"\uE000";
+static NSString * const kSmallCloseMarker = @"\uE001";
 
 @interface HAMarkdownCardCell ()
 @property (nonatomic, strong) UILabel *titleLabel;
@@ -125,6 +127,11 @@ static const CGFloat kTitleHeight = 24.0;
 - (NSAttributedString *)attributedStringFromMarkdown:(NSString *)markdown {
     if (!markdown || markdown.length == 0) return [[NSAttributedString alloc] init];
 
+    // Home Assistant markdown cards commonly contain a small, safe subset of
+    // HTML. Convert only the supported tags to markdown/control markers before
+    // parsing; never hand arbitrary card content to a web view or HTML loader.
+    markdown = [self markdownByConvertingSupportedHTML:markdown];
+
     NSMutableAttributedString *result = [[NSMutableAttributedString alloc] init];
     UIFont *normalFont = [UIFont systemFontOfSize:13];
     UIFont *boldFont = [UIFont boldSystemFontOfSize:13];
@@ -172,7 +179,60 @@ static const CGFloat kTitleHeight = 24.0;
                       italicAttrs:italicAttrs
                         codeAttrs:codeAttrs];
     }
+    [self applySmallMarkersToResult:result];
     return result;
+}
+
+- (NSString *)markdownByConvertingSupportedHTML:(NSString *)markdown {
+    NSString *converted = markdown;
+    NSRegularExpression *expression;
+    // Line breaks are semantic in a markdown card, including the self-closing
+    // form emitted by the Home Assistant frontend.
+    expression = [NSRegularExpression regularExpressionWithPattern:@"<br\\s*/?>" options:NSRegularExpressionCaseInsensitive error:NULL];
+    converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:@"\n"];
+    expression = [NSRegularExpression regularExpressionWithPattern:@"</?(strong|b)>" options:NSRegularExpressionCaseInsensitive error:NULL];
+    converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:@"**"];
+    expression = [NSRegularExpression regularExpressionWithPattern:@"</?(em|i)>" options:NSRegularExpressionCaseInsensitive error:NULL];
+    converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:@"*"];
+    expression = [NSRegularExpression regularExpressionWithPattern:@"<small>" options:NSRegularExpressionCaseInsensitive error:NULL];
+    converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:kSmallOpenMarker];
+    expression = [NSRegularExpression regularExpressionWithPattern:@"</small>" options:NSRegularExpressionCaseInsensitive error:NULL];
+    converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:kSmallCloseMarker];
+    // ha-alert is a presentational wrapper. Keep its text, while deliberately
+    // ignoring attributes such as alert-type rather than executing/rendering
+    // arbitrary HTML.
+    expression = [NSRegularExpression regularExpressionWithPattern:@"</?ha-alert(?:\\s+[^>]*)?>" options:NSRegularExpressionCaseInsensitive error:NULL];
+    converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:@""];
+    return converted;
+}
+
+- (void)applySmallMarkersToResult:(NSMutableAttributedString *)result {
+    NSMutableArray<NSValue *> *ranges = [NSMutableArray array];
+    NSUInteger openLocation = NSNotFound;
+    NSString *string = result.string;
+    for (NSUInteger index = 0; index < string.length; index++) {
+        unichar character = [string characterAtIndex:index];
+        if (character == [kSmallOpenMarker characterAtIndex:0]) {
+            openLocation = index;
+        } else if (character == [kSmallCloseMarker characterAtIndex:0] && openLocation != NSNotFound && index > openLocation) {
+            [ranges addObject:[NSValue valueWithRange:NSMakeRange(openLocation + 1, index - openLocation - 1)]];
+            openLocation = NSNotFound;
+        }
+    }
+    for (NSValue *value in ranges) {
+        NSRange range = value.rangeValue;
+        if (range.length > 0 && NSMaxRange(range) <= result.length) {
+            [result addAttribute:NSFontAttributeName value:[UIFont systemFontOfSize:11] range:range];
+        }
+    }
+    // Remove from the end so marker offsets remain valid. Unmatched markers
+    // are removed as well, preventing private-use characters leaking to users.
+    for (NSInteger index = (NSInteger)result.length - 1; index >= 0; index--) {
+        unichar character = [result.string characterAtIndex:(NSUInteger)index];
+        if (character == [kSmallOpenMarker characterAtIndex:0] || character == [kSmallCloseMarker characterAtIndex:0]) {
+            [result deleteCharactersInRange:NSMakeRange((NSUInteger)index, 1)];
+        }
+    }
 }
 
 - (void)appendFormattedLine:(NSString *)line
@@ -229,6 +289,12 @@ static const CGFloat kTitleHeight = 24.0;
 + (CGFloat)preferredHeightForConfigItem:(HADashboardConfigItem *)configItem width:(CGFloat)width {
     NSDictionary *props = configItem.customProperties;
     NSString *content = props[@"markdown_content"] ?: @"";
+    // Measure the same supported HTML representation that the label displays;
+    // raw tags should not add visible width or height.
+    NSRegularExpression *lineBreak = [NSRegularExpression regularExpressionWithPattern:@"<br\\s*/?>" options:NSRegularExpressionCaseInsensitive error:NULL];
+    content = [lineBreak stringByReplacingMatchesInString:content options:0 range:NSMakeRange(0, content.length) withTemplate:@"\n"];
+    NSRegularExpression *tags = [NSRegularExpression regularExpressionWithPattern:@"</?(strong|b|em|i|small|ha-alert)(?:\\s+[^>]*)?>" options:NSRegularExpressionCaseInsensitive error:NULL];
+    content = [tags stringByReplacingMatchesInString:content options:0 range:NSMakeRange(0, content.length) withTemplate:@""];
     BOOL hasTitle = [props[@"markdown_title"] isKindOfClass:[NSString class]] && [props[@"markdown_title"] length] > 0;
 
     // Measure against the actual card width. A line-count estimate clips

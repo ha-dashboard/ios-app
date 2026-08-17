@@ -518,6 +518,30 @@
     XCTAssertTrue((italicFont.fontDescriptor.symbolicTraits & UIFontDescriptorTraitItalic) != 0);
 }
 
+- (void)testMarkdownCard_formatsSupportedSafeHTML {
+    NSString *content = @"<strong>Platform 1</strong><br><em>Next service</em> <small>updated</small><br><ha-alert alert-type=\"info\">Service update</ha-alert>";
+    NSDictionary *dashboardDictionary = @{
+        @"views": @[@{ @"cards": @[@{ @"type": @"markdown", @"content": content }] }]
+    };
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dashboardDictionary];
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:1];
+    HAMarkdownCardCell *cell = [[HAMarkdownCardCell alloc] initWithFrame:CGRectMake(0, 0, 320, 120)];
+    [cell configureWithConfigItem:config.items.firstObject];
+
+    NSAttributedString *rendered = [cell valueForKeyPath:@"contentLabel.attributedText"];
+    XCTAssertEqualObjects(rendered.string, @"Platform 1\nNext service updated\nService update");
+    NSRange strongRange = [rendered.string rangeOfString:@"Platform 1"];
+    UIFont *strongFont = [rendered attribute:NSFontAttributeName atIndex:strongRange.location effectiveRange:NULL];
+    XCTAssertTrue((strongFont.fontDescriptor.symbolicTraits & UIFontDescriptorTraitBold) != 0);
+    NSRange italicRange = [rendered.string rangeOfString:@"Next service"];
+    UIFont *italicFont = [rendered attribute:NSFontAttributeName atIndex:italicRange.location effectiveRange:NULL];
+    XCTAssertTrue((italicFont.fontDescriptor.symbolicTraits & UIFontDescriptorTraitItalic) != 0);
+    NSRange smallRange = [rendered.string rangeOfString:@"updated"];
+    UIFont *smallFont = [rendered attribute:NSFontAttributeName atIndex:smallRange.location effectiveRange:NULL];
+    XCTAssertLessThan(smallFont.pointSize, 13.0);
+    XCTAssertFalse([rendered.string containsString:@"<"]);
+}
+
 #pragma mark - Test 11: Conditional Entity Rows
 
 - (void)testEntitiesCard_withOnlyConditionalRow_isRetained {
