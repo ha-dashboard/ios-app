@@ -2474,6 +2474,11 @@ heightForHeaderInSection:(NSInteger)section {
 
 - (void)connectionManagerDidConnect:(HAConnectionManager *)manager {
     [self showConnectionBar:NO message:nil];
+    // Cached dashboards can be displayed before the authenticated API is
+    // available. Retry their Markdown templates now that Home Assistant is
+    // connected; otherwise a failed offline render leaves source Jinja visible
+    // until a later entity update happens to trigger another attempt.
+    [self renderMarkdownTemplatesForEntityId:nil];
     // If we're already showing cached data, don't show loading spinner —
     // live data will seamlessly replace cached data in the background
     if (!manager.showingCachedData && !self.statesLoaded) {
