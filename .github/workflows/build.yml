@@ -119,7 +119,10 @@ jobs:
 
           mkdir -p ~/.xcodes/Downloads
           echo "Downloading Xcode 13.2.1 .xip via xcodes..."
-          xcodes download 13.2.1 --use-fastlane-auth --directory ~/.xcodes/Downloads
+          xcodes download 13.2.1 \
+            --use-fastlane-auth \
+            --fastlane-user "$XCODES_USERNAME" \
+            --directory ~/.xcodes/Downloads
           echo "Downloaded:"
           ls -lh ~/.xcodes/Downloads/
 
