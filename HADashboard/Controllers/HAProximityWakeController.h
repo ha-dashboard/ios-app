@@ -4,6 +4,15 @@
 /// HAProximityWakeController observes this to reset the idle timer.
 extern NSString *const HAWindowUserDidInteractNotification;
 
+/// Posted by remote-control commands to change the brightness without waking a
+/// sleeping kiosk. userInfo: @{ @"brightness": NSNumber (0.0–1.0) }.
+extern NSString *const HAProximityWakeSetBrightnessNotification;
+
+/// Posted by the remote screen-off command to put a wake-on-touch kiosk to
+/// sleep immediately. The controller adds the touch-absorbing overlay so the
+/// next physical touch wakes the screen without activating dashboard content.
+extern NSString *const HAProximityWakeSleepNotification;
+
 /// Implements fake-sleep/wake for kiosk mode.
 ///
 /// When started, a 60-second idle timer runs. If no touch occurs before it

@@ -3,6 +3,7 @@
 #import "HAConnectionManager.h"
 #import "HADeviceRegistration.h"
 #import "HAAuthManager.h"
+#import "HAProximityWakeController.h"
 #import "HANotificationPresenter.h"
 #import "HATheme.h"
 #import "HALog.h"
@@ -178,21 +179,52 @@ NSString *const HARemoteCommandReloadNotification = @"HARemoteCommandReloadNotif
     }
     value = fminf(fmaxf(value, 0.0), 1.0);
 
+    if ([self usesProximityWake]) {
+        [[NSNotificationCenter defaultCenter]
+            postNotificationName:HAProximityWakeSetBrightnessNotification
+                          object:self
+                        userInfo:@{@"brightness": @(value)}];
+        HALogI(@"cmd", @"Set wake-on-touch brightness to %.0f%%", value * 100);
+        return;
+    }
+
     [UIScreen mainScreen].brightness = value;
     HALogI(@"cmd", @"Set brightness to %.0f%%", value * 100);
 }
 
 - (void)handleScreenOn {
+    if ([self usesProximityWake]) {
+        // This is deliberately the same signal as a physical touch. It lets
+        // HAProximityWakeController restore its own saved brightness, remove
+        // the black overlay, and restart the full idle interval.
+        [[NSNotificationCenter defaultCenter]
+            postNotificationName:HAWindowUserDidInteractNotification object:self];
+        HALogI(@"cmd", @"Wake-on-touch screen on requested");
+        return;
+    }
+
     CGFloat restore = self.savedBrightness > 0 ? self.savedBrightness : 0.5;
     [UIScreen mainScreen].brightness = restore;
     HALogI(@"cmd", @"Screen on (brightness %.0f%%)", restore * 100);
 }
 
 - (void)handleScreenOff {
+    if ([self usesProximityWake]) {
+        [[NSNotificationCenter defaultCenter]
+            postNotificationName:HAProximityWakeSleepNotification object:self];
+        HALogI(@"cmd", @"Wake-on-touch screen off requested");
+        return;
+    }
+
     CGFloat current = [UIScreen mainScreen].brightness;
     if (current > 0) self.savedBrightness = current;
     [UIScreen mainScreen].brightness = 0.0;
     HALogI(@"cmd", @"Screen off (saved brightness %.0f%%)", self.savedBrightness * 100);
+}
+
+- (BOOL)usesProximityWake {
+    HAAuthManager *auth = [HAAuthManager sharedManager];
+    return auth.isKioskMode && auth.proximityWakeEnabled;
 }
 
 - (void)handleSwitchDashboard:(NSDictionary *)data {

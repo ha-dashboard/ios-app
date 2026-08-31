@@ -225,7 +225,12 @@ static NSArray *allSensorIds(void) {
         }
     }
     if ([sensorId isEqualToString:kSensorScreenBrightness]) {
-        return @((NSInteger)([UIScreen mainScreen].brightness * 100));
+        CGFloat brightness = [UIScreen mainScreen].brightness;
+        // Mac Catalyst reports -1 because it has no device display brightness.
+        // Preserve the same unavailable sentinel used for battery level rather
+        // than publishing an impossible -100% diagnostic value to HA.
+        if (brightness < 0) return @(-1);
+        return @((NSInteger)(brightness * 100));
     }
     if ([sensorId isEqualToString:kSensorStorage]) {
         NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfFileSystemForPath:NSHomeDirectory() error:nil];

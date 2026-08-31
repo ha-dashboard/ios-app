@@ -195,6 +195,9 @@
 
       <h3>Can I try the app without a Home Assistant server?</h3>
       <p>Yes. The app includes a Demo Mode with three built-in sample dashboards. Open the app and select Demo Mode from the connection screen.</p>
+
+      <h3>Can a Home Assistant automation wake my kiosk dashboard?</h3>
+      <p>Yes. In Settings, enable <strong>Register with Home Assistant</strong>, then enable both Kiosk Mode and Wake on Touch. Call the generated <code>notify.mobile_app_&lt;device&gt;</code> action with <code>message: command_screen_on</code>. This wakes the app’s dimmed dashboard and restarts its one-minute wake timer. It works while HA Dashboard remains open in kiosk mode; it cannot unlock or launch a backgrounded iPad.</p>
     </div>
   </main>
 

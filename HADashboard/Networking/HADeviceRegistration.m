@@ -276,9 +276,13 @@ static NSString *const kDeviceNameOverride   = @"ha_device_name_override";
         // so push_url is never called — but both fields are required for HA to
         // register the notify.mobile_app_<device> service. HA validates them as
         // an inclusion group ("push_cloud") and rejects if only one is present.
+        // Explicitly advertise the local delivery channel as well; this makes
+        // the WebSocket route first-class rather than relying on cloud-push
+        // capability inference from the placeholder fields above.
         @"app_data":             @{
             @"push_url": @"https://mobile-apps.home-assistant.io/api/sendPush/ios",
             @"push_token": @"websocket-local-push",
+            @"push_websocket_channel": @YES,
         },
     };
 }

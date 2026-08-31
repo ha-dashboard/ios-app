@@ -1,6 +1,8 @@
 #import "HAProximityWakeController.h"
 
 NSString *const HAWindowUserDidInteractNotification = @"HAWindowUserDidInteractNotification";
+NSString *const HAProximityWakeSetBrightnessNotification = @"HAProximityWakeSetBrightnessNotification";
+NSString *const HAProximityWakeSleepNotification = @"HAProximityWakeSleepNotification";
 
 /// Seconds of inactivity before the screen dims.
 static const NSTimeInterval kDimDelay = 60.0;
@@ -34,6 +36,10 @@ static const NSTimeInterval kWakeDuration = 0.35;
     NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
     [nc addObserver:self selector:@selector(userDidInteract)
                name:HAWindowUserDidInteractNotification object:nil];
+    [nc addObserver:self selector:@selector(remoteBrightnessRequested:)
+               name:HAProximityWakeSetBrightnessNotification object:nil];
+    [nc addObserver:self selector:@selector(remoteSleepRequested)
+               name:HAProximityWakeSleepNotification object:nil];
     [nc addObserver:self selector:@selector(appWillResignActive)
                name:UIApplicationWillResignActiveNotification object:nil];
     [nc addObserver:self selector:@selector(appDidBecomeActive)
@@ -71,6 +77,41 @@ static const NSTimeInterval kWakeDuration = 0.35;
     } else {
         [self scheduleIdleTimer];
     }
+}
+
+- (void)remoteBrightnessRequested:(NSNotification *)notification {
+    NSNumber *brightness = notification.userInfo[@"brightness"];
+    if (![brightness isKindOfClass:[NSNumber class]]) return;
+
+    CGFloat value = fminf(fmaxf(brightness.floatValue, 0.0), 1.0);
+    if (self.sleeping) {
+        // Keep the panel visually asleep, but make the next wake use the new
+        // level rather than restoring the stale brightness from before sleep.
+        self.savedBrightness = value;
+    } else {
+        [UIScreen mainScreen].brightness = value;
+    }
+}
+
+- (void)remoteSleepRequested {
+    if (self.sleeping) return;
+
+    UIWindow *window = self.window;
+    if (!window) return;
+
+    [self.idleTimer invalidate];
+    self.idleTimer = nil;
+    self.sleeping = YES;
+    self.savedBrightness = [UIScreen mainScreen].brightness;
+
+    UIView *overlay = [[UIView alloc] initWithFrame:window.bounds];
+    overlay.backgroundColor = [UIColor blackColor];
+    overlay.alpha = 1.0;
+    overlay.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    overlay.userInteractionEnabled = YES;
+    self.sleepOverlay = overlay;
+    [window addSubview:overlay];
+    [UIScreen mainScreen].brightness = 0.0;
 }
 
 #pragma mark - Dim / wake

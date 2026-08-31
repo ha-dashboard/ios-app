@@ -6,10 +6,15 @@
 #import "HANotificationPresenter.h"
 #import "HATheme.h"
 #import "HAAuthManager.h"
+#import "HAProximityWakeController.h"
 
 #pragma mark - HADeviceRegistration Tests
 
 @interface HADeviceRegistrationTests : XCTestCase
+@end
+
+@interface HADeviceRegistration (TestAccess)
+- (NSDictionary *)registrationBody;
 @end
 
 @implementation HADeviceRegistrationTests
@@ -24,6 +29,11 @@
     HADeviceRegistration *reg = [HADeviceRegistration sharedManager];
     XCTAssertNotNil(reg.deviceName, @"deviceName should not be nil");
     XCTAssertTrue(reg.deviceName.length > 0, @"deviceName should not be empty");
+}
+
+- (void)testRegistrationExplicitlyAdvertisesWebSocketPush {
+    NSDictionary *appData = [[HADeviceRegistration sharedManager] registrationBody][@"app_data"];
+    XCTAssertEqualObjects(appData[@"push_websocket_channel"], @YES);
 }
 
 - (void)testIsRegisteredReturnsFalseBeforeRegistration {
@@ -158,8 +168,8 @@
     XCTAssertTrue([value isKindOfClass:[NSNumber class]],
                   @"Screen brightness should be a number, got %@", [value class]);
     NSInteger brightness = [value integerValue];
-    XCTAssertTrue(brightness >= 0 && brightness <= 100,
-                  @"Brightness %ld should be 0-100", (long)brightness);
+    XCTAssertTrue(brightness == -1 || (brightness >= 0 && brightness <= 100),
+                  @"Brightness %ld should be -1 (unavailable) or 0-100", (long)brightness);
 }
 
 - (void)testUnknownSensorReturnsUnknown {
@@ -232,6 +242,70 @@
 
 @end
 
+#pragma mark - HAProximityWakeController Tests
+
+@interface HAProximityWakeController (TestAccess)
+- (void)dim;
+@property (nonatomic, readonly) BOOL sleeping;
+@property (nonatomic, readonly) CGFloat savedBrightness;
+@property (nonatomic, strong, readonly) UIView *sleepOverlay;
+@end
+
+@interface HAProximityWakeControllerTests : XCTestCase
+@property (nonatomic, strong) UIWindow *window;
+@property (nonatomic, strong) HAProximityWakeController *controller;
+@end
+
+@implementation HAProximityWakeControllerTests
+
+- (void)setUp {
+    [super setUp];
+    self.window = [[UIWindow alloc] initWithFrame:CGRectMake(0, 0, 320, 480)];
+    self.controller = [[HAProximityWakeController alloc] initWithWindow:self.window];
+    [self.controller start];
+}
+
+- (void)tearDown {
+    [self.controller stop];
+    self.controller = nil;
+    self.window = nil;
+    [super tearDown];
+}
+
+- (void)testRemoteWakeUsesTheSameStateTransitionAsTouch {
+    [self.controller dim];
+    XCTAssertTrue(self.controller.sleeping);
+
+    [[NSNotificationCenter defaultCenter]
+        postNotificationName:HAWindowUserDidInteractNotification object:self];
+
+    XCTAssertFalse(self.controller.sleeping);
+}
+
+- (void)testRemoteBrightnessChangesTheNextWakeLevelWithoutWaking {
+    [self.controller dim];
+    XCTAssertTrue(self.controller.sleeping);
+
+    [[NSNotificationCenter defaultCenter]
+        postNotificationName:HAProximityWakeSetBrightnessNotification
+                      object:self
+                    userInfo:@{@"brightness": @0.73}];
+
+    XCTAssertTrue(self.controller.sleeping);
+    XCTAssertEqualWithAccuracy(self.controller.savedBrightness, 0.73, 0.001);
+}
+
+- (void)testRemoteSleepAddsTheTouchAbsorbingOverlay {
+    [[NSNotificationCenter defaultCenter]
+        postNotificationName:HAProximityWakeSleepNotification object:self];
+
+    XCTAssertTrue(self.controller.sleeping);
+    XCTAssertNotNil(self.controller.sleepOverlay);
+    XCTAssertTrue(self.controller.sleepOverlay.userInteractionEnabled);
+}
+
+@end
+
 #pragma mark - HARemoteCommandHandler Tests
 
 @interface HARemoteCommandHandler (TestAccess)
@@ -276,6 +350,67 @@
     [self.handler dispatchCommand:@"set_brightness" data:@{@"level": @50}];
     [self waitForExpectationsWithTimeout:2 handler:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:observer];
+}
+
+- (void)testWakeOnTouchBrightnessIsDelegatedToTheProximityController {
+    HAAuthManager *auth = [HAAuthManager sharedManager];
+    BOOL oldKiosk = auth.isKioskMode;
+    BOOL oldWake = auth.proximityWakeEnabled;
+    [auth setKioskMode:YES];
+    [auth setProximityWakeEnabled:YES];
+
+    XCTestExpectation *exp = [self expectationWithDescription:@"proximity brightness request"];
+    id observer = [[NSNotificationCenter defaultCenter]
+        addObserverForName:HAProximityWakeSetBrightnessNotification object:nil queue:nil
+                usingBlock:^(NSNotification *note) {
+        XCTAssertEqualWithAccuracy([note.userInfo[@"brightness"] doubleValue], 0.75, 0.001);
+        [exp fulfill];
+    }];
+    [self.handler dispatchCommand:@"set_brightness" data:@{@"level": @75}];
+    [self waitForExpectationsWithTimeout:2 handler:nil];
+    [[NSNotificationCenter defaultCenter] removeObserver:observer];
+    [auth setProximityWakeEnabled:oldWake];
+    [auth setKioskMode:oldKiosk];
+}
+
+- (void)testWakeOnTouchScreenOnUsesTheTouchWakePath {
+    HAAuthManager *auth = [HAAuthManager sharedManager];
+    BOOL oldKiosk = auth.isKioskMode;
+    BOOL oldWake = auth.proximityWakeEnabled;
+    [auth setKioskMode:YES];
+    [auth setProximityWakeEnabled:YES];
+
+    XCTestExpectation *exp = [self expectationWithDescription:@"touch wake request"];
+    id observer = [[NSNotificationCenter defaultCenter]
+        addObserverForName:HAWindowUserDidInteractNotification object:nil queue:nil
+                usingBlock:^(NSNotification *note) {
+        [exp fulfill];
+    }];
+    [self.handler dispatchCommand:@"command_screen_on" data:@{}];
+    [self waitForExpectationsWithTimeout:2 handler:nil];
+    [[NSNotificationCenter defaultCenter] removeObserver:observer];
+    [auth setProximityWakeEnabled:oldWake];
+    [auth setKioskMode:oldKiosk];
+}
+
+- (void)testWakeOnTouchScreenOffUsesTheProtectiveSleepOverlay {
+    HAAuthManager *auth = [HAAuthManager sharedManager];
+    BOOL oldKiosk = auth.isKioskMode;
+    BOOL oldWake = auth.proximityWakeEnabled;
+    [auth setKioskMode:YES];
+    [auth setProximityWakeEnabled:YES];
+
+    XCTestExpectation *exp = [self expectationWithDescription:@"proximity sleep request"];
+    id observer = [[NSNotificationCenter defaultCenter]
+        addObserverForName:HAProximityWakeSleepNotification object:nil queue:nil
+                usingBlock:^(NSNotification *note) {
+        [exp fulfill];
+    }];
+    [self.handler dispatchCommand:@"command_screen_off" data:@{}];
+    [self waitForExpectationsWithTimeout:2 handler:nil];
+    [[NSNotificationCenter defaultCenter] removeObserver:observer];
+    [auth setProximityWakeEnabled:oldWake];
+    [auth setKioskMode:oldKiosk];
 }
 
 - (void)testThemeCommand {
