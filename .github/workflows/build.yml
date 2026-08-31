@@ -16,8 +16,11 @@ on:
 env:
   SCHEME: HADashboard
   TEAM_ID: ${{ vars.TEAM_ID }}
-  # Xcode 13 SDK stubs (21MB) — only the TBD files needed for armv7 linking
-  XCODE13_SDK_CACHE_KEY: xcode13-sdk-stubs-v1
+  # Immutable Xcode 13.2.1 iPhoneOS SDK stubs (21MB) for armv7 linking.
+  # Kept as a repository release asset so legacy builds never need an Apple
+  # login or an evictable Actions cache to recover the old SDK.
+  XCODE13_SDK_STUBS_RELEASE: xcode13-sdk-stubs-v1
+  XCODE13_SDK_STUBS_SHA256: 7b89a8882d60246b0ba53ed4a61363a0cbcad648e5b36874940bf4ee400c2dfc
 
 jobs:
   build-and-test:
@@ -73,115 +76,32 @@ jobs:
           # on iOS 17.4 and differ across iOS versions. Run locally with:
           #   scripts/test-snapshots.sh
 
-  # ── Seed Xcode 13 SDK stubs cache on main pushes ─────────────────────
-  # The armv7 link step needs TBD stubs from Xcode 13's iOS SDK (21MB).
-  # Prefer the cached Xcode 13.2.1 .xip from the old legacy workflow.
-  # If that cache is missing, re-download the .xip with xcodes + Fastlane auth
-  # and let actions/cache persist it for future runs.
-  seed-sdk-cache:
+  # ── Verify immutable Xcode 13 SDK stubs on main pushes ───────────────
+  # The armv7 link step needs TBD stubs from Xcode 13's iOS SDK. Downloading
+  # this repository-owned release asset is deterministic and avoids Apple-ID
+  # authentication entirely.
+  verify-sdk-stubs:
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 10
     if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
     steps:
-      - name: Check SDK stubs cache
-        id: stubs-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.xcode13-sdk-stubs
-          key: ${{ env.XCODE13_SDK_CACHE_KEY }}
-
-      - name: Restore Xcode 13 .xip from legacy cache
-        if: steps.stubs-cache.outputs.cache-hit != 'true'
-        id: xip-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.xcodes/Downloads
-          key: xcode-13.2.1-xip
-
-      - name: Install xcodes
-        if: steps.stubs-cache.outputs.cache-hit != 'true' && steps.xip-cache.outputs.cache-hit != 'true'
-        run: |
-          if ! command -v xcodes >/dev/null 2>&1; then
-            brew install xcodesorg/made/xcodes
-          fi
-          xcodes version
-
-      - name: Download Xcode 13.2.1 .xip fallback
-        if: steps.stubs-cache.outputs.cache-hit != 'true' && steps.xip-cache.outputs.cache-hit != 'true'
+      - name: Download and verify Xcode 13 SDK stubs
         env:
-          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
-          XCODES_USERNAME: ${{ secrets.XCODES_USERNAME }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -z "$FASTLANE_SESSION" ] || [ -z "$XCODES_USERNAME" ]; then
-            echo "❌ Missing XCODES_USERNAME or FASTLANE_SESSION secret for Xcode 13.2.1 fallback download"
-            exit 1
-          fi
-
-          mkdir -p ~/.xcodes/Downloads
-          echo "Downloading Xcode 13.2.1 .xip via xcodes..."
-          xcodes download 13.2.1 \
-            --use-fastlane-auth \
-            --fastlane-user "$XCODES_USERNAME" \
-            --directory ~/.xcodes/Downloads
-          echo "Downloaded:"
-          ls -lh ~/.xcodes/Downloads/
-
-      - name: Extract SDK stubs from cached .xip
-        if: steps.stubs-cache.outputs.cache-hit != 'true'
-        run: |
-          XIP=$(find ~/.xcodes/Downloads -name "*Xcode*13*" -o -name "*13*.xip" 2>/dev/null | head -1)
-
-          if [ -z "$XIP" ]; then
-            echo "❌ No Xcode 13.2.1 .xip found in legacy cache"
-            echo "   Cache key 'xcode-13.2.1-xip' may need to be seeded manually."
-            exit 1
-          fi
-
-          echo "Found cached .xip: $XIP ($(du -h "$XIP" | cut -f1))"
-
-          # Free disk space for extraction (~12GB needed)
-          sudo rm -rf /Applications/Xcode_16.0.app \
-                      /Applications/Xcode_16.1.app \
-                      /Applications/Xcode_16.3.app \
-                      /Applications/Xcode_16.4.app 2>/dev/null || true
-
-          # Extract .xip directly — no xcodes auth needed.
-          # xip --expand is the built-in macOS tool for Apple-signed archives.
-          echo "Expanding .xip (this takes a few minutes)..."
-          cd /tmp
-          xip --expand "$XIP"
-
-          # Find the extracted Xcode.app
-          XCODE13=$(ls -d /tmp/Xcode*.app 2>/dev/null | head -1)
-          if [ -z "$XCODE13" ]; then
-            echo "❌ Xcode not found after xip --expand"
-            ls /tmp/*.app 2>/dev/null
-            exit 1
-          fi
-          echo "Extracted: $XCODE13"
-
-          # Extract just the iOS SDK (TBD stubs + SDKSettings) — 21MB
-          SDK="$XCODE13/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk"
-          if [ ! -d "$SDK" ]; then
-            # Try versioned path
-            SDK=$(find "$XCODE13/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs" \
-                -maxdepth 1 -name "iPhoneOS*.sdk" 2>/dev/null | head -1)
-          fi
-
-          if [ ! -d "$SDK" ]; then
-            echo "❌ iOS SDK not found in extracted Xcode"
-            find "$XCODE13/Contents/Developer/Platforms" -name "*.sdk" -maxdepth 4 2>/dev/null
-            exit 1
-          fi
-
-          mkdir -p ~/.xcode13-sdk-stubs
-          tar czf ~/.xcode13-sdk-stubs/iPhoneOS-armv7-stubs.tar.gz \
-              -C "$(dirname "$SDK")" "$(basename "$SDK")"
-          ls -lh ~/.xcode13-sdk-stubs/iPhoneOS-armv7-stubs.tar.gz
-          echo "✓ SDK stubs cached ($(du -sh ~/.xcode13-sdk-stubs | cut -f1))"
-
-          # Clean up the full Xcode extraction
-          rm -rf "$XCODE13"
+          set -euo pipefail
+          STUBS_DIR="$RUNNER_TEMP/xcode13-sdk-stubs"
+          mkdir -p "$STUBS_DIR"
+          gh release download "$XCODE13_SDK_STUBS_RELEASE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern iPhoneOS-armv7-stubs.tar.gz \
+            --dir "$STUBS_DIR"
+          STUBS_ARCHIVE="$STUBS_DIR/iPhoneOS-armv7-stubs.tar.gz"
+          echo "$XCODE13_SDK_STUBS_SHA256  $STUBS_ARCHIVE" | shasum -a 256 -c -
+          tar tzf "$STUBS_ARCHIVE" | grep -Fx 'iPhoneOS.sdk/SDKSettings.plist'
+          tar tzf "$STUBS_ARCHIVE" | grep -Fx 'iPhoneOS.sdk/System/Library/Frameworks/UIKit.framework/UIKit.tbd'
 
   # ── Universal armv7+arm64 release ────────────────────────────────────
   archive-release:
@@ -267,27 +187,22 @@ jobs:
           echo "✓ Certificate and provisioning profile installed"
           security find-identity -v -p codesigning "$KEYCHAIN_PATH" | head -3
 
-      - name: Restore Xcode 13 SDK stubs
-        id: sdk-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.xcode13-sdk-stubs
-          key: ${{ env.XCODE13_SDK_CACHE_KEY }}
-
-      - name: Install Xcode 13 SDK stubs
+      - name: Download Xcode 13 SDK stubs
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           STUBS_DIR="$RUNNER_TEMP/xcode13-sdk"
           mkdir -p "$STUBS_DIR"
-
-          if [ -f ~/.xcode13-sdk-stubs/iPhoneOS-armv7-stubs.tar.gz ]; then
-            echo "Extracting cached SDK stubs..."
-            tar xzf ~/.xcode13-sdk-stubs/iPhoneOS-armv7-stubs.tar.gz -C "$STUBS_DIR"
-          else
-            echo "❌ SDK stubs cache miss — push to main first to seed cache"
-            echo "   The seed-sdk-cache job extracts stubs from the legacy Xcode .xip cache"
-            exit 1
-          fi
-
+          gh release download "$XCODE13_SDK_STUBS_RELEASE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern iPhoneOS-armv7-stubs.tar.gz \
+            --dir "$STUBS_DIR"
+          STUBS_ARCHIVE="$STUBS_DIR/iPhoneOS-armv7-stubs.tar.gz"
+          echo "$XCODE13_SDK_STUBS_SHA256  $STUBS_ARCHIVE" | shasum -a 256 -c -
+          tar xzf "$STUBS_ARCHIVE" -C "$STUBS_DIR"
+          test -f "$STUBS_DIR/iPhoneOS.sdk/SDKSettings.plist"
+          test -f "$STUBS_DIR/iPhoneOS.sdk/System/Library/Frameworks/UIKit.framework/UIKit.tbd"
           echo "SDK stubs at: $STUBS_DIR/iPhoneOS.sdk"
           echo "XCODE13_SDK=$STUBS_DIR/iPhoneOS.sdk" >> "$GITHUB_ENV"
 

@@ -18,12 +18,20 @@ set -euo pipefail
 #   Prints the path to the built .app on success
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-XCODE13="/Applications/Xcode-13.2.1.app"
-XCODE26="/Applications/Xcode.app"
 
 # ── Load .env ─────────────────────────────────────────────────────────
 if [[ -f "$PROJECT_DIR/.env" ]]; then
     set -a; source "$PROJECT_DIR/.env"; set +a
+fi
+
+XCODE13="${XCODE13_PATH:-/Applications/Xcode-13.2.1.app}"
+if [[ -n "${XCODE_PATH:-}" ]]; then
+    XCODE26="$XCODE_PATH"
+elif [[ -d "/Applications/Xcode.app" ]]; then
+    XCODE26="/Applications/Xcode.app"
+else
+    # Beta macOS hosts commonly keep the active toolchain under this name.
+    XCODE26="/Applications/Xcode-beta.app"
 fi
 
 BUNDLE_ID="${BUNDLE_ID:-com.hadashboard.app}"
