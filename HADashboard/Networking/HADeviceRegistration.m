@@ -3,7 +3,9 @@
 #import "HAAuthManager.h"
 #import "HAKeychainHelper.h"
 #import "NSMutableURLRequest+HAHelpers.h"
+#import "HAURLSessionRedirectGuard.h"
 #import <UIKit/UIKit.h>
+#import <arpa/inet.h>
 #import <sys/utsname.h>
 
 NSString *const HADeviceRegistrationDidCompleteNotification  = @"HADeviceRegistrationDidComplete";
@@ -17,11 +19,40 @@ static NSString *const kKeychainDeviceId     = @"ha_device_id";
 /// NSUserDefaults key for user-overridden device name (from Settings UI).
 static NSString *const kDeviceNameOverride   = @"ha_device_name_override";
 
+static BOOL HAWebhookHostIsLocalNetwork(NSString *host) {
+    NSString *value = host.lowercaseString;
+    if (!value.length) return NO;
+    if ([value isEqualToString:@"localhost"] || [value hasSuffix:@".local"]) return YES;
+
+    struct in_addr ipv4;
+    if (inet_pton(AF_INET, value.UTF8String, &ipv4) == 1) {
+        uint32_t address = ntohl(ipv4.s_addr);
+        return (address & 0xFF000000) == 0x0A000000 ||
+               (address & 0xFFF00000) == 0xAC100000 ||
+               (address & 0xFFFF0000) == 0xC0A80000 ||
+               (address & 0xFF000000) == 0x7F000000 ||
+               (address & 0xFFFF0000) == 0xA9FE0000;
+    }
+
+    struct in6_addr ipv6;
+    if (inet_pton(AF_INET6, value.UTF8String, &ipv6) == 1) {
+        const uint8_t *bytes = ipv6.s6_addr;
+        BOOL loopback = IN6_IS_ADDR_LOOPBACK(&ipv6);
+        BOOL linkLocal = bytes[0] == 0xFE && (bytes[1] & 0xC0) == 0x80;
+        BOOL uniqueLocal = (bytes[0] & 0xFE) == 0xFC;
+        return loopback || linkLocal || uniqueLocal;
+    }
+    return NO;
+}
+
 @interface HADeviceRegistration ()
 @property (nonatomic, copy) NSString *webhookId;
 @property (nonatomic, copy) NSString *cloudhookURL;
 @property (nonatomic, copy) NSString *remoteUIURL;
 @property (nonatomic, strong) NSURLSession *session;
+- (NSDictionary *)registrationBody;
+- (NSDictionary *)registrationUpdateBody;
+- (NSDictionary *)webSocketPushAppData;
 @end
 
 @implementation HADeviceRegistration
@@ -38,7 +69,9 @@ static NSString *const kDeviceNameOverride   = @"ha_device_name_override";
 - (instancetype)init {
     self = [super init];
     if (self) {
-        _session = [NSURLSession sessionWithConfiguration:[NSMutableURLRequest ha_defaultSessionConfiguration]];
+        _session = [NSURLSession sessionWithConfiguration:[NSMutableURLRequest ha_defaultSessionConfiguration]
+                                                  delegate:[HAURLSessionRedirectGuard sharedGuard]
+                                             delegateQueue:nil];
         // Restore from Keychain
         _webhookId    = [HAKeychainHelper stringForKey:kKeychainWebhookId];
         _cloudhookURL = [HAKeychainHelper stringForKey:kKeychainCloudhookURL];
@@ -135,7 +168,7 @@ static NSString *const kDeviceNameOverride   = @"ha_device_name_override";
             if (strongSelf.cloudhookURL) [HAKeychainHelper setString:strongSelf.cloudhookURL forKey:kKeychainCloudhookURL];
             if (strongSelf.remoteUIURL)  [HAKeychainHelper setString:strongSelf.remoteUIURL forKey:kKeychainRemoteUIURL];
 
-            HALogI(@"device", @"Registered with webhook_id: %@", strongSelf.webhookId);
+            HALogI(@"device", @"Registered; webhook credential stored in Keychain");
 
             dispatch_async(dispatch_get_main_queue(), ^{
                 [[NSNotificationCenter defaultCenter] postNotificationName:HADeviceRegistrationDidCompleteNotification
@@ -147,6 +180,30 @@ static NSString *const kDeviceNameOverride   = @"ha_device_name_override";
     [task resume];
 }
 
+- (void)updateRegistrationMetadataWithCompletion:(void (^)(BOOL, NSError *))completion {
+    if (!self.isRegistered) {
+        NSError *error = [NSError errorWithDomain:@"HADeviceRegistration" code:-3
+            userInfo:@{NSLocalizedDescriptionKey: @"Not registered — no webhook URL"}];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (completion) completion(NO, error);
+        });
+        return;
+    }
+
+    [self sendWebhookWithType:@"update_registration"
+                         data:[self registrationUpdateBody]
+                   completion:^(id response, NSError *error) {
+        (void)response;
+        if (error) {
+            HALogW(@"device", @"Registration metadata refresh failed: %@",
+                   error.localizedDescription);
+        } else {
+            HALogI(@"device", @"Registration metadata refreshed for WebSocket-only local push");
+        }
+        if (completion) completion(error == nil, error);
+    }];
+}
+
 - (void)unregister {
     self.webhookId    = nil;
     self.cloudhookURL = nil;
@@ -155,6 +212,12 @@ static NSString *const kDeviceNameOverride   = @"ha_device_name_override";
     [HAKeychainHelper removeItemForKey:kKeychainCloudhookURL];
     [HAKeychainHelper removeItemForKey:kKeychainRemoteUIURL];
     HALogI(@"device", @"Unregistered (local credentials cleared)");
+}
+
+- (void)resetLocalRegistration {
+    [self unregister];
+    [HAKeychainHelper removeItemForKey:kKeychainDeviceId];
+    HALogI(@"device", @"Persistent local device identity cleared");
 }
 
 #pragma mark - Webhook
@@ -179,6 +242,10 @@ static NSString *const kDeviceNameOverride   = @"ha_device_name_override";
     NSString *base = [serverURL stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"/"]];
     NSString *url = [NSString stringWithFormat:@"%@/api/webhook/%@", base, self.webhookId];
     return [NSURL URLWithString:url];
+}
+
+- (BOOL)resolvedWebhookUsesLocalNetwork {
+    return HAWebhookHostIsLocalNetwork(self.resolvedWebhookURL.host);
 }
 
 - (void)sendWebhookWithType:(NSString *)type
@@ -271,19 +338,27 @@ static NSString *const kDeviceNameOverride   = @"ha_device_name_override";
         @"os_name":              @"iOS",
         @"os_version":           [UIDevice currentDevice].systemVersion,
         @"supports_encryption":  @NO,
-        // push_url + push_token tell HA to create the notify platform for this device.
-        // We use the WebSocket push_notification_channel instead of actual APNs,
-        // so push_url is never called — but both fields are required for HA to
-        // register the notify.mobile_app_<device> service. HA validates them as
-        // an inclusion group ("push_cloud") and rejects if only one is present.
-        // Explicitly advertise the local delivery channel as well; this makes
-        // the WebSocket route first-class rather than relying on cloud-push
-        // capability inference from the placeholder fields above.
-        @"app_data":             @{
-            @"push_url": @"https://mobile-apps.home-assistant.io/api/sendPush/ios",
-            @"push_token": @"websocket-local-push",
-            @"push_websocket_channel": @YES,
-        },
+        // Home Assistant creates the notify.mobile_app_<device> target from
+        // this capability alone. Do not advertise placeholder APNs/cloud-push
+        // fields: when the local channel is absent HA would otherwise attempt
+        // an unnecessary external fallback with a fake token.
+        @"app_data":             [self webSocketPushAppData],
+    };
+}
+
+- (NSDictionary *)webSocketPushAppData {
+    return @{ @"push_websocket_channel": @YES };
+}
+
+- (NSDictionary *)registrationUpdateBody {
+    NSDictionary *info = [[NSBundle mainBundle] infoDictionary];
+    return @{
+        @"app_version": info[@"CFBundleShortVersionString"] ?: @"0.0.0",
+        @"device_name": self.deviceName,
+        @"manufacturer": @"Apple",
+        @"model": [self machineModel],
+        @"os_version": [UIDevice currentDevice].systemVersion,
+        @"app_data": [self webSocketPushAppData],
     };
 }
 

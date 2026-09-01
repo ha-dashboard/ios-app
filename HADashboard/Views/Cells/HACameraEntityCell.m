@@ -887,8 +887,7 @@ static HACameraStreamMode currentStreamMode(void) {
         return;
     }
 
-    HALogD(@"cam", @"fetchSnapshot: %@ token=%@...", url,
-          [auth.accessToken substringToIndex:MIN(10, auth.accessToken.length)]);
+    HALogD(@"cam", @"fetchSnapshot: %@ (authorization header redacted)", url);
 
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
     [request setValue:[NSString stringWithFormat:@"Bearer %@", auth.accessToken] forHTTPHeaderField:@"Authorization"];

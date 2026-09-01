@@ -2,6 +2,10 @@
 #import "HAKeychainHelper.h"
 #import "HAOAuthClient.h"
 #import "HALog.h"
+#import "HAStreamingManager.h"
+#import "HADeviceIntegrationManager.h"
+#import "HADeviceRegistration.h"
+#import "HACameraRegistrationManager.h"
 
 NSString *const HAAuthManagerDidUpdateNotification = @"HAAuthManagerDidUpdateNotification";
 
@@ -30,6 +34,7 @@ static NSString *const kCameraGlobalMuteKey = @"HACameraGlobalMute";
 @property (nonatomic, assign, readwrite) BOOL cameraGlobalMute;
 @property (nonatomic, strong) NSTimer *refreshTimer;
 @property (nonatomic, strong) NSMutableArray<void (^)(BOOL, NSError *)> *pendingRefreshCompletions;
+@property (nonatomic, assign) NSUInteger credentialGeneration;
 @end
 
 @implementation HAAuthManager
@@ -97,6 +102,12 @@ static NSString *const kCameraGlobalMuteKey = @"HACameraGlobalMute";
     return self.serverURL.length > 0 && self.accessToken.length > 0;
 }
 
+- (NSUInteger)authenticationRevision {
+    @synchronized(self) {
+        return self.credentialGeneration;
+    }
+}
+
 #pragma mark - Save Credentials
 
 + (NSString *)normalizedURL:(NSString *)url {
@@ -108,6 +119,7 @@ static NSString *const kCameraGlobalMuteKey = @"HACameraGlobalMute";
 }
 
 - (void)saveServerURL:(NSString *)url token:(NSString *)token {
+    [self invalidatePendingTokenRefreshes];
     NSString *normalizedURL = [HAAuthManager normalizedURL:url];
 
     [HAKeychainHelper setString:normalizedURL forKey:kServerURLKey];
@@ -134,6 +146,7 @@ static NSString *const kCameraGlobalMuteKey = @"HACameraGlobalMute";
                  accessToken:(NSString *)accessToken
                 refreshToken:(NSString *)refreshToken
                    expiresIn:(NSTimeInterval)expiresIn {
+    [self invalidatePendingTokenRefreshes];
     NSString *normalizedURL = [HAAuthManager normalizedURL:serverURL];
     NSDate *expiry = [NSDate dateWithTimeIntervalSinceNow:expiresIn];
 
@@ -230,6 +243,7 @@ static NSString *const kCameraGlobalMuteKey = @"HACameraGlobalMute";
         return;
     }
 
+    __block NSUInteger refreshGeneration = 0;
     @synchronized(self) {
         if (self.pendingRefreshCompletions) {
             // Already refreshing — queue this caller so it gets the result
@@ -238,10 +252,14 @@ static NSString *const kCameraGlobalMuteKey = @"HACameraGlobalMute";
         }
         self.pendingRefreshCompletions = [NSMutableArray array];
         if (completion) [self.pendingRefreshCompletions addObject:[completion copy]];
+        refreshGeneration = self.credentialGeneration;
     }
 
     HAOAuthClient *oauth = [[HAOAuthClient alloc] initWithServerURL:self.serverURL];
     [oauth refreshWithToken:self.refreshToken completion:^(NSDictionary *tokenResponse, NSError *error) {
+        @synchronized(self) {
+            if (refreshGeneration != self.credentialGeneration) return;
+        }
         BOOL success = NO;
         if (error || !tokenResponse[@"access_token"]) {
             HALogE(@"auth", @"Token refresh failed: %@", error.localizedDescription);
@@ -264,6 +282,23 @@ static NSString *const kCameraGlobalMuteKey = @"HACameraGlobalMute";
             cb(success, error);
         }
     }];
+}
+
+- (void)invalidatePendingTokenRefreshes {
+    NSArray<void (^)(BOOL, NSError *)> *completions = nil;
+    @synchronized(self) {
+        self.credentialGeneration++;
+        completions = [self.pendingRefreshCompletions copy];
+        self.pendingRefreshCompletions = nil;
+    }
+    if (completions.count == 0) return;
+    NSError *cancelled = [NSError errorWithDomain:NSURLErrorDomain
+                                              code:NSURLErrorCancelled
+                                          userInfo:@{NSLocalizedDescriptionKey:
+                                              @"The authentication refresh was cancelled because credentials changed."}];
+    for (void (^callback)(BOOL, NSError *) in completions) {
+        callback(NO, cancelled);
+    }
 }
 
 #pragma mark - Other Settings
@@ -313,16 +348,25 @@ static NSString *const kCameraGlobalMuteKey = @"HACameraGlobalMute";
 }
 
 - (void)clearCredentials {
+    // Stop all opt-in services before removing their persisted state.
+    [HADeviceIntegrationManager sharedManager].enabled = NO;
+    [[HADeviceRegistration sharedManager] resetLocalRegistration];
+    [[HAStreamingManager sharedManager] clearLocalStreamConfiguration];
+    [[HACameraRegistrationManager sharedManager] resetLocalRegistrationState];
+    [self invalidatePendingTokenRefreshes];
+
     [HAKeychainHelper removeItemForKey:kServerURLKey];
     [HAKeychainHelper removeItemForKey:kAccessTokenKey];
     [HAKeychainHelper removeItemForKey:kAuthModeKey];
     [HAKeychainHelper removeItemForKey:kRefreshTokenKey];
     [HAKeychainHelper removeItemForKey:kTokenExpiryKey];
-    [[NSUserDefaults standardUserDefaults] removeObjectForKey:kSelectedDashboardKey];
-    [[NSUserDefaults standardUserDefaults] removeObjectForKey:kKioskModeKey];
-    [[NSUserDefaults standardUserDefaults] removeObjectForKey:kDemoModeKey];
-    [[NSUserDefaults standardUserDefaults] removeObjectForKey:kAutoReloadDashboardKey];
-    [[NSUserDefaults standardUserDefaults] synchronize];
+
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString *bundleIdentifier = [NSBundle mainBundle].bundleIdentifier;
+    if (bundleIdentifier.length) {
+        [defaults removePersistentDomainForName:bundleIdentifier];
+    }
+    [defaults synchronize];
 
     self.serverURL = nil;
     self.accessToken = nil;
@@ -331,8 +375,10 @@ static NSString *const kCameraGlobalMuteKey = @"HACameraGlobalMute";
     self.tokenExpiresAt = nil;
     self.selectedDashboardPath = nil;
     self.kioskMode = NO;
+    self.proximityWakeEnabled = NO;
     self.demoMode = NO;
     self.autoReloadDashboard = YES;
+    self.cameraGlobalMute = YES;
 
     [self.refreshTimer invalidate];
     self.refreshTimer = nil;

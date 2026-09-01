@@ -7,6 +7,7 @@
 #import <netinet/in.h>
 #import "HADeviceRegistration.h"
 #import "HAAuthManager.h"
+#import "HAStreamingManager.h"
 
 /// Sensor unique IDs (must match what we register).
 static NSString *const kSensorBatteryLevel      = @"battery_level";
@@ -20,6 +21,7 @@ static NSString *const kSensorWifiBSSID         = @"wifi_bssid";
 static NSString *const kSensorConnectionType    = @"connection_type";
 static NSString *const kSensorLastUpdateTrigger = @"last_update_trigger";
 static NSString *const kSensorDeviceModel       = @"device_model";
+static NSString *const kSensorCameraStream      = @"camera_stream";
 
 extern NSString *const HAConnectionManagerDidReceiveLovelaceNotification;
 
@@ -27,7 +29,7 @@ static NSArray *allSensorIds(void) {
     return @[kSensorBatteryLevel, kSensorBatteryState, kSensorScreenBrightness,
              kSensorStorage, kSensorAppState, kSensorActiveDashboard,
              kSensorWifiSSID, kSensorWifiBSSID, kSensorConnectionType,
-             kSensorLastUpdateTrigger, kSensorDeviceModel];
+             kSensorLastUpdateTrigger, kSensorDeviceModel, kSensorCameraStream];
 }
 
 @interface HASensorReporter ()
@@ -51,7 +53,12 @@ static NSArray *allSensorIds(void) {
     [self registerSensorWithId:kSensorBatteryLevel     name:@"Battery Level"     deviceClass:@"battery" unit:@"%" stateClass:@"measurement" icon:@"mdi:battery"];
     [self registerSensorWithId:kSensorBatteryState     name:@"Battery State"     deviceClass:nil        unit:nil  stateClass:nil            icon:@"mdi:battery-charging"];
     [self registerSensorWithId:kSensorScreenBrightness name:@"Screen Brightness" deviceClass:nil        unit:@"%" stateClass:@"measurement" icon:@"mdi:brightness-6"];
-    [self registerSensorWithId:kSensorStorage          name:@"Storage Available" deviceClass:nil        unit:@"GB" stateClass:@"measurement" icon:@"mdi:harddisk"];
+    if ([[HADeviceRegistration sharedManager] resolvedWebhookUsesLocalNetwork]) {
+        // Apple's required-reason policy permits displaying disk-space data on
+        // another user-operated device over the local network, but not sending
+        // it over an HA Cloud/remote webhook route.
+        [self registerSensorWithId:kSensorStorage      name:@"Storage Available" deviceClass:nil        unit:@"GB" stateClass:@"measurement" icon:@"mdi:harddisk"];
+    }
     [self registerSensorWithId:kSensorAppState         name:@"App State"         deviceClass:nil        unit:nil  stateClass:nil            icon:@"mdi:application"];
     [self registerSensorWithId:kSensorActiveDashboard  name:@"Active Dashboard"  deviceClass:nil        unit:nil  stateClass:nil            icon:@"mdi:view-dashboard"];
     [self registerSensorWithId:kSensorWifiSSID          name:@"WiFi SSID"         deviceClass:nil        unit:nil  stateClass:nil            icon:@"mdi:wifi"];
@@ -59,6 +66,7 @@ static NSArray *allSensorIds(void) {
     [self registerSensorWithId:kSensorConnectionType    name:@"Connection Type"   deviceClass:nil        unit:nil  stateClass:nil            icon:@"mdi:network"];
     [self registerSensorWithId:kSensorLastUpdateTrigger name:@"Last Update Trigger" deviceClass:nil      unit:nil  stateClass:nil            icon:@"mdi:update"];
     [self registerSensorWithId:kSensorDeviceModel       name:@"Device Model"      deviceClass:nil        unit:nil  stateClass:nil            icon:@"mdi:cellphone"];
+    [self registerSensorWithId:kSensorCameraStream      name:@"Camera Stream"     deviceClass:nil        unit:nil  stateClass:nil            icon:@"mdi:video-wireless"];
 }
 
 - (void)registerSensorWithId:(NSString *)uniqueId name:(NSString *)name
@@ -108,6 +116,8 @@ static NSArray *allSensorIds(void) {
                name:UIApplicationDidEnterBackgroundNotification object:nil];
     [nc addObserver:self selector:@selector(dashboardDidChange:)
                name:HAConnectionManagerDidReceiveLovelaceNotification object:nil];
+    [nc addObserver:self selector:@selector(cameraStreamDidChange:)
+               name:HAStreamingManagerStateDidChangeNotification object:nil];
 
     // Storage timer — every 15 minutes
     self.storageTimer = [NSTimer scheduledTimerWithTimeInterval:900.0
@@ -148,6 +158,7 @@ static NSArray *allSensorIds(void) {
     [self reportSensor:kSensorConnectionType];
 }
 - (void)dashboardDidChange:(NSNotification *)note        { [self reportSensor:kSensorActiveDashboard]; }
+- (void)cameraStreamDidChange:(NSNotification *)note     { [self reportSensor:kSensorCameraStream]; }
 - (void)storageTimerFired:(NSTimer *)timer               { [self reportSensor:kSensorStorage]; }
 
 #pragma mark - Reporting
@@ -157,12 +168,17 @@ static NSArray *allSensorIds(void) {
 
     NSMutableArray *batch = [NSMutableArray array];
     for (NSString *sensorId in allSensorIds()) {
-        [batch addObject:@{
+        if ([sensorId isEqualToString:kSensorStorage] &&
+            ![[HADeviceRegistration sharedManager] resolvedWebhookUsesLocalNetwork]) continue;
+        NSMutableDictionary *entry = [@{
             @"unique_id": sensorId,
             @"type": @"sensor",
             @"state": [self currentValueForSensor:sensorId],
             @"icon": [self iconForSensor:sensorId],
-        }];
+        } mutableCopy];
+        NSDictionary *attributes = [self attributesForSensor:sensorId];
+        if (attributes) entry[@"attributes"] = attributes;
+        [batch addObject:entry];
     }
 
     [[HADeviceRegistration sharedManager] sendWebhookWithType:@"update_sensor_states"
@@ -176,13 +192,17 @@ static NSArray *allSensorIds(void) {
 
 - (void)reportSensor:(NSString *)sensorId {
     if (![HADeviceRegistration sharedManager].isRegistered) return;
+    if ([sensorId isEqualToString:kSensorStorage] &&
+        ![[HADeviceRegistration sharedManager] resolvedWebhookUsesLocalNetwork]) return;
 
-    NSDictionary *entry = @{
+    NSMutableDictionary *entry = [@{
         @"unique_id": sensorId,
         @"type": @"sensor",
         @"state": [self currentValueForSensor:sensorId],
         @"icon": [self iconForSensor:sensorId],
-    };
+    } mutableCopy];
+    NSDictionary *attributes = [self attributesForSensor:sensorId];
+    if (attributes) entry[@"attributes"] = attributes;
 
     [[HADeviceRegistration sharedManager] sendWebhookWithType:@"update_sensor_states"
                                                          data:@[entry]
@@ -207,6 +227,7 @@ static NSArray *allSensorIds(void) {
     if ([sensorId isEqualToString:kSensorConnectionType])    return @"mdi:network";
     if ([sensorId isEqualToString:kSensorLastUpdateTrigger]) return @"mdi:update";
     if ([sensorId isEqualToString:kSensorDeviceModel])       return @"mdi:cellphone";
+    if ([sensorId isEqualToString:kSensorCameraStream])      return @"mdi:video-wireless";
     return @"mdi:cellphone";
 }
 
@@ -268,7 +289,33 @@ static NSArray *allSensorIds(void) {
     if ([sensorId isEqualToString:kSensorDeviceModel]) {
         return [self machineModel];
     }
+    if ([sensorId isEqualToString:kSensorCameraStream]) {
+        HAStreamingManager *stream = [HAStreamingManager sharedManager];
+        if (!stream.featureEnabled) return @"disabled";
+        return stream.streaming && stream.streamClientCount > 0 ? @"streaming" : (stream.streaming ? @"idle" : @"foreground_required");
+    }
     return @"unknown";
+}
+
+- (NSDictionary *)attributesForSensor:(NSString *)sensorId {
+    if (![sensorId isEqualToString:kSensorCameraStream]) return nil;
+    HAStreamingManager *stream = [HAStreamingManager sharedManager];
+    NSMutableDictionary *attributes = [@{
+        @"Transport": @"RTSP over TCP",
+        @"Authentication": @"Digest",
+        @"Authenticated Media Clients": @(stream.streamClientCount),
+        @"Playing Viewers": @(stream.streamPlayingClientCount),
+        @"Open Connections": @(stream.streamConnectionCount),
+    } mutableCopy];
+    if (stream.streamURL) attributes[@"Stream URL"] = stream.streamURL;
+    if (stream.secondaryStreamURL) attributes[@"Secondary Stream URL"] = stream.secondaryStreamURL;
+    NSString *mode = stream.cameraMode == HAStreamingCameraModeBoth ? @"front_and_rear"
+        : (stream.cameraMode == HAStreamingCameraModeRear ? @"rear" : @"front");
+    attributes[@"Camera Mode"] = mode;
+    attributes[@"MultiCam Supported"] = @(stream.multiCamSupported);
+    attributes[@"Quality Scale"] = @(stream.qualityScale);
+    attributes[@"Quality"] = stream.qualityDescription ?: @"unknown";
+    return attributes;
 }
 
 #pragma mark - WiFi Info

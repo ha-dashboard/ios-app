@@ -1,17 +1,35 @@
 #import "HAAPIClient.h"
 #import "HAAuthManager.h"
 #import "NSMutableURLRequest+HAHelpers.h"
+#import "HAURLSessionRedirectGuard.h"
+
+static NSError *HACrossOriginAPIPathError(void) {
+    return [NSError errorWithDomain:@"HAAPIClient" code:-5
+                           userInfo:@{NSLocalizedDescriptionKey:
+                               @"The API request path resolved outside the configured Home Assistant origin."}];
+}
 
 @interface HAAPIClient ()
 @property (nonatomic, strong) NSURL *baseURL;
 @property (nonatomic, copy)   NSString *token;
 @property (nonatomic, strong) NSURLSession *session;
 @property (nonatomic, assign) BOOL isRetrying401;
+@property (nonatomic, assign, getter=isCancelled) BOOL cancelled;
+@property (nonatomic, assign, readwrite) NSTimeInterval requestTimeoutInterval;
+@property (nonatomic, assign, readwrite) NSTimeInterval resourceTimeoutInterval;
 @end
 
 @implementation HAAPIClient
 
 - (instancetype)initWithBaseURL:(NSURL *)baseURL token:(NSString *)token {
+    return [self initWithBaseURL:baseURL token:token
+          requestTimeoutInterval:15.0 resourceTimeoutInterval:30.0];
+}
+
+- (instancetype)initWithBaseURL:(NSURL *)baseURL
+                          token:(NSString *)token
+         requestTimeoutInterval:(NSTimeInterval)requestTimeoutInterval
+        resourceTimeoutInterval:(NSTimeInterval)resourceTimeoutInterval {
     self = [super init];
     if (self) {
         // Ensure trailing slash so relative URL resolution works correctly
@@ -23,8 +41,15 @@
             _baseURL = baseURL;
         }
         _token   = [token copy];
+        _requestTimeoutInterval = MAX(1.0, requestTimeoutInterval);
+        _resourceTimeoutInterval = MAX(_requestTimeoutInterval, resourceTimeoutInterval);
 
-        _session = [NSURLSession sessionWithConfiguration:[NSMutableURLRequest ha_defaultSessionConfiguration]];
+        NSURLSessionConfiguration *configuration = [NSMutableURLRequest ha_defaultSessionConfiguration];
+        configuration.timeoutIntervalForRequest = _requestTimeoutInterval;
+        configuration.timeoutIntervalForResource = _resourceTimeoutInterval;
+        _session = [NSURLSession sessionWithConfiguration:configuration
+                                                  delegate:[HAURLSessionRedirectGuard sharedGuard]
+                                             delegateQueue:nil];
     }
     return self;
 }
@@ -74,6 +99,29 @@
     [self executePlainTextRequest:request completion:completion];
 }
 
+- (void)getJSONAtPath:(NSString *)path completion:(HAAPIResponseBlock)completion {
+    [self GET:path completion:completion];
+}
+
+- (void)postJSONAtPath:(NSString *)path body:(NSDictionary *)body completion:(HAAPIResponseBlock)completion {
+    [self POST:path body:body completion:completion];
+}
+
+- (void)deleteJSONAtPath:(NSString *)path completion:(HAAPIResponseBlock)completion {
+    NSURL *url = [NSURL URLWithString:path relativeToURL:self.baseURL];
+    if (![HAURLSessionRedirectGuard URL:self.baseURL sharesOriginWithURL:url]) {
+        ha_dispatchMainCompletion(completion, nil, HACrossOriginAPIPathError());
+        return;
+    }
+    NSMutableURLRequest *request = [self requestWithURL:url method:@"DELETE"];
+    [self executeRequest:request completion:completion];
+}
+
+- (void)cancelAllRequests {
+    self.cancelled = YES;
+    [self.session invalidateAndCancel];
+}
+
 - (NSURLSessionDataTask *)getCalendarEventsForEntityId:(NSString *)entityId
                                                  start:(NSString *)startISO
                                                    end:(NSString *)endISO
@@ -97,6 +145,10 @@
 
 - (NSURLSessionDataTask *)GETWithTask:(NSString *)path completion:(HAAPIResponseBlock)completion {
     NSURL *url = [NSURL URLWithString:path relativeToURL:self.baseURL];
+    if (![HAURLSessionRedirectGuard URL:self.baseURL sharesOriginWithURL:url]) {
+        ha_dispatchMainCompletion(completion, nil, HACrossOriginAPIPathError());
+        return nil;
+    }
     NSMutableURLRequest *request = [self requestWithURL:url method:@"GET"];
 
     return [self executeRequestWithTask:request completion:completion];
@@ -104,6 +156,10 @@
 
 - (void)POST:(NSString *)path body:(NSDictionary *)body completion:(HAAPIResponseBlock)completion {
     NSURL *url = [NSURL URLWithString:path relativeToURL:self.baseURL];
+    if (![HAURLSessionRedirectGuard URL:self.baseURL sharesOriginWithURL:url]) {
+        ha_dispatchMainCompletion(completion, nil, HACrossOriginAPIPathError());
+        return;
+    }
     NSMutableURLRequest *request = [self requestWithURL:url method:@"POST"];
 
     if (body) {
@@ -125,6 +181,7 @@
 
 - (NSMutableURLRequest *)requestWithURL:(NSURL *)url method:(NSString *)method {
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    request.timeoutInterval = self.requestTimeoutInterval;
     request.HTTPMethod = method;
     [request ha_setAuthHeaders:self.token];
     return request;
@@ -135,8 +192,14 @@
 }
 
 - (NSURLSessionDataTask *)executeRequestWithTask:(NSURLRequest *)request completion:(HAAPIResponseBlock)completion {
+    if (self.isCancelled) {
+        ha_dispatchMainCompletion(completion, nil,
+            [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorCancelled userInfo:nil]);
+        return nil;
+    }
     NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request
         completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            if (self.isCancelled) return;
             if (error) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     if (completion) completion(nil, error);
@@ -152,6 +215,7 @@
                     self.isRetrying401 = YES;
                     [[HAAuthManager sharedManager] handleAuthFailureWithCompletion:^(NSString *newToken, NSError *refreshError) {
                         self.isRetrying401 = NO;
+                        if (self.isCancelled) return;
                         if (newToken) {
                             self.token = newToken;
                             NSMutableURLRequest *retry = [request mutableCopy];
@@ -202,8 +266,14 @@
 /// other API endpoints. Keep its decoding isolated so existing callers retain
 /// their JSON response contract.
 - (void)executePlainTextRequest:(NSURLRequest *)request completion:(HAAPIResponseBlock)completion {
+    if (self.isCancelled) {
+        ha_dispatchMainCompletion(completion, nil,
+            [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorCancelled userInfo:nil]);
+        return;
+    }
     NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request
         completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            if (self.isCancelled) return;
             if (error) {
                 ha_dispatchMainCompletion(completion, nil, error);
                 return;
@@ -215,6 +285,7 @@
                 self.isRetrying401 = YES;
                 [[HAAuthManager sharedManager] handleAuthFailureWithCompletion:^(NSString *newToken, NSError *refreshError) {
                     self.isRetrying401 = NO;
+                    if (self.isCancelled) return;
                     if (newToken) {
                         self.token = newToken;
                         NSMutableURLRequest *retry = [request mutableCopy];

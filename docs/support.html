@@ -159,13 +159,13 @@
       <div class="support-card">
         <h3>Report a Bug</h3>
         <p>Found something that isn't working correctly? Let us know by opening a bug report on GitHub. Please include the steps to reproduce the issue and your device/iOS version.</p>
-        <a href="https://github.com/ha-dashboard/ios-app/issues/new?labels=bug&template=bug_report.md" class="btn">Open a Bug Report</a>
+        <a href="https://github.com/ha-dashboard/ios-app/issues/new?labels=bug" class="btn">Open a Bug Report</a>
       </div>
 
       <div class="support-card">
         <h3>Request a Feature</h3>
         <p>Have an idea for a new feature or an improvement? Open a feature request on GitHub and describe what you'd like to see.</p>
-        <a href="https://github.com/ha-dashboard/ios-app/issues/new?labels=enhancement&template=feature_request.md" class="btn">Request a Feature</a>
+        <a href="https://github.com/ha-dashboard/ios-app/issues/new?labels=enhancement" class="btn">Request a Feature</a>
       </div>
 
       <div class="support-card">
@@ -185,7 +185,7 @@
 
     <div class="faq">
       <h3>How do I connect to my Home Assistant server?</h3>
-      <p>Open the app and tap Settings. Enter your Home Assistant server URL (e.g., <code>http://homeassistant.local:8123</code>) and either a long-lived access token or log in via OAuth.</p>
+      <p>Open the app and tap Settings. Enter your Home Assistant server URL (e.g., <code>http://homeassistant.local:8123</code>). Use trusted-network access when your Home Assistant configuration permits this device, paste a long-lived access token, or log in through OAuth.</p>
 
       <h3>The app can't find my server on the network</h3>
       <p>Make sure your device is on the same network as your Home Assistant server. The app uses mDNS (Bonjour) for discovery, which requires the Local Network permission. Check Settings &gt; Privacy &gt; Local Network on your device.</p>
@@ -198,6 +198,29 @@
 
       <h3>Can a Home Assistant automation wake my kiosk dashboard?</h3>
       <p>Yes. In Settings, enable <strong>Register with Home Assistant</strong>, then enable both Kiosk Mode and Wake on Touch. Call the generated <code>notify.mobile_app_&lt;device&gt;</code> action with <code>message: command_screen_on</code>. This wakes the app’s dimmed dashboard and restarts its one-minute wake timer. It works while HA Dashboard remains open in kiosk mode; it cannot unlock or launch a backgrounded iPad.</p>
+
+      <h3>Which Home Assistant remote commands are supported?</h3>
+      <p>Commands use the generated <code>notify.mobile_app_&lt;device&gt;</code> action and Home Assistant's local WebSocket push channel. HA Dashboard must be open, connected, and registered. There is no developer cloud-push fallback, and commands cannot unlock a device or launch the app from the background.</p>
+      <ul>
+        <li><code>command_screen_on</code> and <code>command_screen_off</code> wake or dim the display. With Kiosk Mode and Wake on Touch enabled, screen-on restarts the one-minute timer.</li>
+        <li><code>command_screen_brightness_level</code> uses <code>data.command</code> from <code>0</code> to <code>255</code>. The custom <code>set_brightness</code> command accepts percentage <code>data.level</code> or byte-scale <code>data.brightness</code>.</li>
+        <li><code>switch_dashboard</code> uses <code>data.dashboard</code>; <code>switch_view</code> or <code>command_navigate</code> uses <code>data.path</code>, <code>data.view</code>, or numeric <code>data.index</code>.</li>
+        <li><code>set_theme</code> uses <code>data.mode</code> (<code>auto</code>, <code>dark</code>, or <code>light</code>); <code>set_gradient</code> accepts a preset, two custom hex colours, or <code>data.enabled: false</code>.</li>
+        <li><code>set_kiosk_mode</code> uses boolean <code>data.enabled</code>; <code>reload</code> reconnects and reloads the dashboard. A normal notification message displays as an in-app banner.</li>
+      </ul>
+      <p>Example: <code>action: notify.mobile_app_&lt;device&gt;</code> with <code>data: { message: command_screen_brightness_level, data: { command: 128 } }</code>.</p>
+
+      <h3>How do I use this device as a Home Assistant camera?</h3>
+      <p>Local Camera Stream requires iOS 10.3.3 or later; the rest of HA Dashboard remains available on iOS 9. In Settings, enable <strong>Local Camera Stream</strong> and grant Camera and Microphone access. Choose Front, Rear, or Both when supported, then use the capability-based quality slider. The dashboard remains visible, but capture starts only after an RTSP client authenticates and requests media.</p>
+      <p>A single selected camera uses port <code>8554</code>. In Both mode, front uses <code>8554</code> and rear uses <code>8555</code>; both use the same credentials. The displayed addresses and their normal tap-to-copy action omit credentials. Open <strong>Protected access</strong> and explicitly choose <strong>Copy URL with Password</strong> for a client-ready sensitive URL. Its username is <code>hadashboard</code>; the app generates a strong, unique password for each device and retains it in that device's Keychain. The copied item is local-only, remains available long enough to switch to VLC, and expires after 60 seconds if unchanged. VLC or another RTSP client may retain the protected URL in its own recent-items history, which the app cannot clear.</p>
+      <p>When <strong>Register with Home Assistant</strong> is enabled and the logged-in user is an administrator, HA Dashboard validates active URLs and creates or updates only Generic Camera entries whose IDs it saved previously. It sends the bare URL, username, password, Digest authentication mode, and TCP transport as separate Generic Camera settings. HTTPS protects that credential submission. For a loopback, <code>.local</code>, link-local, RFC1918, or IPv6 unique-local Home Assistant address, registration proceeds over HTTP without another per-server prompt; non-local HTTP is refused. <strong>Local HTTP is still plaintext: another host able to monitor that LAN may recover the camera username and password.</strong> Use it only on a trusted local network. Camera-flow requests use isolated 75-second request and 120-second resource timeouts. After each retryable failed attempt, the app waits 2, 4, 8, 16, and 32 seconds, then 60 seconds between attempts while the same listener, registration setting, account, and Home Assistant origin remain active; Settings shows that state. Those delays begin after the preceding attempt ends, so they are not an end-to-end completion deadline. Home Assistant stores those credentials and its backups may contain them. For manual setup, have a Home Assistant administrator add Generic Camera with the bare URL, username <code>hadashboard</code>, the password from between <code>hadashboard:</code> and <code>@</code> in the explicitly copied protected URL, Digest authentication, and TCP transport. Leaving Both mode does not delete the rear entry from Home Assistant; remove it there if it is no longer wanted.</p>
+      <p>Use <strong>Rotate Stream Password</strong> if access may have been shared too widely. Rotation disconnects current viewers, invalidates old protected URLs, and completes locally after the listener re-arms; it does not wait for Home Assistant. While <strong>Register with Home Assistant</strong> is enabled, the app then starts asynchronous reconciliation of app-owned camera entries and keeps retrying transient failures while the same registration context remains active. Manually configured clients and unowned entries need the new URL or password set manually.</p>
+      <p>The server supports concurrent authenticated clients. VLC uses a roughly one-second network cache by default; for low-latency testing start it with <code>--network-caching=100 --rtsp-tcp</code>. VLC begins playback when the URL opens, so pressing its play/pause control at that point pauses the stream.</p>
+      <p><strong>Security:</strong> RTSP Digest authentication blocks clients without the device password from requesting capture, but camera and microphone media is plaintext and not encrypted on the LAN. Use it only on a trusted local network, do not forward ports 8554/8555 or expose them through a VPN, and turn it off when not needed. A red <strong>Camera + mic live</strong> indicator appears above the dashboard, including in kiosk mode, while capture is active; tap it to stop and disable the stream. The feature has no relay, cloud media stream, recording, hidden preview, or background capture.</p>
+      <p>Mute Camera Audio controls playback of Home Assistant camera cards only. Local Camera Stream always includes microphone AAC while viewed.</p>
+
+      <h3>What does Log Out &amp; Reset remove?</h3>
+      <p>It clears Home Assistant and Local Camera Stream credentials, registration identity, preferences, cached Home Assistant state/history, local logs, and stream configuration stored by this app. Home Assistant devices and Generic Camera entries, including the stream credentials saved in those entries, remain until you remove them in Home Assistant.</p>
     </div>
   </main>
 

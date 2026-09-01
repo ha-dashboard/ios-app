@@ -30,9 +30,18 @@ extern NSString *const HADeviceRegistrationDidInvalidateNotification;
 /// Calls completion on the main queue.
 - (void)registerWithCompletion:(void (^)(BOOL success, NSError *error))completion;
 
+/// Refresh the existing Home Assistant mobile-app registration with the
+/// current device metadata and WebSocket-only local-push capability. This also
+/// removes obsolete placeholder cloud-push fields from older registrations.
+- (void)updateRegistrationMetadataWithCompletion:(void (^)(BOOL success, NSError *error))completion;
+
 /// Clear local registration (webhook_id, cloudhook, remote_ui).
 /// Does NOT unregister from HA server (no API for that).
 - (void)unregister;
+
+/// Clear all local registration state, including the persistent device ID.
+/// Home Assistant entities/config entries remain on the user's server.
+- (void)resetLocalRegistration;
 
 /// Send a webhook request to HA.
 /// @param type The webhook type (e.g. "register_sensor", "update_sensor_states").
@@ -44,5 +53,9 @@ extern NSString *const HADeviceRegistrationDidInvalidateNotification;
 
 /// Resolved webhook URL (cloudhook > remote_ui > local). Nil if not registered.
 - (NSURL *)resolvedWebhookURL;
+
+/// YES only when the currently selected webhook endpoint is a loopback,
+/// link-local, RFC1918, or .local address.
+- (BOOL)resolvedWebhookUsesLocalNetwork;
 
 @end

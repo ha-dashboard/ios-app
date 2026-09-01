@@ -49,7 +49,15 @@ targets:
         CFBundleDisplayName: "HA Dashboard"
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
-        NSLocalNetworkUsageDescription: "Discover Home Assistant servers on your network"
+        NSLocalNetworkUsageDescription: "Discover Home Assistant servers and host explicitly enabled camera and microphone streams for RTSP clients that connect to this device."
+        NSCameraUsageDescription: "Allow HA Dashboard to stream live video to RTSP clients while Local Camera Stream is enabled."
+        NSMicrophoneUsageDescription: "Allow HA Dashboard to include live audio in Local Camera Streams you enable."
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: "Default Configuration"
+                UISceneDelegateClassName: HAAppSceneDelegate
         NSBonjourServices:
           - _home-assistant._tcp
         UILaunchStoryboardName: LaunchScreen
@@ -82,6 +90,7 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF: NO
         GCC_WARN_INHIBIT_ALL_WARNINGS: NO
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": HADashboard/HADashboard-Catalyst.entitlements
       configs:
         Debug:
           SWIFT_OPTIMIZATION_LEVEL: "-Onone"
@@ -94,7 +103,12 @@ targets:
           GCC_OPTIMIZATION_LEVEL: "s"
           DEBUG_INFORMATION_FORMAT: "dwarf-with-dsym"
           VALIDATE_PRODUCT: YES
-    dependencies: []
+    dependencies:
+      - sdk: AVFoundation.framework
+      - sdk: AudioToolbox.framework
+      - sdk: CoreMedia.framework
+      - sdk: CoreVideo.framework
+      - sdk: VideoToolbox.framework
     preBuildScripts: []
     postBuildScripts: []
     scheme:

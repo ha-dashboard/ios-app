@@ -1,85 +1,107 @@
 # RosettaSim Legacy Simulator Deployment
 
-Deploying HA Dashboard to legacy iOS simulators (iOS 9.3–14.x) running under RosettaSim (x86_64).
+RosettaSim runs x86_64 iOS 9–14 simulator runtimes on a compatible host. It is
+useful for legacy UI testing, but it is not the build path for the universal
+physical-device product.
 
-## Prerequisites
+## Host support
 
-- **RosettaSim** installed with `rosettasim-ctl` built at `~/Projects/rosetta/src/build/rosettasim-ctl`
-- **Xcode 26** at `/Applications/Xcode.app`
-- Legacy iOS simulator runtimes installed (iOS 9.3, 10.3, etc.)
-- `coreutils` installed (`brew install coreutils`) for the `gtimeout` binary
+| Host | Status |
+|------|--------|
+| macOS 26 + Xcode 26 | Supported legacy build/install/boot path |
+| Xcode 27 | Unsupported: xcodebuild rejects simulator targets below iOS 15 |
+| macOS 27 | Unsupported: CoreSimulator cannot construct an x86 launch host for the legacy runtime |
 
-## Building
+`scripts/build.sh rosettasim` detects Xcode 27 and fails with this explanation
+instead of producing a misleading partial artifact. The physical-device path
+remains available on Xcode 27: `scripts/build.sh device` compiles armv7 and
+arm64 directly with an iOS 9 minimum.
+
+## Prerequisites on a supported host
+
+- macOS 26
+- Xcode 26 selected through `/Applications/Xcode.app` or `XCODE_PATH`
+- RosettaSim with `rosettasim-ctl` built at
+  `~/Projects/rosetta/src/build/rosettasim-ctl`
+- The required legacy simulator runtime installed with RosettaSim's installer
+- `coreutils` (`brew install coreutils`) for `gtimeout`
+
+## Build
 
 ```bash
 scripts/build.sh rosettasim
 ```
 
-This produces an x86_64 simulator binary at:
-```
+The output is an x86_64 app at:
+
+```text
 build/rosettasim/Build/Products/Debug-iphonesimulator/HA Dashboard.app
 ```
 
-Uses standard Xcode 26 xcodebuild with `MERGED_BINARY_TYPE=none`. This is critical — the default Debug configuration uses mergeable libraries (stub binary + debug dylib) which crashes on legacy runtimes due to libdispatch incompatibility.
+The build uses `MERGED_BINARY_TYPE=none` and `ENABLE_DEBUG_DYLIB=NO`. Without
+those settings, modern Xcode's stub executable/debug-dylib layout crashes in
+legacy libdispatch before the app launches.
 
-## Installing and Launching
+## Discover, install, and launch
 
-Use `rosettasim-ctl` for all legacy simulator operations. Do **not** use `xcrun simctl install/launch/terminate` — they hang on legacy runtimes.
+Do not copy a saved simulator UDID from documentation; recreating a device
+changes it. Discover the current IDs first:
 
 ```bash
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 RSCTL=~/Projects/rosetta/src/build/rosettasim-ctl
 APP="build/rosettasim/Build/Products/Debug-iphonesimulator/HA Dashboard.app"
-UDID="D9DCA298-C3D2-4B68-9501-E5279A1B96B6"  # iOS 9.3 iPad Pro
 
-$RSCTL boot $UDID
-$RSCTL install $UDID "$APP"
-$RSCTL launch $UDID com.hadashboard.app
+$RSCTL list
+$RSCTL boot <legacy-udid>
+$RSCTL install <legacy-udid> "$APP"
+$RSCTL launch <legacy-udid> com.hadashboard.app
 ```
 
-## rosettasim-ctl Commands
+Standard `xcrun simctl install`, `launch`, and `terminate` may hang against
+legacy runtimes. Use `rosettasim-ctl` for those operations.
+
+Useful commands include:
 
 | Command | Description |
 |---------|-------------|
-| `list` | List all devices with status (marks legacy runtimes) |
-| `boot <UDID>` | Boot device |
-| `shutdown <UDID\|all>` | Shutdown device(s) |
-| `install <UDID> <path.app>` | Install app (MobileInstallation for legacy) |
-| `launch <UDID> <bundle-id>` | Launch app (SpringBoard injection for legacy) |
-| `terminate <UDID> <bundle-id>` | Kill running app |
-| `screenshot <UDID> <output>` | Screenshot from daemon framebuffer |
-| `listapps <UDID>` | List installed apps |
-| `appinfo <UDID> <bundle-id>` | JSON app info |
-| `status <UDID>` | Full device status with daemon/IO info |
-| `privacy <UDID> grant <service> <bundle-id>` | Grant TCC permissions |
+| `list` | Show current runtimes and devices |
+| `status <UDID>` | Show the selected device/runtime state |
+| `boot <UDID>` | Boot a supported legacy device |
+| `shutdown <UDID\|all>` | Shut down devices |
+| `install <UDID> <app>` | Install through legacy MobileInstallation |
+| `launch <UDID> <bundle-id>` | Launch through the legacy SpringBoard path |
+| `terminate <UDID> <bundle-id>` | Stop the app |
+| `screenshot <UDID> <output>` | Capture the legacy framebuffer |
+| `privacy <UDID> grant <service> <bundle-id>` | Set a simulator TCC grant |
 
-For native runtimes (iOS 16+), `rosettasim-ctl` transparently passes through to `xcrun simctl`.
+## iOS 9.3.3 acceptance
 
-## Device UDIDs
-
-| Device | iOS | UDID |
-|--------|-----|------|
-| iPad Pro | 9.3 | `D9DCA298-C3D2-4B68-9501-E5279A1B96B6` |
-| iPad (5th gen) | 10.3 | `261D4B19-BE81-42F2-A646-3EF6F668DD84` |
-| iPad (10th gen) | 16.4 | `87E82E85-7B26-480C-B5A2-6D68403CF920` |
-| iPad (A16) | 26.2 | `6937E3CC-604A-4E46-A356-17E82351093A` |
-
-## Native Simulators (iOS 16+)
-
-```bash
-scripts/build.sh sim
-xcrun simctl install <UDID> "build/sim/.../HA Dashboard.app"
-xcrun simctl launch <UDID> com.hadashboard.app
-```
-
-Or use `scripts/deploy.sh sim` which handles build + install + launch.
+A successful RosettaSim run is useful evidence but does not replace physical
+armv7/arm64 validation. For a release candidate, also inspect both Mach-O
+slices for minimum iOS 9.0 and launch the exact universal artifact on reachable
+legacy hardware. Local Camera Stream must remain disabled below iOS 10.3.3 and
+must not request Camera or Microphone permission there.
 
 ## Troubleshooting
 
-### "BUG in libdispatch" crash on launch
-The app was built without `MERGED_BINARY_TYPE=none`. Rebuild with `scripts/build.sh rosettasim`.
+### Deployment target must be iOS 15 or later
 
-### `rosettasim-ctl` commands fail with "timeout not found"
-Install coreutils: `brew install coreutils`. The tool resolves `gtimeout` from `/opt/homebrew/bin/`.
+Xcode 27 is selected. Move the test to a macOS 26/Xcode 26 host; do not patch
+the app's plist and call that an iOS 9 simulator build, because the executable
+load command would still require iOS 15.
 
-### `xcrun simctl install` hangs on legacy sim
-Use `rosettasim-ctl install` instead. Standard simctl hangs on iOS 7–14 runtimes.
+### Runtime unavailable or liblaunch_sim could not be opened
+
+First confirm the host is macOS 26. On macOS 27 this is an architectural host
+block, not a missing app setting. On a supported host, reinstall the legacy
+runtime with RosettaSim's installer and re-run `rosettasim-ctl list`.
+
+### BUG in libdispatch at launch
+
+Rebuild through `scripts/build.sh rosettasim`; the app was likely built with a
+mergeable debug dylib.
+
+### timeout not found
+
+Install coreutils: `brew install coreutils`.

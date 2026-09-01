@@ -14,6 +14,9 @@
 #import "HACacheManager.h"
 #import "HAEntityStateCache.h"
 #import "HAHistoryManager.h"
+#import "HAStreamingManager.h"
+#import "HACameraRegistrationManager.h"
+#import "HARTSPCredentialManager.h"
 
 
 // NSUserDefaults keys for device integration
@@ -66,6 +69,18 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 @property (nonatomic, strong) UIView *cameraMuteSection;
 @property (nonatomic, strong) UISwitch *cameraMuteSwitch;
 
+// Local live camera/audio publisher (opt-in, foreground-only)
+@property (nonatomic, strong) UIView *liveStreamingSection;
+@property (nonatomic, strong) UILabel *liveStreamingStatusLabel;
+@property (nonatomic, strong) UISwitch *liveStreamingSwitch;
+@property (nonatomic, strong) UISegmentedControl *liveStreamingCameraSegment;
+@property (nonatomic, strong) UISlider *liveStreamingQualitySlider;
+@property (nonatomic, strong) UILabel *liveStreamingQualityLabel;
+@property (nonatomic, strong) UIButton *liveStreamingAccessButton;
+@property (nonatomic, strong) NSTimer *liveStreamingQualityDebounceTimer;
+@property (nonatomic, assign) NSInteger sensitiveStreamPasteboardChangeCount;
+@property (nonatomic, strong) NSDate *sensitiveStreamPasteboardExpiry;
+
 // Clear cache
 @property (nonatomic, strong) UIButton *clearCacheButton;
 
@@ -98,11 +113,29 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     self.view.backgroundColor = [HATheme backgroundColor];
 
     [self setupUI];
+    NSNotificationCenter *notifications = [NSNotificationCenter defaultCenter];
+    [notifications addObserver:self selector:@selector(liveStreamingStateChanged:)
+                          name:HAStreamingManagerStateDidChangeNotification object:nil];
+    [notifications addObserver:self selector:@selector(liveStreamingStateChanged:)
+                          name:HACameraRegistrationDidChangeNotification object:nil];
+    [notifications addObserver:self selector:@selector(deviceRegistrationStateChanged:)
+                          name:HADeviceRegistrationDidCompleteNotification object:nil];
+    [notifications addObserver:self selector:@selector(deviceRegistrationStateChanged:)
+                          name:HADeviceRegistrationDidInvalidateNotification object:nil];
+    [notifications addObserver:self selector:@selector(clearExpiredSensitiveStreamPasteboardAfterActivation:)
+                          name:UIApplicationDidBecomeActiveNotification object:nil];
+}
+
+- (void)dealloc {
+    [self clearSensitiveStreamPasteboardIfExpired];
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [self.liveStreamingQualityDebounceTimer invalidate];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     [self updateConnectionSummary];
+    [self updateLiveStreamingStatus];
 }
 
 - (void)setupUI {
@@ -333,12 +366,15 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     // Camera audio mute default
     UISwitch *camMuteSw = nil;
     self.cameraMuteSection = [self createToggleSection:@"Mute Camera Audio"
-        helpText:@"Camera streams are muted by default. Turn this off to hear audio when opening fullscreen camera views (HLS streams only)."
+        helpText:@"Controls audio playback for Home Assistant camera cards only. Local Camera Stream always includes microphone audio while a client is viewing it; turn that stream off to stop publishing audio."
         isOn:[[HAAuthManager sharedManager] cameraGlobalMute]
         target:self action:@selector(cameraMuteSwitchToggled:)
         switchOut:&camMuteSw];
     self.cameraMuteSwitch = camMuteSw;
     [container addSubview:self.cameraMuteSection];
+
+    self.liveStreamingSection = [self createLiveStreamingSection];
+    [container addSubview:self.liveStreamingSection];
 
     // Clear cache button
     self.clearCacheButton = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -450,6 +486,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         @"demo":      self.demoSection,
         @"autoReload":self.autoReloadSection,
         @"camMute":   self.cameraMuteSection,
+        @"liveStream":self.liveStreamingSection,
         @"clrCache":  self.clearCacheButton,
         @"intHdr":    self.integrationSectionHeader,
         @"intSec":    self.integrationSection,
@@ -462,7 +499,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     NSDictionary *metrics = @{@"p": @16, @"sh": @32, @"hg": @10, @"fh": @44};
 
     [container addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[proxWake]-p-[demo]-p-[autoReload]-p-[camMute]-p-[clrCache(fh)]-sh-[intHdr]-hg-[intSec]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
+        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[proxWake]-p-[demo]-p-[autoReload]-p-[camMute]-p-[liveStream]-p-[clrCache(fh)]-sh-[intHdr]-hg-[intSec]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
         options:0 metrics:metrics views:views]];
 
     for (NSString *name in views) {
@@ -488,6 +525,355 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeCenterX multiplier:1 constant:0]];
     [container addConstraint:[NSLayoutConstraint constraintWithItem:container attribute:NSLayoutAttributeWidth
         relatedBy:NSLayoutRelationLessThanOrEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:maxWidth]];
+}
+
+- (UIView *)createLiveStreamingSection {
+    HAStreamingManager *manager = [HAStreamingManager sharedManager];
+    UIView *section = [[UIView alloc] init];
+    section.translatesAutoresizingMaskIntoConstraints = NO;
+
+    UILabel *title = [[UILabel alloc] init];
+    title.text = @"Local Camera Stream";
+    title.font = [UIFont systemFontOfSize:16];
+    title.textColor = [HATheme primaryTextColor];
+    title.translatesAutoresizingMaskIntoConstraints = NO;
+    [section addSubview:title];
+
+    self.liveStreamingSwitch = [[HASwitch alloc] init];
+    self.liveStreamingSwitch.onTintColor = [HATheme switchTintColor];
+    self.liveStreamingSwitch.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.liveStreamingSwitch addTarget:self action:@selector(liveStreamingToggled:) forControlEvents:UIControlEventValueChanged];
+    [section addSubview:self.liveStreamingSwitch];
+
+    self.liveStreamingCameraSegment = [[UISegmentedControl alloc] initWithItems:@[@"Front", @"Rear", @"Both"]];
+    self.liveStreamingCameraSegment.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.liveStreamingCameraSegment setEnabled:manager.frontCameraAvailable forSegmentAtIndex:HAStreamingCameraModeFront];
+    [self.liveStreamingCameraSegment setEnabled:manager.rearCameraAvailable forSegmentAtIndex:HAStreamingCameraModeRear];
+    [self.liveStreamingCameraSegment setEnabled:manager.multiCamSupported forSegmentAtIndex:HAStreamingCameraModeBoth];
+    self.liveStreamingCameraSegment.selectedSegmentIndex = manager.cameraMode;
+    self.liveStreamingCameraSegment.hidden = !(manager.frontCameraAvailable && manager.rearCameraAvailable);
+    [self.liveStreamingCameraSegment addTarget:self action:@selector(liveStreamingCameraChanged:) forControlEvents:UIControlEventValueChanged];
+    [section addSubview:self.liveStreamingCameraSegment];
+
+    self.liveStreamingQualityLabel = [[UILabel alloc] init];
+    self.liveStreamingQualityLabel.font = [UIFont systemFontOfSize:12];
+    self.liveStreamingQualityLabel.textColor = [HATheme secondaryTextColor];
+    self.liveStreamingQualityLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [section addSubview:self.liveStreamingQualityLabel];
+
+    self.liveStreamingQualitySlider = [[UISlider alloc] init];
+    self.liveStreamingQualitySlider.minimumValue = 0.0f;
+    self.liveStreamingQualitySlider.maximumValue = 1.0f;
+    self.liveStreamingQualitySlider.value = manager.qualityScale;
+    self.liveStreamingQualitySlider.continuous = YES;
+    self.liveStreamingQualitySlider.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.liveStreamingQualitySlider addTarget:self action:@selector(liveStreamingQualityPreviewChanged:) forControlEvents:UIControlEventValueChanged];
+    [self.liveStreamingQualitySlider addTarget:self action:@selector(liveStreamingQualityCommitted:) forControlEvents:(UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel)];
+    [section addSubview:self.liveStreamingQualitySlider];
+
+    self.liveStreamingStatusLabel = [[UILabel alloc] init];
+    self.liveStreamingStatusLabel.font = [UIFont systemFontOfSize:12];
+    self.liveStreamingStatusLabel.textColor = [HATheme secondaryTextColor];
+    self.liveStreamingStatusLabel.numberOfLines = 0;
+    self.liveStreamingStatusLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    self.liveStreamingStatusLabel.userInteractionEnabled = YES;
+    [self.liveStreamingStatusLabel addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(copyLiveStreamURL:)]];
+    [section addSubview:self.liveStreamingStatusLabel];
+
+    self.liveStreamingAccessButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [self.liveStreamingAccessButton setTitle:@"Protected access · Manage" forState:UIControlStateNormal];
+    self.liveStreamingAccessButton.titleLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightMedium];
+    self.liveStreamingAccessButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+    self.liveStreamingAccessButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.liveStreamingAccessButton addTarget:self action:@selector(liveStreamingAccessTapped:)
+        forControlEvents:UIControlEventTouchUpInside];
+    [section addSubview:self.liveStreamingAccessButton];
+
+    CGFloat segmentHeight = self.liveStreamingCameraSegment.hidden ? 0 : 32;
+    [NSLayoutConstraint activateConstraints:@[
+        [title.topAnchor constraintEqualToAnchor:section.topAnchor],
+        [title.leadingAnchor constraintEqualToAnchor:section.leadingAnchor],
+        [self.liveStreamingSwitch.trailingAnchor constraintEqualToAnchor:section.trailingAnchor],
+        [self.liveStreamingSwitch.centerYAnchor constraintEqualToAnchor:title.centerYAnchor],
+        [self.liveStreamingCameraSegment.topAnchor constraintEqualToAnchor:title.bottomAnchor constant:self.liveStreamingCameraSegment.hidden ? 0 : 8],
+        [self.liveStreamingCameraSegment.leadingAnchor constraintEqualToAnchor:section.leadingAnchor],
+        [self.liveStreamingCameraSegment.trailingAnchor constraintEqualToAnchor:section.trailingAnchor],
+        [self.liveStreamingCameraSegment.heightAnchor constraintEqualToConstant:segmentHeight],
+        [self.liveStreamingQualityLabel.topAnchor constraintEqualToAnchor:self.liveStreamingCameraSegment.bottomAnchor constant:8],
+        [self.liveStreamingQualityLabel.leadingAnchor constraintEqualToAnchor:section.leadingAnchor],
+        [self.liveStreamingQualityLabel.trailingAnchor constraintEqualToAnchor:section.trailingAnchor],
+        [self.liveStreamingQualitySlider.topAnchor constraintEqualToAnchor:self.liveStreamingQualityLabel.bottomAnchor constant:2],
+        [self.liveStreamingQualitySlider.leadingAnchor constraintEqualToAnchor:section.leadingAnchor],
+        [self.liveStreamingQualitySlider.trailingAnchor constraintEqualToAnchor:section.trailingAnchor],
+        [self.liveStreamingQualitySlider.heightAnchor constraintEqualToConstant:30],
+        [self.liveStreamingStatusLabel.topAnchor constraintEqualToAnchor:self.liveStreamingQualitySlider.bottomAnchor constant:6],
+        [self.liveStreamingStatusLabel.leadingAnchor constraintEqualToAnchor:section.leadingAnchor],
+        [self.liveStreamingStatusLabel.trailingAnchor constraintEqualToAnchor:section.trailingAnchor],
+        [self.liveStreamingAccessButton.topAnchor constraintEqualToAnchor:self.liveStreamingStatusLabel.bottomAnchor constant:4],
+        [self.liveStreamingAccessButton.leadingAnchor constraintEqualToAnchor:section.leadingAnchor],
+        [self.liveStreamingAccessButton.trailingAnchor constraintEqualToAnchor:section.trailingAnchor],
+        [self.liveStreamingAccessButton.heightAnchor constraintEqualToConstant:30],
+        [self.liveStreamingAccessButton.bottomAnchor constraintEqualToAnchor:section.bottomAnchor],
+    ]];
+    [self updateLiveStreamingStatus];
+    return section;
+}
+
+- (void)liveStreamingToggled:(UISwitch *)sender {
+    HAStreamingManager *manager = [HAStreamingManager sharedManager];
+    if (!sender.isOn) {
+        [manager stopWithTrigger:HAStreamingStopTriggerUser error:nil];
+        [manager setFeatureEnabled:NO error:nil];
+        [self updateLiveStreamingStatus];
+        return;
+    }
+
+    NSError *error = nil;
+    if (![manager setFeatureEnabled:YES error:&error]) {
+        sender.on = NO;
+        [self showLiveStreamingError:error];
+        return;
+    }
+    sender.enabled = NO;
+    [manager armLocalStreamWithCompletion:^(BOOL success, NSError *startError) {
+        sender.enabled = YES;
+        if (!success) {
+            BOOL temporarilyAway = manager.featureEnabled &&
+                [UIApplication sharedApplication].applicationState != UIApplicationStateActive;
+            if (!temporarilyAway) {
+                sender.on = NO;
+                [manager setFeatureEnabled:NO error:nil];
+                [self showLiveStreamingError:startError];
+            }
+        }
+        [self updateLiveStreamingStatus];
+    }];
+}
+
+- (void)liveStreamingCameraChanged:(UISegmentedControl *)sender {
+    HAStreamingManager *manager = [HAStreamingManager sharedManager];
+    NSError *error = nil;
+    if (![manager setCameraMode:(HAStreamingCameraMode)sender.selectedSegmentIndex error:&error]) {
+        sender.selectedSegmentIndex = manager.cameraMode;
+        [self showLiveStreamingError:error];
+    }
+    [self updateLiveStreamingStatus];
+}
+
+- (void)liveStreamingQualityPreviewChanged:(UISlider *)sender {
+    self.liveStreamingQualityLabel.text = [[HAStreamingManager sharedManager] qualityDescriptionForScale:sender.value];
+    [self.liveStreamingQualityDebounceTimer invalidate];
+    self.liveStreamingQualityDebounceTimer = [NSTimer scheduledTimerWithTimeInterval:0.35
+        target:self selector:@selector(commitDebouncedStreamingQuality:) userInfo:nil repeats:NO];
+}
+
+- (void)commitDebouncedStreamingQuality:(NSTimer *)timer {
+    (void)timer;
+    [self liveStreamingQualityCommitted:self.liveStreamingQualitySlider];
+}
+
+- (void)liveStreamingQualityCommitted:(UISlider *)sender {
+    [self.liveStreamingQualityDebounceTimer invalidate];
+    self.liveStreamingQualityDebounceTimer = nil;
+    HAStreamingManager *manager = [HAStreamingManager sharedManager];
+    NSError *error = nil;
+    if (![manager setQualityScale:sender.value error:&error]) {
+        sender.value = manager.qualityScale;
+        [self showLiveStreamingError:error];
+    }
+    [self updateLiveStreamingStatus];
+}
+
+- (void)copyLiveStreamURL:(UITapGestureRecognizer *)gesture {
+    (void)gesture;
+    NSArray<NSString *> *urls = [HAStreamingManager sharedManager].streamURLs;
+    if (urls.count == 0) return;
+    [UIPasteboard generalPasteboard].string = [urls componentsJoinedByString:@"\n"];
+    [HAToastView showInView:self.view message:urls.count > 1 ? @"RTSP URLs copied" : @"RTSP URL copied" subtitle:nil duration:1.5 tapAction:nil];
+}
+
+- (void)liveStreamingAccessTapped:(UIButton *)sender {
+    NSError *credentialError = nil;
+    HARTSPCredentials *credentials = [[HARTSPCredentialManager sharedManager]
+        credentialsWithError:&credentialError];
+    if (!credentials) {
+        [self showLiveStreamingError:credentialError];
+        return;
+    }
+    HAStreamingManager *stream = [HAStreamingManager sharedManager];
+    UIAlertController *menu = [UIAlertController alertControllerWithTitle:@"Protected Stream Access"
+        message:@"Each device has its own strong password. When Register with Home Assistant is enabled, Home Assistant receives it over HTTPS or automatically over a local-network HTTP connection. On HTTP, that password is sent without transport encryption. RTSP media also remains plaintext on your trusted local network."
+        preferredStyle:UIAlertControllerStyleActionSheet];
+    if (stream.streamURLs.count > 0) {
+        [menu addAction:[UIAlertAction actionWithTitle:@"Copy URL with Password"
+            style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+                (void)action;
+                NSMutableArray<NSString *> *protectedURLs = [NSMutableArray array];
+                for (NSString *URL in stream.streamURLs) {
+                    if ([URL hasPrefix:@"rtsp://"]) {
+                        [protectedURLs addObject:[NSString stringWithFormat:@"rtsp://%@:%@@%@",
+                            credentials.username, credentials.password, [URL substringFromIndex:7]]];
+                    }
+                }
+                NSString *sensitiveValue = [protectedURLs componentsJoinedByString:@"\n"];
+                UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
+                NSDate *expiration = [NSDate dateWithTimeIntervalSinceNow:60.0];
+                if (@available(iOS 10.0, *)) {
+                    // System-managed expiration continues while this process is
+                    // suspended, and local-only prevents Universal Clipboard
+                    // from propagating the stream password to another device.
+                    [pasteboard setItems:@[@{@"public.utf8-plain-text": sensitiveValue}]
+                                 options:@{
+                                     UIPasteboardOptionExpirationDate: expiration,
+                                     UIPasteboardOptionLocalOnly: @YES,
+                                 }];
+                } else {
+                    // Local Camera Stream is unavailable before iOS 10.3.3;
+                    // retain a defensive fallback for compile-time portability.
+                    pasteboard.string = sensitiveValue;
+                }
+                self.sensitiveStreamPasteboardChangeCount = pasteboard.changeCount;
+                self.sensitiveStreamPasteboardExpiry = expiration;
+                [HAToastView showInView:self.view message:@"Sensitive connection URL copied"
+                    subtitle:@"Local clipboard item expires in 60 seconds" duration:2.5 tapAction:nil];
+                __weak typeof(self) weakSelf = self;
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(60 * NSEC_PER_SEC)),
+                    dispatch_get_main_queue(), ^{
+                        [weakSelf clearSensitiveStreamPasteboardIfExpired];
+                    });
+            }]];
+    }
+    [menu addAction:[UIAlertAction actionWithTitle:@"Rotate Stream Password"
+        style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+            (void)action;
+            [self confirmStreamCredentialRotation];
+        }]];
+    [menu addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    menu.popoverPresentationController.sourceView = sender;
+    menu.popoverPresentationController.sourceRect = sender.bounds;
+    [self presentViewController:menu animated:YES completion:nil];
+}
+
+- (void)clearSensitiveStreamPasteboardIfExpired {
+    if (!self.sensitiveStreamPasteboardExpiry ||
+        [self.sensitiveStreamPasteboardExpiry timeIntervalSinceNow] > 0) return;
+    [self clearSensitiveStreamPasteboardIfUnchanged];
+}
+
+- (void)clearExpiredSensitiveStreamPasteboardAfterActivation:(NSNotification *)notification {
+    (void)notification;
+    [self clearSensitiveStreamPasteboardIfExpired];
+}
+
+- (void)clearSensitiveStreamPasteboardIfUnchanged {
+    if (!self.sensitiveStreamPasteboardExpiry) return;
+    UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
+    if (pasteboard.changeCount == self.sensitiveStreamPasteboardChangeCount) {
+        pasteboard.string = @"";
+    }
+    self.sensitiveStreamPasteboardExpiry = nil;
+    self.sensitiveStreamPasteboardChangeCount = 0;
+}
+
+- (void)confirmStreamCredentialRotation {
+    UIAlertController *confirmation = [UIAlertController alertControllerWithTitle:@"Rotate Stream Password?"
+        message:@"Current clients will disconnect immediately. The protected listener re-arms with the new password first. The app then attempts to update app-owned Home Assistant camera entries asynchronously and retries transient failures while the same stream, registration setting, account, and server remain active. Manual clients will need the new URL."
+        preferredStyle:UIAlertControllerStyleAlert];
+    [confirmation addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [confirmation addAction:[UIAlertAction actionWithTitle:@"Rotate" style:UIAlertActionStyleDestructive
+        handler:^(UIAlertAction *action) {
+            (void)action;
+            self.liveStreamingAccessButton.enabled = NO;
+            [[HAStreamingManager sharedManager] rotateStreamCredentialWithCompletion:^(BOOL success, NSError *error) {
+                self.liveStreamingAccessButton.enabled = YES;
+                if (!success) [self showLiveStreamingError:error];
+                else {
+                    BOOL registrationCanUpdate = [HADeviceIntegrationManager sharedManager].enabled &&
+                        [HACameraRegistrationManager sharedManager].automaticRegistrationTransportAllowed;
+                    NSString *subtitle = registrationCanUpdate
+                        ? @"Home Assistant update follows; Settings shows progress"
+                        : @"Manual clients need the new protected URL";
+                    [HAToastView showInView:self.view message:@"Stream password rotated"
+                        subtitle:subtitle duration:2.5 tapAction:nil];
+                }
+                [self updateLiveStreamingStatus];
+            }];
+        }]];
+    [self presentViewController:confirmation animated:YES completion:nil];
+}
+
+- (void)showLiveStreamingError:(NSError *)error { UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Local Camera Stream" message:error.localizedDescription preferredStyle:UIAlertControllerStyleAlert]; [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]]; [self presentViewController:alert animated:YES completion:nil]; }
+
+- (void)liveStreamingStateChanged:(NSNotification *)notification {
+    (void)notification;
+    dispatch_async(dispatch_get_main_queue(), ^{ [self updateLiveStreamingStatus]; });
+}
+
+- (void)updateLiveStreamingStatus {
+    HAStreamingManager *manager = [HAStreamingManager sharedManager];
+    self.liveStreamingSwitch.on = manager.featureEnabled;
+    self.liveStreamingSwitch.enabled = manager.supported;
+    self.liveStreamingCameraSegment.selectedSegmentIndex = manager.cameraMode;
+    self.liveStreamingQualitySlider.value = manager.qualityScale;
+    self.liveStreamingQualityLabel.text = manager.qualityDescription;
+    // Keep recovery available if the persistent toggle is on but listener
+    // arming failed because a stale or damaged credential could not be read.
+    self.liveStreamingAccessButton.enabled = manager.supported && manager.featureEnabled;
+    if (!manager.supported) {
+        self.liveStreamingStatusLabel.text = @"Requires iOS 10.3.3 or newer.";
+    } else if (manager.streaming && manager.secondaryStreamURL.length) {
+        NSString *state = manager.isCapturing
+            ? [NSString stringWithFormat:@"CAMERA + MIC LIVE · %lu authenticated %@",
+                (unsigned long)manager.streamClientCount, manager.streamClientCount == 1 ? @"client" : @"clients"]
+            : @"PROTECTED · Camera off · Waiting for authenticated viewer";
+        self.liveStreamingStatusLabel.text = [NSString stringWithFormat:@"%@\nFRONT %@\nREAR %@\nTap an address to copy it without credentials.",
+            state, manager.streamURL ?: @"", manager.secondaryStreamURL];
+    } else if (manager.streaming) {
+        NSString *camera = manager.cameraMode == HAStreamingCameraModeRear ? @"REAR" : @"FRONT";
+        NSString *state = manager.isCapturing
+            ? [NSString stringWithFormat:@"CAMERA + MIC LIVE · %lu authenticated %@",
+                (unsigned long)manager.streamClientCount, manager.streamClientCount == 1 ? @"client" : @"clients"]
+            : @"PROTECTED · Camera off · Waiting for authenticated viewer";
+        self.liveStreamingStatusLabel.text = [NSString stringWithFormat:@"%@\n%@ %@\nTap the address to copy it without credentials.",
+            state, camera, manager.streamURL ?: @""];
+    } else if (manager.featureEnabled) {
+        self.liveStreamingStatusLabel.text = @"Protected stream is re-arming.";
+    } else {
+        self.liveStreamingStatusLabel.text = @"Off · A unique device password is retained for the next use.";
+    }
+    HACameraRegistrationManager *registration = [HACameraRegistrationManager sharedManager];
+    if ([HADeviceIntegrationManager sharedManager].enabled && manager.streaming) {
+        if (registration.isRetryScheduled) {
+            NSString *retryStatus = [NSString stringWithFormat:
+                @"\nHome Assistant: retry %lu in %.0f s.",
+                (unsigned long)registration.retryAttempt,
+                registration.scheduledRetryDelay];
+            if (registration.lastError.localizedDescription.length) {
+                retryStatus = [retryStatus stringByAppendingFormat:@"\nLast error: %@",
+                    registration.lastError.localizedDescription];
+            }
+            self.liveStreamingStatusLabel.text = [self.liveStreamingStatusLabel.text
+                stringByAppendingString:retryStatus];
+        } else if (registration.isRegistering) {
+            NSString *registeringStatus = registration.retryAttempt > 0
+                ? [NSString stringWithFormat:@"\nHome Assistant: registering camera (retry %lu)…",
+                    (unsigned long)registration.retryAttempt]
+                : @"\nHome Assistant: registering camera…";
+            if (registration.retryAttempt > 0 && registration.lastError.localizedDescription.length) {
+                registeringStatus = [registeringStatus stringByAppendingFormat:@"\nLast error: %@",
+                    registration.lastError.localizedDescription];
+            }
+            self.liveStreamingStatusLabel.text = [self.liveStreamingStatusLabel.text
+                stringByAppendingString:registeringStatus];
+        } else if (registration.lastError) {
+            self.liveStreamingStatusLabel.text = [self.liveStreamingStatusLabel.text
+                stringByAppendingFormat:@"\nHome Assistant: %@", registration.lastError.localizedDescription];
+        }
+    }
+    if (manager.supported) {
+        self.liveStreamingStatusLabel.text = [self.liveStreamingStatusLabel.text
+            stringByAppendingString:@"\nSecurity: RTSP media and camera-password registration to a local HTTP Home Assistant server are plaintext on your LAN."];
+    }
 }
 
 #pragma mark - Section Helpers
@@ -562,7 +948,10 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     [regRow addSubview:regLabel];
 
     self.registrationSwitch = [[HASwitch alloc] init];
-    self.registrationSwitch.on = [HADeviceRegistration sharedManager].isRegistered;
+    // Reflect the persisted user intent, not only whether the latest webhook
+    // registration has completed. This prevents the toggle appearing to turn
+    // itself off while Home Assistant is temporarily unreachable.
+    self.registrationSwitch.on = [HADeviceIntegrationManager sharedManager].enabled;
     self.registrationSwitch.onTintColor = [HATheme switchTintColor];
     [self.registrationSwitch addTarget:self action:@selector(registrationSwitchToggled:) forControlEvents:UIControlEventValueChanged];
     self.registrationSwitch.translatesAutoresizingMaskIntoConstraints = NO;
@@ -611,15 +1000,23 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 
 - (void)updateRegistrationStatus {
     HADeviceRegistration *reg = [HADeviceRegistration sharedManager];
-    if (reg.isRegistered) {
-        NSString *truncatedId = reg.webhookId;
-        if (truncatedId.length > 12) {
-            truncatedId = [NSString stringWithFormat:@"%@\u2026", [truncatedId substringToIndex:12]];
-        }
-        self.registrationStatusLabel.text = [NSString stringWithFormat:@"Registered \u2014 Webhook: %@", truncatedId];
+    BOOL enabled = [HADeviceIntegrationManager sharedManager].enabled;
+    self.registrationSwitch.on = enabled;
+    if (!enabled) {
+        self.registrationStatusLabel.text = @"Off. Enable to send diagnostics to your Home Assistant, including battery, brightness, app/dashboard state, Wi-Fi identifiers when available, camera-stream status, and available storage only over a local webhook route.";
+    } else if (reg.isRegistered) {
+        self.registrationStatusLabel.text = @"Registered — device diagnostics and commands enabled.";
     } else {
-        self.registrationStatusLabel.text = @"Not registered. Enable to send device sensors to Home Assistant.";
+        self.registrationStatusLabel.text = @"Registration is enabled but not complete. HA Dashboard will retry when it reconnects to Home Assistant.";
     }
+}
+
+- (void)deviceRegistrationStateChanged:(NSNotification *)notification {
+    (void)notification;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self updateRegistrationStatus];
+        [self updateLiveStreamingStatus];
+    });
 }
 
 #pragma mark - Device Integration Actions
@@ -634,6 +1031,35 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
                 // Enable integration manager so sensors start reporting
                 [HADeviceIntegrationManager sharedManager].enabled = YES;
                 [self updateRegistrationStatus];
+                HAStreamingManager *stream = [HAStreamingManager sharedManager];
+                if (stream.streaming && stream.streamURLs.count > 0) {
+                    NSError *credentialError = nil;
+                    HARTSPCredentials *credentials = [[HARTSPCredentialManager sharedManager]
+                        credentialsWithError:&credentialError];
+                    if (!credentials) {
+                        self.registrationStatusLabel.text = [NSString stringWithFormat:
+                            @"Registered — protected camera credentials failed: %@",
+                            credentialError.localizedDescription ?: @"Unknown error"];
+                        return;
+                    }
+                    self.registrationStatusLabel.text = @"Registered — adding camera entries…";
+                    [[HACameraRegistrationManager sharedManager]
+                        ensureCameraEntriesForStreamURLs:stream.streamURLs
+                        deviceName:[HADeviceRegistration sharedManager].deviceName
+                        username:credentials.username
+                        password:credentials.password
+                        credentialRevision:credentials.revision
+                        framesPerSecond:stream.targetFrameRate
+                        completion:^(BOOL cameraSuccess, NSError *cameraError) {
+                            if (cameraSuccess) {
+                                [self updateRegistrationStatus];
+                            } else {
+                                self.registrationStatusLabel.text = [NSString stringWithFormat:
+                                    @"Registered — camera entry failed: %@",
+                                    cameraError.localizedDescription ?: @"Unknown error"];
+                            }
+                        }];
+                }
             } else {
                 sender.on = NO;
                 self.registrationStatusLabel.text = [NSString stringWithFormat:@"Registration failed: %@",
@@ -658,11 +1084,8 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 
     // Push name change to HA if registered
     if ([HADeviceRegistration sharedManager].isRegistered) {
-        NSDictionary *update = @{
-            @"device_name": [HADeviceRegistration sharedManager].deviceName,
-            @"app_version": [[NSBundle mainBundle] infoDictionary][@"CFBundleShortVersionString"] ?: @"0.0.0",
-        };
-        [[HADeviceRegistration sharedManager] sendWebhookWithType:@"update_registration" data:update completion:nil];
+        [[HADeviceRegistration sharedManager]
+            updateRegistrationMetadataWithCompletion:nil];
     }
 }
 
@@ -987,12 +1410,18 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 
 - (void)logoutTapped {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Log Out & Reset"
-        message:@"This will remove all saved credentials, settings, and return the app to its initial state."
+        message:@"This removes locally saved credentials, registration data, settings, cached dashboard data, and logs, then returns the app to its initial state. Home Assistant devices and camera entries remain on your server until you remove them there."
         preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"Log Out" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
-        [[HAConnectionManager sharedManager] disconnect];
+        HAConnectionManager *connection = [HAConnectionManager sharedManager];
+        [connection disconnect];
+        [connection clearEntityStore];
+        [[HAEntityStateCache sharedCache] discardPendingWrites];
+        [[HAHistoryManager sharedManager] clearCache];
+        [[HACacheManager sharedManager] clearAllServerCaches];
         [[HAAuthManager sharedManager] clearCredentials];
+        [HALog clearLogs];
 
         // Navigate to login screen
         HALoginViewController *loginVC = [[HALoginViewController alloc] init];
