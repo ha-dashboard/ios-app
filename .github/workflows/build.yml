@@ -211,15 +211,21 @@ jobs:
           # Import the certificate
           CERT_PATH="$RUNNER_TEMP/dev-cert.p12"
           echo -n "$DEV_CERT_BASE64" | base64 --decode > "$CERT_PATH"
-          security import "$CERT_PATH" \
+          if ! security import "$CERT_PATH" \
               -k "$KEYCHAIN_PATH" \
               -P "$DEV_CERT_PASSWORD" \
               -T /usr/bin/codesign \
-              -T /usr/bin/security
+              -T /usr/bin/security >/dev/null 2>&1; then
+            echo "::error::Failed to import signing certificate"
+            exit 1
+          fi
           rm "$CERT_PATH"
 
           # Allow codesign to access the keychain without prompt
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          if ! security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null 2>&1; then
+            echo "::error::Failed to configure signing-key access"
+            exit 1
+          fi
 
           # Add the build keychain to the search list (prepend so it's found first)
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
@@ -231,8 +237,12 @@ jobs:
           cp "$PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
           rm "$PROFILE_PATH"
 
-          echo "✓ Certificate and provisioning profile installed"
-          security find-identity -v -p codesigning "$KEYCHAIN_PATH" | head -3
+          IDENTITY_COUNT="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" 2>/dev/null | awk '/valid identities found/ { print $1; exit }')"
+          if ! [[ "$IDENTITY_COUNT" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::No valid code-signing identity was imported"
+            exit 1
+          fi
+          echo "✓ Certificate and provisioning profile installed ($IDENTITY_COUNT valid code-signing identities)"
 
       - name: Download Xcode 13 SDK stubs
         env:
