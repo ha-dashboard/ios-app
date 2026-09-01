@@ -32,7 +32,28 @@
 		<string>_home-assistant._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Discover Home Assistant servers on your network</string>
+	<string>Discover Home Assistant servers and host explicitly enabled camera and microphone streams for RTSP clients that connect to this device.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Allow HA Dashboard to stream live video to RTSP clients while Local Camera Stream is enabled.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Allow HA Dashboard to include live audio in Local Camera Streams you enable.</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>HAAppSceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 	<key>UIAppFonts</key>
 	<array>
 		<string>materialdesignicons-webfont.ttf</string>

@@ -16,9 +16,7 @@ on:
 env:
   SCHEME: HADashboard
   TEAM_ID: ${{ vars.TEAM_ID }}
-  # Immutable Xcode 13.2.1 iPhoneOS SDK stubs (21MB) for armv7 linking.
-  # Kept as a repository release asset so legacy builds never need an Apple
-  # login or an evictable Actions cache to recover the old SDK.
+  # Immutable Xcode 13.2.1 iPhoneOS SDK stubs for iOS 9 armv7/arm64 linking.
   XCODE13_SDK_STUBS_RELEASE: xcode13-sdk-stubs-v1
   XCODE13_SDK_STUBS_SHA256: 7b89a8882d60246b0ba53ed4a61363a0cbcad648e5b36874940bf4ee400c2dfc
 
@@ -34,10 +32,10 @@ jobs:
       - name: Select Xcode
         run: |
           # Find the latest Xcode 26.x (year-based naming from WWDC 2025)
-          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
           if [ -z "$XCODE" ]; then
             # Fall back to default Xcode
-            XCODE=$(ls -d /Applications/Xcode.app /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+            XCODE=$(ls -d /Applications/Xcode.app /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1 || true)
           fi
           echo "Using: $XCODE ($(${XCODE}/Contents/Developer/usr/bin/xcodebuild -version | head -1))"
           sudo xcode-select -s "$XCODE"
@@ -70,23 +68,54 @@ jobs:
             -destination "generic/platform=iOS Simulator" \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
+            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
             MARKETING_VERSION=${{ steps.version.outputs.version }} \
             CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build_number }}
           # Snapshot tests are skipped in CI — reference images are recorded
           # on iOS 17.4 and differ across iOS versions. Run locally with:
           #   scripts/test-snapshots.sh
 
-  # ── Verify immutable Xcode 13 SDK stubs on main pushes ───────────────
-  # The armv7 link step needs TBD stubs from Xcode 13's iOS SDK. Downloading
-  # this repository-owned release asset is deterministic and avoids Apple-ID
-  # authentication entirely.
-  verify-sdk-stubs:
+      - name: Test streaming and device integration behavior
+        run: |
+          xcodebuild test \
+            -scheme $SCHEME \
+            -destination 'platform=macOS,variant=Mac Catalyst' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
+            MARKETING_VERSION=${{ steps.version.outputs.version }} \
+            CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build_number }} \
+            -only-testing:HADashboardTests/HAStreamingTests \
+            -only-testing:HADashboardTests/HARTSPCredentialManagerTests \
+            -only-testing:HADashboardTests/HADeviceRegistrationTests \
+            -only-testing:HADashboardTests/HASensorReporterTests \
+            -only-testing:HADashboardTests/HAProximityWakeControllerTests \
+            -only-testing:HADashboardTests/HARemoteCommandHandlerTests \
+            -only-testing:HADashboardTests/HADeviceIntegrationManagerTests \
+            -only-testing:HADashboardTests/HANotificationPresenterTests
+
+  # ── Verify immutable stubs and compile both iOS 9 release slices ─────
+  verify-ios9-slices:
     runs-on: macos-latest
-    timeout-minutes: 10
-    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
+          if [ -z "$XCODE" ]; then
+            XCODE=$(ls -d /Applications/Xcode.app /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1 || true)
+          fi
+          test -d "$XCODE"
+          echo "Using: $XCODE ($(${XCODE}/Contents/Developer/usr/bin/xcodebuild -version | head -1))"
+          sudo xcode-select -s "$XCODE"
+          echo "XCODE_PATH=$XCODE" >> "$GITHUB_ENV"
+
       - name: Download and verify Xcode 13 SDK stubs
         env:
           GH_TOKEN: ${{ github.token }}
@@ -102,11 +131,18 @@ jobs:
           echo "$XCODE13_SDK_STUBS_SHA256  $STUBS_ARCHIVE" | shasum -a 256 -c -
           tar tzf "$STUBS_ARCHIVE" | grep -Fx 'iPhoneOS.sdk/SDKSettings.plist'
           tar tzf "$STUBS_ARCHIVE" | grep -Fx 'iPhoneOS.sdk/System/Library/Frameworks/UIKit.framework/UIKit.tbd'
+          tar xzf "$STUBS_ARCHIVE" -C "$STUBS_DIR"
+          echo "XCODE13_SDK_PATH=$STUBS_DIR/iPhoneOS.sdk" >> "$GITHUB_ENV"
+
+      - name: Compile and verify iOS 9 slices
+        env:
+          HADASHBOARD_SLICES_ONLY: YES
+        run: scripts/build.sh device
 
   # ── Universal armv7+arm64 release ────────────────────────────────────
   archive-release:
-    needs: build-and-test
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_version != '')
+    needs: [build-and-test, verify-ios9-slices]
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_version != '')
     runs-on: macos-latest
     timeout-minutes: 45
     permissions:
@@ -118,9 +154,9 @@ jobs:
 
       - name: Select Xcode
         run: |
-          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
           if [ -z "$XCODE" ]; then
-            XCODE=$(ls -d /Applications/Xcode.app /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+            XCODE=$(ls -d /Applications/Xcode.app /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1 || true)
           fi
           echo "Using: $XCODE ($(${XCODE}/Contents/Developer/usr/bin/xcodebuild -version | head -1))"
           sudo xcode-select -s "$XCODE"
@@ -140,6 +176,17 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
           echo "Version: $VERSION (build $BUILD_NUMBER)"
+
+      - name: Validate curated release notes
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          NOTES="docs/releases/v${VERSION}.md"
+          PUBLIC_NOTES="docs/releases/v${VERSION}-github.md"
+          test -f "$NOTES"
+          test -f "$PUBLIC_NOTES"
+          ! grep -Fq 'Status: **Draft' "$NOTES"
+          ! grep -Fq 'Status: **Draft' "$PUBLIC_NOTES"
+          ! grep -Fq -- '- [ ]' "$NOTES"
 
       - name: Decode ASC API key
         env:
@@ -216,8 +263,8 @@ jobs:
           plutil -replace teamID -string "$TEAM_ID" ExportOptions-AppStore.plist
           plutil -replace teamID -string "$TEAM_ID" ExportOptions-AdHoc.plist
 
-      # ── Step 1: Build armv7 slice with clang direct ──────────────────
-      - name: Build armv7 slice (clang direct, sdk=26.2)
+      # ── Step 1: Build both iOS 9 slices with clang direct ────────────
+      - name: Build armv7 and arm64 iOS 9 slices
         run: |
           VERSION=${{ steps.version.outputs.version }}
           BUILD_NUMBER=${{ steps.version.outputs.build_number }}
@@ -225,7 +272,7 @@ jobs:
           XCODE26_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
           SDK_VER=$(plutil -extract Version raw "$XCODE26_SDK/SDKSettings.plist")
 
-          echo "Compiling armv7 with Xcode 26 clang (sdk=$SDK_VER)..."
+          echo "Compiling iOS 9 slices with modern Xcode clang (sdk=$SDK_VER)..."
 
           # Collect include directories
           INCLUDE_FLAGS=()
@@ -245,60 +292,83 @@ jobs:
               -not -path '*/iOSSnapshotTestCase/*' \
               -not -path '*/MDI/*')
 
-          # Compile all .m files
-          mkdir -p build/armv7-obj
-          ERRORS=0
-          COMPILED=0
-          for src in "${SOURCES[@]}"; do
-            OBJ_NAME=$(echo "$src" | sed 's|/|_|g; s|\.m$|.o|')
-            if "$CLANG" \
-                --target=armv7-apple-ios9.0 \
-                -isysroot "$XCODE26_SDK" \
-                -x objective-c -fobjc-arc -fmodules -Os -DNDEBUG -g -w \
-                "${INCLUDE_FLAGS[@]}" \
-                -c "$src" -o "build/armv7-obj/$OBJ_NAME" 2>/dev/null; then
-              COMPILED=$((COMPILED + 1))
-            else
-              ERRORS=$((ERRORS + 1))
-              if [ $ERRORS -le 3 ]; then
-                echo "FAIL: $src"
-                "$CLANG" --target=armv7-apple-ios9.0 -isysroot "$XCODE26_SDK" \
-                    -x objective-c -fobjc-arc -fmodules -Os -DNDEBUG \
-                    "${INCLUDE_FLAGS[@]}" -c "$src" -o /dev/null 2>&1 | grep 'error:' | head -3
+          # Compile and link both shipped slices directly. Xcode 27 no longer
+          # permits xcodebuild to target pre-iOS 15, but clang still produces
+          # valid iOS 9 Mach-O slices when linked against the Xcode 13 stubs.
+          for ARCH in armv7 arm64; do
+            TARGET="$ARCH-apple-ios9.0"
+            OBJECT_DIR="build/$ARCH-obj"
+            ARCH_FLAGS=()
+            if [[ "$ARCH" == "armv7" ]]; then
+              # Xcode 27 ld can lose Thumb mode bits for LC_MAIN and Obj-C IMPs.
+              ARCH_FLAGS=(-marm)
+            fi
+            mkdir -p "$OBJECT_DIR"
+            ERRORS=0
+            COMPILED=0
+            for src in "${SOURCES[@]}"; do
+              OBJ_NAME=$(echo "$src" | sed 's|/|_|g; s|\.m$|.o|')
+              if "$CLANG" \
+                  --target="$TARGET" \
+                  -isysroot "$XCODE26_SDK" \
+                  -x objective-c -fobjc-arc -fmodules -Os -DNDEBUG -g \
+                  -Werror=unguarded-availability \
+                  ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} \
+                  "${INCLUDE_FLAGS[@]}" \
+                  -c "$src" -o "$OBJECT_DIR/$OBJ_NAME" 2>/dev/null; then
+                COMPILED=$((COMPILED + 1))
+              else
+                ERRORS=$((ERRORS + 1))
+                if [ $ERRORS -le 3 ]; then
+                  echo "FAIL ($ARCH): $src"
+                  "$CLANG" --target="$TARGET" -isysroot "$XCODE26_SDK" \
+                      -x objective-c -fobjc-arc -fmodules -Os -DNDEBUG \
+                      -Werror=unguarded-availability \
+                      "${INCLUDE_FLAGS[@]}" -c "$src" -o /dev/null 2>&1 | grep 'error:' | head -3
+                fi
+              fi
+            done
+
+            if [ $ERRORS -gt 0 ]; then
+              echo "❌ $ARCH compile failed: $COMPILED/$((COMPILED + ERRORS)) files"
+              exit 1
+            fi
+
+            "$CLANG" \
+                --target="$TARGET" \
+                -isysroot "$XCODE13_SDK" \
+                -framework Foundation -framework UIKit -framework CoreFoundation \
+                -framework CoreGraphics -framework CoreText -framework QuartzCore \
+                -framework Security -framework CFNetwork -framework AVFoundation \
+                -framework AudioToolbox -framework CoreMedia -framework CoreVideo \
+                -framework VideoToolbox \
+                -fobjc-arc -dead_strip \
+                ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} \
+                -Xlinker -platform_version -Xlinker ios -Xlinker 9.0 -Xlinker "$SDK_VER" \
+                "$OBJECT_DIR"/*.o \
+                -o "build/$ARCH-thin"
+
+            if [[ "$ARCH" == "armv7" ]]; then
+              ENTRYOFF=$(otool -l "build/$ARCH-thin" | awk '
+                $1 == "cmd" && $2 == "LC_MAIN" { wanted = 1; next }
+                wanted && $1 == "entryoff" { print $2; exit }
+              ')
+              if [[ -z "$ENTRYOFF" || $((ENTRYOFF % 2)) -ne 0 ]]; then
+                echo "❌ armv7 ARM-mode LC_MAIN entryoff is unexpectedly odd: ${ENTRYOFF:-missing}"
+                exit 1
+              fi
+              if nm -arch armv7 -m "build/$ARCH-thin" | grep ' _main$' | grep -q '\[Thumb\]'; then
+                echo "❌ armv7 main is unexpectedly marked as Thumb"
+                exit 1
               fi
             fi
+
+            echo "✓ $ARCH slice: $(du -h "build/$ARCH-thin" | cut -f1)"
+            otool -l "build/$ARCH-thin" | grep -A5 'LC_VERSION_MIN_IPHONEOS\|LC_BUILD_VERSION'
           done
 
-          if [ $ERRORS -gt 0 ]; then
-            echo "❌ armv7 compile failed: $COMPILED/$((COMPILED + ERRORS)) files"
-            exit 1
-          fi
-          echo "✓ Compiled $COMPILED files"
-
-          # Link against Xcode 13 TBD stubs with platform_version override
-          "$CLANG" \
-              --target=armv7-apple-ios9.0 \
-              -isysroot "$XCODE13_SDK" \
-              -framework Foundation -framework UIKit -framework CoreFoundation \
-              -framework CoreGraphics -framework CoreText -framework QuartzCore \
-              -framework Security -framework CFNetwork \
-              -fobjc-arc -dead_strip \
-              -Xlinker -platform_version -Xlinker ios -Xlinker 9.0 -Xlinker "$SDK_VER" \
-              build/armv7-obj/*.o \
-              -o build/armv7-thin
-
-          # Generate dSYM
-          DSYMUTIL="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/bin/dsymutil"
-          "$DSYMUTIL" build/armv7-thin -o build/armv7.dSYM
-          # Rename DWARF to match app executable name
-          mv "build/armv7.dSYM/Contents/Resources/DWARF/armv7-thin" \
-             "build/armv7.dSYM/Contents/Resources/DWARF/HA Dashboard" 2>/dev/null || true
-
-          echo "✓ armv7 slice: $(du -h build/armv7-thin | cut -f1)"
-          otool -l build/armv7-thin | grep -A5 'LC_VERSION_MIN_IPHONEOS'
-
-      # ── Step 2: Archive arm64 with Xcode 26 ─────────────────────────
-      - name: Archive arm64
+      # ── Step 2: Archive signed bundle/resource template ──────────────
+      - name: Archive signed bundle template
         run: |
           xcodebuild archive \
             -scheme $SCHEME \
@@ -306,6 +376,7 @@ jobs:
             -configuration Release \
             -archivePath build/HADashboard.xcarchive \
             ARCHS=arm64 VALID_ARCHS=arm64 \
+            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
             MARKETING_VERSION=${{ steps.version.outputs.version }} \
             CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build_number }} \
             DEVELOPMENT_TEAM=$TEAM_ID \
@@ -321,9 +392,11 @@ jobs:
           BUILD_NUMBER=${{ steps.version.outputs.build_number }}
           APP="build/HADashboard.xcarchive/Products/Applications/HA Dashboard.app"
           SRC_ICON="HADashboard/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
+          ENTITLEMENTS="build/final-entitlements.plist"
+          codesign -d --entitlements :- "$APP" > "$ENTITLEMENTS" 2>/dev/null
 
           echo "=== Swap in universal binary ==="
-          lipo -create build/armv7-thin "$APP/HA Dashboard" \
+          lipo -create build/armv7-thin build/arm64-thin \
               -output "$APP/HA Dashboard.tmp"
           mv "$APP/HA Dashboard.tmp" "$APP/HA Dashboard"
           echo "Archs: $(lipo -archs "$APP/HA Dashboard")"
@@ -357,42 +430,40 @@ jobs:
           sips -z 120 120 "$SRC_ICON" --out "$APP/AppIcon60x60@2x.png" 2>/dev/null
           sips -z 180 180 "$SRC_ICON" --out "$APP/AppIcon60x60@3x.png" 2>/dev/null
 
-          echo "=== Merge dSYMs ==="
+          echo "=== Generate universal dSYM ==="
           DSYM="build/HADashboard.xcarchive/dSYMs/HA Dashboard.app.dSYM"
-          ARM64_DWARF="$DSYM/Contents/Resources/DWARF/HA Dashboard"
-          ARMV7_DWARF="build/armv7.dSYM/Contents/Resources/DWARF/HA Dashboard"
-          if [ -f "$ARM64_DWARF" ] && [ -f "$ARMV7_DWARF" ]; then
-            lipo -create "$ARMV7_DWARF" "$ARM64_DWARF" -output "${ARM64_DWARF}.universal"
-            mv "${ARM64_DWARF}.universal" "$ARM64_DWARF"
-            echo "dSYM UUIDs:"
-            dwarfdump --uuid "$DSYM"
-          fi
+          rm -rf "$DSYM"
+          "$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/bin/dsymutil" \
+              "$APP/HA Dashboard" -o "$DSYM"
+          echo "dSYM UUIDs:"
+          dwarfdump --uuid "$DSYM"
 
           echo "=== Re-sign ==="
           IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | grep "Apple" | head -1 | sed 's/.*"\(.*\)"/\1/')
-          codesign --force --sign "$IDENTITY" --timestamp=none "$APP"
+          codesign --force --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" --timestamp=none "$APP"
 
           echo "=== Verify ==="
-          echo "Binary:    $(lipo -archs "$APP/HA Dashboard")"
-          echo "MinOS:     $(plutil -extract MinimumOSVersion raw "$PLIST")"
+          ARCHS=$(lipo -archs "$APP/HA Dashboard")
+          test "$ARCHS" = "armv7 arm64"
+          test "$(plutil -extract MinimumOSVersion raw "$PLIST")" = "9.0"
+          for ARCH in armv7 arm64; do
+            MINIMUM=$(otool -l -arch "$ARCH" "$APP/HA Dashboard" | awk '
+              $1 == "cmd" && $2 == "LC_VERSION_MIN_IPHONEOS" { wanted = 1; next }
+              wanted && $1 == "version" { print $2; wanted = 0 }
+            ')
+            test "$MINIMUM" = "9.0"
+          done
+          BINARY_UUIDS=$(dwarfdump --uuid "$APP/HA Dashboard" | awk '{print $2, $3}' | sort)
+          DSYM_UUIDS=$(dwarfdump --uuid "$DSYM" | awk '{print $2, $3}' | sort)
+          test "$BINARY_UUIDS" = "$DSYM_UUIDS"
+          echo "Binary:    $ARCHS"
+          echo "MinOS:     9.0 (armv7, arm64, bundle)"
           echo "Bundle ID: $(plutil -extract CFBundleIdentifier raw "$PLIST")"
+          test -f "$APP/PrivacyInfo.xcprivacy"
+          plutil -lint "$APP/PrivacyInfo.xcprivacy"
+          codesign --verify --deep --strict --verbose=2 "$APP"
 
-      # ── Step 4: Export for App Store ─────────────────────────────────
-      - name: Export App Store IPA (uploads to TestFlight)
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          xcodebuild -exportArchive \
-            -archivePath build/HADashboard.xcarchive \
-            -exportPath build/appstore \
-            -exportOptionsPlist ExportOptions-AppStore.plist \
-            -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            -allowProvisioningUpdates
-
-      # ── Step 5: Export Ad Hoc IPA ────────────────────────────────────
+      # ── Step 4: Export and verify Ad Hoc IPA before any upload ───────
       - name: Export Ad Hoc IPA
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -416,6 +487,45 @@ jobs:
             mv "$ADHOC_IPA" "build/HADashboard-${VERSION}-universal-armv7-arm64.ipa"
           fi
 
+      - name: Verify exported Ad Hoc IPA
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          IPA="build/HADashboard-${VERSION}-universal-armv7-arm64.ipa"
+          VERIFY_DIR="$RUNNER_TEMP/verify-adhoc"
+          mkdir -p "$VERIFY_DIR"
+          ditto -x -k "$IPA" "$VERIFY_DIR"
+          APP=$(find "$VERIFY_DIR/Payload" -maxdepth 1 -name '*.app' -type d | head -1)
+          test -d "$APP"
+          BINARY="$APP/HA Dashboard"
+          test "$(lipo -archs "$BINARY")" = "armv7 arm64"
+          test "$(plutil -extract MinimumOSVersion raw "$APP/Info.plist")" = "9.0"
+          test "$(plutil -extract CFBundleIdentifier raw "$APP/Info.plist")" = "com.hadashboard.app"
+          test -f "$APP/PrivacyInfo.xcprivacy"
+          plutil -lint "$APP/PrivacyInfo.xcprivacy"
+          for ARCH in armv7 arm64; do
+            MINIMUM=$(otool -l -arch "$ARCH" "$BINARY" | awk '
+              $1 == "cmd" && $2 == "LC_VERSION_MIN_IPHONEOS" { wanted = 1; next }
+              wanted && $1 == "version" { print $2; wanted = 0 }
+            ')
+            test "$MINIMUM" = "9.0"
+          done
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
+      # ── Step 5: Upload the verified archive to TestFlight ────────────
+      - name: Export App Store IPA (uploads to TestFlight)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/HADashboard.xcarchive \
+            -exportPath build/appstore \
+            -exportOptionsPlist ExportOptions-AppStore.plist \
+            -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            -allowProvisioningUpdates
+
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
@@ -429,7 +539,8 @@ jobs:
         with:
           files: |
             build/HADashboard-*-universal-armv7-arm64.ipa
-          generate_release_notes: true
+          body_path: docs/releases/${{ github.ref_name }}-github.md
+          generate_release_notes: false
           draft: false
 
       # ── Cleanup ─────────────────────────────────────────────────────

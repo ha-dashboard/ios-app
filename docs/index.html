@@ -186,7 +186,7 @@
       <p>A native iOS app that renders your Home Assistant Lovelace dashboards. No web views.</p>
       <div class="app-store-section">
         <a href="https://apps.apple.com/gb/app/ha-dash/id6759347912" class="app-store-badge">
-          <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83&amp;releaseDate=1740009600" alt="Download on the App Store">
+          <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83" alt="Download on the App Store">
         </a>
       </div>
     </div>
@@ -199,13 +199,15 @@
       <ul>
         <li><strong>Native rendering</strong> of HA Lovelace dashboards &mdash; sections, masonry, panel, and sidebar layouts</li>
         <li><strong>Real-time updates</strong> via WebSocket &mdash; entity states update live</li>
-        <li><strong>33 cell types</strong> &mdash; controls, inputs, composite cards, entity detail views</li>
+        <li><strong>Broad card coverage</strong> &mdash; controls, inputs, composite cards, and entity detail views</li>
         <li><strong>Themes</strong> &mdash; Auto, Dark, Light, and Gradient modes</li>
         <li><strong>Kiosk mode</strong> &mdash; hides navigation, prevents sleep, triple-tap top of screen to temporarily show controls</li>
         <li><strong>Demo mode</strong> &mdash; 3 built-in dashboards with simulated entities, no server needed</li>
         <li><strong>Dashboard switcher</strong> &mdash; switch between multiple HA dashboards</li>
+        <li><strong>Local remote controls</strong> &mdash; wake or dim an open kiosk, set brightness, navigate, change appearance or kiosk state, reload, and show notification banners through Home Assistant's WebSocket channel</li>
         <li><strong>mDNS discovery</strong> &mdash; finds Home Assistant servers on your local network</li>
-        <li><strong>Dual auth</strong> &mdash; long-lived access token or full OAuth login flow</li>
+        <li><strong>Three connection modes</strong> &mdash; trusted-network access, long-lived token, or full OAuth login</li>
+        <li><strong>Local camera streams</strong> &mdash; foreground-only, per-device password-protected H.264/AAC on iOS 10.3.3+, with front/rear MultiCam on supported iOS 13+ hardware, concurrent consumers, device-capability quality control, and Home Assistant camera registration</li>
       </ul>
 
       <div class="screenshots">
@@ -224,7 +226,7 @@
       <ul>
         <li>A running Home Assistant instance (local network or remote via HTTPS)</li>
         <li>At least one Lovelace dashboard configured</li>
-        <li>An iPad or iPhone running iOS 9 or later</li>
+        <li>An iPad or iPhone running iOS 9 or later (Local Camera Stream requires iOS 10.3.3+)</li>
       </ul>
       <p>No Home Assistant server? Use <strong>Demo Mode</strong> to explore the app with built-in sample dashboards.</p>
     </section>
@@ -237,7 +239,7 @@
 
     <section id="privacy">
       <h2>Privacy</h2>
-      <p>HA Dashboard does <strong>not</strong> collect, store, or transmit any personal data. The app contains no analytics, tracking, advertising, or telemetry. All communication is directly between your device and your Home Assistant server.</p>
+      <p>HA Dashboard sends no personal data to the developer and contains no analytics, tracking, advertising, or telemetry. It communicates with the Home Assistant infrastructure you configure. Optional camera/microphone streams require a unique device password and go directly to authenticated RTSP clients on your trusted local network, never through a developer relay or cloud media service. RTSP media is not encrypted on the LAN.</p>
       <p><a href="privacy.html">Read the full Privacy Policy &rarr;</a></p>
     </section>
 

@@ -111,47 +111,62 @@
   <main class="container">
     <a href="index.html" class="back-link">&larr; Back to HA Dashboard</a>
 
-    <p><strong>Last updated:</strong> February 2026</p>
+    <p><strong>Last updated:</strong> September 2026</p>
 
-    <p>HA Dashboard is a native iOS app that connects to your self-hosted Home Assistant server. This policy explains how the app handles your data.</p>
+    <p>HA Dashboard connects to Home Assistant infrastructure chosen by the user. This policy distinguishes that communication from collection by the app developer.</p>
 
-    <h2>Data Collection</h2>
-    <p>HA Dashboard does <strong>not</strong> collect, store, or transmit any personal data to the developer or any third party. The app contains no analytics, tracking, advertising, or telemetry SDKs.</p>
+    <h2>Developer Data Collection</h2>
+    <p>HA Dashboard does <strong>not</strong> send personal data to the developer and contains no developer analytics, tracking, advertising, telemetry, or crash-reporting SDK. The developer cannot access your Home Assistant credentials, dashboard data, device diagnostics, or camera/microphone media through the app.</p>
 
-    <h2>How the App Works</h2>
+    <h2>Home Assistant Communication</h2>
     <ul>
-      <li>The app connects directly to a Home Assistant server URL that <strong>you</strong> configure.</li>
-      <li>All communication occurs between your device and your Home Assistant server.</li>
-      <li>No data passes through any intermediary servers.</li>
+      <li>The app exchanges authentication, dashboard configuration, entity state, and service-call data with the Home Assistant server URL you configure.</li>
+      <li>If you enable <strong>Register with Home Assistant</strong>, the app sends its generated device ID, device name, model, OS/app versions, battery, brightness, app state, active dashboard, network state, Wi-Fi SSID/BSSID when available, and Local Camera Stream status, bare URLs, camera mode/capability, quality, transport and authentication mode, and authenticated/playing/raw connection counts to your Home Assistant instance. It does not send the stream password as a sensor value.</li>
+      <li>Home Assistant may return a Home Assistant Cloud cloudhook or remote UI URL. Optional diagnostic webhooks may use that user-controlled route. Camera and microphone media never uses it.</li>
+      <li>Remote commands and in-app notification banners use Home Assistant's local WebSocket push channel while the app is open and connected. The app does not register a developer cloud-push URL/token or fall back to a developer push service when that channel is unavailable.</li>
+      <li>Available-storage diagnostics are sent only when the selected webhook route is a local-network address and device registration is enabled.</li>
     </ul>
 
-    <h2>Credentials</h2>
+    <h2>Local Camera and Microphone Stream</h2>
     <ul>
-      <li>Your Home Assistant access token or OAuth credentials are stored locally in the iOS Keychain on your device.</li>
-      <li>Credentials are never transmitted to the developer or any third party.</li>
-      <li>Credentials are only sent to your configured Home Assistant server for authentication.</li>
+      <li>Local Camera Stream is off by default, requires iOS 10.3.3 or later, and requests Camera and Microphone access only after you enable it.</li>
+      <li>While foregrounded, the app arms H.264/AAC RTSP-over-TCP on its selected private primary (<code>en0</code>) address. Capture begins only after an RTSP client successfully authenticates and requests media, not merely because the toggle is on or an unauthenticated client reaches the port.</li>
+      <li>A single selected camera uses port 8554. On supported MultiCam devices, Both mode uses front on 8554 and rear on 8555.</li>
+      <li>Each device uses the fixed RTSP username <code>hadashboard</code> and its own cryptographically generated 32-character password. The password is stored in the platform Keychain as available only while the device is unlocked and is not synchronised to other devices.</li>
+      <li>The listener requires RTSP Digest authentication, but RTSP/RTP media remains plaintext and is <strong>not encrypted on the local network</strong>. A host with the password and network access can receive live camera and microphone media. Use it only on a trusted local network, never forward these ports or expose them through a VPN, and turn it off when not needed.</li>
+      <li>A visible <strong>Camera + mic live</strong> indicator appears above the dashboard, including in kiosk mode, whenever authenticated viewers have activated capture. Tapping it stops and disables Local Camera Stream.</li>
+      <li>Mute Camera Audio affects Home Assistant camera-card playback only. Local Camera Stream includes microphone AAC while viewed.</li>
+      <li>Capture stops after the final authenticated media client disconnects. Listener and capture stop when you disable it, leave the foreground, log out, lose permission, or encounter a failure. The app does not record media, show a hidden preview, capture in the background, or accept remote commands that enable capture.</li>
+    </ul>
+
+    <h2>Credentials and Local Storage</h2>
+    <ul>
+      <li>Home Assistant tokens are stored in the platform Keychain. Developer deployment values may bootstrap credentials once; persisted bootstrap values are removed after migration.</li>
+      <li>The Local Camera Stream password remains in the device-only Keychain when the stream is turned off. Rotating it disconnects current viewers and invalidates manually saved URLs. <strong>Log Out &amp; Reset</strong> deletes it; a new password is generated if the feature is used again.</li>
+      <li>The stream address shown in Settings and reported as a sensor attribute contains no credentials. The explicit <strong>Copy URL with Password</strong> action puts a sensitive connection URL on the system clipboard as a local-only item, so Universal Clipboard does not propagate it to another device. The app gives the system a 60-second expiration date and also clears an unchanged expired value itself while active or when it next becomes active. Other apps with clipboard access may be able to read the credential before it expires. A receiving RTSP client may retain a protected URL in its own history or logs; remove it there when no longer needed.</li>
+      <li>Preferences, cached Home Assistant state, stream mode/quality, and saved config-entry IDs and non-secret credential revisions remain in the app container.</li>
+      <li>When camera registration is enabled, Home Assistant stores Generic Camera entries with the bare RTSP URLs, username, and password on your server. Password rotation completes locally after the protected listener re-arms and does not wait for Home Assistant. While <strong>Register with Home Assistant</strong> remains enabled, the app then starts asynchronous reconciliation of the replacement credential through Home Assistant's camera config flow. It updates only entries whose IDs it saved, or creates a new entry when it has no saved ID; retryable failures continue while the same stream, registration setting, account, and Home Assistant origin remain active. Manually configured or unowned entries must be updated manually. Home Assistant backups may therefore contain the stream password; protect them as you would other Home Assistant credentials.</li>
+      <li>Camera registration sends the username and password to the configured Home Assistant URL using that server connection. HTTPS protects that submission in transit. For a loopback, <code>.local</code>, link-local, RFC1918, or IPv6 unique-local Home Assistant address, automatic registration may instead use HTTP without another per-server prompt. <strong>HTTP provides no transport encryption: another host able to monitor that LAN may recover the camera username and password.</strong> Use this only on a trusted local network. Non-local HTTP is never accepted for automatic camera credential registration.</li>
+      <li>Live camera and microphone media is not written to the app container, Photos, iCloud, or a developer service.</li>
     </ul>
 
     <h2>Local Network Access</h2>
-    <p>The app uses local network access (mDNS/Bonjour) to discover Home Assistant servers on your network. This requires the Local Network permission on iOS. The discovery data does not leave your device.</p>
+    <p>The app uses Bonjour/mDNS to discover Home Assistant and may host the optional RTSP listener. iOS and iPadOS 14 or later request Local Network permission; earlier supported releases do not show that system permission. Discovery results stay on the device.</p>
 
-    <h2>Cookies and Web Tracking</h2>
-    <p>The app does not use cookies, web views, or any form of web-based tracking.</p>
+    <h2>User Controls and Retention</h2>
+    <p>Turning off Register with Home Assistant stops reporting and removes local webhook credentials. Log Out &amp; Reset clears local Home Assistant and stream credentials, registration identity, preferences, cached Home Assistant state/history, local logs, and stream configuration. Devices and Generic Camera entries, including their saved stream credentials, remain in Home Assistant until you remove them there.</p>
 
-    <h2>Data Storage</h2>
-    <p>All app data (server configuration, dashboard preferences, cached entity states) is stored locally on your device. No data is synced to cloud services.</p>
-
-    <h2>Third-Party Services</h2>
-    <p>The app does not integrate with any third-party services, SDKs, or APIs beyond your own Home Assistant server.</p>
+    <h2>Cookies, Tracking, and Third-Party SDKs</h2>
+    <p>The app does not use cookies, advertising identifiers, tracking, web analytics, or third-party analytics/advertising SDKs. Home Assistant and optional Home Assistant Cloud routes are services configured by the user, not developer collection services.</p>
 
     <h2>Children's Privacy</h2>
-    <p>The app does not knowingly collect any data from anyone, including children.</p>
+    <p>The developer does not knowingly collect data from anyone, including children.</p>
 
     <h2>Changes to This Policy</h2>
     <p>If this policy changes, the updated version will be published at this URL.</p>
 
     <h2>Contact</h2>
-    <p>For questions about this privacy policy, <a href="https://github.com/ha-dashboard/ios-app/issues/new?labels=question">open an issue</a> on the GitHub repository.</p>
+    <p>For privacy questions, <a href="https://github.com/ha-dashboard/ios-app/issues/new?labels=question">open a GitHub issue</a>. A separate non-GitHub support address has not yet been published.</p>
   </main>
 
   <footer>

@@ -46,16 +46,28 @@ NSString *const HARemoteCommandReloadNotification = @"HARemoteCommandReloadNotif
         @"support_confirm": @YES,
     };
     __weak typeof(self) weakSelf = self;
-    self.subscriptionId = [cm subscribeWithCommand:command
-                                           handler:^(NSDictionary *eventData) {
+    __block NSInteger requestedSubscriptionId = 0;
+    requestedSubscriptionId = [cm subscribeWithCommand:command
+                                               handler:^(NSDictionary *eventData) {
         [weakSelf handleNotificationEvent:eventData];
+    } completion:^(BOOL success, NSError *error) {
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        if (!success) {
+            if (strongSelf.subscriptionId == requestedSubscriptionId) {
+                strongSelf.subscriptionId = 0;
+            }
+            HALogE(@"cmd", @"Home Assistant rejected the local push channel: %@",
+                   error.localizedDescription ?: @"Unknown error");
+            return;
+        }
+        HALogI(@"cmd", @"Push notification channel accepted (id=%ld, webhook credential redacted)",
+               (long)requestedSubscriptionId);
     }];
+    self.subscriptionId = requestedSubscriptionId;
 
     if (self.subscriptionId == 0) {
         HALogE(@"cmd", @"Failed to open push channel (not connected)");
-    } else {
-        HALogI(@"cmd", @"Push notification channel open (id=%ld, webhook=%@)",
-              (long)self.subscriptionId, webhookId);
     }
 }
 
@@ -130,9 +142,10 @@ NSString *const HARemoteCommandReloadNotification = @"HARemoteCommandReloadNotif
 - (void)dispatchCommand:(NSString *)command data:(NSDictionary *)data {
     HALogI(@"cmd", @"Dispatching command: %@", command);
 
-    if ([command isEqualToString:@"command_screen_brightness_level"] ||
-        [command isEqualToString:@"set_brightness"]) {
-        [self handleSetBrightness:data];
+    if ([command isEqualToString:@"command_screen_brightness_level"]) {
+        [self handleSetBrightness:data companionStyle:YES];
+    } else if ([command isEqualToString:@"set_brightness"]) {
+        [self handleSetBrightness:data companionStyle:NO];
     } else if ([command isEqualToString:@"command_screen_on"]) {
         [self handleScreenOn];
     } else if ([command isEqualToString:@"command_screen_off"]) {
@@ -162,22 +175,22 @@ NSString *const HARemoteCommandReloadNotification = @"HARemoteCommandReloadNotif
 
 #pragma mark - Command Handlers
 
-- (void)handleSetBrightness:(NSDictionary *)data {
-    // Accept "level" (0-100) or "brightness" (0-255 companion style)
-    NSNumber *level = data[@"level"];
-    if (!level) level = data[@"brightness"];
-    if (!level) {
-        // Companion style: brightness is in the command data at top level
-        level = data[@"command_screen_brightness_level"];
+- (void)handleSetBrightness:(NSDictionary *)data companionStyle:(BOOL)companionStyle {
+    // Home Assistant's standard command uses data.command on a 0-255 scale.
+    // The app's custom set_brightness route keeps explicit percentage `level`
+    // and 0-255 `brightness` variants for existing automations.
+    NSNumber *level = companionStyle ? data[@"command"] : data[@"level"];
+    BOOL usesByteScale = companionStyle;
+    if (!level && !companionStyle) {
+        level = data[@"brightness"];
+        usesByteScale = level != nil;
     }
     if (![level isKindOfClass:[NSNumber class]]) return;
 
     CGFloat value = [level floatValue];
-    // Normalize: if > 1 assume 0-100 or 0-255 scale
-    if (value > 1.0) {
-        value = value > 100 ? value / 255.0 : value / 100.0;
-    }
-    value = fminf(fmaxf(value, 0.0), 1.0);
+    if (usesByteScale) value /= 255.0;
+    else if (value > 1.0) value /= 100.0;
+    value = fminf(fmaxf(value, 0.0f), 1.0f);
 
     if ([self usesProximityWake]) {
         [[NSNotificationCenter defaultCenter]

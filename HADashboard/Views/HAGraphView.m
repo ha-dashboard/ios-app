@@ -516,13 +516,20 @@ static NSDateFormatter *sCachedTimeFmt(void) {
             segLayer.frame = CGRectMake(barAreaX + segX, y, segW, barHeight);
             segLayer.backgroundColor = color.CGColor;
             // Round corners only on first/last segments
-            if (segX <= 0.5) {
+            BOOL roundLeading = segX <= 0.5;
+            BOOL roundTrailing = segEndX >= barAreaW - 0.5;
+            if (roundLeading || roundTrailing) {
                 segLayer.cornerRadius = 3.0;
-                segLayer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMinXMaxYCorner;
-            }
-            if (segEndX >= barAreaW - 0.5) {
-                segLayer.cornerRadius = 3.0;
-                segLayer.maskedCorners |= kCALayerMaxXMinYCorner | kCALayerMaxXMaxYCorner;
+                if (@available(iOS 11.0, *)) {
+                    CACornerMask corners = 0;
+                    if (roundLeading) {
+                        corners |= kCALayerMinXMinYCorner | kCALayerMinXMaxYCorner;
+                    }
+                    if (roundTrailing) {
+                        corners |= kCALayerMaxXMinYCorner | kCALayerMaxXMaxYCorner;
+                    }
+                    segLayer.maskedCorners = corners;
+                }
             }
             segLayer.masksToBounds = YES;
             [self.layer addSublayer:segLayer];

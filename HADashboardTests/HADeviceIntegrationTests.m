@@ -3,6 +3,7 @@
 #import "HASensorReporter.h"
 #import "HARemoteCommandHandler.h"
 #import "HADeviceIntegrationManager.h"
+#import "HAConnectionManager.h"
 #import "HANotificationPresenter.h"
 #import "HATheme.h"
 #import "HAAuthManager.h"
@@ -15,6 +16,7 @@
 
 @interface HADeviceRegistration (TestAccess)
 - (NSDictionary *)registrationBody;
+- (NSDictionary *)registrationUpdateBody;
 @end
 
 @implementation HADeviceRegistrationTests
@@ -34,6 +36,20 @@
 - (void)testRegistrationExplicitlyAdvertisesWebSocketPush {
     NSDictionary *appData = [[HADeviceRegistration sharedManager] registrationBody][@"app_data"];
     XCTAssertEqualObjects(appData[@"push_websocket_channel"], @YES);
+    XCTAssertNil(appData[@"push_url"]);
+    XCTAssertNil(appData[@"push_token"]);
+    XCTAssertEqual(appData.count, (NSUInteger)1);
+}
+
+- (void)testRegistrationMetadataUpdateIsCompleteAndWebSocketOnly {
+    NSDictionary *body = [[HADeviceRegistration sharedManager] registrationUpdateBody];
+    XCTAssertTrue([body[@"app_version"] length] > 0);
+    XCTAssertTrue([body[@"device_name"] length] > 0);
+    XCTAssertEqualObjects(body[@"manufacturer"], @"Apple");
+    XCTAssertTrue([body[@"model"] length] > 0);
+    XCTAssertTrue([body[@"os_version"] length] > 0);
+    NSDictionary *appData = body[@"app_data"];
+    XCTAssertEqualObjects(appData, (@{@"push_websocket_channel": @YES}));
 }
 
 - (void)testIsRegisteredReturnsFalseBeforeRegistration {
@@ -313,6 +329,10 @@
 - (void)handleNotificationEvent:(NSDictionary *)eventData;
 @end
 
+@interface HAConnectionManager (SubscriptionTestAccess)
+- (void)webSocketClient:(id)client didReceiveMessage:(NSDictionary *)message;
+@end
+
 @interface HARemoteCommandHandlerTests : XCTestCase
 @property (nonatomic, strong) HARemoteCommandHandler *handler;
 @end
@@ -336,7 +356,30 @@
     XCTAssertNoThrow([self.handler dispatchCommand:@"set_brightness" data:@{@"level": @50}]);
     XCTAssertNoThrow([self.handler dispatchCommand:@"set_brightness" data:@{@"brightness": @128}]);
     XCTAssertNoThrow([self.handler dispatchCommand:@"command_screen_brightness_level"
-                                              data:@{@"command_screen_brightness_level": @255}]);
+                                              data:@{@"command": @255}]);
+}
+
+- (void)testCompanionBrightnessUsesOfficialCommandFieldAndByteScale {
+    HAAuthManager *auth = [HAAuthManager sharedManager];
+    BOOL oldKiosk = auth.isKioskMode;
+    BOOL oldWake = auth.proximityWakeEnabled;
+    [auth setKioskMode:YES];
+    [auth setProximityWakeEnabled:YES];
+
+    XCTestExpectation *exp = [self expectationWithDescription:@"companion brightness request"];
+    id observer = [[NSNotificationCenter defaultCenter]
+        addObserverForName:HAProximityWakeSetBrightnessNotification object:nil queue:nil
+                usingBlock:^(NSNotification *note) {
+        XCTAssertEqualWithAccuracy([note.userInfo[@"brightness"] doubleValue],
+                                   128.0 / 255.0, 0.001);
+        [exp fulfill];
+    }];
+    [self.handler dispatchCommand:@"command_screen_brightness_level"
+                             data:@{@"command": @128}];
+    [self waitForExpectationsWithTimeout:2 handler:nil];
+    [[NSNotificationCenter defaultCenter] removeObserver:observer];
+    [auth setProximityWakeEnabled:oldWake];
+    [auth setKioskMode:oldKiosk];
 }
 
 - (void)testBrightnessCommandPostsGenericNotification {
@@ -449,6 +492,51 @@
     [[NSNotificationCenter defaultCenter] removeObserver:observer];
 }
 
+- (void)testCommandNavigateAliasPostsNotification {
+    XCTestExpectation *exp = [self expectationWithDescription:@"navigate alias notification"];
+    id observer = [[NSNotificationCenter defaultCenter]
+        addObserverForName:@"HAActionNavigateNotification" object:nil queue:nil
+                usingBlock:^(NSNotification *note) {
+        XCTAssertEqualObjects(note.userInfo[@"path"], @"security");
+        [exp fulfill];
+    }];
+
+    [self.handler dispatchCommand:@"command_navigate" data:@{@"path": @"security"}];
+    [self waitForExpectationsWithTimeout:2 handler:nil];
+    [[NSNotificationCenter defaultCenter] removeObserver:observer];
+}
+
+- (void)testSwitchDashboardPersistsSelection {
+    HAAuthManager *auth = [HAAuthManager sharedManager];
+    NSString *before = auth.selectedDashboardPath;
+    [self.handler dispatchCommand:@"switch_dashboard"
+                             data:@{@"dashboard": @"release-test-dashboard"}];
+    XCTAssertEqualObjects(auth.selectedDashboardPath, @"release-test-dashboard");
+    [auth saveSelectedDashboardPath:before ?: @""];
+}
+
+- (void)testGradientPresetCommand {
+    BOOL oldEnabled = [HATheme isGradientEnabled];
+    HAGradientPreset oldPreset = [HATheme gradientPreset];
+    [self.handler dispatchCommand:@"set_gradient" data:@{@"preset": @"ocean_blue"}];
+    XCTAssertTrue([HATheme isGradientEnabled]);
+    XCTAssertEqual([HATheme gradientPreset], HAGradientPresetOceanBlue);
+    [HATheme setGradientPreset:oldPreset];
+    [HATheme setGradientEnabled:oldEnabled];
+}
+
+- (void)testReloadCommandPostsReloadNotification {
+    XCTestExpectation *exp = [self expectationWithDescription:@"reload notification"];
+    id observer = [[NSNotificationCenter defaultCenter]
+        addObserverForName:HARemoteCommandReloadNotification object:nil queue:nil
+                usingBlock:^(NSNotification *note) {
+        [exp fulfill];
+    }];
+    [self.handler dispatchCommand:@"reload" data:@{}];
+    [self waitForExpectationsWithTimeout:2 handler:nil];
+    [[NSNotificationCenter defaultCenter] removeObserver:observer];
+}
+
 - (void)testUnknownCommandDoesNotCrash {
     XCTAssertNoThrow([self.handler dispatchCommand:@"totally_unknown_command" data:@{@"foo": @"bar"}],
                      @"Unknown command should log but not crash");
@@ -491,6 +579,29 @@
 
     [self waitForExpectationsWithTimeout:2 handler:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:observer];
+}
+
+- (void)testMobilePushSubscriptionPreservesMessageAndConfirmationFields {
+    HAConnectionManager *manager = [[HAConnectionManager alloc] init];
+    NSMutableDictionary *handlers = [manager valueForKey:@"eventHandlers"];
+    XCTestExpectation *exp = [self expectationWithDescription:@"raw push event"];
+    handlers[@42] = ^(NSDictionary *event) {
+        XCTAssertEqualObjects(event[@"message"], @"command_screen_on");
+        XCTAssertEqualObjects(event[@"hass_confirm_id"], @"confirm-42");
+        XCTAssertEqualObjects(event[@"data"], @{});
+        [exp fulfill];
+    };
+
+    [manager webSocketClient:nil didReceiveMessage:@{
+        @"id": @42,
+        @"type": @"event",
+        @"event": @{
+            @"message": @"command_screen_on",
+            @"data": @{},
+            @"hass_confirm_id": @"confirm-42",
+        },
+    }];
+    [self waitForExpectationsWithTimeout:2 handler:nil];
 }
 
 - (void)testHandleNotificationEventHADictStyle {

@@ -5,6 +5,7 @@
 #import "HANotificationPresenter.h"
 #import "HADeviceRegistration.h"
 #import "HAConnectionManager.h"
+#import "HACameraRegistrationManager.h"
 
 extern NSString *const HARemoteCommandReloadNotification;
 
@@ -14,6 +15,10 @@ static NSString *const kEnabledKey = @"HADeviceIntegration_enabled";
 @property (nonatomic, strong) HASensorReporter *sensorReporter;
 @property (nonatomic, strong) HARemoteCommandHandler *commandHandler;
 @property (nonatomic, assign) BOOL running;
+@property (nonatomic, assign) BOOL registering;
+@property (nonatomic, assign) BOOL registrationMetadataRefreshInFlight;
+@property (nonatomic, assign) BOOL registrationMetadataRefreshComplete;
+- (void)refreshRegistrationMetadataIfNeeded;
 @end
 
 @implementation HADeviceIntegrationManager
@@ -58,10 +63,13 @@ static NSString *const kEnabledKey = @"HADeviceIntegration_enabled";
 - (void)setEnabled:(BOOL)enabled {
     _enabled = enabled;
     [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:kEnabledKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication);
 
-    if (enabled && self.isRegistered && [HAConnectionManager sharedManager].isConnected) {
-        [self start];
+    if (enabled && [HAConnectionManager sharedManager].isConnected) {
+        [self ensureRegistrationThenStart];
     } else if (!enabled) {
+        [[HACameraRegistrationManager sharedManager] cancelRegistration];
         [self stop];
     }
 }
@@ -73,6 +81,8 @@ static NSString *const kEnabledKey = @"HADeviceIntegration_enabled";
     if (!self.enabled || !self.isRegistered) return;
 
     self.running = YES;
+
+    [self refreshRegistrationMetadataIfNeeded];
 
     // Start sensor reporting
     self.sensorReporter = [[HASensorReporter alloc] init];
@@ -87,6 +97,26 @@ static NSString *const kEnabledKey = @"HADeviceIntegration_enabled";
 
     // Start notification presenter (displays non-command notifications as banners)
     [[HANotificationPresenter sharedPresenter] start];
+}
+
+- (void)refreshRegistrationMetadataIfNeeded {
+    if (self.registrationMetadataRefreshComplete ||
+        self.registrationMetadataRefreshInFlight) return;
+
+    self.registrationMetadataRefreshInFlight = YES;
+    __weak typeof(self) weakSelf = self;
+    [[HADeviceRegistration sharedManager]
+        updateRegistrationMetadataWithCompletion:^(BOOL success, NSError *error) {
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        strongSelf.registrationMetadataRefreshInFlight = NO;
+        if (success) {
+            strongSelf.registrationMetadataRefreshComplete = YES;
+        } else {
+            HALogW(@"device", @"Will retry registration metadata refresh after reconnect: %@",
+                   error.localizedDescription ?: @"Unknown error");
+        }
+    }];
 }
 
 - (void)stop {
@@ -104,15 +134,26 @@ static NSString *const kEnabledKey = @"HADeviceIntegration_enabled";
 #pragma mark - Notifications
 
 - (void)connectionDidConnect:(NSNotification *)note {
-    if (self.enabled && self.isRegistered) {
-        if (self.running) {
-            // Already running (e.g. registration completed before WS was ready).
-            // Retry the push channel now that WS is authenticated.
-            [self.commandHandler startListening];
-        } else {
-            [self start];
-        }
+    if (self.enabled) [self ensureRegistrationThenStart];
+}
+
+- (void)ensureRegistrationThenStart {
+    if (!self.enabled || ![HAConnectionManager sharedManager].isConnected) return;
+    if (self.isRegistered) {
+        if (self.running) [self.commandHandler startListening];
+        else [self start];
+        return;
     }
+    if (self.registering) return;
+    self.registering = YES;
+    [[HADeviceRegistration sharedManager] registerWithCompletion:^(BOOL success, NSError *error) {
+        self.registering = NO;
+        if (success) {
+            [self start];
+        } else {
+            HALogE(@"device", @"Automatic registration failed: %@", error.localizedDescription);
+        }
+    }];
 }
 
 - (void)connectionDidDisconnect:(NSNotification *)note {

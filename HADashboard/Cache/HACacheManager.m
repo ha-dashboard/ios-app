@@ -144,4 +144,23 @@
     if (expendDir) [fm removeItemAtPath:expendDir error:nil];
 }
 
+- (void)clearAllServerCaches {
+    NSString *appSupport = [NSSearchPathForDirectoriesInDomains(
+        NSApplicationSupportDirectory, NSUserDomainMask, YES) firstObject];
+    NSString *caches = [NSSearchPathForDirectoriesInDomains(
+        NSCachesDirectory, NSUserDomainMask, YES) firstObject];
+    // Drain queued writes first so an older dashboard snapshot cannot recreate
+    // the cache immediately after Log Out & Reset removes it.
+    dispatch_sync(self.writeQueue, ^{
+        NSFileManager *fm = [NSFileManager defaultManager];
+        if (appSupport.length) {
+            [fm removeItemAtPath:[appSupport stringByAppendingPathComponent:@"HACache"] error:nil];
+        }
+        if (caches.length) {
+            [fm removeItemAtPath:[caches stringByAppendingPathComponent:@"HACache"] error:nil];
+        }
+    });
+    self.serverURL = nil;
+}
+
 @end

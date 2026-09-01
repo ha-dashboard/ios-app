@@ -117,9 +117,17 @@ extern NSString *const HAConnectionManagerHADidStartNotification;              /
                           handler:(void (^)(NSDictionary *eventData))handler;
 
 /// Subscribe with an arbitrary WebSocket command (e.g. mobile_app/push_notification_channel).
-/// Returns subscription message ID. The handler is called for each message on that subscription.
+/// Returns subscription message ID. The handler receives the raw `event`
+/// object for each message on that subscription.
 - (NSInteger)subscribeWithCommand:(NSDictionary *)command
                           handler:(void (^)(NSDictionary *eventData))handler;
+
+/// Subscribe with an arbitrary command and report whether Home Assistant
+/// accepted the subscription. The event handler remains registered only after
+/// a successful result response.
+- (NSInteger)subscribeWithCommand:(NSDictionary *)command
+                          handler:(void (^)(NSDictionary *eventData))handler
+                       completion:(void (^)(BOOL success, NSError *error))completion;
 
 /// Unsubscribe from a previously registered event subscription.
 - (void)unsubscribeFromEventWithId:(NSInteger)subscriptionId;

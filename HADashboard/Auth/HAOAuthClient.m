@@ -1,6 +1,7 @@
 #import "HAOAuthClient.h"
 #import "HAAuthManager.h"
 #import "NSMutableURLRequest+HAHelpers.h"
+#import "HAURLSessionRedirectGuard.h"
 
 static NSString *const kClientId = @"https://hadashboard.local/";
 static NSString *const kRedirectURI = @"https://hadashboard.local/";
@@ -17,7 +18,9 @@ static NSString *const kRedirectURI = @"https://hadashboard.local/";
     if (self) {
         _serverURL = [[HAAuthManager normalizedURL:serverURL] copy];
 
-        _session = [NSURLSession sessionWithConfiguration:[NSMutableURLRequest ha_defaultSessionConfiguration]];
+        _session = [NSURLSession sessionWithConfiguration:[NSMutableURLRequest ha_defaultSessionConfiguration]
+                                                  delegate:[HAURLSessionRedirectGuard sharedGuard]
+                                             delegateQueue:nil];
     }
     return self;
 }

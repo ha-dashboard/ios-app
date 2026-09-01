@@ -31,6 +31,9 @@ typedef NS_ENUM(NSInteger, HALogLevel) {
 + (NSString *)previousLogFilePath;
 + (void)flush;
 
+/// Remove current and rotated logs, then start a fresh local session log.
++ (void)clearLogs;
+
 /// Startup profiling mode (replaces HAStartupLog).
 /// Uses mach_absolute_time offsets for the first 30 seconds, then wall clock.
 + (void)logStartup:(NSString *)message;

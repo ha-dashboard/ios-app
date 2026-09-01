@@ -69,6 +69,11 @@ static const NSTimeInterval kDebounceInterval = 5.0;
     [self writePendingToDiskSync];
 }
 
+- (void)discardPendingWrites {
+    self.writeScheduled = NO;
+    self.pendingEntities = nil;
+}
+
 #pragma mark - Private
 
 - (void)writePendingToDisk {

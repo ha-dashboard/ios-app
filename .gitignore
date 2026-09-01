@@ -77,6 +77,10 @@ docs/*
 !docs/privacy.html
 !docs/support.html
 !docs/rosettasim-deployment.md
+!docs/live-camera-streaming-v1.md
+!docs/releases/
+docs/releases/*
+!docs/releases/*.md
 !docs/screenshots
 docs/screenshots/*
 !docs/screenshots/*.png

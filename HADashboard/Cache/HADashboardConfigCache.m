@@ -67,8 +67,12 @@
 
     // Compute hash of new config
     NSError *error = nil;
+    NSJSONWritingOptions writingOptions = 0;
+    if (@available(iOS 11.0, *)) {
+        writingOptions = NSJSONWritingSortedKeys;
+    }
     NSData *jsonData = [NSJSONSerialization dataWithJSONObject:config
-                                                      options:NSJSONWritingSortedKeys
+                                                      options:writingOptions
                                                         error:&error];
     if (!jsonData) {
         HALogE(@"cache", @"Failed to serialize dashboard config: %@", error.localizedDescription);

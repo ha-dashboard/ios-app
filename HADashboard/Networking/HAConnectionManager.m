@@ -615,14 +615,30 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     return [self subscribeWithCommand:@{
         @"type": @"subscribe_events",
         @"event_type": eventType,
-    } handler:handler];
+    } handler:^(NSDictionary *event) {
+        handler(event[@"data"] ?: event);
+    }];
 }
 
 - (NSInteger)subscribeWithCommand:(NSDictionary *)command
                           handler:(void (^)(NSDictionary *eventData))handler {
+    return [self subscribeWithCommand:command handler:handler completion:nil];
+}
+
+- (NSInteger)subscribeWithCommand:(NSDictionary *)command
+                          handler:(void (^)(NSDictionary *eventData))handler
+                       completion:(void (^)(BOOL success, NSError *error))completion {
     if (!self.wsClient.isAuthenticated || !handler) return 0;
     NSInteger msgId = [self.wsClient sendCommand:command];
     self.eventHandlers[@(msgId)] = [handler copy];
+    if (completion) {
+        __weak typeof(self) weakSelf = self;
+        self.pendingCompletions[@(msgId)] = ^(id result, NSError *error) {
+            (void)result;
+            if (error) [weakSelf.eventHandlers removeObjectForKey:@(msgId)];
+            completion(error == nil, error);
+        };
+    }
     return msgId;
 }
 
@@ -1236,9 +1252,12 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
         NSInteger subId = [message[@"id"] integerValue];
         void (^handler)(NSDictionary *) = self.eventHandlers[@(subId)];
         if (handler) {
-            NSDictionary *eventData = event[@"data"] ?: event;
             dispatch_async(dispatch_get_main_queue(), ^{
-                handler(eventData);
+                // Arbitrary subscriptions receive the raw event object. A
+                // mobile-app push payload has its own `data` member; unwrapping
+                // it here would discard message and hass_confirm_id. Typed
+                // subscribe_events callers unwrap their event data explicitly.
+                handler(event);
             });
         }
 

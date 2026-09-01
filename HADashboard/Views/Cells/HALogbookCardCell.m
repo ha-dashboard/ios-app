@@ -48,7 +48,11 @@ static const NSInteger kMaxEntries = 10;
         self.emptyLabel.hidden = YES;
         [self.contentView addSubview:self.emptyLabel];
 
-        self.spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
+        UIActivityIndicatorViewStyle spinnerStyle = UIActivityIndicatorViewStyleGray;
+        if (@available(iOS 13.0, *)) {
+            spinnerStyle = UIActivityIndicatorViewStyleMedium;
+        }
+        self.spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:spinnerStyle];
         self.spinner.translatesAutoresizingMaskIntoConstraints = NO;
         self.spinner.hidesWhenStopped = YES;
         [self.contentView addSubview:self.spinner];

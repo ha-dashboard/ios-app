@@ -181,6 +181,22 @@ static NSDate *_initDate = nil;
     }
 }
 
++ (void)clearLogs {
+    @synchronized(self) {
+        @try {
+            [_fileHandle synchronizeFile];
+            [_fileHandle closeFile];
+        } @catch (NSException *exception) {
+            (void)exception;
+        }
+        _fileHandle = nil;
+        NSFileManager *manager = [NSFileManager defaultManager];
+        if (_currentPath.length) [manager removeItemAtPath:_currentPath error:nil];
+        if (_previousPath.length) [manager removeItemAtPath:_previousPath error:nil];
+        [self _openLogFile];
+    }
+}
+
 #pragma mark - Internal
 
 + (void)_logLevel:(HALogLevel)level

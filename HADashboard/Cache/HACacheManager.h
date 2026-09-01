@@ -29,6 +29,9 @@
 /// Delete all cache files for the current server.
 - (void)clearAllCaches;
 
+/// Delete cache directories for every server previously used by this app.
+- (void)clearAllServerCaches;
+
 #pragma mark - Paths
 
 /// Returns the Application Support cache directory for the current server.

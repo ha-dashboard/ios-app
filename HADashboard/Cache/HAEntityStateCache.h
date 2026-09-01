@@ -22,6 +22,9 @@
 /// Call this on applicationWillResignActive:.
 - (void)flushToDisk;
 
+/// Drop any debounced in-memory snapshot so a reset cannot recreate a cache.
+- (void)discardPendingWrites;
+
 /// Whether there is a cached state file on disk for the current server.
 - (BOOL)hasCachedStates;
 

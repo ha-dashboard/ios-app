@@ -19,6 +19,10 @@ typedef NS_ENUM(NSInteger, HAAuthMode) {
 @property (nonatomic, copy, readonly) NSString *refreshToken;
 @property (nonatomic, copy, readonly) NSDate *tokenExpiresAt;
 
+/// Non-secret generation that changes whenever the configured server/account
+/// credentials are replaced or cleared. Access-token refreshes keep it stable.
+@property (nonatomic, readonly) NSUInteger authenticationRevision;
+
 /// Selected dashboard URL path (nil = default dashboard)
 @property (nonatomic, copy, readonly) NSString *selectedDashboardPath;
 

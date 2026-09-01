@@ -1,6 +1,6 @@
 # HA Dashboard
 
-Native iOS Home Assistant dashboard app. Renders HA Lovelace dashboards natively across iOS 9.3.5 (iPad 2, armv7) through iOS 18+ (iPhone 16 Pro Max, arm64), providing a kiosk-friendly wall-mounted display experience on old iPads while also working as a mobile dashboard on modern devices.
+Native Home Assistant dashboard app. The scripted universal product carries armv7 and arm64 slices with an iOS 9.0 minimum, covering iOS 9.3.3 legacy devices through iOS 27, plus a Mac Catalyst developer build. Local Camera Stream is separately gated to iOS 10.3.3+.
 
 ## Published Links
 
@@ -19,20 +19,21 @@ Native iOS Home Assistant dashboard app. Renders HA Lovelace dashboards natively
 
 ## Build Setup
 
-Two Xcode versions are required:
+The modern toolchain plus legacy iPhoneOS link stubs are required for the full universal product:
 
 | Xcode | Path | Purpose |
 |-------|------|---------|
-| **13.2.1** | `/Applications/Xcode-13.2.1.app` | Provides armv7 SDK stubs for linking the universal device build (iPad 2). |
-| **26** | `/Applications/Xcode.app` | Builds all targets: arm64 sim, x86_64 legacy sim (RosettaSim), and device. |
+| **13.2.1 SDK** | Full Xcode app or `XCODE13_SDK_PATH` | Link stubs for both iOS 9 armv7 and arm64 device slices. |
+| **26 or 27** | `/Applications/Xcode.app`, beta fallback, or `XCODE_PATH` | Modern compiler, current simulator, signed bundle template, physical-device tooling, and Catalyst. |
 
 ### Build Targets
 
 | Target | Command | Arch | iOS Min | SDK | Notes |
 |--------|---------|------|---------|-----|-------|
 | Simulator | `scripts/build.sh sim` | arm64 | 15.0 | Xcode 26 | Native arm64 sim for iOS 16+ |
-| RosettaSim | `scripts/build.sh rosettasim` | x86_64 | 9.0 | Xcode 26 | Legacy sim for iOS 9–14 via RosettaSim. Uses `MERGED_BINARY_TYPE=none` to disable mergeable libraries — the default Debug stub+dylib pattern crashes on legacy runtimes' libdispatch. |
-| Device | `scripts/build.sh device` | armv7+arm64 | 9.0 | Xcode 26 clang + Xcode 13 link stubs | Universal binary. armv7 compiled with Xcode 26 clang, linked against Xcode 13 SDK. arm64 via xcodebuild. |
+| RosettaSim | `scripts/build.sh rosettasim` | x86_64 | 9.0 | macOS 26 + Xcode 26 only | Legacy sim for iOS 9–14. Xcode/macOS 27 fail closed because they cannot build/boot the x86-only runtimes. |
+| Device | `scripts/build.sh device` | armv7+arm64 | 9.0 in both slices | Xcode 26/27 clang + Xcode 13 link stubs | Both executables compile/link directly; armv7 is forced to ARM mode to avoid Xcode 27 Thumb-relocation loss, while xcodebuild supplies only the signed bundle/resources before replacement and re-signing. |
+| Mac Catalyst | `scripts/build.sh mac` | arm64 | iOS 15 Catalyst mapping | Xcode 26/27 | Sandboxed developer build with camera, microphone, client, server, and app-private Keychain access-group entitlements. |
 
 - **XcodeGen** generates `HADashboard.xcodeproj` from `project.yml` — run `scripts/regen.sh` after changing project.yml
 - `regen.sh` sources `.env` to inject your Team ID and Bundle ID into the project before generation
@@ -62,12 +63,13 @@ Key variables:
 |--------|------|-----|---------------|
 | iPad 2 | armv7 | 9.3.5 | WiFi SSH (jailbroken) or Unraid USB |
 | iPad 3 | armv7 | 9.3.5 | WiFi SSH (jailbroken) |
-| iPad Mini 4 | arm64 | 15.x | WiFi via ios-deploy + pymobiledevice3 |
-| iPad Mini 5 | arm64 | 26.x | WiFi via devicectl |
-| iPhone 16 Pro Max | arm64 | 18.x | WiFi via devicectl |
+| iPad 4 | armv7 | 10.3.x | Wi-Fi SSH (jailbroken) or validated Unraid USB |
+| iPad Mini 4 | arm64 | 15.x | MobileDevice Wi-Fi via `ideviceinstaller` |
+| iPad Mini 5 | arm64 | 26.x | CoreDevice, with validated MobileDevice Wi-Fi fallback |
+| iPhone 16 | arm64 | 26.x | CoreDevice/devicectl |
 | iPad Simulator | arm64 | 16.4+ | `xcrun simctl install/launch` |
 | iPhone Simulator | arm64 | 16.4+ | `xcrun simctl install/launch` |
-| Legacy Simulator | x86_64 | 9.3–14.x | `rosettasim-ctl install/launch` (via RosettaSim) |
+| Legacy Simulator | x86_64 | 9.3–14.x | `rosettasim-ctl` on macOS 26 + Xcode 26 only |
 
 ## Versioning & Release
 
@@ -80,28 +82,19 @@ Version is derived from **git tags** — no files to edit for a version bump.
 
 ### Release Workflow
 
-To cut a release:
+Release only from a clean, current `main` after the exact candidate has passed
+the acceptance checklist. Curated notes are required because the historical
+`v1.2.5` tag predates source already shipped as App Store build 158.
 
 ```bash
-# 1. Tag HEAD (annotated tag)
-git tag -a v1.2.1 -m "v1.2.1: summary of changes"
-git push origin main --tags
-
-# 2. Create GitHub release with notes
-gh release create v1.2.1 --title "v1.2.1" --latest --notes "..."
+cp docs/releases/v1.2.6.md docs/releases/vX.Y.Z.md
+# Edit and verify the notes, merge to main, then:
+scripts/release.sh X.Y.Z
 ```
 
-To **retag** (move an existing tag to current HEAD):
-
-```bash
-git tag -d v1.2.1                    # Delete local tag
-git push origin :refs/tags/v1.2.1    # Delete remote tag
-git tag -a v1.2.1 -m "..."           # Recreate at HEAD
-git push origin v1.2.1               # Push new tag
-# Then delete old GitHub release and create a new one
-gh release delete v1.2.1 --yes
-gh release create v1.2.1 --title "v1.2.1" --latest --notes "..."
-```
+`release.sh` refuses detached HEAD, a dirty tree, a non-main branch, an
+out-of-date `origin/main`, a missing notes file, or an existing tag. It creates
+and pushes an annotated tag. Never move a published release tag.
 
 ### CI Pipeline (`.github/workflows/build.yml`)
 
@@ -110,17 +103,18 @@ Triggered on pushes to `main` and `v*` tags:
 | Job | Trigger | What it does |
 |-----|---------|-------------|
 | `build-and-test` | All pushes | Builds simulator target, verifies compilation |
-| `seed-sdk-cache` | Main push only | Extracts Xcode 13 armv7 SDK stubs from cached .xip (one-time) |
-| `archive-release` | Tag push only | Full release: armv7 clang compile → arm64 archive → lipo merge → sign → **export App Store IPA (uploads to TestFlight)** → export Ad Hoc IPA → upload to GitHub Release |
+| `verify-ios9-slices` | Every CI run | Downloads/checks the immutable Xcode 13 SDK stubs, then compiles and verifies unsigned armv7+arm64 iOS 9 slices. |
+| `archive-release` | Tag push only | Direct armv7+arm64 iOS 9 compile/link → signed bundle template → universal replacement/dSYM → export App Store/TestFlight + Ad Hoc IPA → GitHub Release. |
 
 The `archive-release` job handles **everything** for App Store submission:
-- Builds universal armv7+arm64 binary
+- Builds a universal armv7+arm64 binary whose two Mach-O slices both target iOS 9.0
 - Signs with dev certificate + provisioning profile (from GitHub secrets)
 - Exports App Store IPA via `xcodebuild -exportArchive` with ASC API key auth
 - **Automatically uploads to TestFlight** (the App Store export triggers upload)
 - Exports Ad Hoc IPA and attaches to GitHub Release
 
-**After CI completes**, go to [App Store Connect](https://appstoreconnect.apple.com) → TestFlight to:
+The tag workflow creates the GitHub release automatically using the matching
+`docs/releases/vX.Y.Z.md` file. After CI completes, go to [App Store Connect](https://appstoreconnect.apple.com) → TestFlight to:
 1. Add release notes for the TestFlight build
 2. Submit for external testing or App Review
 
@@ -146,19 +140,22 @@ Local builds use `ASC_KEY_PATH` to point to the `.p8` file on disk. CI decodes `
 scripts/deploy.sh sim              # iPad simulator (arm64, iOS 16+)
 scripts/deploy.sh sim iphone       # iPhone simulator (arm64, iOS 16+)
 scripts/deploy.sh iphone           # Physical iPhone via devicectl
-scripts/deploy.sh mini5            # iPad Mini 5 via devicectl (WiFi)
-scripts/deploy.sh mini4            # iPad Mini 4 via ios-deploy (WiFi)
+scripts/deploy.sh mini5            # iPad Mini 5 via CoreDevice/MobileDevice Wi-Fi
+scripts/deploy.sh mini4            # iPad Mini 4 via ideviceinstaller (Wi-Fi)
 scripts/deploy.sh ipad2            # iPad 2 via WiFi SSH (jailbroken)
 scripts/deploy.sh ipad3            # iPad 3 via WiFi SSH (jailbroken)
+scripts/deploy.sh ipad4            # iPad 4 via WiFi SSH (jailbroken)
+scripts/deploy.sh ipad4-usb        # iPad 4 via validated Unraid USB
+scripts/deploy.sh mac              # Mac Catalyst
 scripts/deploy.sh all              # Deploy to all targets
 scripts/deploy.sh all --kiosk      # Deploy to all targets in kiosk mode
 ```
 
-Options: `--no-build`, `--dashboard X`, `--default`, `--server URL`, `--kiosk`, `--no-kiosk`
+Options: `--no-build`, `--dashboard X`, `--default`, `--server URL`, `--token`, `--kiosk`, `--no-kiosk`, `--reset`, `--demo`
 
 ### RosettaSim (Legacy Simulators — iOS 9.3–14.x)
 
-Legacy iOS simulators run x86_64 under RosettaSim. Standard `xcrun simctl install/launch` **hangs** on these runtimes — use `rosettasim-ctl` instead.
+Legacy iOS simulators run x86_64 under RosettaSim on **macOS 26 with Xcode 26**. Standard `xcrun simctl install/launch` hangs on these runtimes, so use `rosettasim-ctl`. Xcode 27 rejects the legacy deployment target and macOS 27 cannot construct an x86 launch host; `build.sh rosettasim` therefore fails closed there. This does not affect the physical iOS 9 universal device build.
 
 **Binary**: `/Users/ashhopkins/Projects/rosetta/src/build/rosettasim-ctl`
 
@@ -208,7 +205,7 @@ For native runtimes (iOS 16+), all commands transparently pass through to `xcrun
 
 **Rebuild rosettasim-ctl**: `cd ~/Projects/rosetta/src && make ctl`
 
-**Known legacy simulator UDIDs:**
+**Example saved simulator UDIDs (verify locally; simulator recreation changes them):**
 
 | Device | iOS | UDID |
 |--------|-----|------|
@@ -220,7 +217,7 @@ For native runtimes (iOS 16+), all commands transparently pass through to `xcrun
 ## Architecture
 
 ### Language & Frameworks
-- Pure **Objective-C**, no Swift, no storyboards, no XIBs
+- Pure **Objective-C**, no Swift and no application UI storyboards/XIBs; `LaunchScreen.storyboard` is the sole storyboard
 - All UI built programmatically with `NSLayoutConstraint` anchors (iOS 9+)
 - **SocketRocket** (`Vendor/SRWebSocket`) for WebSocket
 - **NSURLSession** for REST API calls
@@ -236,6 +233,10 @@ For native runtimes (iOS 16+), all commands transparently pass through to `xcrun
 | `HAWebSocketClient` | SocketRocket wrapper. Auth, state subscriptions, service calls, Lovelace fetch. |
 | `HAAPIClient` | REST client with Bearer auth. Auto-retries 401 with refresh in OAuth mode. |
 | `HADiscoveryService` | Bonjour/mDNS browser for `_home-assistant._tcp`. |
+| `HAStreamingManager` | Opt-in foreground RTSP listeners plus authenticated-media-client-gated H.264/AAC capture and encoding. |
+| `HARTSPCredentialManager` | Generates and rotates the per-device RTSP password stored in the device-only Keychain; username is fixed as `hadashboard`. |
+| `HARTSPServer` | Digest-authenticated RTSP/RTP-over-TCP server bound to one selected local address; media remains plaintext. |
+| `HACameraRegistrationManager` | Asynchronous, admin-authenticated Generic Camera reconciliation for app-owned entry IDs, with RTSP Digest credentials, 75/120-second camera-only timeouts, and context-bound retry delays capped at 60 seconds. |
 | `HALovelaceParser` | Converts HA Lovelace JSON into `HADashboardConfig` (sections + items). |
 | `HAEntityDisplayHelper` | Centralized entity display: name, state, icon glyph, icon color, toggle detection. |
 | `HAEntityCellFactory` | Maps entity domains + card types to cell reuse identifiers. |
@@ -269,9 +270,9 @@ For native runtimes (iOS 16+), all commands transparently pass through to `xcrun
 
 ## Testing
 
-### Snapshot Regression Tests (96 tests)
+### Snapshot Regression Tests
 
-Pixel-perfect visual regression tests covering all 32 cell types in multiple states across gradient + light themes.
+Pixel-perfect visual regression coverage across card types and multiple states in gradient and light themes. Avoid hard-coded suite counts here; query the current test bundle and reference directory when reporting coverage.
 
 ```bash
 scripts/test-snapshots.sh
@@ -331,8 +332,10 @@ Replace `IPAD3` with `IPAD2` or `IPAD4` for other devices. Credentials are in `.
 HADashboard/
 ├── Auth/           # HAAuthManager, HAKeychainHelper, HAOAuthClient
 ├── Controllers/    # HADashboardViewController, HASettingsViewController
+├── Integration/    # Home Assistant sensors and remote commands
 ├── Models/         # HADashboardConfig, HAEntity, HALovelaceParser
 ├── Networking/     # HAAPIClient, HAConnectionManager, HAWebSocketClient, HADiscoveryService
+├── Streaming/      # Digest-protected RTSP, device credential, capture, and H.264/AAC encoders
 ├── Theme/          # HATheme, HAIconMapper, HAHaptics
 ├── Views/
 │   ├── Cells/      # 25+ entity cells (HABaseEntityCell subclasses) + composite cards
@@ -340,6 +343,7 @@ HADashboard/
 │   ├── HAEntityRowView, HAGraphView, HASectionHeaderView
 │   └── HAThermostatGaugeView
 ├── Info.plist
+├── PrivacyInfo.xcprivacy
 └── main.m
 Vendor/             # SocketRocket (SRWebSocket), MDI icon font, iOSSnapshotTestCase
 HADashboardTests/   # 96 snapshot regression tests + reference images
@@ -348,10 +352,22 @@ screenshots/        # HA web + app screenshot captures (git-ignored)
 project.yml         # XcodeGen project definition (placeholders — .env fills real values)
 .env.example        # Template for required environment variables
 PRIVACY.md          # Privacy policy
+docs/releases/      # Curated GitHub, App Store, TestFlight, and release-gate notes
 ```
 
 ## Known Issues
 
 - Constraint warning on iPad 2 settings screen (UISegmentedControl vertical position) — cosmetic only
 - Developer disk image must be remounted after iPad 2 reboot (deploy script handles this automatically)
-- iPad Mini 4 deploy requires ios-deploy + pymobiledevice3 installed via Homebrew/pip
+- Mini 4/Mini 5 MobileDevice fallback requires `libimobiledevice` and `ideviceinstaller`; automatic launch additionally needs a matching Developer Disk Image
+- The 32-bit iOS 10.3.3 h3lix jailbreak needs a compatible Dropbear service; OpenSSH can accept port 22 but hang before sending its banner
+- RosettaSim iOS 9–14 validation requires macOS 26 + Xcode 26 and is unavailable on macOS/Xcode 27
+- Local Camera Stream requires per-device RTSP Digest credentials, but media remains plaintext and unencrypted; use only on a trusted LAN, never forward 8554/8555, and prefer a DHCP reservation
+- Leaving Both camera mode does not delete the saved rear Generic Camera entry from Home Assistant
+
+## Privacy and Release Metadata
+
+- `HADashboard/PrivacyInfo.xcprivacy` declares app-only defaults, elapsed-time logging, and local user-approved storage display required-reason APIs.
+- Keep `HADashboard/Info.plist` and `project.yml` camera, microphone, and local-network purpose strings identical.
+- Public privacy wording lives in `PRIVACY.md` and `docs/privacy.html`; camera support guidance is in `docs/support.html` and `docs/live-camera-streaming-v1.md`.
+- `docs/releases/vX.Y.Z.md` is the internal App Store/TestFlight/acceptance dossier; `vX.Y.Z-github.md` is the bounded public GitHub release body.

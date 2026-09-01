@@ -13,6 +13,7 @@
 #import "HAEntityStateCache.h"
 #import "HADeviceIntegrationManager.h"
 #import "HADeviceRegistration.h"
+#import "HAStreamingManager.h"
 
 /// Window subclass that detects system appearance changes (iOS 13+) and posts
 /// HAThemeDidChangeNotification so every view/VC refreshes — not just the
@@ -67,6 +68,7 @@
 @end
 
 @interface HAAppDelegate ()
+@property (nonatomic, strong) UIButton *streamPrivacyIndicator;
 @end
 
 @implementation HAAppDelegate
@@ -91,11 +93,6 @@
     [HALog logStartup:@"warmFonts BEGIN"];
     [HAIconMapper warmFonts];
     [HALog logStartup:@"warmFonts END"];
-
-    [HALog logStartup:@"UIWindow alloc BEGIN"];
-    self.window = [[HAThemeAwareWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
-    self.window.backgroundColor = [UIColor whiteColor];
-    [HALog logStartup:@"UIWindow alloc END"];
 
     // Bootstrap credentials from launch arguments (for simulator/testing):
     //   -HAServerURL http://... -HAAccessToken eyJ... -HADashboard office
@@ -157,6 +154,44 @@
         }
     }
 
+    // Legacy SSH deployment writes launch overrides into the app preference
+    // plist because it cannot pass process arguments. Consume those values
+    // once, after their durable equivalents have been saved, so an access
+    // token or reset flag is never left in NSUserDefaults across launches.
+    NSArray<NSString *> *bootstrapKeys = @[
+        @"HAClearCredentials", @"HAServerURL", @"HAAccessToken", @"HADashboard",
+        @"HAKioskMode", @"HAThemeMode", @"HAGradientEnabled", @"HADemoMode",
+        @"HAAutoRegister",
+    ];
+    for (NSString *key in bootstrapKeys) [defaults removeObjectForKey:key];
+    [defaults synchronize];
+
+    if (@available(iOS 13.0, *)) {
+        // A scene delegate will create the window. Deferring this prevents the
+        // app-delegate window from being detached from Catalyst's scene.
+        [HALog logStartup:@"Waiting for scene delegate window"];
+    } else {
+        [HALog logStartup:@"UIWindow alloc BEGIN"];
+        HAThemeAwareWindow *window = [[HAThemeAwareWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
+        [HALog logStartup:@"UIWindow alloc END"];
+        [self configureInitialInterfaceInWindow:window];
+    }
+
+    [[HAPerfMonitor sharedMonitor] start];
+
+    [[NSNotificationCenter defaultCenter] addObserver:self
+        selector:@selector(streamingStateDidChange:)
+        name:HAStreamingManagerStateDidChangeNotification object:nil];
+
+    [HALog logStartup:@"didFinishLaunching END"];
+    return YES;
+}
+
+- (void)configureInitialInterfaceInWindow:(UIWindow *)window {
+    if (!window || self.window.rootViewController) return;
+    self.window = window;
+    self.window.backgroundColor = [UIColor whiteColor];
+
     [HALog logStartup:@"isConfigured check BEGIN"];
     BOOL configured = [[HAAuthManager sharedManager] isConfigured];
     HALogI(@"startup", @"isConfigured=%@", configured ? @"YES" : @"NO");
@@ -177,21 +212,78 @@
     [HALog logStartup:@"makeKeyAndVisible BEGIN"];
     [self.window makeKeyAndVisible];
     [HALog logStartup:@"makeKeyAndVisible END"];
+    [self installStreamPrivacyIndicator];
 
     // Apply the saved theme's interface style to the window so the nav bar,
     // status bar, and all dynamic colors match the selected theme from launch.
     [HATheme applyInterfaceStyle];
+}
 
-    [[HAPerfMonitor sharedMonitor] start];
+- (void)installStreamPrivacyIndicator {
+    [self.streamPrivacyIndicator removeFromSuperview];
+    UIButton *indicator = [UIButton buttonWithType:UIButtonTypeCustom];
+    indicator.translatesAutoresizingMaskIntoConstraints = NO;
+    indicator.backgroundColor = [UIColor colorWithRed:0.78 green:0.08 blue:0.10 alpha:0.96];
+    indicator.layer.cornerRadius = 15.0;
+    indicator.titleLabel.font = [UIFont boldSystemFontOfSize:12.0];
+    indicator.contentEdgeInsets = UIEdgeInsetsMake(6, 12, 6, 12);
+    indicator.accessibilityLabel = @"Camera and microphone are live. Tap to stop streaming.";
+    [indicator addTarget:self action:@selector(streamPrivacyIndicatorTapped:)
+        forControlEvents:UIControlEventTouchUpInside];
+    [self.window addSubview:indicator];
+    NSLayoutYAxisAnchor *topAnchor;
+    if (@available(iOS 11.0, *)) topAnchor = self.window.safeAreaLayoutGuide.topAnchor;
+    else topAnchor = self.window.topAnchor;
+    [NSLayoutConstraint activateConstraints:@[
+        [indicator.centerXAnchor constraintEqualToAnchor:self.window.centerXAnchor],
+        [indicator.topAnchor constraintEqualToAnchor:topAnchor constant:8.0],
+        [indicator.heightAnchor constraintGreaterThanOrEqualToConstant:30.0],
+    ]];
+    self.streamPrivacyIndicator = indicator;
+    [self updateStreamPrivacyIndicator];
+}
 
-    [HALog logStartup:@"didFinishLaunching END"];
-    return YES;
+- (void)streamingStateDidChange:(NSNotification *)notification {
+    (void)notification;
+    dispatch_async(dispatch_get_main_queue(), ^{ [self updateStreamPrivacyIndicator]; });
+}
+
+- (void)updateStreamPrivacyIndicator {
+    HAStreamingManager *stream = [HAStreamingManager sharedManager];
+    NSUInteger clients = stream.streamClientCount;
+    BOOL live = stream.isCapturing && clients > 0;
+    self.streamPrivacyIndicator.hidden = !live;
+    if (live) {
+        NSString *title = [NSString stringWithFormat:@"Camera + mic live · %lu authenticated %@",
+            (unsigned long)clients, clients == 1 ? @"client" : @"clients"];
+        [self.streamPrivacyIndicator setTitle:title forState:UIControlStateNormal];
+        [self.window bringSubviewToFront:self.streamPrivacyIndicator];
+    }
+}
+
+- (void)streamPrivacyIndicatorTapped:(UIButton *)sender {
+    (void)sender;
+    HAStreamingManager *stream = [HAStreamingManager sharedManager];
+    [stream stopWithTrigger:HAStreamingStopTriggerUser error:nil];
+    [stream setFeatureEnabled:NO error:nil];
 }
 
 - (void)applicationDidBecomeActive:(UIApplication *)application {
+    (void)application;
+    [self resumeForegroundServices];
+}
+
+- (void)resumeForegroundServices {
     if ([[HAAuthManager sharedManager] isConfigured]) {
         [[HAConnectionManager sharedManager] connect];
         [[HADeviceIntegrationManager sharedManager] start];
+    }
+
+    // The user-visible Local Camera Stream toggle is persistent consent. A
+    // foreground return resumes it; resigning active always stops capture.
+    HAStreamingManager *localStream = [HAStreamingManager sharedManager];
+    if (localStream.featureEnabled && !localStream.streaming) {
+        [localStream armLocalStreamWithCompletion:nil];
     }
 
     // Request Guided Access if kiosk mode is on and not already in Guided Access.
@@ -211,6 +303,11 @@
 }
 
 - (void)applicationWillResignActive:(UIApplication *)application {
+    (void)application;
+    [self suspendForegroundServices];
+}
+
+- (void)suspendForegroundServices {
     [[HAPerfMonitor sharedMonitor] stop];
     // Flush entity state cache to disk synchronously before disconnect
     [[HADeviceIntegrationManager sharedManager] stop];
