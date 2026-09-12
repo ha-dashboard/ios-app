@@ -1,6 +1,6 @@
 # HA Dashboard
 
-Native Home Assistant dashboard app. The scripted universal product carries armv7 and arm64 slices with an iOS 9.0 minimum, covering iOS 9.3.3 legacy devices through iOS 27, plus a Mac Catalyst developer build. Local Camera Stream is separately gated to iOS 10.3.3+.
+Native Home Assistant dashboard app. The scripted universal Ad Hoc/GitHub/device product carries armv7 and arm64 slices with an iOS 9.0 minimum, covering iOS 9.3.3 legacy devices through iOS 27, plus a Mac Catalyst developer build. The separate App Store product is arm64 with an iOS 15.0 minimum and is archived without legacy binary replacement. Local Camera Stream is separately gated to iOS 10.3.3+ in the universal product.
 
 ## Published Links
 
@@ -33,6 +33,7 @@ The modern toolchain plus legacy iPhoneOS link stubs are required for the full u
 | Simulator | `scripts/build.sh sim` | arm64 | 15.0 | Xcode 26 | Native arm64 sim for iOS 16+ |
 | RosettaSim | `scripts/build.sh rosettasim` | x86_64 | 9.0 | macOS 26 + Xcode 26 only | Legacy sim for iOS 9–14. Xcode/macOS 27 fail closed because they cannot build/boot the x86-only runtimes. |
 | Device | `scripts/build.sh device` | armv7+arm64 | 9.0 in both slices | Xcode 26/27 clang + Xcode 13 link stubs | Both executables compile/link directly; armv7 is forced to ARM mode to avoid Xcode 27 Thumb-relocation loss, while xcodebuild supplies only the signed bundle/resources before replacement and re-signing. |
+| App Store | CI `workflow_dispatch`/tag archive | arm64 | 15.0 | Xcode 26/27 | Separate pristine archive used only for App Store Connect; never receives the iOS 9 universal replacement. |
 | Mac Catalyst | `scripts/build.sh mac` | arm64 | iOS 15 Catalyst mapping | Xcode 26/27 | Sandboxed developer build with camera, microphone, client, server, and app-private Keychain access-group entitlements. |
 
 - **XcodeGen** generates `HADashboard.xcodeproj` from `project.yml` — run `scripts/regen.sh` after changing project.yml
@@ -104,17 +105,23 @@ Triggered on pushes to `main` and `v*` tags:
 |-----|---------|-------------|
 | `build-and-test` | All pushes | Builds simulator target, verifies compilation |
 | `verify-ios9-slices` | Every CI run | Downloads/checks the immutable Xcode 13 SDK stubs, then compiles and verifies unsigned armv7+arm64 iOS 9 slices. |
-| `archive-release` | Tag push only | Direct armv7+arm64 iOS 9 compile/link → signed bundle template → universal replacement/dSYM → export App Store/TestFlight + Ad Hoc IPA → GitHub Release. |
+| `archive-release` | Tag push or manual dispatch from `main` | Archives a pristine arm64/iOS 15 App Store product, verifies it, copies a separate legacy template, performs the armv7+arm64/iOS 9 replacement only there, then exports the appropriate archive to each destination. Tag pushes also create the GitHub Release. |
 
-The `archive-release` job handles **everything** for App Store submission:
-- Builds a universal armv7+arm64 binary whose two Mach-O slices both target iOS 9.0
+The `archive-release` job keeps the two distribution products separate:
+- Archives and verifies an arm64 App Store binary with bundle and Mach-O minimum iOS 15.0, matching version/build metadata, a matching dSYM, privacy manifest, and Xcode 26-or-newer provenance
+- Copies that archive before mutation, then builds the universal armv7+arm64 binary whose two Mach-O slices both target iOS 9.0
 - Signs with dev certificate + provisioning profile (from GitHub secrets)
-- Exports App Store IPA via `xcodebuild -exportArchive` with ASC API key auth
+- Exports App Store/TestFlight only from the untouched modern archive via `xcodebuild -exportArchive` with ASC API key auth
 - **Automatically uploads to TestFlight** (the App Store export triggers upload)
-- Exports Ad Hoc IPA and attaches to GitHub Release
+- Exports the Ad Hoc IPA only from the legacy archive and attaches that universal artifact to GitHub Release
 
 The tag workflow creates the GitHub release automatically using the matching
-`docs/releases/vX.Y.Z.md` file. After CI completes, go to [App Store Connect](https://appstoreconnect.apple.com) → TestFlight to:
+`docs/releases/vX.Y.Z.md` file. A manual dispatch is accepted only from `main`
+and never creates or updates the existing GitHub release. The marketing version
+comes from the tag on tag runs and the validated input on manual runs; the build
+number is the current commit count. Therefore a post-v1.2.6 workflow fix merged
+to `main` produces a build newer than build 162 used in the rejected production
+submission without moving the published tag. After CI completes, go to [App Store Connect](https://appstoreconnect.apple.com) → TestFlight to:
 1. Add release notes for the TestFlight build
 2. Submit for external testing or App Review
 

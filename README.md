@@ -4,7 +4,12 @@
 
 A native iOS app that renders your [Home Assistant](https://www.home-assistant.io/) dashboards natively, achieving usable framerates on the oldest iOS devices.
 
-Built to run from armv7 and arm64 devices on iOS 9.3.3 through current iOS 27 devices, with a Mac Catalyst developer build. The optional Local Camera Stream requires iOS 10.3.3 or later.
+The universal developer and Ad Hoc build runs on armv7 and arm64 devices from
+iOS 9.3.3 through current iOS 27 devices, with a Mac Catalyst developer build.
+Starting with 1.2.6, Apple's distribution requirements mean the App Store uses
+a separate arm64 build targeting iOS 15 or later; iOS 9–14 devices remain on
+the last compatible App Store version or can use the universal developer build.
+The optional Local Camera Stream requires iOS 10.3.3 or later.
 
 ## Features
 
@@ -19,7 +24,7 @@ Built to run from armv7 and arm64 devices on iOS 9.3.3 through current iOS 27 de
   appearance/kiosk state, reload, or show an in-app banner
 - **mDNS discovery** — finds Home Assistant servers on your local network
 - **Triple auth** — trusted network support, long-lived access token, or full OAuth login flow with token refresh
-- **Universal binary** — armv7 + arm64 in one build, with an iOS 9.0 minimum encoded in both slices
+- **Universal developer build** — armv7 + arm64 in one build, with an iOS 9.0 minimum encoded in both slices
 - **Demo mode** — Built-in dashboards with simulated entities and history
 - **Optional local camera streams** — Foreground-only, per-device password-protected H.264/AAC RTSP with front/rear selection, simultaneous MultiCam where supported, concurrent consumers, live capability-based quality/orientation, and Home Assistant Generic Camera registration (iOS 10.3.3+)
 
@@ -50,7 +55,10 @@ See the [landing page](https://ha-dashboard.github.io/ios-app/) for screenshots.
 
 ### Easy path
 
-Install from the [App Store](https://apps.apple.com/gb/app/ha-dash/id6759347912)
+Install from the [App Store](https://apps.apple.com/gb/app/ha-dash/id6759347912).
+The App Store build of HA Dash 1.2.6 requires iOS 15. Older devices can keep the
+last compatible App Store version; developers can continue to build and deploy
+the universal iOS 9-compatible artifact from this repository.
 
 ### For contributors or developers
 
