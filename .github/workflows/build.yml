@@ -175,7 +175,9 @@ jobs:
           if [ -z "$XCODE" ]; then
             for CANDIDATE in /Applications/Xcode.app /Applications/Xcode-beta.app; do
               if [ -d "$CANDIDATE" ]; then
-                CANDIDATE_MAJOR=$($CANDIDATE/Contents/Developer/usr/bin/xcodebuild -version | awk '/^Xcode / { split($2, v, "."); print v[1] }')
+                CANDIDATE_VERSION_OUTPUT=$($CANDIDATE/Contents/Developer/usr/bin/xcodebuild -version)
+                CANDIDATE_VERSION=$(printf '%s\n' "$CANDIDATE_VERSION_OUTPUT" | awk '/^Xcode / { print $2 }')
+                CANDIDATE_MAJOR=${CANDIDATE_VERSION%%.*}
                 if [[ "$CANDIDATE_MAJOR" =~ ^(26|27)$ ]]; then
                   XCODE="$CANDIDATE"
                   break
@@ -184,7 +186,8 @@ jobs:
             done
           fi
           test -d "$XCODE"
-          XCODE_VERSION=$($XCODE/Contents/Developer/usr/bin/xcodebuild -version | awk '/^Xcode / { print $2; exit }')
+          XCODE_VERSION_OUTPUT=$($XCODE/Contents/Developer/usr/bin/xcodebuild -version)
+          XCODE_VERSION=$(printf '%s\n' "$XCODE_VERSION_OUTPUT" | awk '/^Xcode / { print $2 }')
           XCODE_MAJOR=${XCODE_VERSION%%.*}
           if ! [[ "$XCODE_MAJOR" =~ ^(26|27)$ ]]; then
             echo "::error::App Store packaging requires Xcode 26 or 27; found ${XCODE_VERSION:-unknown}"
