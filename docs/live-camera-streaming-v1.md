@@ -7,6 +7,14 @@ later. Local Camera Stream is a separate optional feature that requires iOS
 10.3.3 or later. Its persisted enable flag is discarded on an unsupported OS,
 and every arm attempt checks the platform again before requesting permission.
 
+The universal armv7/arm64 developer and Ad Hoc artifact retains that iOS 9.0
+minimum. Apple rejected the first 1.2.6 production submission with
+`ITMS-90068` because a 9.0 `MinimumOSVersion` is no longer accepted for new App
+Store distribution. The App Store therefore receives a separate arm64 archive
+with an iOS 15.0 minimum, while legacy-device deployment continues to use the
+universal artifact. Do not treat the App Store binary's minimum as a change to
+the source or developer-build compatibility boundary.
+
 Simultaneous front/rear capture uses `AVCaptureMultiCamSession`, so Both appears
 only on compatible iOS 13-or-later hardware. A normal single-camera stream does
 not require MultiCam support. Mac Catalyst is a developer-build target rather

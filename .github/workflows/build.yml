@@ -9,13 +9,17 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: 'Marketing version to upload to TestFlight (for example, 1.2.5)'
+        description: 'Numeric marketing version to upload to App Store Connect (for example, 1.2.6)'
         required: true
         type: string
 
 env:
   SCHEME: HADashboard
   TEAM_ID: ${{ vars.TEAM_ID }}
+  # App Store Connect rejects the legacy iOS 9 product. Keep the store archive
+  # on the modern toolchain floor while preserving the separate Ad Hoc build.
+  APP_STORE_MIN_IOS: '15.0'
+  APP_STORE_BUILD_NUMBER_FLOOR: '162'
   # Immutable Xcode 13.2.1 iPhoneOS SDK stubs for iOS 9 armv7/arm64 linking.
   XCODE13_SDK_STUBS_RELEASE: xcode13-sdk-stubs-v1
   XCODE13_SDK_STUBS_SHA256: 7b89a8882d60246b0ba53ed4a61363a0cbcad648e5b36874940bf4ee400c2dfc
@@ -45,13 +49,20 @@ jobs:
 
       - name: Set version
         id: version
+        env:
+          REQUESTED_VERSION: ${{ inputs.release_version }}
         run: |
+          set -euo pipefail
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/v}"
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            VERSION="${{ inputs.release_version }}"
+            VERSION="$REQUESTED_VERSION"
           else
             VERSION="0.0.0-dev"
+          fi
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid marketing version: $VERSION"
+            exit 1
           fi
           BUILD_NUMBER=$(git rev-list --count HEAD)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -142,7 +153,7 @@ jobs:
   # ── Universal armv7+arm64 release ────────────────────────────────────
   archive-release:
     needs: [build-and-test, verify-ios9-slices]
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_version != '')
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_version != '')
     runs-on: macos-latest
     timeout-minutes: 45
     permissions:
@@ -152,13 +163,34 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Select Xcode
+      - name: Select Xcode 26 or 27 for release packaging
         run: |
+          set -euo pipefail
+          # Prefer the latest stable Xcode 26 runner image already proven by
+          # CI. Use Xcode 27 when 26 is unavailable, then checked fallbacks.
           XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
           if [ -z "$XCODE" ]; then
-            XCODE=$(ls -d /Applications/Xcode.app /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1 || true)
+            XCODE=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1 || true)
           fi
-          echo "Using: $XCODE ($(${XCODE}/Contents/Developer/usr/bin/xcodebuild -version | head -1))"
+          if [ -z "$XCODE" ]; then
+            for CANDIDATE in /Applications/Xcode.app /Applications/Xcode-beta.app; do
+              if [ -d "$CANDIDATE" ]; then
+                CANDIDATE_MAJOR=$($CANDIDATE/Contents/Developer/usr/bin/xcodebuild -version | awk '/^Xcode / { split($2, v, "."); print v[1] }')
+                if [[ "$CANDIDATE_MAJOR" =~ ^(26|27)$ ]]; then
+                  XCODE="$CANDIDATE"
+                  break
+                fi
+              fi
+            done
+          fi
+          test -d "$XCODE"
+          XCODE_VERSION=$($XCODE/Contents/Developer/usr/bin/xcodebuild -version | awk '/^Xcode / { print $2; exit }')
+          XCODE_MAJOR=${XCODE_VERSION%%.*}
+          if ! [[ "$XCODE_MAJOR" =~ ^(26|27)$ ]]; then
+            echo "::error::App Store packaging requires Xcode 26 or 27; found ${XCODE_VERSION:-unknown}"
+            exit 1
+          fi
+          echo "Using: $XCODE (Xcode $XCODE_VERSION)"
           sudo xcode-select -s "$XCODE"
 
       - name: Install XcodeGen
@@ -166,13 +198,24 @@ jobs:
 
       - name: Set version from tag
         id: version
+        env:
+          REQUESTED_VERSION: ${{ inputs.release_version }}
         run: |
+          set -euo pipefail
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            VERSION="${{ inputs.release_version }}"
+            VERSION="$REQUESTED_VERSION"
           else
             VERSION="${GITHUB_REF#refs/tags/v}"
           fi
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid marketing version: $VERSION"
+            exit 1
+          fi
           BUILD_NUMBER=$(git rev-list --count HEAD)
+          if [ "$BUILD_NUMBER" -le "$APP_STORE_BUILD_NUMBER_FLOOR" ]; then
+            echo "::error::Build $BUILD_NUMBER is not newer than build $APP_STORE_BUILD_NUMBER_FLOOR used in the rejected production submission"
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
           echo "Version: $VERSION (build $BUILD_NUMBER)"
@@ -377,16 +420,18 @@ jobs:
             otool -l "build/$ARCH-thin" | grep -A5 'LC_VERSION_MIN_IPHONEOS\|LC_BUILD_VERSION'
           done
 
-      # ── Step 2: Archive signed bundle/resource template ──────────────
-      - name: Archive signed bundle template
+      # ── Step 2: Archive the modern App Store product ────────────────
+      - name: Archive modern App Store product
         run: |
+          set -euo pipefail
           xcodebuild archive \
             -scheme $SCHEME \
             -sdk iphoneos \
             -configuration Release \
-            -archivePath build/HADashboard.xcarchive \
+            -archivePath build/HADashboard-AppStore.xcarchive \
             ARCHS=arm64 VALID_ARCHS=arm64 \
-            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
+            ONLY_ACTIVE_ARCH=NO \
+            IPHONEOS_DEPLOYMENT_TARGET=$APP_STORE_MIN_IOS \
             MARKETING_VERSION=${{ steps.version.outputs.version }} \
             CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build_number }} \
             DEVELOPMENT_TEAM=$TEAM_ID \
@@ -395,12 +440,76 @@ jobs:
             CODE_SIGN_IDENTITY="Apple Development" \
             PROVISIONING_PROFILE_SPECIFIER="HADashboard Development"
 
-      # ── Step 3: Merge armv7+arm64 into archive ──────────────────────
-      - name: Merge universal binary into archive
+      - name: Verify modern App Store archive
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
         run: |
+          set -euo pipefail
+          ARCHIVE="build/HADashboard-AppStore.xcarchive"
+          APP="$ARCHIVE/Products/Applications/HA Dashboard.app"
+          PLIST="$APP/Info.plist"
+          BINARY="$APP/HA Dashboard"
+          DSYM="$ARCHIVE/dSYMs/HA Dashboard.app.dSYM"
+
+          test -d "$APP"
+          test -f "$BINARY"
+          test -d "$DSYM"
+          test "$(lipo -archs "$BINARY")" = "arm64"
+          test "$(plutil -extract MinimumOSVersion raw "$PLIST")" = "$APP_STORE_MIN_IOS"
+          test "$(plutil -extract CFBundleIdentifier raw "$PLIST")" = "com.hadashboard.app"
+          test "$(plutil -extract CFBundleShortVersionString raw "$PLIST")" = "$RELEASE_VERSION"
+          test "$(plutil -extract CFBundleVersion raw "$PLIST")" = "$RELEASE_BUILD_NUMBER"
+          test -f "$APP/PrivacyInfo.xcprivacy"
+          plutil -lint "$APP/PrivacyInfo.xcprivacy"
+
+          MACHO_MINIMUM=$(otool -l -arch arm64 "$BINARY" | awk '
+            $1 == "cmd" && ($2 == "LC_BUILD_VERSION" || $2 == "LC_VERSION_MIN_IPHONEOS") { wanted = 1; next }
+            wanted && ($1 == "minos" || $1 == "version") { print $2; exit }
+          ')
+          test "$MACHO_MINIMUM" = "$APP_STORE_MIN_IOS"
+
+          DTXCODE=$(plutil -extract DTXcode raw "$PLIST")
+          if ! [[ "$DTXCODE" =~ ^[0-9]+$ ]] || [ "$DTXCODE" -lt 2600 ]; then
+            echo "::error::Modern App Store archive was not built by Xcode 26 or newer (DTXcode=$DTXCODE)"
+            exit 1
+          fi
+          DTPLATFORM=$(plutil -extract DTPlatformName raw "$PLIST")
+          test "$DTPLATFORM" = "iphoneos"
+          DTSDKNAME=$(plutil -extract DTSDKName raw "$PLIST")
+          if ! [[ "$DTSDKNAME" =~ ^iphoneos[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::error::Unexpected App Store SDK name: $DTSDKNAME"
+            exit 1
+          fi
+          SDK_VERSION=${DTSDKNAME#iphoneos}
+          SDK_MAJOR=${SDK_VERSION%%.*}
+          if [ "$SDK_MAJOR" -lt 26 ]; then
+            echo "::error::App Store archive requires the iOS 26 SDK or newer; found $DTSDKNAME"
+            exit 1
+          fi
+
+          BINARY_UUIDS=$(dwarfdump --uuid "$BINARY" | awk '{print $2, $3}' | sort)
+          DSYM_UUIDS=$(dwarfdump --uuid "$DSYM" | awk '{print $2, $3}' | sort)
+          test "$BINARY_UUIDS" = "$DSYM_UUIDS"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          MODERN_BINARY_SHA256=$(shasum -a 256 "$BINARY" | awk '{print $1}')
+          echo "MODERN_BINARY_SHA256=$MODERN_BINARY_SHA256" >> "$GITHUB_ENV"
+          echo "App Store: arm64, iOS $MACHO_MINIMUM, version $RELEASE_VERSION ($RELEASE_BUILD_NUMBER), DTXcode $DTXCODE, $DTSDKNAME"
+
+      # The App Store archive above remains immutable. The legacy archive is a
+      # separate packaging template for the iOS 9 Ad Hoc/GitHub product.
+      - name: Copy legacy packaging template
+        run: |
+          set -euo pipefail
+          ditto build/HADashboard-AppStore.xcarchive build/HADashboard-Legacy.xcarchive
+
+      # ── Step 3: Merge armv7+arm64 into the legacy archive ───────────
+      - name: Merge universal binary into legacy archive
+        run: |
+          set -euo pipefail
           VERSION=${{ steps.version.outputs.version }}
           BUILD_NUMBER=${{ steps.version.outputs.build_number }}
-          APP="build/HADashboard.xcarchive/Products/Applications/HA Dashboard.app"
+          APP="build/HADashboard-Legacy.xcarchive/Products/Applications/HA Dashboard.app"
           SRC_ICON="HADashboard/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
           ENTITLEMENTS="build/final-entitlements.plist"
           codesign -d --entitlements :- "$APP" > "$ENTITLEMENTS" 2>/dev/null
@@ -441,7 +550,7 @@ jobs:
           sips -z 180 180 "$SRC_ICON" --out "$APP/AppIcon60x60@3x.png" 2>/dev/null
 
           echo "=== Generate universal dSYM ==="
-          DSYM="build/HADashboard.xcarchive/dSYMs/HA Dashboard.app.dSYM"
+          DSYM="build/HADashboard-Legacy.xcarchive/dSYMs/HA Dashboard.app.dSYM"
           rm -rf "$DSYM"
           "$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/bin/dsymutil" \
               "$APP/HA Dashboard" -o "$DSYM"
@@ -481,7 +590,7 @@ jobs:
         run: |
           # Re-archive for Ad Hoc (different signing)
           xcodebuild -exportArchive \
-            -archivePath build/HADashboard.xcarchive \
+            -archivePath build/HADashboard-Legacy.xcarchive \
             -exportPath build/adhoc \
             -exportOptionsPlist ExportOptions-AdHoc.plist \
             -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey.p8" \
@@ -521,14 +630,46 @@ jobs:
           done
           codesign --verify --deep --strict --verbose=2 "$APP"
 
-      # ── Step 5: Upload the verified archive to TestFlight ────────────
-      - name: Export App Store IPA (uploads to TestFlight)
+      # ── Step 5: Upload only the verified modern archive ─────────────
+      - name: Export modern App Store archive (uploads to TestFlight)
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
         run: |
+          set -euo pipefail
+          APP="build/HADashboard-AppStore.xcarchive/Products/Applications/HA Dashboard.app"
+          BINARY="$APP/HA Dashboard"
+          PLIST="$APP/Info.plist"
+          test "$(lipo -archs "$BINARY")" = "arm64"
+          test "$(plutil -extract MinimumOSVersion raw "$PLIST")" = "$APP_STORE_MIN_IOS"
+          test "$(plutil -extract CFBundleShortVersionString raw "$PLIST")" = "$RELEASE_VERSION"
+          test "$(plutil -extract CFBundleVersion raw "$PLIST")" = "$RELEASE_BUILD_NUMBER"
+          test -f "$APP/PrivacyInfo.xcprivacy"
+          plutil -lint "$APP/PrivacyInfo.xcprivacy"
+          test "$(plutil -extract DTPlatformName raw "$PLIST")" = "iphoneos"
+          DTXCODE=$(plutil -extract DTXcode raw "$PLIST")
+          [[ "$DTXCODE" =~ ^[0-9]+$ ]]
+          test "$DTXCODE" -ge 2600
+          DTSDKNAME=$(plutil -extract DTSDKName raw "$PLIST")
+          [[ "$DTSDKNAME" =~ ^iphoneos[0-9]+(\.[0-9]+)*$ ]]
+          SDK_VERSION=${DTSDKNAME#iphoneos}
+          SDK_MAJOR=${SDK_VERSION%%.*}
+          test "$SDK_MAJOR" -ge 26
+          MACHO_MINIMUM=$(otool -l -arch arm64 "$BINARY" | awk '
+            $1 == "cmd" && ($2 == "LC_BUILD_VERSION" || $2 == "LC_VERSION_MIN_IPHONEOS") { wanted = 1; next }
+            wanted && ($1 == "minos" || $1 == "version") { print $2; exit }
+          ')
+          test "$MACHO_MINIMUM" = "$APP_STORE_MIN_IOS"
+          test "$(shasum -a 256 "$BINARY" | awk '{print $1}')" = "$MODERN_BINARY_SHA256"
+          BINARY_UUIDS=$(dwarfdump --uuid "$BINARY" | awk '{print $2, $3}' | sort)
+          DSYM_UUIDS=$(dwarfdump --uuid "build/HADashboard-AppStore.xcarchive/dSYMs/HA Dashboard.app.dSYM" | awk '{print $2, $3}' | sort)
+          test "$BINARY_UUIDS" = "$DSYM_UUIDS"
+          codesign --verify --deep --strict "$APP"
+
           xcodebuild -exportArchive \
-            -archivePath build/HADashboard.xcarchive \
+            -archivePath build/HADashboard-AppStore.xcarchive \
             -exportPath build/appstore \
             -exportOptionsPlist ExportOptions-AppStore.plist \
             -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey.p8" \
@@ -544,7 +685,7 @@ jobs:
 
       # ── GitHub Release ──────────────────────────────────────────────
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
