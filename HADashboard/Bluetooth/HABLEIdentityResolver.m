@@ -350,7 +350,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         if([saved[@"address"] isEqual:address] && [self validBinding:saved] && HABLEProfilesCompatible(profile,saved[@"profile"])){method=saved[@"method"];unit=saved[@"unit_identifier"];lineage=saved[@"lineage"] ?: @[];score+=180;[reasons addObject:@"Previously verified binding for this Apple peripheral"];}
         NSDictionary *correlation=identifier.length && compatible ? [self.evidence correlationForIdentifier:identifier address:address now:now] : nil;
         if([correlation[@"distinct_packets"] unsignedIntegerValue]) [reasons addObject:[NSString stringWithFormat:@"Learning: %lu / 12 distinct payload changes agree",(unsigned long)[correlation[@"distinct_packets"] unsignedIntegerValue]]];
-        if([correlation[@"distinct_packets"] unsignedIntegerValue]>=12 && ![correlation[@"qualified"] boolValue]) {
+        if(!method && [correlation[@"distinct_packets"] unsignedIntegerValue]>=12 && ![correlation[@"qualified"] boolValue]) {
             if([correlation[@"contradictory_channel"] boolValue])[reasons addObject:@"Unresolved: another payload channel contradicts this match"];
             if([correlation[@"agreement"] doubleValue]<.9)[reasons addObject:@"Unresolved: too many payload changes disagree"];
             if(fabs([correlation[@"median_skew"] doubleValue])>3)[reasons addObject:@"Unresolved: observation timing does not align"];
@@ -358,7 +358,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
             if([correlation[@"local_age"] doubleValue]>120 || [correlation[@"reference_age"] doubleValue]>120)[reasons addObject:@"Unresolved: recent corroborating evidence is missing"];
         }
         BOOL competingLocal=[correlation[@"qualified"] boolValue] && [self.evidence hasCompetingLocalIdentifier:identifier address:address now:now];
-        if(competingLocal)[reasons addObject:@"Ambiguous: another local peripheral has matching observations"];
+        if(competingLocal && !method)[reasons addObject:@"Ambiguous: another local peripheral has matching observations"];
         if([correlation[@"qualified"] boolValue] && !competingLocal){method=method ?: @"packet_sequence";unit=unit ?: named;score+=120;[reasons addObject:[NSString stringWithFormat:@"%lu distinct payloads agree in time",(unsigned long)[correlation[@"distinct_packets"] unsignedIntegerValue]]];}
         candidate[@"automatic_match"]=@(address.length && method!=nil);candidate[@"score"]=@(score);candidate[@"method"]=method ?: @"";candidate[@"unit_identifier"]=unit ?: @"";candidate[@"profile"]=profile;candidate[@"lineage"]=lineage;candidate[@"local_identifier"]=identifier ?: @"";
         candidate[@"reference_sources"]=correlation[@"sources"] ?: (remote[@"source"] ? @[remote[@"source"]] : @[]);
