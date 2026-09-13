@@ -101,6 +101,49 @@
     XCTAssertFalse([HABLEIdentityEvidence tokens:a agreeWith:b]);
     XCTAssertFalse([HABLEIdentityEvidence tokens:b agreeWith:a]);
 }
+- (NSDictionary *)recordPassiveUnit:(NSString *)name identifier:(NSString *)identifier address:(NSString *)address resolver:(HABLEIdentityResolver *)resolver atTime:(NSTimeInterval)time {
+    NSDictionary *observation=@{@"identifier":identifier,@"name":name,@"last_seen":@(time),@"service_uuids":@[@"1234"],@"manufacturer_data":@"AQIDBAUGBwg="};
+    [resolver recordObservation:observation identifier:identifier];
+    [resolver observeAdvertisements:@[@{@"address":address,@"source":@"20:00:00:00:00:01",@"name":name,@"time":@(time),@"service_uuids":@[@"1234"],@"raw":@"09ff0102030405060708"}]];
+    return observation;
+}
+- (void)testSustainedPassiveSignatureIsProvisionalAndDistinctNamesStaySeparate {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;HABLEIdentityResolver *resolver=[HABLEIdentityResolver new];
+    [resolver loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];NSDictionary *a=nil,*b=nil;
+    for(NSUInteger i=0;i<4;i++) {
+        a=[self recordPassiveUnit:@"Unit1234" identifier:@"a" address:@"AA:BB:CC:DD:EE:01" resolver:resolver atTime:now-30+i*10];
+        b=[self recordPassiveUnit:@"Unit5678" identifier:@"b" address:@"AA:BB:CC:DD:EE:02" resolver:resolver atTime:now-30+i*10];
+        if(i<3)XCTAssertNil([resolver automaticMatchForObservation:a]);
+    }
+    NSDictionary *match=[resolver automaticMatchForObservation:a];
+    XCTAssertEqualObjects(match[@"method"],@"passive_signature");XCTAssertEqualObjects(match[@"address"],@"AA:BB:CC:DD:EE:01");
+    XCTAssertEqualObjects([resolver automaticMatchForObservation:b][@"address"],@"AA:BB:CC:DD:EE:02");
+    [resolver rememberAutomaticMatch:match];XCTAssertEqual([[resolver valueForKey:@"localBindings"] count],0u);
+    // A newly observed twin vetoes the provisional match immediately.
+    [self recordPassiveUnit:@"Unit1234" identifier:@"twin" address:@"AA:BB:CC:DD:EE:03" resolver:resolver atTime:now];
+    XCTAssertNil([resolver automaticMatchForObservation:a]);
+}
+- (void)testPassiveSignatureDoesNotPromoteReplaysGenericNamesOrStaleEvidence {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;HABLEIdentityResolver *resolver=[HABLEIdentityResolver new];
+    [resolver loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];NSDictionary *o=nil;
+    for(NSUInteger i=0;i<4;i++)o=[self recordPassiveUnit:@"Unit1234" identifier:@"a" address:@"AA:BB:CC:DD:EE:01" resolver:resolver atTime:now-30];
+    XCTAssertNil([resolver automaticMatchForObservation:o]);
+    for(NSUInteger i=0;i<4;i++)o=[self recordPassiveUnit:@"Thermometer" identifier:@"a" address:@"AA:BB:CC:DD:EE:01" resolver:resolver atTime:now-30+i*10];
+    XCTAssertNil([resolver automaticMatchForObservation:o]);
+    for(NSUInteger i=0;i<4;i++)o=[self recordPassiveUnit:@"Unit1234" identifier:@"a" address:@"AA:BB:CC:DD:EE:01" resolver:resolver atTime:now-100+i*10];
+    XCTAssertNil([resolver automaticMatchForObservation:o]);
+}
+- (void)testPassiveSignatureResetsOnPayloadChangeOrObservationGap {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;HABLEIdentityResolver *resolver=[HABLEIdentityResolver new];
+    [resolver loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];NSDictionary *o=nil;
+    for(NSUInteger i=0;i<4;i++)o=[self recordPassiveUnit:@"Unit1234" identifier:@"a" address:@"AA:BB:CC:DD:EE:01" resolver:resolver atTime:now-30+i*10];
+    XCTAssertNotNil([resolver automaticMatchForObservation:o]);
+    NSMutableDictionary *changed=[o mutableCopy];changed[@"manufacturer_data"]=@"AQIDBAUGBwk=";[resolver recordObservation:changed identifier:@"a"];
+    XCTAssertNil([resolver automaticMatchForObservation:changed]);
+    [self recordPassiveUnit:@"Unit1234" identifier:@"a" address:@"AA:BB:CC:DD:EE:01" resolver:resolver atTime:now-60];
+    o=[self recordPassiveUnit:@"Unit1234" identifier:@"a" address:@"AA:BB:CC:DD:EE:01" resolver:resolver atTime:now];
+    XCTAssertNil([resolver automaticMatchForObservation:o]);
+}
 - (NSDictionary *)stableIdentifierFields {
     NSData *json=[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:55"}} options:0 error:nil];
     NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:json path:@"s/1234/c/5678"];

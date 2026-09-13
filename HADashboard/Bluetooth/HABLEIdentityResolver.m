@@ -43,6 +43,34 @@ static NSDictionary *HABLEProfile(NSDictionary *observation) {
     if (!manufacturer.length) manufacturer = [[NSData alloc] initWithBase64EncodedString:HABLEString(observation[@"identity_manufacturer_data"]) options:0];
     return @{@"name":HABLEString(observation[@"name"]), @"services":[HABLEIdentityEvidence canonicalServices:observation[@"identity_service_uuids"] ?: observation[@"service_uuids"]], @"manufacturer_length":@(manufacturer.length), @"manufacturer_prefix":manufacturer.length>=2 ? [[manufacturer subdataWithRange:NSMakeRange(0,2)] base64EncodedStringWithOptions:0] : @""};
 }
+// A provisional signature is an observation, not a hardware identifier.
+// Require an identifier-shaped name and a substantive payload; names alone
+// and generic service/model profiles never qualify.
+static NSString *HABLEPassiveSignature(NSDictionary *profile, NSArray *tokens) {
+    if(!HABLEUnitIdentifier(profile[@"name"]) || !tokens.count)return nil;
+    BOOL substantive=NO;
+    for(NSString *token in tokens) {
+        NSRange separator=[token rangeOfString:@":" options:NSBackwardsSearch];
+        if(separator.location==NSNotFound)return nil;
+        NSData *bytes=[[NSData alloc] initWithBase64EncodedString:[token substringFromIndex:separator.location+1] options:0];
+        if(bytes.length>=8)substantive=YES;
+    }
+    if(!substantive)return nil;
+    NSArray *parts=@[profile[@"name"],profile[@"services"] ?: @[],[tokens sortedArrayUsingSelector:@selector(compare:)]];
+    NSData *encoded=[NSJSONSerialization dataWithJSONObject:parts options:0 error:nil];
+    return encoded ? HABLEHash([[NSString alloc] initWithData:encoded encoding:NSUTF8StringEncoding]) : nil;
+}
+static void HABLETrackPassiveSignature(NSMutableDictionary *row, NSDictionary *previous, NSString *signature, NSTimeInterval time, NSTimeInterval previousTime) {
+    if(!signature || !isfinite(time))return;
+    BOOL continues=[previous[@"passive_signature"] isEqual:signature] && time>=previousTime && time-previousTime<=20;
+    row[@"passive_signature"]=signature;
+    row[@"passive_since"]=continues ? previous[@"passive_since"] : @(time);
+    row[@"passive_samples"]=continues ? @([previous[@"passive_samples"] unsignedIntegerValue]+(time>previousTime ? 1 : 0)) : @1;
+}
+static BOOL HABLEPassiveReady(NSDictionary *row, NSString *timeKey, NSTimeInterval now) {
+    NSTimeInterval last=[row[timeKey] doubleValue],first=[row[@"passive_since"] doubleValue];
+    return row[@"passive_signature"] && isfinite(last) && last<=now+5 && now-last<=20 && last-first>=30 && [row[@"passive_samples"] unsignedIntegerValue]>=3;
+}
 static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     if ([b[@"required_prefix"] isKindOfClass:NSString.class]) return [a[@"manufacturer_prefix"] isEqual:b[@"required_prefix"]] && [HABLEString(a[@"name"]) caseInsensitiveCompare:HABLEString(b[@"name"])]==NSOrderedSame;
     NSArray *as = [a[@"services"] isKindOfClass:NSArray.class] ? a[@"services"] : @[], *bs = [b[@"services"] isKindOfClass:NSArray.class] ? b[@"services"] : @[];
@@ -241,6 +269,9 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         info[@"profile"]=@{@"name":HABLEString(ad[@"name"]),@"services":[HABLEIdentityEvidence canonicalServices:ad[@"service_uuids"]],@"manufacturer_length":@(length)};
         NSDictionary *anchor=HABLEHexData(ad[@"raw"]).length ? @{@"address":address,@"source":source,@"raw":ad[@"raw"]} : self.remoteInfo[address][@"native_anchor"];
         if(anchor)info[@"native_anchor"]=anchor;
+        NSDictionary *previous=self.remoteInfo[address];
+        if(![previous[@"source"] isEqual:source])previous=nil;
+        HABLETrackPassiveSignature(info,previous,HABLEPassiveSignature(info[@"profile"],tokens),[ad[@"time"] doubleValue],[previous[@"time"] doubleValue]);
         self.remoteInfo[address]=info;
         // A merged manufacturer-data dictionary is metadata, not a packet trace.
         if (tokens.count && [ad[@"time"] isKindOfClass:NSNumber.class]) [self.evidence recordRemoteTokens:tokens address:address source:source atTime:[ad[@"time"] doubleValue]];
@@ -478,7 +509,9 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         NSString *oldest=HABLEEvictionKey(self.localObservations,@"last_seen",[observation[@"last_seen"] doubleValue]);
         if(!oldest)return;[self removeIdentifier:oldest];
     }
-    self.localObservations[identifier]=observation;[self.evidence recordLocal:observation identifier:identifier atTime:[observation[@"last_seen"] doubleValue]];
+    NSMutableDictionary *record=[observation mutableCopy];NSDictionary *previous=self.localObservations[identifier];
+    HABLETrackPassiveSignature(record,previous,HABLEPassiveSignature(HABLEProfile(observation),[HABLEIdentityEvidence tokensForObservation:observation]),[observation[@"last_seen"] doubleValue],[previous[@"last_seen"] doubleValue]);
+    self.localObservations[identifier]=record;[self.evidence recordLocal:observation identifier:identifier atTime:[observation[@"last_seen"] doubleValue]];
 }
 - (NSString *)evidenceForIdentifier:(NSString *)identifier { return self.lastEvidence[identifier] ?: @"Waiting for sufficient identity evidence"; }
 - (void)removeIdentifier:(NSString *)identifier { [self.potentialKnownIdentifiers removeObject:identifier]; [self.lastEvidence removeObjectForKey:identifier]; [self.localObservations removeObjectForKey:identifier];[self.evidence removeIdentifier:identifier]; }
@@ -531,6 +564,11 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         BOOL competingLocal=[correlation[@"qualified"] boolValue] && [self.evidence hasCompetingLocalIdentifier:identifier address:address now:now];
         if(competingLocal && !method)[reasons addObject:@"Ambiguous: another local peripheral has matching observations"];
         if([correlation[@"qualified"] boolValue] && !competingLocal){method=method ?: @"packet_sequence";unit=unit ?: named;score+=120;[reasons addObject:[NSString stringWithFormat:@"%lu distinct payloads agree in time",(unsigned long)[correlation[@"distinct_packets"] unsignedIntegerValue]]];}
+        NSDictionary *local=self.localObservations[identifier];
+        if(!method && remote[@"native_anchor"] && ![self.proxySources containsObject:remote[@"source"]] && HABLEPassiveReady(local,@"last_seen",now) && HABLEPassiveReady(remote,@"time",now) && [local[@"passive_signature"] isEqual:remote[@"passive_signature"]] && [local[@"passive_signature"] isEqual:HABLEPassiveSignature(profile,tokens)] && !(serial.length && [known[@"serial_number"] length] && ![serial isEqual:known[@"serial_number"]]) && ![HABLEIdentityEvidence identifierFingerprints:observation[@"gatt_fingerprints"] conflictWith:shared[@"fingerprint_profile"]]) {
+            method=@"passive_signature";score+=80;candidate[@"passive_signature"]=local[@"passive_signature"];
+            [reasons addObject:@"Provisional: exact name, services and payload agree continuously with an independent radio; not a verified hardware identity"];
+        }
         if([method isEqual:@"gatt_fingerprint"]) {
             NSDictionary *proof=[saved[@"address"] isEqual:address] && [saved[@"method"] isEqual:@"gatt_fingerprint"] ? saved : shared;
             if([self validBinding:proof]){candidate[@"fingerprint_witness"]=proof[@"fingerprint_witness"];if(proof[@"fingerprint_profile"])candidate[@"fingerprint_profile"]=proof[@"fingerprint_profile"];candidate[@"supporting_sources"]=proof[@"supporting_sources"];}
@@ -590,6 +628,18 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         return nil;
     }
     NSString *identifier=observation[@"identifier"];
+    if([match[@"method"] isEqual:@"passive_signature"]) {
+        NSTimeInterval now=NSDate.date.timeIntervalSince1970;NSString *signature=match[@"passive_signature"];
+        for(NSString *other in self.localObservations)if(![other isEqual:identifier] && now-[self.localObservations[other][@"last_seen"] doubleValue]<=120 && [signature isEqual:self.localObservations[other][@"passive_signature"]]) {
+            self.lastEvidence[identifier]=@"Ambiguous: another local device has the same complete passive signature";return nil;
+        }
+        for(NSString *other in self.remoteInfo)if(![other isEqual:match[@"address"]] && now-[self.remoteInfo[other][@"time"] doubleValue]<=120 && [signature isEqual:self.remoteInfo[other][@"passive_signature"]]) {
+            self.lastEvidence[identifier]=@"Ambiguous: another radio address has the same complete passive signature";return nil;
+        }
+        // Re-evaluate on every normal matching pass. Never persist this as
+        // verified proof or republish it as independent radio evidence.
+        return match;
+    }
     if([match[@"identity_kind"] isEqual:@"observed_native"]) for(NSString *other in self.localObservations) {
         NSDictionary *peer=self.localObservations[other];
         if([other isEqual:identifier] || NSDate.date.timeIntervalSince1970-[peer[@"last_seen"] doubleValue]>120)continue;
@@ -633,6 +683,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     return known;
 }
 - (void)rememberAutomaticMatch:(NSDictionary *)match {
+    if([match[@"method"] isEqual:@"passive_signature"])return;
     if(![match[@"automatic_match"] boolValue] || ![self sourceIsCurrent])return;
     NSString *address=match[@"address"],*identifier=match[@"local_identifier"];if(!address.length || !identifier.length)return;
     NSMutableDictionary *binding=[match mutableCopy];binding[@"schema"]=@2;
