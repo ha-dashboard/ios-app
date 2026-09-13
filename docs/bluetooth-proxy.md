@@ -70,12 +70,25 @@ Contradictory comparable channels or competing local/remote candidates reject
 the match. These thresholds are conservative evidence checks, not a guarantee
 that arbitrary indistinguishable transmitters can be identified.
 
+For equal-length payloads, the engine can learn a small recurring leading-byte
+alphabet and compare those packet groups separately. No prefix value has a
+predefined device or protocol meaning. Each group still needs the full changing
+payload evidence; contradictory comparable groups still reject the match.
+Rejected decisions expose timing, agreement, freshness, or ambiguity reasons
+instead of showing only a count that has already exceeded the threshold.
+
 Generic associations are stored in HA's shared system store. Local Apple UUID
 bindings remain scoped to the configured HA account. Peer observations are
 shared only for active learning requests and relevant profiles, using bounded
 batches. Origin lineage prevents a derived proxy from validating its ancestor.
 Previously verified bindings survive restarts, and the earlier stored-association
 format is migrated as data rather than through device-specific parsing rules.
+
+Because HA's shared store does not provide an atomic compare-and-swap, each peer
+reconciles missing catalog additions against its still-valid local proofs. This
+repairs additions lost to concurrent writes without overwriting an existing
+association at the same address. Proofs must still match HA's current registry
+and the local account scope.
 
 Each receiving Apple device must establish its own local peripheral-to-HA
 binding. Importing a shared catalog entry alone does not equate an unfamiliar
