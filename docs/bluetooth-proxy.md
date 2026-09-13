@@ -231,7 +231,39 @@ delivery, and real GATT operations as separate acceptance results. The local
 device observations. Validate its timestamp when collecting it; a stale file
 does not prove a running app.
 
-Generic identity validation (builds 181–183):
+Generic resolver completion validation (builds 187–189):
+
+- 86 signed focused regression tests pass, including ambiguity, timing shifts,
+  static readings, contradictory packet groups, account changes, automatic
+  subscriptions, peer lineage and concurrent-catalog reconciliation.
+- HT1 and HT.w both resolve to their existing HA registry addresses. HT.w's
+  shared proof records fourteen changing payloads against the independent
+  scanner. Catalyst subsequently qualified thirteen changes using verified peer
+  observations, with median timing skew approximately 0.01 seconds.
+- Build 189 Catalyst and iPad Pro restored both bindings immediately after an
+  update/restart, before accumulating a new qualifying sequence. Encrypted
+  captures then received HT1/HT.w counts of 16/11 and 25/26 respectively, with
+  every captured advertisement using the configured address.
+- iPhone 16 also passed both-sensor encrypted captures on build 187. Its initial
+  build 189 capture was unavailable while the app was paused; this failed receipt
+  is retained rather than represented as a forwarding pass. After resuming, its
+  build 189 capture received 21 HT1 and 31 HT.w advertisements, all with the
+  configured addresses. The capture logged an EOF; these counts prove forwarding
+  and identity, not uninterrupted connection uptime.
+- No manual identity import or manufacturer-specific production rule was used.
+  The earlier Mini 5 shared-only learning and restart checks below independently
+  establish automatic peer import without native-scanner comparison.
+- Two existing SensorPush discovery prompts remain, including the older Mini 4
+  aliases. These are not deleted by identity learning, and an older proxy that
+  remains active needs updating separately. This validates the resolver; it does
+  not claim every unavailable fleet member is running the latest build.
+
+The equal-length packet-group regression reproduces a generic dilution problem.
+It is not proof that this was the sole cause of the earlier HT.w delay: the
+captured live rejection identified timing alignment, and later peer evidence
+qualified without lowering the thresholds.
+
+Earlier generic identity validation (builds 181–183):
 
 - 82 signed focused regression tests pass on build 183, including changing
   payloads, alternating advertisement layouts, ambiguous devices, stale evidence,
