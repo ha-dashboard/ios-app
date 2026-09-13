@@ -117,7 +117,7 @@ containing `server` and `token` to the app's
 `-HAImportBootstrapAuth`. The app consumes and deletes the file before saving
 credentials to Keychain. Keep the transfer file out of receipts and logs, remove
 the local temporary copy, and verify that the device copy was consumed. Do not
-put the token in process arguments. Ordinary deployments retain credentials.
+put the token in process arguments. This import requires the explicit launch flag.
 
 For a Mini 5 that is reachable through MobileDevice Wi-Fi but missing from
 CoreDevice, the validated launch path is a personalized developer image followed
@@ -163,22 +163,47 @@ delivery, and real GATT operations as separate acceptance results. The local
 device observations. Validate its timestamp when collecting it; a stale file
 does not prove a running app.
 
-The initial validation established real HA advertisement delivery and a
-successful HA clock-sync operation through a physical iPad Mini 4. HA's
-connection allocation identified that iPad as the route, and the app recorded
-the writes and reply notification. Controlled physical tests on the Mini 4 and
-Mini 5 then verified reads, writes, notifications, readback and cached-handle
-reconnects. The Mini 4 also passed three immediate reconnects after dropping the
-network transport with a BLE connection allocated. Build 167 repeated these
-checks on both Minis, including three transport-drop reconnects per device.
-Both also acknowledged unknown disconnects and rejected an additional client's
-connection in approximately 8–10 ms while preserving the original client's
-ability to read the peripheral. The focused BLE suite passed 8 tests.
-Native transport checks
-passed 10 tests; an isolated signed Catalyst regression run passed 50 tests,
-including existing auth, registration and streaming checks plus BLE setup,
-framing and reset checks. Broader device and failure-path
-acceptance remains in progress; no App Store release is implied by these results.
+Physical validation on 13 September 2026 established encrypted HA advertisement
+forwarding and active GATT operation using public APIs. Build 173 was installed
+and launched on all nine available iOS devices, plus Catalyst. Fresh diagnostics
+showed seven iOS proxies and Catalyst forwarding, and HA reported all eight
+corresponding ESPHome entries loaded.
+
+| Device | Build 173 runtime receipt | Last complete physical GATT check |
+| --- | --- | --- |
+| iPhone 11 | Forwarding to HA | Build 173 |
+| iPhone 16 Pro Max | Forwarding to HA | Build 172 |
+| iPad Pro M2 | Forwarding to HA | Build 167 |
+| iPad Mini 4 | Forwarding to HA | Build 167 |
+| iPad Mini 5 | Forwarding to HA | Build 173 |
+| iPad 3, iOS 9.3.5 | Forwarding with service filters | Build 170 |
+| iPad 4, iOS 10.3.3 | Forwarding with service filters | Build 170 |
+| Second iPad Pro | Bluetooth permission denied | Not performed |
+| iPad 2, iOS 9.3.5 | Core Bluetooth reports unsupported | Not applicable |
+
+The GATT checks verify the reference service and marker, an acknowledged write,
+matching notification and readback, cached-handle reconnect,
+three reconnects after dropping the network transport, and rejection of a second
+client while preserving the original connection. The last GATT build and final
+installation are reported separately; installing build 173 is not a claim that
+every device repeated the complete GATT test on that build.
+
+Earlier real-device validation also routed a Home Assistant clock-sync operation
+through the Mini 4 to a SwitchBot CO2 meter. HA identified the proxy allocation,
+and the app recorded the writes and reply notification.
+
+Native transport checks passed 10 tests. The signed Catalyst regression selection
+passed 59 tests covering BLE, authentication, OAuth, device registration and
+streaming. This includes bounded retries when HA rejects refreshed credentials.
+The iPhone 11's administrator credential bootstrap was subsequently validated on
+the physical device: HA registration succeeded, the one-time file disappeared,
+and preferences contained no access token.
+
+Temporary phone and iPad test apps are separate from HA Dashboard. No private
+Bluetooth framework is needed for these results. Foreground operation and
+Core Bluetooth's identity/discovery limits still apply; these checks do not
+establish unattended background service or universal device compatibility.
+No App Store release is implied by this development validation.
 
 Reference implementations and API documentation:
 
