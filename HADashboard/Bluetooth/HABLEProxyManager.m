@@ -113,6 +113,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 @property (nonatomic, strong) HABLEIdentityResolver *identityResolver;
 @property (nonatomic, strong) HABLEIdentityResolver *identityImportResolver;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *automaticMappings;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *identityLabels;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *identityCheckTimes;
 @property (nonatomic, copy) NSString *identityScope;
 @property (nonatomic, assign) NSUInteger identityGeneration;
@@ -169,7 +170,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         [defaults removeObjectForKey:@"HABLEProxyRegister"];
         _registration = [[HABLEProxyRegistration alloc] init];
         _identityResolver = [[HABLEIdentityResolver alloc] init];
-        _automaticMappings = [NSMutableDictionary dictionary]; _identityCheckTimes = [NSMutableDictionary dictionary];
+        _automaticMappings = [NSMutableDictionary dictionary]; _identityLabels = [NSMutableDictionary dictionary]; _identityCheckTimes = [NSMutableDictionary dictionary];
         _pendingIdentityAdvertisements = [NSMutableArray array];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(integrationRegistrationDidChange:) name:HADeviceIntegrationEnabledDidChangeNotification object:nil];
         _handleTables = [[[NSUserDefaults standardUserDefaults] dictionaryForKey:@"ha_ble_proxy_handle_tables"] mutableCopy] ?: [NSMutableDictionary dictionary];
@@ -385,7 +386,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     self.registration = [[HABLEProxyRegistration alloc] init]; self.nextRegistrationAttempt = 0;
     self.registeredContext = nil; self.integrationRegistrationWasEnabled = NO;
     [[NSUserDefaults standardUserDefaults] setBool:NO forKey:HABLEEnabledKey];
-    [self.automaticMappings removeAllObjects]; [self.identityCheckTimes removeAllObjects];
+    [self.automaticMappings removeAllObjects]; [self.identityLabels removeAllObjects]; [self.identityCheckTimes removeAllObjects];
     self.identityResolver = [[HABLEIdentityResolver alloc] init]; self.identityScope = nil; self.identitiesReady = NO; self.identityPacketsDropped = 0;
     self.advertisementCount = self.forwardedCount = self.discoveryCallbacks = self.unknownRSSICount = 0;
     self.gattReads = self.gattWrites = self.gattNotifications = 0;
@@ -411,6 +412,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         for (NSString *candidate in self.observations) if (!self.sessions[@([self addressForIdentifier:candidate])] && (!oldest || [self.observations[candidate][@"last_seen"] doubleValue] < [self.observations[oldest][@"last_seen"] doubleValue])) oldest = candidate;
         if (!oldest) return;
         [self.observations removeObjectForKey:oldest]; [self.peripherals removeObjectForKey:oldest]; [self.advertisedAddresses removeObjectForKey:oldest];
+        [self.automaticMappings removeObjectForKey:oldest]; [self.identityLabels removeObjectForKey:oldest]; [self.identityCheckTimes removeObjectForKey:oldest];
     }
     NSData *manufacturer = advertisement[CBAdvertisementDataManufacturerDataKey];
     if (manufacturer.length >= 8) {
@@ -466,8 +468,22 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 }
 - (void)matchIdentifier:(NSString *)identifier {
     NSMutableDictionary *observation = self.observations[identifier];
-    if (!observation || self.mappings[identifier] || self.advertisedAddresses[identifier]) return;
+    if (!observation) return;
     CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+    if (self.mappings[identifier] || self.advertisedAddresses[identifier]) {
+        if (self.identitiesReady && now >= [self.identityCheckTimes[identifier] doubleValue]) {
+            self.identityCheckTimes[identifier] = @(now + 30);
+            NSString *address = HABLEAddressString([self addressForIdentifier:identifier]); NSDictionary *match = nil;
+            for (NSDictionary *known in self.identityResolver.knownDevices) if ([known[@"address"] isEqual:address]) {
+                if (match) { match = nil; break; }
+                match = known;
+            }
+            if (match) self.identityLabels[identifier] = match; else [self.identityLabels removeObjectForKey:identifier];
+        }
+        NSDictionary *known = self.identityLabels[identifier];
+        if (known) { observation[@"ha_name"] = known[@"label"]; observation[@"identity_evidence"] = @"Address matches Home Assistant"; }
+        return;
+    }
     if (self.identitiesReady && now >= [self.identityCheckTimes[identifier] doubleValue]) {
         self.identityCheckTimes[identifier] = @(now + 30);
         NSDictionary *match = [self.identityResolver automaticMatchForObservation:observation];
@@ -489,7 +505,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         [self.identityResolver cancel]; [self.identityImportResolver cancel]; self.identityImportResolver = nil;
         self.identityGeneration++; self.importingIdentities = NO;
         self.identityResolver = [[HABLEIdentityResolver alloc] init]; self.identityScope = scope;
-        [self.automaticMappings removeAllObjects]; [self.identityCheckTimes removeAllObjects]; [self.pendingIdentityAdvertisements removeAllObjects];
+        [self.automaticMappings removeAllObjects]; [self.identityLabels removeAllObjects]; [self.identityCheckTimes removeAllObjects]; [self.pendingIdentityAdvertisements removeAllObjects];
         self.identitiesReady = NO; self.identityWaitStarted = CFAbsoluteTimeGetCurrent(); self.nextIdentityRefresh = 0;
     }
     if (!self.running) return;
@@ -605,6 +621,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     }
     if (reason) { if (error) *error = [NSError errorWithDomain:@"HABLEProxy" code:1 userInfo:@{NSLocalizedDescriptionKey:reason}]; return NO; }
     if (address.length) self.mappings[identifier] = HABLEAddressString(value); else [self.mappings removeObjectForKey:identifier];
+    [self.automaticMappings removeObjectForKey:identifier]; [self.identityLabels removeObjectForKey:identifier]; [self.identityCheckTimes removeObjectForKey:identifier];
     [[NSUserDefaults standardUserDefaults] setObject:self.mappings forKey:HABLEMappingKey];
     self.observations[identifier][@"address"] = HABLEAddressString([self addressForIdentifier:identifier]);
     self.observations[identifier][@"identity"] = self.mappings[identifier] ? @"user_associated_mac" : self.advertisedAddresses[identifier] ? @"switchbot_advertised_mac" : @"local_alias";

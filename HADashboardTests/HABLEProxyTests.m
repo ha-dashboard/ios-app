@@ -48,6 +48,7 @@ static NSUInteger HABLERejectedRequestCount;
 @interface HABLEProxyManager (ProtocolTestAccess)
 - (void)updateAutomaticRegistrationWithIntegrationEnabled:(BOOL)enabled connected:(BOOL)connected context:(NSString *)context;
 - (void)registerWithHomeAssistantAutomatically:(BOOL)automatic;
+- (void)matchIdentifier:(NSString *)identifier;
 - (void)deviceRequest:(NSDictionary *)fields connection:(HABLEAPIConnection *)connection;
 - (void)bleServer:(HABLEAPIServer *)server receivedType:(NSUInteger)type data:(NSData *)data connection:(HABLEAPIConnection *)connection;
 @end
@@ -84,6 +85,38 @@ static NSUInteger HABLERejectedRequestCount;
 @interface HABLEProxyTests : XCTestCase
 @end
 @implementation HABLEProxyTests
+- (void)testRemovingManualAssociationCannotPromoteAFriendlyNameIntoAnAddressMatch {
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    id saved = [defaults objectForKey:@"ha_ble_proxy_address_mapping"];
+    HABLEIdentityResolver *resolver = [[HABLEIdentityResolver alloc] init];
+    [resolver loadRegistry:@[@{@"id":@"meter", @"name":@"Generic meter", @"name_by_user":@"Bedroom", @"connections":@[@[@"bluetooth", @"00:11:22:33:44:55"]]}] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    HABLEProxyManager *proxy = [[HABLEProxyManager alloc] init];
+    [proxy setValue:resolver forKey:@"identityResolver"]; [proxy setValue:@YES forKey:@"identitiesReady"];
+    NSMutableDictionary *observation = [@{@"name":@"Generic meter", @"identity":@"user_associated_mac", @"address":@"00:11:22:33:44:55"} mutableCopy];
+    [proxy setValue:[@{@"local-id":observation} mutableCopy] forKey:@"observations"];
+    [proxy setValue:[@{@"local-id":@"00:11:22:33:44:55"} mutableCopy] forKey:@"mappings"];
+    [proxy matchIdentifier:@"local-id"]; XCTAssertEqualObjects(observation[@"ha_name"], @"Bedroom");
+    XCTAssertTrue([proxy setRealAddress:@"" forIdentifier:@"local-id" error:nil]);
+    [proxy matchIdentifier:@"local-id"];
+    XCTAssertNotEqualObjects(observation[@"address"], @"00:11:22:33:44:55");
+    XCTAssertEqualObjects(observation[@"identity"], @"local_alias");
+    if (saved) [defaults setObject:saved forKey:@"ha_ble_proxy_address_mapping"]; else [defaults removeObjectForKey:@"ha_ble_proxy_address_mapping"];
+}
+- (void)testPublishedAddressesKeepTheirIdentityAndUseHAFriendlyNames {
+    HABLEIdentityResolver *resolver = [[HABLEIdentityResolver alloc] init];
+    [resolver loadRegistry:@[@{@"id":@"meter", @"name":@"Raw meter name", @"name_by_user":@"Bedroom climate", @"connections":@[@[@"bluetooth", @"00:11:22:33:44:55"]]}] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    HABLEProxyManager *proxy = [[HABLEProxyManager alloc] init];
+    [proxy setValue:resolver forKey:@"identityResolver"]; [proxy setValue:@YES forKey:@"identitiesReady"];
+    NSMutableDictionary *observation = [@{@"name":@"Raw meter name", @"identity":@"switchbot_advertised_mac", @"address":@"00:11:22:33:44:55"} mutableCopy];
+    [proxy setValue:[@{@"local-id":observation} mutableCopy] forKey:@"observations"];
+    [proxy setValue:[@{@"local-id":@"00:11:22:33:44:55"} mutableCopy] forKey:@"advertisedAddresses"];
+    [proxy matchIdentifier:@"local-id"];
+    XCTAssertEqualObjects(observation[@"ha_name"], @"Bedroom climate");
+    XCTAssertEqualObjects(observation[@"identity"], @"switchbot_advertised_mac");
+    [observation removeObjectForKey:@"ha_name"];
+    [proxy matchIdentifier:@"local-id"];
+    XCTAssertEqualObjects(observation[@"ha_name"], @"Bedroom climate", @"Fresh advertisements retain the cached friendly name");
+}
 - (HABLEIdentityResolver *)poolIdentityResolver {
     HABLEIdentityResolver *resolver = [[HABLEIdentityResolver alloc] init];
     [resolver loadRegistry:@[
