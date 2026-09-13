@@ -7,10 +7,13 @@ forward Bluetooth audio or expose an unrestricted radio adapter.
 
 ## Setup
 
-1. Open Settings → Bluetooth Proxy and enable it. Allow Bluetooth access.
+1. **Register with Home Assistant** automatically activates the proxy unless you
+   have explicitly switched Bluetooth Proxy off. You can also enable it in
+   Settings → Bluetooth Proxy. Allow Bluetooth access when prompted.
 2. Keep the dashboard open. Kiosk mode can prevent automatic display sleep.
-3. While connected to Home Assistant as an administrator, tap **Add to Home
-   Assistant**. The app uses the existing ESPHome integration.
+3. With device registration enabled and an administrator account connected,
+   setup happens automatically through the existing ESPHome integration. The
+   **Add to Home Assistant** button remains available for manual setup.
 4. Alternatively, add ESPHome manually using the displayed local address,
    port 6053, and the copied encryption key.
 
@@ -33,7 +36,18 @@ proxy therefore distinguishes:
 - Hardware addresses explicitly associated by the user.
 - Local aliases for devices whose address is unknown.
 
-Tap a nearby device to import known Bluetooth devices from HA. The matching view
+The proxy imports known HA identities and independent scanner observations
+automatically. It can bind Blue Connect device identifiers to independently
+observed addresses, including registry entries without Bluetooth connections.
+An unambiguous GATT serial can also match an address registered in HA. Generic
+names, services and matching measurements never authorize an automatic link.
+Conflicting records or addresses require confirmation. All HA Dashboard proxy
+sources are excluded from address evidence; native and ESP32 scanners remain
+eligible. Automatic associations are scoped to the HA account session and
+refresh every five minutes. Supported Blue Connect advertisements are briefly
+buffered during the initial import to avoid premature alias discoveries.
+
+Tap a nearby device to inspect matching evidence and known Bluetooth devices. The matching view
 compares registry information and advertisements received by other scanners.
 It can also read standard GATT serial, system ID, manufacturer and model fields
 when a device provides them. Matching names, readings and service UUIDs are

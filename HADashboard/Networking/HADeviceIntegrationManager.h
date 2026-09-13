@@ -1,5 +1,7 @@
 #import <Foundation/Foundation.h>
 
+extern NSString *const HADeviceIntegrationEnabledDidChangeNotification;
+
 /// Coordinates device registration, sensor reporting, and remote command handling.
 /// Singleton — lifecycle tied to connection state.
 @interface HADeviceIntegrationManager : NSObject

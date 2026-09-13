@@ -3,6 +3,9 @@
 #import "HABLEProto.h"
 #import "HABLEProxyRegistration.h"
 #import "HAConnectionManager.h"
+#import "HADeviceIntegrationManager.h"
+#import "HAAuthManager.h"
+#import "HABLEIdentityResolver.h"
 #import "HALog.h"
 #import <CoreBluetooth/CoreBluetooth.h>
 #import <UIKit/UIKit.h>
@@ -104,6 +107,21 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 @property (nonatomic, assign) NSUInteger tickCount;
 @property (nonatomic, strong) HABLEProxyRegistration *registration;
 @property (nonatomic, assign) CFAbsoluteTime nextRegistrationAttempt;
+@property (nonatomic, copy) NSString *registeredContext;
+@property (nonatomic, assign) BOOL integrationRegistrationWasEnabled;
+@property (nonatomic, assign) BOOL automaticRegistrationInFlight;
+@property (nonatomic, strong) HABLEIdentityResolver *identityResolver;
+@property (nonatomic, strong) HABLEIdentityResolver *identityImportResolver;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *automaticMappings;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *identityCheckTimes;
+@property (nonatomic, copy) NSString *identityScope;
+@property (nonatomic, assign) NSUInteger identityGeneration;
+@property (nonatomic, assign) BOOL importingIdentities;
+@property (nonatomic, assign) BOOL identitiesReady;
+@property (nonatomic, assign) CFAbsoluteTime identityWaitStarted;
+@property (nonatomic, assign) CFAbsoluteTime nextIdentityRefresh;
+@property (nonatomic, strong) NSMutableArray<NSDictionary *> *pendingIdentityAdvertisements;
+@property (nonatomic, assign) NSUInteger identityPacketsDropped;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *handleTables;
 @property (nonatomic, assign) NSUInteger gattReads;
 @property (nonatomic, assign) NSUInteger gattWrites;
@@ -150,6 +168,10 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         if ([defaults objectForKey:@"HABLEProxyRegister"]) [defaults setBool:[defaults boolForKey:@"HABLEProxyRegister"] forKey:@"ha_ble_proxy_auto_register"];
         [defaults removeObjectForKey:@"HABLEProxyRegister"];
         _registration = [[HABLEProxyRegistration alloc] init];
+        _identityResolver = [[HABLEIdentityResolver alloc] init];
+        _automaticMappings = [NSMutableDictionary dictionary]; _identityCheckTimes = [NSMutableDictionary dictionary];
+        _pendingIdentityAdvertisements = [NSMutableArray array];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(integrationRegistrationDidChange:) name:HADeviceIntegrationEnabledDidChangeNotification object:nil];
         _handleTables = [[[NSUserDefaults standardUserDefaults] dictionaryForKey:@"ha_ble_proxy_handle_tables"] mutableCopy] ?: [NSMutableDictionary dictionary];
         _scanSubscription = -1; _scanServiceStatus = @"Services can be imported from Home Assistant";
         NSMutableArray *imported = [NSMutableArray array], *additional = [NSMutableArray array];
@@ -163,7 +185,11 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     }
     return self;
 }
-- (BOOL)isEnabled { return [[NSUserDefaults standardUserDefaults] boolForKey:HABLEEnabledKey]; }
+- (void)dealloc { [[NSNotificationCenter defaultCenter] removeObserver:self]; }
+- (BOOL)isEnabled {
+    id preference = [[NSUserDefaults standardUserDefaults] objectForKey:HABLEEnabledKey];
+    return preference ? [preference boolValue] : [HADeviceIntegrationManager sharedManager].enabled;
+}
 - (HABLEScanMode)scanMode {
     NSInteger value = [[NSUserDefaults standardUserDefaults] integerForKey:HABLEScanModeKey];
     return value >= HABLEScanModeAutomatic && value <= HABLEScanModeServices ? (HABLEScanMode)value : HABLEScanModeAutomatic;
@@ -328,6 +354,10 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 - (void)stopTransport {
     self.scanStartGeneration++; [self cancelScanImport];
     [self.registration cancel];
+    self.automaticRegistrationInFlight = NO;
+    [self.identityResolver cancel]; [self.identityImportResolver cancel]; self.identityImportResolver = nil;
+    self.identityGeneration++; self.importingIdentities = NO; self.nextIdentityRefresh = 0;
+    [self.pendingIdentityAdvertisements removeAllObjects];
     if (self.central.state == CBCentralManagerStatePoweredOn) [self.central stopScan];
     for (HABLEPeripheralSession *session in [self.sessions.allValues copy]) {
         if (session.identityCompletion) [self finishIdentity:session error:@"Bluetooth proxy paused"];
@@ -353,6 +383,10 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     self.installationID = [NSUUID UUID].UUIDString; self.adapterAddress = HABLEAddressString(HABLEAlias(self.installationID));
     self.nodeName = [@"ha-dash-" stringByAppendingString:[[self.adapterAddress stringByReplacingOccurrencesOfString:@":" withString:@""] lowercaseString]];
     self.registration = [[HABLEProxyRegistration alloc] init]; self.nextRegistrationAttempt = 0;
+    self.registeredContext = nil; self.integrationRegistrationWasEnabled = NO;
+    [[NSUserDefaults standardUserDefaults] setBool:NO forKey:HABLEEnabledKey];
+    [self.automaticMappings removeAllObjects]; [self.identityCheckTimes removeAllObjects];
+    self.identityResolver = [[HABLEIdentityResolver alloc] init]; self.identityScope = nil; self.identitiesReady = NO; self.identityPacketsDropped = 0;
     self.advertisementCount = self.forwardedCount = self.discoveryCallbacks = self.unknownRSSICount = 0;
     self.gattReads = self.gattWrites = self.gattNotifications = 0;
     NSString *directory = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
@@ -364,6 +398,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     uint64_t address;
     if (HABLEParseAddress(self.mappings[identifier], &address)) return address;
     if (HABLEParseAddress(self.advertisedAddresses[identifier], &address)) return address;
+    if (HABLEParseAddress(self.automaticMappings[identifier][@"address"], &address)) return address;
     return HABLEAlias([self.installationID stringByAppendingString:identifier]);
 }
 - (void)centralManager:(CBCentralManager *)central didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:(NSDictionary *)advertisement RSSI:(NSNumber *)RSSI {
@@ -392,7 +427,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     uint64_t address = [self addressForIdentifier:identifier];
     NSString *name = advertisement[CBAdvertisementDataLocalNameKey] ?: peripheral.name ?: @"Unnamed device";
     self.peripherals[identifier] = peripheral; self.advertisementCount++;
-    NSMutableData *packet = [NSMutableData data]; HABLEPutInteger(packet, 1, address); HABLEPutString(packet, 2, name);
+    NSMutableData *packet = [NSMutableData data]; HABLEPutString(packet, 2, name);
     int64_t rssi = RSSI.longLongValue; HABLEPutInteger(packet, 3, ((uint64_t)rssi << 1) ^ (uint64_t)(rssi >> 63));
     NSMutableArray *uuids = [NSMutableArray array];
     NSMutableOrderedSet *advertisedServices = [NSMutableOrderedSet orderedSetWithArray:advertisement[CBAdvertisementDataServiceUUIDsKey] ?: @[]];
@@ -409,12 +444,75 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         NSMutableData *entry = [NSMutableData data]; HABLEPutString(entry, 1, [NSString stringWithFormat:@"%04x", bytes[0] | (bytes[1] << 8)]);
         HABLEPutBytes(entry, 3, [manufacturer subdataWithRange:NSMakeRange(2, manufacturer.length - 2)]); HABLEPutBytes(packet, 6, entry);
     }
-    HABLEPutInteger(packet, 7, (self.mappings[identifier] || self.advertisedAddresses[identifier]) ? 0 : 1);
-    // Preserve changing event payloads in callback order. Coalescing by device
-    // would lose quick button events or successive encrypted packet counters.
-    if ([self.server broadcastAdvertisement:packet]) self.forwardedCount++;
     self.observations[identifier] = [@{@"identifier":identifier, @"name":name, @"address":HABLEAddressString(address), @"identity":self.mappings[identifier] ? @"user_associated_mac" : self.advertisedAddresses[identifier] ? @"switchbot_advertised_mac" : @"local_alias", @"rssi":RSSI, @"connectable":advertisement[CBAdvertisementDataIsConnectable] ?: @NO, @"last_seen":@([[NSDate date] timeIntervalSince1970]), @"service_uuids":uuids, @"service_data":serviceDump, @"manufacturer_data":[manufacturer base64EncodedStringWithOptions:0] ?: @""} mutableCopy];
     if (self.identityMetadata[identifier]) [self.observations[identifier] addEntriesFromDictionary:self.identityMetadata[identifier]];
+    [self updateIdentityResolution];
+    [self matchIdentifier:identifier];
+    // Hold supported device identities briefly during the initial HA import,
+    // so a temporary local alias cannot immediately create a duplicate flow.
+    const uint8_t *manufacturerBytes = manufacturer.bytes;
+    BOOL blue = manufacturer.length == 13 && manufacturerBytes[0] == 0x31 && manufacturerBytes[1] == 0x01 &&
+        [name rangeOfString:@"^B2[0-9A-F]{8}$" options:NSRegularExpressionSearch | NSCaseInsensitiveSearch].location != NSNotFound;
+    if (blue && !self.identitiesReady && !self.mappings[identifier] && CFAbsoluteTimeGetCurrent() - self.identityWaitStarted < 10) {
+        if (self.pendingIdentityAdvertisements.count < 256) [self.pendingIdentityAdvertisements addObject:@{@"identifier":identifier, @"packet":packet}];
+        else self.identityPacketsDropped++;
+    } else [self forwardPacket:packet identifier:identifier];
+}
+- (void)forwardPacket:(NSData *)packet identifier:(NSString *)identifier {
+    if (!self.observations[identifier]) return;
+    NSMutableData *encoded = [packet mutableCopy]; HABLEPutInteger(encoded, 1, [self addressForIdentifier:identifier]);
+    HABLEPutInteger(encoded, 7, (self.mappings[identifier] || self.advertisedAddresses[identifier] || self.automaticMappings[identifier]) ? 0 : 1);
+    if ([self.server broadcastAdvertisement:encoded]) self.forwardedCount++;
+}
+- (void)matchIdentifier:(NSString *)identifier {
+    NSMutableDictionary *observation = self.observations[identifier];
+    if (!observation || self.mappings[identifier] || self.advertisedAddresses[identifier]) return;
+    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+    if (self.identitiesReady && now >= [self.identityCheckTimes[identifier] doubleValue]) {
+        self.identityCheckTimes[identifier] = @(now + 30);
+        NSDictionary *match = [self.identityResolver automaticMatchForObservation:observation];
+        uint64_t address = 0; BOOL available = match && HABLEParseAddress(match[@"address"], &address);
+        if (self.sessions[@([self addressForIdentifier:identifier])] || (available && self.sessions[@(address)])) return;
+        for (NSString *other in self.observations) if (available && ![other isEqual:identifier] &&
+            [self addressForIdentifier:other] == address && [[NSDate date] timeIntervalSince1970] - [self.observations[other][@"last_seen"] doubleValue] < 300) available = NO;
+        if (available) self.automaticMappings[identifier] = match; else [self.automaticMappings removeObjectForKey:identifier];
+    }
+    NSDictionary *match = self.automaticMappings[identifier];
+    observation[@"address"] = HABLEAddressString([self addressForIdentifier:identifier]);
+    observation[@"identity"] = match ? @"ha_matched_mac" : @"local_alias";
+    if (match) { observation[@"ha_name"] = match[@"label"]; observation[@"identity_evidence"] = match[@"evidence"]; }
+}
+- (void)updateIdentityResolution {
+    HAAuthManager *auth = [HAAuthManager sharedManager];
+    NSString *scope = [NSString stringWithFormat:@"%@|%lu", auth.serverURL ?: @"", (unsigned long)auth.authenticationRevision];
+    if (![scope isEqual:self.identityScope]) {
+        [self.identityResolver cancel]; [self.identityImportResolver cancel]; self.identityImportResolver = nil;
+        self.identityGeneration++; self.importingIdentities = NO;
+        self.identityResolver = [[HABLEIdentityResolver alloc] init]; self.identityScope = scope;
+        [self.automaticMappings removeAllObjects]; [self.identityCheckTimes removeAllObjects]; [self.pendingIdentityAdvertisements removeAllObjects];
+        self.identitiesReady = NO; self.identityWaitStarted = CFAbsoluteTimeGetCurrent(); self.nextIdentityRefresh = 0;
+    }
+    if (!self.running) return;
+    if (!self.importingIdentities && [HAConnectionManager sharedManager].connected && CFAbsoluteTimeGetCurrent() >= self.nextIdentityRefresh) {
+        self.importingIdentities = YES; self.nextIdentityRefresh = CFAbsoluteTimeGetCurrent() + 300;
+        HABLEIdentityResolver *resolver = [[HABLEIdentityResolver alloc] init]; self.identityImportResolver = resolver;
+        NSUInteger generation = self.identityGeneration; __weak typeof(self) weakSelf = self;
+        [resolver refreshExcludingSource:self.adapterAddress completion:^(NSError *error) {
+            HABLEProxyManager *self = weakSelf; if (!self || self.identityGeneration != generation) return;
+            self.importingIdentities = NO; self.identitiesReady = YES;
+            if (!error) self.identityResolver = resolver;
+            self.identityImportResolver = nil;
+            if (error) self.nextIdentityRefresh = CFAbsoluteTimeGetCurrent() + 60;
+            [self.identityCheckTimes removeAllObjects];
+            for (NSString *identifier in self.observations) [self matchIdentifier:identifier];
+            [self flushIdentityAdvertisements]; [self changed];
+        }];
+    }
+    if (self.identitiesReady || CFAbsoluteTimeGetCurrent() - self.identityWaitStarted >= 10) [self flushIdentityAdvertisements];
+}
+- (void)flushIdentityAdvertisements {
+    for (NSDictionary *item in self.pendingIdentityAdvertisements) [self forwardPacket:item[@"packet"] identifier:item[@"identifier"]];
+    [self.pendingIdentityAdvertisements removeAllObjects];
 }
 - (NSArray *)devices { return [self.observations.allValues sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) { return [b[@"rssi"] compare:a[@"rssi"]]; }]; }
 - (NSString *)registrationStatus { return self.registration.status; }
@@ -448,11 +546,50 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     completion(message ? nil : identity, message ? [NSError errorWithDomain:@"HABLEIdentity" code:3 userInfo:@{NSLocalizedDescriptionKey:message}] : nil);
 }
 - (void)registerWithHomeAssistant {
+    [self registerWithHomeAssistantAutomatically:NO];
+}
+- (NSString *)registrationContext {
+    HAAuthManager *auth = [HAAuthManager sharedManager];
+    return [NSString stringWithFormat:@"%@|%@|%lu", auth.serverURL ?: @"", self.host ?: @"", (unsigned long)auth.authenticationRevision];
+}
+- (void)updateAutomaticRegistration {
+    [self updateAutomaticRegistrationWithIntegrationEnabled:[HADeviceIntegrationManager sharedManager].enabled
+                                                connected:[HAConnectionManager sharedManager].connected
+                                                  context:[self registrationContext]];
+}
+- (void)integrationRegistrationDidChange:(NSNotification *)note {
+    if (self.enabled) [self resume]; else [self suspend];
+    [self updateAutomaticRegistration];
+}
+- (void)updateAutomaticRegistrationWithIntegrationEnabled:(BOOL)enabled connected:(BOOL)connected context:(NSString *)context {
+    BOOL requested = [[NSUserDefaults standardUserDefaults] boolForKey:@"ha_ble_proxy_auto_register"];
+    if (enabled != self.integrationRegistrationWasEnabled) {
+        self.integrationRegistrationWasEnabled = enabled;
+        self.registeredContext = nil; self.nextRegistrationAttempt = 0;
+    }
+    if (!enabled && !requested) {
+        if (self.automaticRegistrationInFlight) {
+            [self.registration cancel]; self.automaticRegistrationInFlight = NO; [self changed];
+        }
+        return;
+    }
+    if (self.running && connected && !self.registration.registering &&
+        (requested || ![self.registeredContext isEqual:context]) && CFAbsoluteTimeGetCurrent() >= self.nextRegistrationAttempt) {
+        [self registerWithHomeAssistantAutomatically:YES];
+    }
+}
+- (void)registerWithHomeAssistantAutomatically:(BOOL)automatic {
     if (!self.running || self.registration.registering) return;
+    self.automaticRegistrationInFlight = automatic;
     self.nextRegistrationAttempt = CFAbsoluteTimeGetCurrent() + 60;
+    NSString *context = [self registrationContext];
     __weak typeof(self) weakSelf = self;
     [self.registration registerHost:self.host key:[self encryptionKey] completion:^(BOOL success) {
-        if (success) [[NSUserDefaults standardUserDefaults] setBool:NO forKey:@"ha_ble_proxy_auto_register"];
+        weakSelf.automaticRegistrationInFlight = NO;
+        if (success) {
+            weakSelf.registeredContext = context;
+            [[NSUserDefaults standardUserDefaults] setBool:NO forKey:@"ha_ble_proxy_auto_register"];
+        }
         [weakSelf changed];
     }]; [self changed];
 }
@@ -474,7 +611,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     [self changed]; return YES;
 }
 - (NSDictionary *)diagnostics {
-    return @{@"schema":@1, @"time":@([[NSDate date] timeIntervalSince1970]), @"enabled":@(self.enabled), @"running":@(self.running), @"status":self.status ?: @"", @"node":self.nodeName, @"adapter_alias":self.adapterAddress, @"host":self.host ?: @"", @"port":@6053, @"clients":@(self.server.authenticatedClients), @"advertisements":@(self.advertisementCount), @"forwarded":@(self.forwardedCount), @"active_connections":@(self.sessions.count), @"devices":self.devices, @"backend":@"public_core_bluetooth", @"transport":@"noise_nnpsk0", @"discovery_callbacks":@(self.discoveryCallbacks), @"unknown_rssi_callbacks":@(self.unknownRSSICount), @"central_state":@((NSInteger)self.central.state), @"scanning":@(self.central.isScanning), @"application_state":@((NSInteger)[UIApplication sharedApplication].applicationState), @"app_build":[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"", @"scan_mode":@(self.scanMode), @"using_service_filters":@(self.usingServiceFilters), @"scan_service_uuids":self.scanServiceUUIDs, @"scan_service_status":self.scanServiceStatus ?: @"", @"registration_status":self.registrationStatus ?: @"", @"registration_requested":@([[NSUserDefaults standardUserDefaults] boolForKey:@"ha_ble_proxy_auto_register"]), @"gatt_reads":@(self.gattReads), @"gatt_writes":@(self.gattWrites), @"gatt_notifications":@(self.gattNotifications)};
+    return @{@"schema":@1, @"time":@([[NSDate date] timeIntervalSince1970]), @"enabled":@(self.enabled), @"running":@(self.running), @"status":self.status ?: @"", @"node":self.nodeName, @"adapter_alias":self.adapterAddress, @"host":self.host ?: @"", @"port":@6053, @"clients":@(self.server.authenticatedClients), @"advertisements":@(self.advertisementCount), @"forwarded":@(self.forwardedCount), @"active_connections":@(self.sessions.count), @"devices":self.devices, @"backend":@"public_core_bluetooth", @"transport":@"noise_nnpsk0", @"discovery_callbacks":@(self.discoveryCallbacks), @"unknown_rssi_callbacks":@(self.unknownRSSICount), @"central_state":@((NSInteger)self.central.state), @"scanning":@(self.central.isScanning), @"application_state":@((NSInteger)[UIApplication sharedApplication].applicationState), @"app_build":[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"", @"scan_mode":@(self.scanMode), @"using_service_filters":@(self.usingServiceFilters), @"scan_service_uuids":self.scanServiceUUIDs, @"scan_service_status":self.scanServiceStatus ?: @"", @"registration_status":self.registrationStatus ?: @"", @"registration_requested":@([[NSUserDefaults standardUserDefaults] boolForKey:@"ha_ble_proxy_auto_register"]), @"registration_automatic":@([HADeviceIntegrationManager sharedManager].enabled), @"identity_status":self.identityResolver.status ?: @"", @"identity_importing":@(self.importingIdentities), @"identity_matches":@(self.automaticMappings.count), @"identity_packets_dropped":@(self.identityPacketsDropped), @"gatt_reads":@(self.gattReads), @"gatt_writes":@(self.gattWrites), @"gatt_notifications":@(self.gattNotifications)};
 }
 - (void)tick:(NSTimer *)timer {
     self.tickCount++;
@@ -487,7 +624,8 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     }
     if (!(self.tickCount % 4)) {
         [self updateRadio];
-        if (self.running && [[NSUserDefaults standardUserDefaults] boolForKey:@"ha_ble_proxy_auto_register"] && [HAConnectionManager sharedManager].connected && CFAbsoluteTimeGetCurrent() >= self.nextRegistrationAttempt) [self registerWithHomeAssistant];
+        [self updateAutomaticRegistration];
+        [self updateIdentityResolution];
         if (self.running) self.status = self.usingServiceFilters && !self.scanServiceUUIDs.count ? @"Import or enter Bluetooth service UUIDs to scan" : [NSString stringWithFormat:@"%@ · %lu client(s) · %lu devices · %lu connections", self.usingServiceFilters ? @"Scanning known services" : @"Scanning", (unsigned long)self.server.authenticatedClients, (unsigned long)self.observations.count, (unsigned long)self.sessions.count];
         [self changed];
     }

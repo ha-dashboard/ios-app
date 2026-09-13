@@ -4,6 +4,12 @@
 #import "HABLEProxyRegistration.h"
 #import "HABLEAPIServer.h"
 #import "HAAPIClient.h"
+#import "HABLEIdentityResolver.h"
+
+@interface HABLEIdentityResolver (IdentityTestAccess)
+- (void)loadRegistry:(NSArray *)devices entries:(NSArray *)entries excludingSource:(NSString *)source;
+- (void)observeAdvertisements:(NSArray *)advertisements;
+@end
 
 @interface HAAPIClient (RetryTestAccess)
 - (void)refreshAfterUnauthorized:(void (^)(NSString *, NSError *))completion;
@@ -40,8 +46,28 @@ static NSUInteger HABLERejectedRequestCount;
 @end
 
 @interface HABLEProxyManager (ProtocolTestAccess)
+- (void)updateAutomaticRegistrationWithIntegrationEnabled:(BOOL)enabled connected:(BOOL)connected context:(NSString *)context;
+- (void)registerWithHomeAssistantAutomatically:(BOOL)automatic;
 - (void)deviceRequest:(NSDictionary *)fields connection:(HABLEAPIConnection *)connection;
 - (void)bleServer:(HABLEAPIServer *)server receivedType:(NSUInteger)type data:(NSData *)data connection:(HABLEAPIConnection *)connection;
+@end
+
+@interface HABLERegistrationPolicyProxy : HABLEProxyManager
+@property NSUInteger registrationAttempts;
+@end
+@implementation HABLERegistrationPolicyProxy
+- (void)registerWithHomeAssistantAutomatically:(BOOL)automatic {
+    XCTAssertTrue(automatic);
+    self.registrationAttempts++;
+    [self setValue:@(CFAbsoluteTimeGetCurrent() + 60) forKey:@"nextRegistrationAttempt"];
+}
+@end
+
+@interface HABLECancellableRegistration : HABLEProxyRegistration
+@property NSUInteger cancellations;
+@end
+@implementation HABLECancellableRegistration
+- (void)cancel { self.cancellations++; [super cancel]; }
 @end
 
 @interface HABLECapturingServer : HABLEAPIServer
@@ -58,6 +84,97 @@ static NSUInteger HABLERejectedRequestCount;
 @interface HABLEProxyTests : XCTestCase
 @end
 @implementation HABLEProxyTests
+- (HABLEIdentityResolver *)poolIdentityResolver {
+    HABLEIdentityResolver *resolver = [[HABLEIdentityResolver alloc] init];
+    [resolver loadRegistry:@[
+        @{@"id":@"pool", @"name":@"B201ABCDEF", @"manufacturer":@"Blue Riiot", @"identifiers":@[@[@"blue_connect", @"B201ABCDEF"]], @"connections":@[], @"config_entries":@[@"pool-entry"]},
+        @{@"id":@"app-proxy", @"manufacturer":@"ha-dashboard", @"connections":@[@[@"mac", @"02:00:00:00:00:01"]], @"config_entries":@[@"app-entry"]},
+        @{@"id":@"native-adapter", @"connections":@[@[@"bluetooth", @"00:00:00:00:00:01"]], @"config_entries":@[@"adapter-entry"]}
+    ] entries:@[@{@"domain":@"bluetooth", @"entry_id":@"adapter-entry"}] excludingSource:@"02:00:00:00:00:02"];
+    return resolver;
+}
+- (NSDictionary *)poolAdvertisementWithAddress:(NSString *)address source:(NSString *)source {
+    return @{@"name":@"B201ABCDEF", @"address":address, @"source":source, @"manufacturer_data":@{@"305":@"0102030405060708090a0b"}, @"service_uuids":@[]};
+}
+- (NSDictionary *)poolObservation {
+    const uint8_t bytes[] = {0x31, 0x01, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+    return @{@"name":@"B201ABCDEF", @"identity":@"local_alias", @"address":@"02:00:00:00:00:03", @"manufacturer_data":[[NSData dataWithBytes:bytes length:sizeof(bytes)] base64EncodedStringWithOptions:0], @"service_uuids":@[]};
+}
+- (void)testIdentityImportsIntegrationIDWithoutRegistryAddressAndRejectsProxyAliases {
+    HABLEIdentityResolver *resolver = [self poolIdentityResolver];
+    XCTAssertEqual(resolver.knownDevices.count, 1u);
+    XCTAssertEqualObjects(resolver.knownDevices.firstObject[@"address"], @"");
+    [resolver observeAdvertisements:@[[self poolAdvertisementWithAddress:@"02:00:00:00:00:03" source:@"02:00:00:00:00:01"]]];
+    XCTAssertNil([resolver automaticMatchForObservation:[self poolObservation]], @"Another app proxy must never establish a real address");
+    [resolver observeAdvertisements:@[[self poolAdvertisementWithAddress:@"00:11:22:33:44:55" source:@"00:00:00:00:00:01"]]];
+    NSDictionary *match = [resolver automaticMatchForObservation:[self poolObservation]];
+    XCTAssertEqualObjects(match[@"address"], @"00:11:22:33:44:55", @"Independent native adapters must remain valid evidence");
+}
+- (void)testIdentityNeverAutomaticallyMatchesNamesOrMeasurementsAlone {
+    HABLEIdentityResolver *resolver = [self poolIdentityResolver];
+    [resolver observeAdvertisements:@[[self poolAdvertisementWithAddress:@"00:11:22:33:44:55" source:@"00:00:00:00:00:01"]]];
+    NSMutableDictionary *observation = [[self poolObservation] mutableCopy];
+    observation[@"manufacturer_data"] = @"";
+    XCTAssertNil([resolver automaticMatchForObservation:observation]);
+    observation = [[self poolObservation] mutableCopy]; observation[@"name"] = @"Pool Sensor";
+    XCTAssertNil([resolver automaticMatchForObservation:observation]);
+    [observation removeObjectForKey:@"name"];
+    XCTAssertNil([resolver automaticMatchForObservation:observation]);
+}
+- (void)testConflictingIndependentAddressesRequireConfirmation {
+    HABLEIdentityResolver *resolver = [self poolIdentityResolver];
+    [resolver observeAdvertisements:@[
+        [self poolAdvertisementWithAddress:@"00:11:22:33:44:55" source:@"00:00:00:00:00:01"],
+        [self poolAdvertisementWithAddress:@"00:11:22:33:44:66" source:@"00:00:00:00:00:01"]
+    ]];
+    XCTAssertNil([resolver automaticMatchForObservation:[self poolObservation]]);
+}
+- (void)testGattSerialOnlyLinksAnUnambiguousRegisteredAddress {
+    HABLEIdentityResolver *resolver = [[HABLEIdentityResolver alloc] init];
+    NSDictionary *first = @{@"id":@"sensor-one", @"name":@"Room Sensor", @"serial_number":@"SN-123456", @"connections":@[@[@"bluetooth", @"00:11:22:33:44:55"]]};
+    [resolver loadRegistry:@[first] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    NSDictionary *observation = @{@"identity":@"local_alias", @"serial_number":@"SN-123456", @"name":@"Room Sensor"};
+    XCTAssertEqualObjects([resolver automaticMatchForObservation:observation][@"address"], @"00:11:22:33:44:55");
+    NSMutableDictionary *second = [first mutableCopy]; second[@"id"] = @"sensor-two"; second[@"connections"] = @[@[@"bluetooth", @"00:11:22:33:44:66"]];
+    [resolver loadRegistry:@[first, second] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    XCTAssertNil([resolver automaticMatchForObservation:observation], @"Duplicate serial numbers cannot identify one device");
+}
+- (void)testRegistrationFollowsIntegrationToggleAndWaitsForConnectivity {
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    id saved = [defaults objectForKey:@"ha_ble_proxy_auto_register"];
+    [defaults removeObjectForKey:@"ha_ble_proxy_auto_register"];
+    HABLERegistrationPolicyProxy *proxy = [[HABLERegistrationPolicyProxy alloc] init];
+    [proxy setValue:@YES forKey:@"running"];
+    [proxy updateAutomaticRegistrationWithIntegrationEnabled:NO connected:YES context:@"server-one"];
+    [proxy updateAutomaticRegistrationWithIntegrationEnabled:YES connected:NO context:@"server-one"];
+    XCTAssertEqual(proxy.registrationAttempts, 0u);
+    [proxy updateAutomaticRegistrationWithIntegrationEnabled:YES connected:YES context:@"server-one"];
+    XCTAssertEqual(proxy.registrationAttempts, 1u);
+    [proxy updateAutomaticRegistrationWithIntegrationEnabled:YES connected:YES context:@"server-one"];
+    XCTAssertEqual(proxy.registrationAttempts, 1u, @"Failures must respect the retry delay");
+    [proxy setValue:@0 forKey:@"nextRegistrationAttempt"];
+    [proxy setValue:@"server-one" forKey:@"registeredContext"];
+    [proxy updateAutomaticRegistrationWithIntegrationEnabled:YES connected:YES context:@"server-one"];
+    XCTAssertEqual(proxy.registrationAttempts, 1u, @"Successful setup must not repeat every tick");
+    [proxy updateAutomaticRegistrationWithIntegrationEnabled:YES connected:YES context:@"server-two"];
+    XCTAssertEqual(proxy.registrationAttempts, 2u, @"A different account or proxy address needs setup");
+    if (saved) [defaults setObject:saved forKey:@"ha_ble_proxy_auto_register"];
+}
+- (void)testTurningIntegrationOffCancelsAutomaticButNotManualSetup {
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    id saved = [defaults objectForKey:@"ha_ble_proxy_auto_register"];
+    [defaults removeObjectForKey:@"ha_ble_proxy_auto_register"];
+    HABLERegistrationPolicyProxy *proxy = [[HABLERegistrationPolicyProxy alloc] init];
+    HABLECancellableRegistration *registration = [[HABLECancellableRegistration alloc] init];
+    [proxy setValue:registration forKey:@"registration"];
+    [proxy setValue:@YES forKey:@"integrationRegistrationWasEnabled"];
+    [proxy setValue:@YES forKey:@"automaticRegistrationInFlight"];
+    [proxy updateAutomaticRegistrationWithIntegrationEnabled:NO connected:YES context:@"server"];
+    XCTAssertEqual(registration.cancellations, 1u);
+    [proxy updateAutomaticRegistrationWithIntegrationEnabled:NO connected:YES context:@"server"];
+    XCTAssertEqual(registration.cancellations, 1u, @"Manual setup must stay independent of the integration toggle");
+    if (saved) [defaults setObject:saved forKey:@"ha_ble_proxy_auto_register"];
+}
 - (void)checkRejectedRequestWithTextResponse:(BOOL)text {
     HABLERejectedRequestCount = 0;
     [NSURLProtocol registerClass:[HABLERejectingHTTPProtocol class]];

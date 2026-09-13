@@ -10,6 +10,7 @@
 extern NSString *const HARemoteCommandReloadNotification;
 
 static NSString *const kEnabledKey = @"HADeviceIntegration_enabled";
+NSString *const HADeviceIntegrationEnabledDidChangeNotification = @"HADeviceIntegrationEnabledDidChangeNotification";
 
 @interface HADeviceIntegrationManager ()
 @property (nonatomic, strong) HASensorReporter *sensorReporter;
@@ -65,6 +66,7 @@ static NSString *const kEnabledKey = @"HADeviceIntegration_enabled";
     [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:kEnabledKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
     CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication);
+    [[NSNotificationCenter defaultCenter] postNotificationName:HADeviceIntegrationEnabledDidChangeNotification object:self];
 
     if (enabled && [HAConnectionManager sharedManager].isConnected) {
         [self ensureRegistrationThenStart];

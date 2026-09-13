@@ -73,6 +73,11 @@
         }];
     } else if (path.section == 1) {
         NSDictionary *candidate = self.candidates[path.row];
+        if (![candidate[@"address"] length]) {
+            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Bluetooth address unavailable" message:@"Home Assistant knows this device's identity but has no independent Bluetooth address for it yet. Leave another scanner online and refresh, or enter its verified address manually." preferredStyle:UIAlertControllerStyleAlert];
+            [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+            [self presentViewController:alert animated:YES completion:nil]; return;
+        }
         NSString *message = [NSString stringWithFormat:@"Link this Bluetooth device to %@ (%@)?\n\n%@\n\nOnly confirm if these are the same physical device.", candidate[@"label"], candidate[@"address"], candidate[@"evidence"]];
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Confirm device identity" message:message preferredStyle:UIAlertControllerStyleAlert];
         [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
