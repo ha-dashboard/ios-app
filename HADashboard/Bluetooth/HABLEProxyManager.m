@@ -117,6 +117,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *identityLabels;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *identityCheckTimes;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *identityProbeTimes;
+@property (nonatomic, strong) NSMutableDictionary *identityProbeAttempts;
 @property (nonatomic, assign) NSTimeInterval nextIdentityProbeAt;
 @property (nonatomic, copy) NSString *identityScope;
 @property (nonatomic, assign) NSUInteger identityGeneration;
@@ -171,7 +172,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         [defaults removeObjectForKey:@"HABLEProxyRegister"];
         _registration = [[HABLEProxyRegistration alloc] init];
         _identityResolver = [[HABLEIdentityResolver alloc] init];
-        _automaticMappings = [NSMutableDictionary dictionary]; _identityLabels = [NSMutableDictionary dictionary]; _identityCheckTimes = [NSMutableDictionary dictionary]; _identityProbeTimes = [NSMutableDictionary dictionary];
+        _automaticMappings = [NSMutableDictionary dictionary]; _identityLabels = [NSMutableDictionary dictionary]; _identityCheckTimes = [NSMutableDictionary dictionary]; _identityProbeTimes = [NSMutableDictionary dictionary]; _identityProbeAttempts = NSMutableDictionary.dictionary;
         _pendingIdentityAdvertisements = [NSMutableArray array];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(integrationRegistrationDidChange:) name:HADeviceIntegrationEnabledDidChangeNotification object:nil];
         for (NSString *name in @[HAConnectionManagerDidConnectNotification, HAConnectionManagerHADidStartNotification, HAConnectionManagerDidReceiveRegistriesNotification]) [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(identityConnectionDidChange:) name:name object:nil];
@@ -389,7 +390,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     self.registration = [[HABLEProxyRegistration alloc] init]; self.nextRegistrationAttempt = 0;
     self.registeredContext = nil; self.integrationRegistrationWasEnabled = NO;
     [[NSUserDefaults standardUserDefaults] setBool:NO forKey:HABLEEnabledKey];
-    [self.automaticMappings removeAllObjects]; [self.identityLabels removeAllObjects]; [self.identityCheckTimes removeAllObjects]; [self.identityProbeTimes removeAllObjects]; self.nextIdentityProbeAt = 0;
+    [self.automaticMappings removeAllObjects]; [self.identityLabels removeAllObjects]; [self.identityCheckTimes removeAllObjects]; [self.identityProbeTimes removeAllObjects]; [self.identityProbeAttempts removeAllObjects]; self.nextIdentityProbeAt = 0;
     self.identityResolver = [[HABLEIdentityResolver alloc] init]; self.identityScope = nil; self.identitiesReady = NO; self.identityPacketsDropped = 0;
     self.advertisementCount = self.forwardedCount = self.discoveryCallbacks = self.unknownRSSICount = 0;
     self.gattReads = self.gattWrites = self.gattNotifications = 0;
@@ -688,6 +689,8 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     if (!(self.tickCount % 20)) [self writeDiagnostics];
 }
 - (NSTimeInterval)identityProbeIntervalForObservation:(NSDictionary *)observation {
+    NSString *identifier=observation[@"identifier"];
+    if(identifier.length && [self.identityProbeAttempts[identifier] unsignedIntegerValue]>=2)return 3600;
     if([observation[@"gatt_probe_attempts"] unsignedIntegerValue]>=2)return 3600;
     for(NSDictionary *value in [observation[@"gatt_fingerprints"] allValues])if([value[@"sessions"] unsignedIntegerValue]==1)return 60;
     return 3600;
@@ -704,6 +707,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     for (NSString *identifier in probeOrder) {
         NSDictionary *observation = self.observations[identifier];
         if (self.mappings[identifier] || self.automaticMappings[identifier] || ![observation[@"connectable"] boolValue] || now-[observation[@"last_seen"] doubleValue]>15 || now-[observation[@"first_seen"] doubleValue]<60 || now-[self.identityProbeTimes[identifier] doubleValue]<[self identityProbeIntervalForObservation:observation] || ![self.identityResolver hasKnownIdentityForObservation:observation]) continue;
+        self.identityProbeAttempts[identifier]=@(MIN(255,[self.identityProbeAttempts[identifier] unsignedIntegerValue]+1));
         self.identityProbeTimes[identifier] = @(now); self.nextIdentityProbeAt = now + 60;
         __weak typeof(self) weakSelf = self;
         [self inspectIdentifier:identifier completion:^(NSDictionary *identity, NSError *error) {

@@ -53,6 +53,7 @@ static NSUInteger HABLERejectedRequestCount;
 - (void)finishOperation:(id)session error:(NSUInteger)error;
 - (void)discoveryPartDone:(id)session;
 - (NSTimeInterval)identityProbeIntervalForObservation:(NSDictionary *)observation;
+- (void)probePendingIdentity;
 - (void)updateIdentityResolution;
 - (void)flushIdentityAdvertisements;
 - (void)centralManager:(CBCentralManager *)central didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:(NSDictionary *)advertisement RSSI:(NSNumber *)RSSI;
@@ -80,6 +81,12 @@ static NSUInteger HABLERejectedRequestCount;
 - (void)pump:(id)session { self.pumps++; }
 @end
 
+@interface HABLEFailingProbeProxy : HABLEProxyManager
+@property NSUInteger inspections;
+@end
+@implementation HABLEFailingProbeProxy
+- (void)inspectIdentifier:(NSString *)identifier completion:(void (^)(NSDictionary *,NSError *))completion {self.inspections++;completion(nil,[NSError errorWithDomain:@"test" code:1 userInfo:nil]);}
+@end
 @interface HABLERegistrationPolicyProxy : HABLEProxyManager
 @property NSUInteger registrationAttempts;
 @end
@@ -140,6 +147,18 @@ static NSUInteger HABLERejectedRequestCount;
     NSDictionary *fingerprints=@{@"path":@{@"sessions":@1}};
     XCTAssertEqual(([manager identityProbeIntervalForObservation:@{@"gatt_fingerprints":fingerprints,@"gatt_probe_attempts":@1}]),60);
     XCTAssertEqual(([manager identityProbeIntervalForObservation:@{@"gatt_fingerprints":fingerprints,@"gatt_probe_attempts":@2}]),3600);
+}
+- (void)testFailedVerificationDoesNotRetryEveryMinuteForever {
+    HABLEFailingProbeProxy *manager=[HABLEFailingProbeProxy new];NSTimeInterval now=NSDate.date.timeIntervalSince1970;
+    [manager setValue:@YES forKey:@"identitiesReady"];[manager setValue:[HABLECountingResolver new] forKey:@"identityResolver"];
+    NSDictionary *observation=@{@"identifier":@"failed-probe",@"connectable":@YES,@"last_seen":@(now),@"first_seen":@(now-120),@"rssi":@(-50),@"gatt_probe_attempts":@1,@"gatt_fingerprints":@{@"path":@{@"sessions":@1}}};
+    [manager setValue:[@{@"failed-probe":observation} mutableCopy] forKey:@"observations"];
+    for(NSUInteger i=0;i<3;i++) {
+        [manager setValue:@0 forKey:@"nextIdentityProbeAt"];
+        [manager valueForKey:@"identityProbeTimes"][@"failed-probe"]=@(now-61);
+        [manager probePendingIdentity];
+    }
+    XCTAssertEqual(manager.inspections,2u);
 }
 - (void)testFingerprintDiscoveryOnlyQueuesBoundedReadableCharacteristics {
     HABLEFingerprintPolicyProxy *manager=[HABLEFingerprintPolicyProxy new];id session=[NSClassFromString(@"HABLEPeripheralSession") new];
