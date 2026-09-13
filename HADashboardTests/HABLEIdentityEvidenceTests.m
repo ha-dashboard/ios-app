@@ -167,6 +167,18 @@
     NSMutableDictionary *invalid=[binding mutableCopy];invalid[@"device_id"]=@"other-device";
     [r loadCatalog:@{@"schema":@2,@"bindings":@{@"00:11:22:33:44:55":invalid}}];XCTAssertEqual([[r valueForKey:@"catalog"] count],0u);
 }
+- (void)testCatalogReconciliationRepublishesMissingProofWithoutOverwritingConflicts {
+    HABLEIdentityResolver *r=[self resolver];
+    NSDictionary *binding=@{@"schema":@2,@"address":@"00:11:22:33:44:55",@"device_id":@"sensor",@"method":@"serial",@"unit_identifier":@"SN-901827",@"proof_id":@"proof-one",@"profile":@{},@"lineage":@[]};
+    [r setValue:[@{@"local":binding} mutableCopy] forKey:@"localBindings"];
+    [r loadCatalog:@{@"schema":@2,@"bindings":@{}}];
+    XCTAssertEqualObjects(([r valueForKey:@"pendingPublications"][@"00:11:22:33:44:55"]),binding);
+    [[r valueForKey:@"pendingPublications"] removeAllObjects];
+    NSMutableDictionary *other=[binding mutableCopy];other[@"proof_id"]=@"different-proof";
+    [r loadCatalog:@{@"schema":@2,@"bindings":@{@"00:11:22:33:44:55":other}}];
+    XCTAssertEqual([[r valueForKey:@"pendingPublications"] count],0u);
+    XCTAssertEqualObjects(([r valueForKey:@"catalog"][@"00:11:22:33:44:55"][@"proof_id"]),@"different-proof");
+}
 - (void)testDerivedPeerCannotFeedItsAncestor {
     HABLEIdentityResolver *r=[self resolver];NSDictionary *binding=@{@"schema":@2,@"address":@"00:11:22:33:44:55",@"device_id":@"sensor",@"method":@"serial",@"unit_identifier":@"SN-901827",@"proof_id":@"proof-one",@"profile":@{},@"lineage":@[]};
     [r loadCatalog:@{@"schema":@2,@"bindings":@{@"00:11:22:33:44:55":binding}}];

@@ -147,7 +147,15 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     if (![value isKindOfClass:NSDictionary.class] || ![value[@"schema"] isEqual:@2] || ![value[@"bindings"] isKindOfClass:NSDictionary.class]) return;
     NSMutableDictionary *valid=NSMutableDictionary.dictionary;
     for (NSString *address in value[@"bindings"]) { NSDictionary *binding=value[@"bindings"][address];if ([self validBinding:binding] && [binding[@"address"] isEqual:address]) valid[address]=binding;if(valid.count>=512)break; }
-    self.catalog=valid; [self rebuildKnownDevices];
+    self.catalog=valid;
+    // HA's shared store has no compare-and-swap operation. Repair additions
+    // lost to concurrent publishers from this peer's still-valid local proofs.
+    // An existing address is never overwritten by this reconciliation.
+    for (NSDictionary *binding in self.localBindings.allValues) {
+        NSString *address=binding[@"address"];
+        if ([self validBinding:binding] && !self.catalog[address] && self.pendingPublications.count<512) self.pendingPublications[address]=binding;
+    }
+    [self rebuildKnownDevices];
 }
 - (void)loadLocalBindings {
     NSDictionary *saved=[NSUserDefaults.standardUserDefaults dictionaryForKey:HABLELocalBindingsKey];
@@ -155,7 +163,10 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     if (![saved[@"scope"] isEqual:self.scope] || ![saved[@"bindings"] isKindOfClass:NSDictionary.class]) return;
     for (NSString *identifier in saved[@"bindings"]) {
         NSDictionary *binding=saved[@"bindings"][identifier]; NSDictionary *shared=self.catalog[binding[@"address"]];
-        if ([self validBinding:binding] && [shared[@"proof_id"] isEqual:binding[@"proof_id"]]) self.localBindings[identifier]=binding;
+        if ([self validBinding:binding] && (!shared || [shared[@"proof_id"] isEqual:binding[@"proof_id"]])) {
+            self.localBindings[identifier]=binding;
+            if (!shared && self.pendingPublications.count<512) self.pendingPublications[binding[@"address"]]=binding;
+        }
         if(self.localBindings.count>=256)break;
     }
 }
