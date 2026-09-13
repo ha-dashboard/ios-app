@@ -6,6 +6,7 @@
 
 @interface HABLEProxyManager (ProtocolTestAccess)
 - (void)deviceRequest:(NSDictionary *)fields connection:(HABLEAPIConnection *)connection;
+- (void)bleServer:(HABLEAPIServer *)server receivedType:(NSUInteger)type data:(NSData *)data connection:(HABLEAPIConnection *)connection;
 @end
 
 @interface HABLECapturingServer : HABLEAPIServer
@@ -22,6 +23,14 @@
 @interface HABLEProxyTests : XCTestCase
 @end
 @implementation HABLEProxyTests
+- (void)testClientCanUnsubscribeFromAdvertisements {
+    HABLEProxyManager *manager = [[HABLEProxyManager alloc] init];
+    HABLEAPIConnection *client = [[HABLEAPIConnection alloc] init];
+    [manager bleServer:nil receivedType:66 data:[NSData data] connection:client];
+    XCTAssertTrue(client.advertisements);
+    [manager bleServer:nil receivedType:87 data:[NSData data] connection:client];
+    XCTAssertFalse(client.advertisements);
+}
 - (void)testServiceUUIDsAcceptHAFormatsAndRejectAddresses {
     NSString *expected = @"0000fcd2-0000-1000-8000-00805f9b34fb";
     for (NSString *value in @[@"FCD2", @"0xfcd2", @"0000FCD2", @"0000FCD200001000800000805F9B34FB", expected]) XCTAssertEqualObjects(HABLECanonicalUUID(value), expected);

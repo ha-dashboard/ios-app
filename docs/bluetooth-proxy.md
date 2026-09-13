@@ -66,7 +66,12 @@ its hardware address.
 A controlled test on a jailbroken iPad 4 running iOS 10.3.3 received zero
 callbacks with three broad-scan variants and 504 callbacks with an explicit
 service filter, while the nearby iPhone reference was verified advertising
-throughout. The automatic fallback is undergoing end-to-end device validation.
+throughout. The reference included a name and a 128-bit service UUID; Apple's
+[overflow advertising](https://developer.apple.com/documentation/corebluetooth/cbperipheralmanager/startadvertising(_:))
+can require an explicit service filter. This result is specific to that control,
+not proof that all broad scanning fails on those iOS versions. Build 170 then
+passed physical GATT checks on both the iPad 3 and iPad 4. The iPad 3 discovered
+the reference using services imported from HA, without a manual seed.
 
 ## Supported behaviour and limits
 
@@ -96,7 +101,7 @@ the key and network reachability can use the proxy. It is not included in local
 diagnostic snapshots. HA keeps its own copy, including in backups.
 
 Turning the feature off closes its connections. Log Out & Reset also removes
-the local key, address associations, handle tables and diagnostic snapshot.
+the local key, address associations, service filters, handle tables and diagnostic snapshot.
 Remove unwanted ESPHome entries separately in HA.
 
 ## Development and validation
@@ -123,13 +128,16 @@ administrator API (`esphome/get_encryption_key`), keeping it in memory:
 ```sh
 # HA_SERVER and HA_TOKEN must already be supplied to the environment.
 build/ble-proxy-venv/bin/python scripts/ble-proxy-gatt-probe.py \
-  --host PROXY_IP --address FIXTURE_ADDRESS --ha-entry PROXY_ENTRY_ID \
+  --host PROXY_IP --discover-fixture --ha-entry PROXY_ENTRY_ID \
   --fixture FIXTURE_RECEIPT.json --output RESULT.json --stress-reconnect 3 \
   --check-client-isolation
 ```
 
 Use it only with the controlled peripheral from `scripts/ble-test-peripheral.m`.
 The driver checks its service UUID and marker before sending a test write.
+Live discovery avoids selecting an old alias after a reference device rotates
+its Bluetooth address. A known fixed address can alternatively be supplied with
+`--address FIXTURE_ADDRESS`.
 The optional client-isolation check verifies prompt rejection of a second
 client and confirms that the original connection remains readable.
 

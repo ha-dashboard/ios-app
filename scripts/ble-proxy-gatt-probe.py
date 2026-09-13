@@ -37,7 +37,7 @@ async def key_from_home_assistant(entry):
 
 async def probe(args, key):
     fixture = json.loads(Path(args.fixture).read_text())
-    address = int(args.address.replace(":", ""), 16)
+    address = int(args.address.replace(":", ""), 16) if args.address else 0
     client = APIClient(args.host, 6053, noise_psk=key)
     receipt = {"time": time.time(), "host": args.host, "address": args.address,
                "fixture_service": fixture["service_uuid"], "checks": []}
@@ -49,12 +49,35 @@ async def probe(args, key):
         connected = up
         receipt.setdefault("connection_states", []).append({"connected": up, "mtu": mtu, "error": error})
 
+    async def connect(has_cache):
+        cancel = await client.bluetooth_device_connect(address, state, feature_flags=flags, has_cache=has_cache, address_type=1)
+        if not connected:
+            cancel()
+            error = receipt["connection_states"][-1]["error"]
+            raise RuntimeError(f"The proxy rejected the physical connection (error {error})")
+        cancels.append(cancel)
+
     try:
         await client.connect()
         info = await client.device_info()
         flags = info.bluetooth_proxy_feature_flags
         receipt["proxy"] = {"name": info.name, "feature_flags": flags}
-        cancels.append(await client.bluetooth_device_connect(address, state, feature_flags=flags, has_cache=False, address_type=1))
+        if args.discover_fixture:
+            discovery = asyncio.get_running_loop().create_future()
+
+            def advertised(advertisement):
+                if not discovery.done() and fixture["service_uuid"].lower() in [uuid.lower() for uuid in advertisement.service_uuids]:
+                    discovery.set_result(advertisement)
+
+            cancel_discovery = client.subscribe_bluetooth_le_advertisements(advertised)
+            try:
+                advertisement = await asyncio.wait_for(discovery, 20)
+            finally:
+                cancel_discovery()
+            address = advertisement.address
+            receipt["address"] = ":".join(f"{address:012X}"[offset:offset + 2] for offset in range(0, 12, 2))
+            receipt["checks"].append({"live_service_advertisement": "received", "rssi": advertisement.rssi})
+        await connect(False)
         services = await client.bluetooth_gatt_get_services(address)
         characteristic = next(c for s in services.services if s.uuid.lower() == fixture["service_uuid"].lower()
                               for c in s.characteristics if c.uuid.lower() == fixture["characteristic_uuid"].lower())
@@ -83,7 +106,7 @@ async def probe(args, key):
         for cancel in cancels:
             cancel()
         cancels.clear()
-        cancels.append(await client.bluetooth_device_connect(address, state, feature_flags=flags, has_cache=True, address_type=1))
+        await connect(True)
         cached = bytes(await client.bluetooth_gatt_read(address, handle))
         assert cached == payload, "Cached handle changed across the physical reconnect"
         receipt["checks"].append({"cached_handle_reconnect": "passed", "handle": handle})
@@ -122,7 +145,7 @@ async def probe(args, key):
             connected = False
             client = APIClient(args.host, 6053, noise_psk=key)
             await client.connect()
-            cancels.append(await client.bluetooth_device_connect(address, state, feature_flags=flags, has_cache=True, address_type=1))
+            await connect(True)
             recovered = bytes(await client.bluetooth_gatt_read(address, handle))
             assert recovered == payload, "Handle or connection recovery failed after a transport drop"
             receipt["checks"].append({"transport_drop_reconnect": iteration + 1, "result": "passed"})
@@ -147,7 +170,9 @@ async def probe(args, key):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", required=True)
-    parser.add_argument("--address", required=True)
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument("--address")
+    target.add_argument("--discover-fixture", action="store_true", help="Choose the reference from a fresh advertisement instead of a cached address")
     parser.add_argument("--fixture", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--ha-entry", help="Read this proxy's key using HA_SERVER and HA_TOKEN, instead of stdin")

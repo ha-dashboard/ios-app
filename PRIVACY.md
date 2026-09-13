@@ -89,6 +89,8 @@ device diagnostics, or camera/microphone media through the app.
   identification reads can retrieve serial, manufacturer, model and system IDs.
   Suggested matches require confirmation. Associations, translated GATT handle
   tables, and bounded observation/diagnostic snapshots remain on the device.
+- Adaptive discovery can import advertised service UUIDs from HA. Imported and
+  manually added service filters are stored locally and removed by reset.
 - Entering the background pauses the iOS proxy. Turning it off or using
   **Log Out & Reset** stops its connections. Reset also deletes its local key,
   associations and diagnostic snapshot. ESPHome entries and their saved keys

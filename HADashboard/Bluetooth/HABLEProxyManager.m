@@ -524,6 +524,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         case 11: [server sendType:19 data:reply to:connection]; break;
         case 28: connection.logs = YES; [server broadcastLog:[NSString stringWithFormat:@"Public CoreBluetooth proxy; %@; %@:%d", self.status, self.host, 6053]]; break;
         case 66: connection.advertisements = YES; break;
+        case 87: connection.advertisements = NO; break;
         case 80: connection.connectionSlots = YES; [server sendType:81 data:[self slotData] to:connection]; break;
         case 68: [self deviceRequest:fields connection:connection]; break;
         case 70: case 73: case 75: case 76: case 77: case 78: [self gattRequest:fields type:type connection:connection]; break;
