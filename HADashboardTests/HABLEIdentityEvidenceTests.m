@@ -190,6 +190,11 @@
     XCTAssertEqualObjects(([peer automaticMatchForObservation:o][@"address"]),@"00:11:22:33:44:55");
     bytes[9]=0xbb;NSMutableDictionary *different=[o mutableCopy];different[@"manufacturer_data"]=[[NSData dataWithBytes:bytes length:sizeof(bytes)] base64EncodedStringWithOptions:0];
     XCTAssertNil([peer automaticMatchForObservation:different]);
+    // Once this Apple peripheral is verified, a different packet layout must
+    // not revoke its binding. A new peer still needs the corroboration above.
+    [peer setValue:[@{@"local":binding} mutableCopy] forKey:@"localBindings"];
+    different[@"manufacturer_data"]=[[@"another packet layout" dataUsingEncoding:NSUTF8StringEncoding] base64EncodedStringWithOptions:0];
+    XCTAssertEqualObjects(([peer automaticMatchForObservation:different][@"address"]),@"00:11:22:33:44:55");
     NSMutableDictionary *second=[ad mutableCopy];second[@"address"]=@"00:11:22:33:44:66";[r observeAdvertisements:@[second]];
     XCTAssertNil([r automaticMatchForObservation:o]);
     XCTAssertTrue(([[r evidenceForIdentifier:@"local"] hasPrefix:@"Ambiguous:"]));

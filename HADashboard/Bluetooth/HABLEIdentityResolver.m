@@ -38,7 +38,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     }
     NSString *an = HABLEString(a[@"name"]), *bn = HABLEString(b[@"name"]);
     return an.length && bn.length && ![an isEqual:@"Unnamed device"] && [an caseInsensitiveCompare:bn] == NSOrderedSame &&
-        [a[@"manufacturer_length"] isKindOfClass:NSNumber.class] && [a[@"manufacturer_length"] unsignedIntegerValue] && [a[@"manufacturer_length"] isEqual:b[@"manufacturer_length"]];
+        [a[@"manufacturer_length"] isKindOfClass:NSNumber.class] && [a[@"manufacturer_length"] unsignedIntegerValue] && [b[@"manufacturer_length"] isKindOfClass:NSNumber.class] && [b[@"manufacturer_length"] unsignedIntegerValue];
 }
 
 @interface HABLEIdentityResolver ()
