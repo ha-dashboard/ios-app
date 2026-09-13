@@ -3,6 +3,41 @@
 #import "HABLEProxyManager.h"
 #import "HABLEProxyRegistration.h"
 #import "HABLEAPIServer.h"
+#import "HAAPIClient.h"
+
+@interface HAAPIClient (RetryTestAccess)
+- (void)refreshAfterUnauthorized:(void (^)(NSString *, NSError *))completion;
+@end
+@interface HABLEProxyRegistration (PermissionTestAccess)
++ (BOOL)isAdministratorInfo:(id)value;
+@end
+
+static NSUInteger HABLERejectedRequestCount;
+@interface HABLERejectingHTTPProtocol : NSURLProtocol
+@end
+@implementation HABLERejectingHTTPProtocol
++ (BOOL)canInitWithRequest:(NSURLRequest *)request { return [request.URL.host isEqual:@"ble-auth-test.invalid"]; }
++ (NSURLRequest *)canonicalRequestForRequest:(NSURLRequest *)request { return request; }
+- (void)startLoading {
+    NSUInteger count; @synchronized([HABLERejectingHTTPProtocol class]) { count = ++HABLERejectedRequestCount; }
+    // Bound the fixture itself so the old infinite retry loop fails promptly.
+    NSInteger status = count <= 2 ? 401 : 429;
+    NSHTTPURLResponse *response = [[NSHTTPURLResponse alloc] initWithURL:self.request.URL statusCode:status HTTPVersion:@"HTTP/1.1" headerFields:@{@"Content-Type":@"application/json"}];
+    [self.client URLProtocol:self didReceiveResponse:response cacheStoragePolicy:NSURLCacheStorageNotAllowed];
+    [self.client URLProtocol:self didLoadData:[@"{}" dataUsingEncoding:NSUTF8StringEncoding]];
+    [self.client URLProtocolDidFinishLoading:self];
+}
+- (void)stopLoading {}
+@end
+
+@interface HABLERefreshingAPIClient : HAAPIClient
+@property NSUInteger refreshCount;
+@end
+@implementation HABLERefreshingAPIClient
+- (void)refreshAfterUnauthorized:(void (^)(NSString *, NSError *))completion {
+    self.refreshCount++; completion(@"replacement-test-token", nil);
+}
+@end
 
 @interface HABLEProxyManager (ProtocolTestAccess)
 - (void)deviceRequest:(NSDictionary *)fields connection:(HABLEAPIConnection *)connection;
@@ -23,6 +58,32 @@
 @interface HABLEProxyTests : XCTestCase
 @end
 @implementation HABLEProxyTests
+- (void)checkRejectedRequestWithTextResponse:(BOOL)text {
+    HABLERejectedRequestCount = 0;
+    [NSURLProtocol registerClass:[HABLERejectingHTTPProtocol class]];
+    HABLERefreshingAPIClient *client = [[HABLERefreshingAPIClient alloc] initWithBaseURL:[NSURL URLWithString:@"https://ble-auth-test.invalid/api/"] token:@"original-test-token" requestTimeoutInterval:1 resourceTimeoutInterval:2];
+    [[client valueForKey:@"session"] invalidateAndCancel];
+    NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+    configuration.protocolClasses = @[[HABLERejectingHTTPProtocol class]];
+    [client setValue:[NSURLSession sessionWithConfiguration:configuration] forKey:@"session"];
+    XCTestExpectation *done = [self expectationWithDescription:@"Unauthorized request completes after one retry"];
+    HAAPIResponseBlock completion = ^(id result, NSError *error) {
+        XCTAssertNil(result); XCTAssertEqual(error.code, (NSInteger)401); [done fulfill];
+    };
+    if (text) [client renderTemplate:@"{{ 1 }}" completion:completion];
+    else [client postJSONAtPath:@"probe" body:@{} completion:completion];
+    [self waitForExpectationsWithTimeout:3 handler:nil];
+    XCTAssertEqual(HABLERejectedRequestCount, (NSUInteger)2);
+    XCTAssertEqual(client.refreshCount, (NSUInteger)1);
+    [client cancelAllRequests]; [NSURLProtocol unregisterClass:[HABLERejectingHTTPProtocol class]];
+}
+- (void)testJSONAuthenticationRetryIsBounded { [self checkRejectedRequestWithTextResponse:NO]; }
+- (void)testTemplateAuthenticationRetryIsBounded { [self checkRejectedRequestWithTextResponse:YES]; }
+- (void)testAutomaticSetupRequiresAnAdministrator {
+    XCTAssertTrue([HABLEProxyRegistration isAdministratorInfo:@{@"is_admin":@YES}]);
+    for (id value in @[@{@"is_admin":@NO}, @{@"is_admin":@"true"}, @{}, @[]]) XCTAssertFalse([HABLEProxyRegistration isAdministratorInfo:value]);
+    XCTAssertFalse([HABLEProxyRegistration isAdministratorInfo:nil]);
+}
 - (void)testClientCanUnsubscribeFromAdvertisements {
     HABLEProxyManager *manager = [[HABLEProxyManager alloc] init];
     HABLEAPIConnection *client = [[HABLEAPIConnection alloc] init];

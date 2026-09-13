@@ -1,6 +1,7 @@
 #import "HABLEProxyRegistration.h"
 #import "HAAPIClient.h"
 #import "HAAuthManager.h"
+#import "HAConnectionManager.h"
 #import "HALog.h"
 #import <arpa/inet.h>
 
@@ -34,6 +35,7 @@ static BOOL HABLESetupURLIsProtected(NSURL *URL) {
 @property (nonatomic, copy) void (^completion)(BOOL);
 @end
 @implementation HABLEProxyRegistration
++ (BOOL)isAdministratorInfo:(id)value { return [value isKindOfClass:[NSDictionary class]] && [value[@"is_admin"] isKindOfClass:[NSNumber class]] && [value[@"is_admin"] boolValue]; }
 + (BOOL)isSetupURLAllowed:(NSURL *)URL { return HABLESetupURLIsProtected(URL); }
 + (BOOL)isSuccessfulExistingEntryReason:(NSString *)reason { return [reason isEqual:@"already_configured"] || [reason isEqual:@"already_configured_updates"]; }
 - (instancetype)init { if ((self = [super init])) _status = @"Not registered by this app"; return self; }
@@ -42,10 +44,20 @@ static BOOL HABLESetupURLIsProtected(NSURL *URL) {
     [self cancel]; HAAuthManager *auth = [HAAuthManager sharedManager];
     if (!host.length || !key.length || !auth.isConfigured) { self.status = @"Enable the proxy and connect to Home Assistant first"; completion(NO); return; }
     if (!HABLESetupURLIsProtected([NSURL URLWithString:auth.serverURL])) { self.status = @"Use HTTPS or a private local HA address for encrypted proxy setup"; completion(NO); return; }
+    HAConnectionManager *connection = [HAConnectionManager sharedManager];
+    if (!connection.connected) { self.status = @"Connect to Home Assistant as an administrator first"; completion(NO); return; }
     self.host = host; self.key = key; self.server = auth.serverURL; self.revision = auth.authenticationRevision; self.steps = 0;
-    self.completion = completion; self.registering = YES; self.status = @"Adding the encrypted proxy to Home Assistant";
-    self.api = [[HAAPIClient alloc] initWithBaseURL:[NSURL URLWithString:self.server] token:auth.accessToken requestTimeoutInterval:20 resourceTimeoutInterval:30];
-    [self post:@"/api/config/config_entries/flow" body:@{@"handler":@"esphome", @"context":@{@"source":@"user"}, @"show_advanced_options":@NO}];
+    self.completion = completion; self.registering = YES; self.status = @"Checking Home Assistant administrator access";
+    NSUInteger generation = self.generation; __weak typeof(self) weakSelf = self;
+    [connection sendCommand:@{@"type":@"auth/current_user"} completion:^(id user, NSError *error) {
+        HABLEProxyRegistration *self = weakSelf; if (!self || generation != self.generation) return;
+        if (error || ![[self class] isAdministratorInfo:user]) { [self finish:NO status:@"An HA administrator account is required for automatic setup"]; return; }
+        HAAuthManager *current = [HAAuthManager sharedManager];
+        if (current.authenticationRevision != self.revision || ![current.serverURL isEqual:self.server]) { [self finish:NO status:@"Home Assistant connection changed; try again"]; return; }
+        self.status = @"Adding the encrypted proxy to Home Assistant";
+        self.api = [[HAAPIClient alloc] initWithBaseURL:[NSURL URLWithString:self.server] token:current.accessToken requestTimeoutInterval:20 resourceTimeoutInterval:30];
+        [self post:@"/api/config/config_entries/flow" body:@{@"handler":@"esphome", @"context":@{@"source":@"user"}, @"show_advanced_options":@NO}];
+    }];
 }
 - (void)finish:(BOOL)success status:(NSString *)status {
     self.status = status; self.registering = NO; self.key = nil;

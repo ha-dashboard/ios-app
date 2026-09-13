@@ -13,10 +13,12 @@ static NSError *HACrossOriginAPIPathError(void) {
 @property (nonatomic, strong) NSURL *baseURL;
 @property (nonatomic, copy)   NSString *token;
 @property (nonatomic, strong) NSURLSession *session;
-@property (nonatomic, assign) BOOL isRetrying401;
 @property (nonatomic, assign, getter=isCancelled) BOOL cancelled;
 @property (nonatomic, assign, readwrite) NSTimeInterval requestTimeoutInterval;
 @property (nonatomic, assign, readwrite) NSTimeInterval resourceTimeoutInterval;
+- (void)refreshAfterUnauthorized:(void (^)(NSString *, NSError *))completion;
+- (NSURLSessionDataTask *)executeRequest:(NSURLRequest *)request retriedAuthentication:(BOOL)retried completion:(HAAPIResponseBlock)completion;
+- (void)executePlainTextRequest:(NSURLRequest *)request retriedAuthentication:(BOOL)retried completion:(HAAPIResponseBlock)completion;
 @end
 
 @implementation HAAPIClient
@@ -192,6 +194,14 @@ static NSError *HACrossOriginAPIPathError(void) {
 }
 
 - (NSURLSessionDataTask *)executeRequestWithTask:(NSURLRequest *)request completion:(HAAPIResponseBlock)completion {
+    return [self executeRequest:request retriedAuthentication:NO completion:completion];
+}
+
+- (void)refreshAfterUnauthorized:(void (^)(NSString *, NSError *))completion {
+    [[HAAuthManager sharedManager] handleAuthFailureWithCompletion:completion];
+}
+
+- (NSURLSessionDataTask *)executeRequest:(NSURLRequest *)request retriedAuthentication:(BOOL)retried completion:(HAAPIResponseBlock)completion {
     if (self.isCancelled) {
         ha_dispatchMainCompletion(completion, nil,
             [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorCancelled userInfo:nil]);
@@ -211,17 +221,15 @@ static NSError *HACrossOriginAPIPathError(void) {
             NSInteger statusCode = httpResponse.statusCode;
 
             if (statusCode == 401) {
-                if (!self.isRetrying401) {
-                    self.isRetrying401 = YES;
-                    [[HAAuthManager sharedManager] handleAuthFailureWithCompletion:^(NSString *newToken, NSError *refreshError) {
-                        self.isRetrying401 = NO;
+                if (!retried) {
+                    [self refreshAfterUnauthorized:^(NSString *newToken, NSError *refreshError) {
                         if (self.isCancelled) return;
                         if (newToken) {
                             self.token = newToken;
                             NSMutableURLRequest *retry = [request mutableCopy];
                             [retry setValue:[NSString stringWithFormat:@"Bearer %@", newToken]
                                 forHTTPHeaderField:@"Authorization"];
-                            [self executeRequest:retry completion:completion];
+                            [self executeRequest:retry retriedAuthentication:YES completion:completion];
                         } else {
                             ha_dispatchMainCompletion(completion, nil, refreshError);
                         }
@@ -231,7 +239,7 @@ static NSError *HACrossOriginAPIPathError(void) {
 
                 NSError *authError = [NSError errorWithDomain:@"HAAPIClient"
                                                          code:401
-                                                     userInfo:@{NSLocalizedDescriptionKey: @"Unauthorized — check your access token"}];
+                                                     userInfo:@{NSLocalizedDescriptionKey: @"Home Assistant rejected the refreshed token. Sign in again or check account permissions."}];
                 ha_dispatchMainCompletion(completion, nil, authError);
                 return;
             }
@@ -266,6 +274,10 @@ static NSError *HACrossOriginAPIPathError(void) {
 /// other API endpoints. Keep its decoding isolated so existing callers retain
 /// their JSON response contract.
 - (void)executePlainTextRequest:(NSURLRequest *)request completion:(HAAPIResponseBlock)completion {
+    [self executePlainTextRequest:request retriedAuthentication:NO completion:completion];
+}
+
+- (void)executePlainTextRequest:(NSURLRequest *)request retriedAuthentication:(BOOL)retried completion:(HAAPIResponseBlock)completion {
     if (self.isCancelled) {
         ha_dispatchMainCompletion(completion, nil,
             [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorCancelled userInfo:nil]);
@@ -281,17 +293,15 @@ static NSError *HACrossOriginAPIPathError(void) {
 
             NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
             NSInteger statusCode = httpResponse.statusCode;
-            if (statusCode == 401 && !self.isRetrying401) {
-                self.isRetrying401 = YES;
-                [[HAAuthManager sharedManager] handleAuthFailureWithCompletion:^(NSString *newToken, NSError *refreshError) {
-                    self.isRetrying401 = NO;
+            if (statusCode == 401 && !retried) {
+                [self refreshAfterUnauthorized:^(NSString *newToken, NSError *refreshError) {
                     if (self.isCancelled) return;
                     if (newToken) {
                         self.token = newToken;
                         NSMutableURLRequest *retry = [request mutableCopy];
                         [retry setValue:[NSString stringWithFormat:@"Bearer %@", newToken]
                             forHTTPHeaderField:@"Authorization"];
-                        [self executePlainTextRequest:retry completion:completion];
+                        [self executePlainTextRequest:retry retriedAuthentication:YES completion:completion];
                     } else {
                         ha_dispatchMainCompletion(completion, nil, refreshError);
                     }
@@ -299,7 +309,7 @@ static NSError *HACrossOriginAPIPathError(void) {
                 return;
             }
             if (statusCode < 200 || statusCode >= 300) {
-                NSString *message = statusCode == 401 ? @"Unauthorized — check your access token"
+                NSString *message = statusCode == 401 ? @"Home Assistant rejected the refreshed token. Sign in again or check account permissions."
                     : [NSString stringWithFormat:@"HTTP %ld", (long)statusCode];
                 NSError *httpError = [NSError errorWithDomain:@"HAAPIClient"
                                                          code:statusCode
