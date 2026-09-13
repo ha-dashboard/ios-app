@@ -2,6 +2,7 @@
 #import "HABLEProto.h"
 #import <math.h>
 #import <float.h>
+#import <CommonCrypto/CommonDigest.h>
 
 static const NSTimeInterval HABLEEvidenceWindow = 900;
 static const NSUInteger HABLEEvidenceEvents = 256;
@@ -23,6 +24,38 @@ static NSString *HABLELittleEndianUUID(const uint8_t *bytes, NSUInteger length) 
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableArray<NSDictionary *> *> *remotes;
 @end
 @implementation HABLEIdentityEvidence
++ (NSDictionary *)fingerprintsForValue:(NSData *)data path:(NSString *)path {
+    if(!data.length || data.length>512 || !path.length)return @{};
+    NSDictionary *(^fingerprint)(NSData *,NSString *)=^NSDictionary *(NSData *bytes,NSString *kind) {
+        uint8_t hash[CC_SHA256_DIGEST_LENGTH];CC_SHA256(bytes.bytes,(CC_LONG)bytes.length,hash);NSMutableString *hex=NSMutableString.string;
+        for(NSUInteger i=0;i<sizeof(hash);i++)[hex appendFormat:@"%02x",hash[i]];
+        return @{@"sha256":hex,@"length":@(bytes.length),@"kind":kind};
+    };
+    id object=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    if(![object isKindOfClass:NSDictionary.class] && ![object isKindOfClass:NSArray.class])return @{path:fingerprint(data,@"opaque")};
+    NSSet *sensitive=[NSSet setWithArray:@[@"password",@"passwd",@"pwd",@"psk",@"secret",@"token",@"accesstoken",@"refreshtoken",@"apikey",@"privatekey",@"key",@"credential",@"credentials",@"authorization",@"auth",@"pin",@"pairingcode"]];
+    NSMutableDictionary *result=NSMutableDictionary.dictionary;
+    NSMutableArray *queue=[NSMutableArray arrayWithObject:@{@"value":object,@"path":[path stringByAppendingString:@"/json"],@"depth":@0}];
+    while(queue.count && result.count<32) {
+        NSDictionary *node=queue.firstObject;[queue removeObjectAtIndex:0];id value=node[@"value"];NSString *key=node[@"path"];NSUInteger depth=[node[@"depth"] unsignedIntegerValue];
+        if([value isKindOfClass:NSDictionary.class] && depth<4) {
+            for(NSString *field in [[value allKeys] sortedArrayUsingSelector:@selector(compare:)]) {
+                NSString *normalized=[[[field lowercaseString] componentsSeparatedByCharactersInSet:[[NSCharacterSet alphanumericCharacterSet] invertedSet]] componentsJoinedByString:@""];
+                BOOL privateField=[sensitive containsObject:normalized];
+                for(NSString *fragment in @[@"password",@"secret",@"token",@"credential",@"authorization",@"privatekey",@"apikey",@"pairingcode",@"passcode"])if([normalized rangeOfString:fragment].location!=NSNotFound)privateField=YES;
+                if(privateField)continue;
+                NSString *escaped=[[field stringByReplacingOccurrencesOfString:@"~" withString:@"~0"] stringByReplacingOccurrencesOfString:@"/" withString:@"~1"];
+                if(queue.count<64)[queue addObject:@{@"value":value[field],@"path":[key stringByAppendingFormat:@"/%@",escaped],@"depth":@(depth+1)}];
+            }
+        } else if([value isKindOfClass:NSArray.class] && depth<4) {
+            for(NSUInteger i=0;i<MIN(16,[value count]) && queue.count<64;i++)[queue addObject:@{@"value":value[i],@"path":[key stringByAppendingFormat:@"/%lu",(unsigned long)i],@"depth":@(depth+1)}];
+        } else if(([value isKindOfClass:NSString.class] && [value length]) || [value isKindOfClass:NSNumber.class]) {
+            NSData *encoded=[NSJSONSerialization dataWithJSONObject:@[value] options:0 error:nil];
+            result[key]=fingerprint(encoded,@"json_scalar");
+        }
+    }
+    return result;
+}
 + (NSDictionary *)mergeFingerprintReads:(NSDictionary *)reads previous:(NSDictionary *)previous session:(NSString *)session atTime:(NSTimeInterval)time {
     NSMutableDictionary *result=[previous mutableCopy] ?: NSMutableDictionary.dictionary;
     for(NSString *path in reads) {

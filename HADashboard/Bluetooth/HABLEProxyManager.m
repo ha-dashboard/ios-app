@@ -579,8 +579,10 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     if (!completion) return;
     session.identityValues[@"identification_read_at"] = @([[NSDate date] timeIntervalSince1970]);
     NSString *peripheralID=session.peripheral.identifier.UUIDString;
-    session.identityValues[@"gatt_probe_attempts"]=@(MIN(255,[self.identityMetadata[peripheralID][@"gatt_probe_attempts"] unsignedIntegerValue]+1));
-    session.identityValues[@"gatt_fingerprints"]=[HABLEIdentityEvidence mergeFingerprintReads:session.identityValues[@"gatt_fingerprint_reads"] ?: @{} previous:self.identityMetadata[peripheralID][@"gatt_fingerprints"] session:session.identityValues[@"gatt_probe_session"] atTime:NSDate.date.timeIntervalSince1970];
+    BOOL sameSchema=[self.identityMetadata[peripheralID][@"gatt_fingerprint_schema"] isEqual:@2];
+    session.identityValues[@"gatt_fingerprint_schema"]=@2;
+    session.identityValues[@"gatt_probe_attempts"]=@(sameSchema ? MIN(255,[self.identityMetadata[peripheralID][@"gatt_probe_attempts"] unsignedIntegerValue]+1) : 1);
+    session.identityValues[@"gatt_fingerprints"]=[HABLEIdentityEvidence mergeFingerprintReads:session.identityValues[@"gatt_fingerprint_reads"] ?: @{} previous:sameSchema ? self.identityMetadata[peripheralID][@"gatt_fingerprints"] : @{} session:session.identityValues[@"gatt_probe_session"] atTime:NSDate.date.timeIntervalSince1970];
     [session.identityValues removeObjectForKey:@"gatt_fingerprint_reads"];
     NSDictionary *identity = [session.identityValues copy];
     if (!message) {
@@ -694,7 +696,12 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     NSTimeInterval now = NSDate.date.timeIntervalSince1970;
     if (!self.identitiesReady || now < self.nextIdentityProbeAt || self.sessions.count >= HABLESlots) return;
     for (HABLEPeripheralSession *session in self.sessions.allValues) if (session.identityCompletion) return;
-    for (NSString *identifier in self.observations) {
+    NSArray *probeOrder=[self.observations.allKeys sortedArrayUsingComparator:^NSComparisonResult(NSString *a,NSString *b) {
+        BOOL verifyA=[self identityProbeIntervalForObservation:self.observations[a]]==60,verifyB=[self identityProbeIntervalForObservation:self.observations[b]]==60;
+        if(verifyA!=verifyB)return verifyA ? NSOrderedAscending : NSOrderedDescending;
+        return [self.observations[b][@"rssi"] compare:self.observations[a][@"rssi"]];
+    }];
+    for (NSString *identifier in probeOrder) {
         NSDictionary *observation = self.observations[identifier];
         if (self.mappings[identifier] || self.automaticMappings[identifier] || ![observation[@"connectable"] boolValue] || now-[observation[@"last_seen"] doubleValue]>15 || now-[observation[@"first_seen"] doubleValue]<60 || now-[self.identityProbeTimes[identifier] doubleValue]<[self identityProbeIntervalForObservation:observation] || ![self.identityResolver hasKnownIdentityForObservation:observation]) continue;
         self.identityProbeTimes[identifier] = @(now); self.nextIdentityProbeAt = now + 60;
@@ -997,10 +1004,9 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         }
         NSString *path=session.identityReadPaths[handle];
         if(path && value.length && value.length<=512) {
-            uint8_t hash[CC_SHA256_DIGEST_LENGTH];CC_SHA256(value.bytes,(CC_LONG)value.length,hash);NSMutableString *hex=NSMutableString.string;
-            for(NSUInteger i=0;i<sizeof(hash);i++)[hex appendFormat:@"%02x",hash[i]];
             NSMutableDictionary *reads=session.identityValues[@"gatt_fingerprint_reads"];if(!reads){reads=NSMutableDictionary.dictionary;session.identityValues[@"gatt_fingerprint_reads"]=reads;}
-            reads[path]=@{@"sha256":hex,@"length":@(value.length)};
+            NSDictionary *fields=[HABLEIdentityEvidence fingerprintsForValue:value path:path];
+            for(NSString *key in fields)if(reads.count<64 || reads[key])reads[key]=fields[key];
         }
         if(field && self.identitiesReady) {
             NSMutableDictionary *candidate=[self.observations[peripheral.identifier.UUIDString] mutableCopy] ?: NSMutableDictionary.dictionary;

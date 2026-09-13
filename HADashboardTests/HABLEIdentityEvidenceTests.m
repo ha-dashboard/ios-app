@@ -44,6 +44,20 @@
 @interface HABLEIdentityEvidenceTests : XCTestCase
 @end
 @implementation HABLEIdentityEvidenceTests
+- (void)testStructuredFingerprintsSeparateChangingFieldsAndExcludeCredentials {
+    NSDictionary *a=@{@"identity":@{@"id":@"unit-a"},@"rssi":@(-50),@"wifi":@{@"password":@"private",@"client_token":@"private",@"ssid":@"network"}};
+    NSMutableDictionary *b=[a mutableCopy];b[@"rssi"]=@(-60);
+    NSDictionary *first=[HABLEIdentityEvidence fingerprintsForValue:[NSJSONSerialization dataWithJSONObject:a options:0 error:nil] path:@"characteristic"];
+    NSDictionary *second=[HABLEIdentityEvidence fingerprintsForValue:[NSJSONSerialization dataWithJSONObject:b options:0 error:nil] path:@"characteristic"];
+    XCTAssertNil(first[@"characteristic"]);XCTAssertNil(first[@"characteristic/json/wifi/password"]);XCTAssertNil(first[@"characteristic/json/wifi/client_token"]);
+    XCTAssertEqualObjects(first[@"characteristic/json/identity/id"],second[@"characteristic/json/identity/id"]);
+    XCTAssertNotEqualObjects(first[@"characteristic/json/rssi"],second[@"characteristic/json/rssi"]);
+    XCTAssertFalse([[first description] containsString:@"unit-a"]);
+    NSDictionary *history=[HABLEIdentityEvidence mergeFingerprintReads:first previous:@{} session:@"one" atTime:1];
+    history=[HABLEIdentityEvidence mergeFingerprintReads:second previous:history session:@"two" atTime:2];
+    XCTAssertTrue([history[@"characteristic/json/identity/id"][@"stable_across_sessions"] boolValue]);
+    XCTAssertTrue([history[@"characteristic/json/rssi"][@"varying"] boolValue]);
+}
 - (void)testOpaqueFingerprintsRequireSeparateSessionsAndRememberVariation {
     NSDictionary *reads=@{@"service/characteristic":@{@"sha256":@"hash-a",@"length":@16}};
     NSDictionary *first=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:@{} session:@"one" atTime:1];

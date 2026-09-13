@@ -44,7 +44,7 @@
         cell.detailTextLabel.text = [lines componentsJoinedByString:@"\n"];
     }
     else if (path.section == 0 && path.row == 1) { cell.textLabel.text = @"Enter an address manually"; cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator; }
-    else if (path.section == 0) { cell.textLabel.text = self.identifying ? @"Reading identification…" : @"Read identifying characteristics"; cell.detailTextLabel.text = @"Reads standard serial, system ID, manufacturer and model fields when available. These reads do not send device control commands."; cell.userInteractionEnabled = !self.identifying; }
+    else if (path.section == 0) { cell.textLabel.text = self.identifying ? @"Reading identification…" : @"Read identifying characteristics"; cell.detailTextLabel.text = @"Reads available identity fields and bounded read-only fingerprints. No device control commands are sent."; cell.userInteractionEnabled = !self.identifying; }
     else { NSDictionary *candidate = self.candidates[path.row]; cell.textLabel.text = candidate[@"label"]; cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@ %@\n%@", candidate[@"address"], candidate[@"manufacturer"] ?: @"", candidate[@"model"] ?: @"", candidate[@"evidence"]]; cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator; }
     return cell;
 }
