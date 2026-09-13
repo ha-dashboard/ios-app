@@ -13,7 +13,7 @@
     if ((self = [super initWithStyle:UITableViewStyleGrouped])) { _observation = [observation copy]; _resolver = [[HABLEIdentityResolver alloc] init]; _candidates = @[]; } return self;
 }
 - (void)viewDidLoad {
-    [super viewDidLoad]; self.title = @"Match with Home Assistant";
+    [super viewDidLoad]; self.title = @"Bluetooth identity";
     self.tableView.rowHeight = UITableViewAutomaticDimension; self.tableView.estimatedRowHeight = 70;
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(modelChanged:) name:HABLEProxyDidChangeNotification object:nil];
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRefresh target:self action:@selector(refresh:)]; [self refresh:nil];
@@ -30,7 +30,7 @@
 }
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 2; }
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return section == 0 ? 3 : self.candidates.count; }
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section { return section == 0 ? self.observation[@"name"] : @"Known Home Assistant devices"; }
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section { return section == 0 ? self.observation[@"name"] : @"Observed and registered devices"; }
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     return section == 0 ? @"HA identities and peer observations synchronize automatically." : @"HA identities, confirmed associations and fresh peer evidence synchronize automatically. Identical readings, names and services can belong to multiple devices. Ambiguous matches stay pending; confirm the physical device before creating an association.";
 }

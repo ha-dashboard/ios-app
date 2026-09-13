@@ -174,6 +174,26 @@
     [r loadRegistry:@[@{@"id":@"sensor",@"name":@"Room climate",@"serial_number":@"SN-901827",@"connections":@[@[@"bluetooth",@"00:11:22:33:44:55"]],@"identifiers":@[@[@"arbitrary_integration",@"UNIT-901827"]]}] entries:@[] excludingSource:@"02:00:00:00:00:01"];
     return r;
 }
+- (void)testObservedAddressCanMatchWithoutAnyHADeviceRegistration {
+    HABLEIdentityResolver *r=[HABLEIdentityResolver new];
+    [r loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    NSDictionary *ad=@{@"address":@"00:11:22:33:44:55",@"source":@"AA:BB:CC:DD:EE:FF",@"name":@"Unregistered appliance",@"service_uuids":@[@"1234"],@"time":@(NSDate.date.timeIntervalSince1970),@"raw":@"0bff341200112233445599aa"};
+    [r observeAdvertisements:@[ad]];
+    uint8_t bytes[]={0x34,0x12,0,0x11,0x22,0x33,0x44,0x55,0x99,0xaa};
+    NSDictionary *o=@{@"identifier":@"local",@"name":@"Unregistered appliance",@"service_uuids":@[@"1234"],@"manufacturer_data":[[NSData dataWithBytes:bytes length:sizeof(bytes)] base64EncodedStringWithOptions:0]};
+    NSDictionary *match=[r automaticMatchForObservation:o];
+    XCTAssertEqualObjects(match[@"address"],@"00:11:22:33:44:55");
+    XCTAssertEqualObjects(match[@"identity_kind"],@"observed_native");
+    NSMutableDictionary *binding=[match mutableCopy];binding[@"schema"]=@2;binding[@"proof_id"]=@"observed-proof";
+    HABLEIdentityResolver *peer=[HABLEIdentityResolver new];[peer loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:02"];
+    [peer loadCatalog:@{@"schema":@2,@"bindings":@{@"00:11:22:33:44:55":binding}}];
+    XCTAssertEqualObjects(([peer automaticMatchForObservation:o][@"address"]),@"00:11:22:33:44:55");
+    bytes[9]=0xbb;NSMutableDictionary *different=[o mutableCopy];different[@"manufacturer_data"]=[[NSData dataWithBytes:bytes length:sizeof(bytes)] base64EncodedStringWithOptions:0];
+    XCTAssertNil([peer automaticMatchForObservation:different]);
+    NSMutableDictionary *second=[ad mutableCopy];second[@"address"]=@"00:11:22:33:44:66";[r observeAdvertisements:@[second]];
+    XCTAssertNil([r automaticMatchForObservation:o]);
+    XCTAssertTrue(([[r evidenceForIdentifier:@"local"] hasPrefix:@"Ambiguous:"]));
+}
 - (void)testSerialIdentityDoesNotDependOnManufacturer {
     HABLEIdentityResolver *r=[self resolver];NSDictionary *m=[r automaticMatchForObservation:@{@"identifier":@"local",@"name":@"Anything",@"serial_number":@"SN-901827"}];
     XCTAssertEqualObjects(m[@"address"],@"00:11:22:33:44:55");

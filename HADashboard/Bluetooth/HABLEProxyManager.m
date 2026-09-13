@@ -496,7 +496,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     }
     NSDictionary *match = self.automaticMappings[identifier];
     observation[@"address"] = HABLEAddressString([self addressForIdentifier:identifier]);
-    observation[@"identity"] = match ? @"ha_matched_mac" : @"local_alias";
+    observation[@"identity"] = match ? ([match[@"identity_kind"] isEqual:@"observed_native"] ? @"shared_observed_address" : @"ha_matched_mac") : @"local_alias";
     if (match) { [observation removeObjectForKey:@"identity_pending"]; observation[@"ha_name"] = match[@"label"]; observation[@"identity_evidence"] = match[@"evidence"]; }
     else { [observation removeObjectForKey:@"ha_name"]; observation[@"identity_evidence"] = [self.identityResolver evidenceForIdentifier:identifier]; if (!self.identitiesReady || [self.identityResolver hasKnownIdentityForObservation:observation]) observation[@"identity_pending"] = @YES; else [observation removeObjectForKey:@"identity_pending"]; }
 }

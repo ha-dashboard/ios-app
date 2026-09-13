@@ -129,12 +129,33 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         if (!addresses.count && ![record[@"serial_number"] length] && !hasUnit) continue;
         for (NSString *address in addresses.count ? addresses.allObjects : @[@""]) { NSMutableDictionary *item=[record mutableCopy];item[@"address"]=address;[known addObject:item]; }
     }
+    // An advertised Bluetooth identity does not require an HA device entry.
+    // Keep the radio anchor separate from optional HA registration metadata.
+    NSMutableSet *covered=NSMutableSet.set;
+    for(NSDictionary *record in known)if([record[@"address"] length])[covered addObject:record[@"address"]];
+    NSMutableSet *observed=[NSMutableSet setWithArray:self.remoteInfo.allKeys];
+    for(NSString *address in self.catalog)if([self.catalog[address][@"identity_kind"] isEqual:@"observed_native"])[observed addObject:address];
+    for(NSString *address in observed) {
+        if([covered containsObject:address])continue;
+        NSDictionary *remote=self.remoteInfo[address],*shared=self.catalog[address];
+        NSDictionary *anchor=remote[@"native_anchor"] ?: shared[@"native_anchor"];
+        if(!anchor)continue;
+        NSString *name=HABLEString(remote[@"name"]);if(!name.length)name=HABLEString(shared[@"name"]);
+        [known addObject:@{@"identity_kind":@"observed_native",@"device_id":[@"bluetooth:" stringByAppendingString:address],@"address":address,@"addresses":@[address],@"identifiers":@[],@"domains":@[],@"name":name,@"label":name.length ? name : address,@"native_anchor":anchor}];
+    }
     self.knownDevices=[known sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a,NSDictionary *b){return [a[@"label"] localizedCaseInsensitiveCompare:b[@"label"]];}];
 }
 - (BOOL)validBinding:(NSDictionary *)binding {
     uint64_t address;
     if (![binding isKindOfClass:NSDictionary.class] || ![binding[@"profile"] isKindOfClass:NSDictionary.class] || ![binding[@"lineage"] isKindOfClass:NSArray.class] || [binding[@"lineage"] count]>32 || ![binding[@"schema"] isEqual:@2] || !HABLEParseAddress(HABLEString(binding[@"address"]),&address) || ![binding[@"proof_id"] isKindOfClass:NSString.class]) return NO;
     if (![@[@"embedded_address",@"serial",@"named_identifier",@"packet_sequence",@"confirmed"] containsObject:binding[@"method"]]) return NO;
+    if([binding[@"identity_kind"] isEqual:@"observed_native"]) {
+        NSDictionary *anchor=binding[@"native_anchor"];
+        if(![anchor isKindOfClass:NSDictionary.class] || ![anchor[@"address"] isEqual:binding[@"address"]] || ![binding[@"device_id"] isEqual:[@"bluetooth:" stringByAppendingString:binding[@"address"]]])return NO;
+        NSString *source=HABLEString(anchor[@"source"]);
+        if(!source.length || [source isEqual:self.sourceAddress] || [self.proxySources containsObject:source] || !HABLEHexData(anchor[@"raw"]).length)return NO;
+        return [@[@"embedded_address",@"packet_sequence",@"confirmed"] containsObject:binding[@"method"]];
+    }
     for (NSDictionary *record in self.registryDevices) if ([record[@"device_id"] isEqual:binding[@"device_id"]]) {
         if ([binding[@"method"] isEqual:@"serial"] && ![record[@"serial_number"] isEqual:binding[@"unit_identifier"]]) return NO;
         if ([binding[@"method"] isEqual:@"named_identifier"] && ![self registeredIdentifierForName:HABLEString(binding[@"unit_identifier"]) record:record]) return NO;
@@ -180,6 +201,8 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         NSMutableDictionary *info=[ad mutableCopy];info[@"tokens"]=tokens;
         NSUInteger length=0;for(NSString *token in tokens)if([token hasPrefix:@"m:"])length=[[[NSData alloc]initWithBase64EncodedString:[token substringFromIndex:[token rangeOfString:@":" options:NSBackwardsSearch].location+1] options:0]length];
         info[@"profile"]=@{@"name":HABLEString(ad[@"name"]),@"services":[HABLEIdentityEvidence canonicalServices:ad[@"service_uuids"]],@"manufacturer_length":@(length)};
+        NSDictionary *anchor=HABLEHexData(ad[@"raw"]).length ? @{@"address":address,@"source":source,@"raw":ad[@"raw"]} : self.remoteInfo[address][@"native_anchor"];
+        if(anchor)info[@"native_anchor"]=anchor;
         self.remoteInfo[address]=info;
         // A merged manufacturer-data dictionary is metadata, not a packet trace.
         if (tokens.count && [ad[@"time"] isKindOfClass:NSNumber.class]) [self.evidence recordRemoteTokens:tokens address:address source:source atTime:[ad[@"time"] doubleValue]];
@@ -323,6 +346,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 }
 - (BOOL)proof:(NSDictionary *)proof matches:(NSDictionary *)observation {
     NSString *method=proof[@"method"];
+    if([method isEqual:@"embedded_address"] && [proof[@"identity_kind"] isEqual:@"observed_native"])return [HABLEIdentityEvidence observation:observation containsAddress:proof[@"address"]] && HABLEProfilesCompatible(HABLEProfile(observation),proof[@"profile"]) && [HABLEIdentityEvidence tokens:[HABLEIdentityEvidence tokensForObservation:observation] agreeWith:[HABLEIdentityEvidence tokensForRawAdvertisement:HABLEHexData(proof[@"native_anchor"][@"raw"])]];
     if([method isEqual:@"embedded_address"])return [HABLEIdentityEvidence observation:observation containsAddress:proof[@"address"]];
     if([method isEqual:@"serial"])return [observation[@"serial_number"] isEqual:proof[@"unit_identifier"]];
     if([method isEqual:@"named_identifier"])return [HABLEString(observation[@"name"]) caseInsensitiveCompare:HABLEString(proof[@"unit_identifier"])]==NSOrderedSame && [HABLEIdentityEvidence tokensForObservation:observation].count && HABLEProfilesCompatible(HABLEProfile(observation),proof[@"profile"]);
@@ -372,6 +396,16 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     for(NSDictionary *candidate in candidates)if([candidate[@"automatic_match"] boolValue]){if(match){if([observation[@"identifier"] length])self.lastEvidence[observation[@"identifier"]]=@"Ambiguous: multiple known devices satisfy the identity evidence";return nil;}match=candidate;}
     if(!match)return nil;
     NSString *identifier=observation[@"identifier"];
+    if([match[@"identity_kind"] isEqual:@"observed_native"] && [self.evidence hasCompetingLocalIdentifier:identifier address:match[@"address"] now:NSDate.date.timeIntervalSince1970]) {
+        self.lastEvidence[identifier]=@"Ambiguous: another local peripheral shares this observed identity evidence";return nil;
+    }
+    if([match[@"identity_kind"] isEqual:@"observed_native"]) for(NSString *other in self.remoteInfo) {
+        NSDictionary *remote=self.remoteInfo[other];
+        if([other isEqual:match[@"address"]] || !remote[@"native_anchor"] || fabs(NSDate.date.timeIntervalSince1970-[remote[@"time"] doubleValue])>120)continue;
+        if(HABLEProfilesCompatible(HABLEProfile(observation),remote[@"profile"]) && [HABLEIdentityEvidence tokens:[HABLEIdentityEvidence tokensForObservation:observation] agreeWith:remote[@"tokens"]]) {
+            self.lastEvidence[identifier]=@"Ambiguous: multiple radio addresses carry the same observed payload";return nil;
+        }
+    }
     if([match[@"method"] isEqual:@"packet_sequence"]) for(NSString *other in self.remoteInfo) {
         if([other isEqual:match[@"address"]] || !HABLEProfilesCompatible(HABLEProfile(observation),self.remoteInfo[other][@"profile"]))continue;
         NSDictionary *e=[self.evidence correlationForIdentifier:identifier address:other now:NSDate.date.timeIntervalSince1970];
@@ -438,7 +472,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     NSString *identifier=observation[@"identifier"];
     if(!identifier.length || [self.localBindings[identifier][@"address"] isEqual:address])return;
     NSDictionary *selected=nil;
-    for(NSDictionary *record in self.registryDevices) if([record[@"addresses"] containsObject:address] || [self registeredIdentifierForName:HABLEString(observation[@"name"]) record:record]) {
+    for(NSDictionary *record in self.knownDevices) if([record[@"address"] isEqual:address] || [self registeredIdentifierForName:HABLEString(observation[@"name"]) record:record]) {
         if(selected)return;selected=record;
     }
     if(!selected)return;
