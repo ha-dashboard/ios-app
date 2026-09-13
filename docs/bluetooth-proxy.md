@@ -41,10 +41,18 @@ automatically. It can bind Blue Connect device identifiers to independently
 observed addresses, including registry entries without Bluetooth connections.
 An unambiguous GATT serial can also match an address registered in HA. Generic
 names, services and matching measurements never authorize an automatic link.
+Recognized addresses also display HA’s friendly device names.
 Conflicting records or addresses require confirmation. All HA Dashboard proxy
 sources are excluded from address evidence; native and ESP32 scanners remain
-eligible. Automatic associations are scoped to the HA account session and
-refresh every five minutes. Supported Blue Connect advertisements are briefly
+eligible. Verified Blue Connect associations are saved in HA’s shared frontend
+system store, using a separate namespaced key for each HA device. Writes require
+an HA administrator; other signed-in proxies can reuse the association after a
+restart without a live ESP32 supplying address evidence. Each read validates the
+HA device ID, integration identifier, vendor and proof schema against the current
+registry. Conflicting records are not overwritten automatically. In-memory
+matches are scoped to the current HA connection and refresh every five minutes.
+HA backups include these non-secret associations; resetting one proxy does not
+delete associations used by other proxies. Supported Blue Connect advertisements are briefly
 buffered during the initial import to avoid premature alias discoveries.
 
 Tap a nearby device to inspect matching evidence and known Bluetooth devices. The matching view
@@ -154,6 +162,11 @@ build/ble-proxy-venv/bin/python scripts/ble-proxy-gatt-probe.py \
   --fixture FIXTURE_RECEIPT.json --output RESULT.json --stress-reconnect 3 \
   --check-client-isolation
 ```
+
+For a shared-identity acceptance check, launching with
+`-HABLEIdentitySharedOnly YES` skips live scanner comparison in the identity
+resolver. It still requires an existing verified HA association; the flag does
+not supply or override any address. Normal launches compare live observations.
 
 Use it only with the controlled peripheral from `scripts/ble-test-peripheral.m`.
 The driver checks its service UUID and marker before sending a test write.

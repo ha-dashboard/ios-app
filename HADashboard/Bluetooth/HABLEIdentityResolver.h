@@ -7,5 +7,6 @@
 - (NSArray<NSDictionary *> *)candidatesForObservation:(NSDictionary *)observation;
 /// Returns only an unambiguous address backed by a device-specific identifier.
 - (NSDictionary *)automaticMatchForObservation:(NSDictionary *)observation;
+- (void)rememberAutomaticMatch:(NSDictionary *)match;
 - (void)cancel;
 @end

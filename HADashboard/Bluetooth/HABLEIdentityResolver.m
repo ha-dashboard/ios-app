@@ -1,6 +1,7 @@
 #import "HABLEIdentityResolver.h"
 #import "HABLEProto.h"
 #import "HAConnectionManager.h"
+#import "HAAuthManager.h"
 
 static NSData *HABLEHexData(NSString *value) {
     if (![value isKindOfClass:[NSString class]] || value.length % 2 || value.length > 4096) return nil;
@@ -24,11 +25,16 @@ static NSString *HABLEFullUUID(NSString *value) {
 @property (nonatomic, assign) NSInteger subscription;
 @property (nonatomic, assign) NSUInteger generation;
 @property (nonatomic, copy) NSArray<NSDictionary *> *registryDevices;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *sharedBindings;
+@property (nonatomic, strong) NSMutableSet<NSString *> *occupiedBindingKeys;
+@property (nonatomic, strong) NSMutableSet<NSString *> *publishingBindings;
+@property (nonatomic, copy) NSString *sourceServer;
+@property (nonatomic, assign) NSUInteger sourceRevision;
 @end
 
 @implementation HABLEIdentityResolver
 - (instancetype)init {
-    if ((self = [super init])) { _knownDevices = @[]; _advertisements = [NSMutableDictionary dictionary]; _subscription = -1; _status = @"Not synchronised"; }
+    if ((self = [super init])) { _knownDevices = @[]; _advertisements = [NSMutableDictionary dictionary]; _subscription = -1; _status = @"Not synchronised"; _sharedBindings = [NSMutableDictionary dictionary]; _occupiedBindingKeys = [NSMutableSet set]; _publishingBindings = [NSMutableSet set]; }
     return self;
 }
 - (void)dealloc { [self cancel]; }
@@ -77,6 +83,8 @@ static NSString *HABLEFullUUID(NSString *value) {
     for (NSDictionary *record in self.registryDevices) {
         NSMutableDictionary *addresses = [NSMutableDictionary dictionary];
         for (NSString *address in record[@"addresses"]) addresses[address] = @"registry_bluetooth";
+        NSDictionary *binding = self.sharedBindings[record[@"device_id"]];
+        if (binding && !addresses[binding[@"address"]]) addresses[binding[@"address"]] = @"shared_identity";
         for (NSString *address in self.advertisements) {
             NSDictionary *ad = self.advertisements[address]; NSString *name = ad[@"name"];
             if (![name isKindOfClass:[NSString class]] || !name.length) continue;
@@ -87,9 +95,71 @@ static NSString *HABLEFullUUID(NSString *value) {
         if (!addresses.count && ![record[@"blue_connect_identifier"] length] && ![record[@"serial_number"] length]) continue;
         for (NSString *address in addresses.count ? addresses.allKeys : @[@""]) {
             NSMutableDictionary *item = [record mutableCopy]; item[@"address"] = address; item[@"address_provenance"] = addresses[address] ?: @"unresolved"; [known addObject:item];
+            if ([binding[@"address"] isEqual:address]) item[@"shared_identity"] = binding;
         }
     }
     self.knownDevices = [known sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) { return [a[@"label"] localizedCaseInsensitiveCompare:b[@"label"]]; }];
+}
+- (NSString *)sharedKeyForDeviceID:(NSString *)deviceID { return [@"ha_dashboard.ble_identity.v1." stringByAppendingString:deviceID]; }
+- (BOOL)sourceIsCurrent {
+    HAAuthManager *auth = [HAAuthManager sharedManager];
+    return self.sourceServer.length && [auth.serverURL isEqual:self.sourceServer] && auth.authenticationRevision == self.sourceRevision;
+}
+- (void)loadSharedValue:(id)value forRecord:(NSDictionary *)record {
+    NSString *deviceID = record[@"device_id"];
+    if (!deviceID.length) return;
+    if (value && value != [NSNull null]) [self.occupiedBindingKeys addObject:deviceID];
+    uint64_t address;
+    if (![value isKindOfClass:[NSDictionary class]] || ![value[@"schema"] isKindOfClass:[NSNumber class]] || [value[@"schema"] integerValue] != 1 ||
+        ![value[@"profile"] isEqual:@"blue_connect-v1"] || ![value[@"device_id"] isEqual:deviceID] ||
+        ![value[@"identifier"] isEqual:record[@"blue_connect_identifier"]] ||
+        ![value[@"manufacturer_id"] isEqual:@305] || ![value[@"evidence_kind"] isEqual:@"independent_scanner"] ||
+        ![value[@"address"] isKindOfClass:[NSString class]] || !HABLEParseAddress(value[@"address"], &address)) return;
+    NSMutableDictionary *binding = [value mutableCopy]; binding[@"address"] = HABLEAddressString(address);
+    self.sharedBindings[deviceID] = binding;
+    [self rebuildKnownDevices];
+}
+- (void)loadSharedBindingsWithCompletion:(void (^)(void))completion {
+    dispatch_group_t group = dispatch_group_create(); NSUInteger count = 0, generation = self.generation;
+    __weak typeof(self) weakSelf = self;
+    for (NSDictionary *record in self.registryDevices) {
+        NSString *deviceID = record[@"device_id"];
+        if (![record[@"blue_connect_identifier"] length] || !deviceID.length || deviceID.length > 128) continue;
+        if (++count > 32) break;
+        dispatch_group_enter(group);
+        [[HAConnectionManager sharedManager] sendCommand:@{@"type":@"frontend/get_system_data", @"key":[self sharedKeyForDeviceID:deviceID]} completion:^(id result, NSError *error) {
+            HABLEIdentityResolver *self = weakSelf;
+            if (self && generation == self.generation && [self sourceIsCurrent] && !error && [result isKindOfClass:[NSDictionary class]]) [self loadSharedValue:result[@"value"] forRecord:record];
+            dispatch_group_leave(group);
+        }];
+    }
+    dispatch_group_notify(group, dispatch_get_main_queue(), ^{ HABLEIdentityResolver *self = weakSelf; if (self && generation == self.generation && [self sourceIsCurrent]) completion(); });
+}
+- (void)rememberAutomaticMatch:(NSDictionary *)match {
+    NSString *deviceID = match[@"device_id"], *identifier = match[@"blue_connect_identifier"], *address = match[@"address"];
+    if (!deviceID.length || deviceID.length > 128 || !identifier.length || !address.length || ![match[@"automatic_match"] boolValue] || ![self sourceIsCurrent] ||
+        [self.occupiedBindingKeys containsObject:deviceID] || [self.publishingBindings containsObject:deviceID]) return;
+    NSDictionary *advertisement = self.advertisements[address];
+    if (![advertisement[@"name"] isKindOfClass:[NSString class]] || [advertisement[@"name"] caseInsensitiveCompare:identifier] != NSOrderedSame ||
+        HABLEHexData(advertisement[@"manufacturer_data"][@"305"]).length != 11) return;
+    [self.publishingBindings addObject:deviceID];
+    NSUInteger generation = self.generation; __weak typeof(self) weakSelf = self;
+    NSString *key = [self sharedKeyForDeviceID:deviceID];
+    // Recheck before writing. Existing or conflicting records are never
+    // overwritten automatically; normal concurrent discoveries are idempotent.
+    [[HAConnectionManager sharedManager] sendCommand:@{@"type":@"frontend/get_system_data", @"key":key} completion:^(id result, NSError *error) {
+        HABLEIdentityResolver *self = weakSelf; if (!self || generation != self.generation || ![self sourceIsCurrent]) return;
+        if (error || ![result isKindOfClass:[NSDictionary class]]) return;
+        id existing = result[@"value"];
+        if (existing && existing != [NSNull null]) { [self loadSharedValue:existing forRecord:match]; return; }
+        NSDictionary *value = @{@"schema":@1, @"profile":@"blue_connect-v1", @"device_id":deviceID, @"identifier":identifier, @"address":address, @"manufacturer_id":@305,
+            @"evidence_kind":@"independent_scanner", @"source":advertisement[@"source"], @"verified_at":@([[NSDate date] timeIntervalSince1970])};
+        // HA enforces administrator permission for this system-store write.
+        [[HAConnectionManager sharedManager] sendCommand:@{@"type":@"frontend/set_system_data", @"key":key, @"value":value} completion:^(id result, NSError *error) {
+            HABLEIdentityResolver *self = weakSelf; if (!self || generation != self.generation || ![self sourceIsCurrent] || error) return;
+            [self loadSharedValue:value forRecord:match];
+        }];
+    }];
 }
 - (void)observeAdvertisements:(NSArray *)advertisements {
     for (NSDictionary *advertisement in advertisements) {
@@ -101,6 +171,8 @@ static NSString *HABLEFullUUID(NSString *value) {
 }
 - (void)refreshExcludingSource:(NSString *)source completion:(void (^)(NSError *))completion {
     [self cancel]; self.knownDevices = @[]; self.registryDevices = @[]; [self.advertisements removeAllObjects];
+    [self.sharedBindings removeAllObjects]; [self.occupiedBindingKeys removeAllObjects]; [self.publishingBindings removeAllObjects];
+    HAAuthManager *auth = [HAAuthManager sharedManager]; self.sourceServer = auth.serverURL; self.sourceRevision = auth.authenticationRevision;
     NSUInteger generation = self.generation;
     HAConnectionManager *connection = [HAConnectionManager sharedManager];
     if (!connection.connected) {
@@ -116,17 +188,23 @@ static NSString *HABLEFullUUID(NSString *value) {
             HABLEIdentityResolver *self = weakSelf; if (!self || generation != self.generation) return;
             if (error || ![result isKindOfClass:[NSArray class]]) { self.status = @"Could not read Home Assistant devices"; completion(error ?: [NSError errorWithDomain:@"HABLEIdentity" code:2 userInfo:nil]); return; }
             [self loadRegistry:result entries:entries excludingSource:source];
+            [self loadSharedBindingsWithCompletion:^{
+            HABLEIdentityResolver *self = weakSelf; if (!self || generation != self.generation) return;
+            if ([[NSUserDefaults standardUserDefaults] boolForKey:@"HABLEIdentitySharedOnly"]) {
+                self.status = @"Using stored HA identities without scanner comparison"; completion(nil); return;
+            }
             self.status = @"Comparing independent Bluetooth observations";
             self.subscription = [connection subscribeWithCommand:@{@"type":@"bluetooth/subscribe_advertisements"} handler:^(NSDictionary *event) {
                 HABLEIdentityResolver *self = weakSelf; if (!self || generation != self.generation) return;
                 if ([event[@"add"] isKindOfClass:[NSArray class]]) [self observeAdvertisements:event[@"add"]];
             } completion:^(BOOL success, NSError *error) {
                 HABLEIdentityResolver *self = weakSelf; if (!self || generation != self.generation) return;
-                if (!success) { [self cancel]; self.status = @"Registry imported; advertisement matching needs administrator access"; completion(nil); return; }
+                if (!success) { [self cancel]; self.status = self.sharedBindings.count ? @"Using stored identities; live scanner comparison needs administrator access" : @"Registry imported; advertisement matching needs administrator access"; completion(nil); return; }
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
                     HABLEIdentityResolver *self = weakSelf; if (!self || generation != self.generation) return;
                     [self cancel]; self.status = [NSString stringWithFormat:@"Imported %lu identities from HA", (unsigned long)self.knownDevices.count]; completion(nil);
                 });
+            }];
             }];
         }];
     }];
@@ -171,6 +249,10 @@ static NSString *HABLEFullUUID(NSString *value) {
             manufacturer.length == 13 && bluePayload.length == 11) {
             const uint8_t *bytes = manufacturer.bytes;
             if (bytes[0] == 0x31 && bytes[1] == 0x01) { verified = YES; score += 150; [evidence addObject:@"Blue Connect ID and vendor match an independent scanner"]; }
+        }
+        if (address.length && blueID.length && name.length && [name caseInsensitiveCompare:blueID] == NSOrderedSame && manufacturer.length == 13 && known[@"shared_identity"]) {
+            const uint8_t *bytes = manufacturer.bytes;
+            if (bytes[0] == 0x31 && bytes[1] == 0x01) { verified = YES; score += 150; [evidence addObject:@"Verified Blue Connect association stored in HA"]; }
         }
         if (address.length && [known[@"address_provenance"] isEqual:@"registry_bluetooth"] && serial.length >= 4 &&
             ![[serial lowercaseString] isEqual:@"unknown"] && [serial rangeOfCharacterFromSet:[NSCharacterSet characterSetWithCharactersInString:@"123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"]].location != NSNotFound &&

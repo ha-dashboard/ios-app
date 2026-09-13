@@ -491,7 +491,8 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         if (self.sessions[@([self addressForIdentifier:identifier])] || (available && self.sessions[@(address)])) return;
         for (NSString *other in self.observations) if (available && ![other isEqual:identifier] &&
             [self addressForIdentifier:other] == address && [[NSDate date] timeIntervalSince1970] - [self.observations[other][@"last_seen"] doubleValue] < 300) available = NO;
-        if (available) self.automaticMappings[identifier] = match; else [self.automaticMappings removeObjectForKey:identifier];
+        if (available) { self.automaticMappings[identifier] = match; [self.identityResolver rememberAutomaticMatch:match]; }
+        else [self.automaticMappings removeObjectForKey:identifier];
     }
     NSDictionary *match = self.automaticMappings[identifier];
     observation[@"address"] = HABLEAddressString([self addressForIdentifier:identifier]);

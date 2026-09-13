@@ -9,6 +9,7 @@
 @interface HABLEIdentityResolver (IdentityTestAccess)
 - (void)loadRegistry:(NSArray *)devices entries:(NSArray *)entries excludingSource:(NSString *)source;
 - (void)observeAdvertisements:(NSArray *)advertisements;
+- (void)loadSharedValue:(id)value forRecord:(NSDictionary *)record;
 @end
 
 @interface HAAPIClient (RetryTestAccess)
@@ -85,6 +86,32 @@ static NSUInteger HABLERejectedRequestCount;
 @interface HABLEProxyTests : XCTestCase
 @end
 @implementation HABLEProxyTests
+- (NSDictionary *)sharedPoolBinding {
+    return @{@"schema":@1, @"profile":@"blue_connect-v1", @"device_id":@"pool", @"identifier":@"B201ABCDEF", @"address":@"00:11:22:33:44:55", @"manufacturer_id":@305, @"evidence_kind":@"independent_scanner"};
+}
+- (void)testSharedIdentityMatchesWithoutIndependentAdvertisements {
+    HABLEIdentityResolver *resolver = [self poolIdentityResolver];
+    NSData *stored = [NSJSONSerialization dataWithJSONObject:[self sharedPoolBinding] options:0 error:nil];
+    [resolver loadSharedValue:[NSJSONSerialization JSONObjectWithData:stored options:0 error:nil] forRecord:resolver.knownDevices.firstObject];
+    XCTAssertEqualObjects([resolver automaticMatchForObservation:[self poolObservation]][@"address"], @"00:11:22:33:44:55");
+    HABLEIdentityResolver *restarted = [self poolIdentityResolver];
+    [restarted loadSharedValue:[self sharedPoolBinding] forRecord:restarted.knownDevices.firstObject];
+    XCTAssertEqualObjects([restarted automaticMatchForObservation:[self poolObservation]][@"address"], @"00:11:22:33:44:55");
+}
+- (void)testSharedIdentityRejectsOtherDevicesAndUnsupportedProofs {
+    for (NSDictionary *change in @[@{@"device_id":@"another-device"}, @{@"identifier":@"B201123456"}, @{@"manufacturer_id":@1}, @{@"evidence_kind":@"name_only"}, @{@"schema":@99}, @{@"address":@"not-an-address"}]) {
+        HABLEIdentityResolver *resolver = [self poolIdentityResolver];
+        NSMutableDictionary *binding = [[self sharedPoolBinding] mutableCopy]; [binding addEntriesFromDictionary:change];
+        [resolver loadSharedValue:binding forRecord:resolver.knownDevices.firstObject];
+        XCTAssertNil([resolver automaticMatchForObservation:[self poolObservation]], @"Invalid cached evidence must not bind a device: %@", change);
+    }
+}
+- (void)testFreshAddressConflictingWithSharedIdentityRequiresConfirmation {
+    HABLEIdentityResolver *resolver = [self poolIdentityResolver];
+    [resolver loadSharedValue:[self sharedPoolBinding] forRecord:resolver.knownDevices.firstObject];
+    [resolver observeAdvertisements:@[[self poolAdvertisementWithAddress:@"00:11:22:33:44:66" source:@"00:00:00:00:00:01"]]];
+    XCTAssertNil([resolver automaticMatchForObservation:[self poolObservation]]);
+}
 - (void)testRemovingManualAssociationCannotPromoteAFriendlyNameIntoAnAddressMatch {
     NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
     id saved = [defaults objectForKey:@"ha_ble_proxy_address_mapping"];
