@@ -68,6 +68,32 @@ device diagnostics, or camera/microphone media through the app.
   camera/microphone capture in the background, or accept a Home Assistant
   command that remotely enables capture.
 
+## Bluetooth Proxy
+
+- Bluetooth Proxy is off by default. When enabled, it requests Bluetooth access
+  and forwards nearby Bluetooth LE advertisements to authenticated clients such
+  as Home Assistant. Data includes device identifiers, names, signal strength,
+  manufacturer data and service data. Active clients can connect to peripherals,
+  read or write characteristics, and subscribe to notifications.
+- Proxy traffic on the selected private IPv4 address, port 6053, is encrypted
+  and authenticated with a randomly generated per-device key stored in the
+  device-only Keychain. Anyone with that key and network access can use the proxy.
+  It is not sent to the developer or included in diagnostic snapshots.
+- **Add to Home Assistant** sends the key to your configured server through its
+  existing HTTP or HTTPS connection. HTTPS protects setup; HTTP setup requires a
+  trusted local network. Home Assistant stores the key and may include it in its
+  backups. Manual key copies use the local clipboard and expire after 60 seconds
+  on iOS 10 or later; on iOS 9 the app clears an unchanged copy when it can run.
+- Device matching imports known Bluetooth addresses and metadata from your Home
+  Assistant registry and compares other scanners' advertisements. Standard GATT
+  identification reads can retrieve serial, manufacturer, model and system IDs.
+  Suggested matches require confirmation. Associations, translated GATT handle
+  tables, and bounded observation/diagnostic snapshots remain on the device.
+- Entering the background pauses the iOS proxy. Turning it off or using
+  **Log Out & Reset** stops its connections. Reset also deletes its local key,
+  associations and diagnostic snapshot. ESPHome entries and their saved keys
+  remain on your HA server until removed there.
+
 ## Credentials and Local Storage
 
 - Home Assistant access and refresh tokens are stored in the platform Keychain.
@@ -116,7 +142,7 @@ device diagnostics, or camera/microphone media through the app.
 ## Local Network Access
 
 The app uses Bonjour/mDNS to discover Home Assistant and may host the optional
-RTSP listener described above. iOS and iPadOS 14 or later request Local Network
+RTSP and Bluetooth proxy listeners described above. iOS and iPadOS 14 or later request Local Network
 permission for this access; earlier supported releases do not show that system
 permission. Discovery results remain on the device.
 

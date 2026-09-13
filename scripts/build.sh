@@ -208,7 +208,7 @@ build_device() {
     local SOURCES=()
     while IFS= read -r src; do
         SOURCES+=("$src")
-    done < <(find HADashboard Vendor -name '*.m' \
+    done < <(find HADashboard Vendor \( -name '*.m' -o -name '*.c' \) \
         -not -path '*/iOSSnapshotTestCase/*' \
         -not -path '*/MDI/*' 2>/dev/null)
 
@@ -235,11 +235,13 @@ build_device() {
         for src in "${SOURCES[@]}"; do
             local object_name
             local compile_output
-            object_name=$(echo "$src" | sed 's|/|_|g; s|\.m$|.o|')
+            object_name=$(echo "$src" | sed 's|/|_|g; s|\.[mc]$|.o|')
+            local language_flags=(-x objective-c -fobjc-arc)
+            [[ "$src" == *.c ]] && language_flags=(-x c)
             if compile_output=$("$CLANG" \
                 --target="$target" \
                 -isysroot "$XCODE26_SDK" \
-                -x objective-c -fobjc-arc -fmodules -Os -DNDEBUG -g \
+                "${language_flags[@]}" -fmodules -Os -DNDEBUG -g \
                 -Werror=unguarded-availability \
                 ${architecture_flags[@]+"${architecture_flags[@]}"} \
                 "${INCLUDE_FLAGS[@]}" \
@@ -271,7 +273,7 @@ build_device() {
             -framework CoreGraphics -framework CoreText -framework QuartzCore \
             -framework Security -framework CFNetwork -framework AVFoundation \
             -framework AudioToolbox -framework CoreMedia -framework CoreVideo \
-            -framework VideoToolbox \
+            -framework VideoToolbox -framework CoreBluetooth \
             -fobjc-arc -dead_strip \
             ${architecture_flags[@]+"${architecture_flags[@]}"} \
             -Xlinker -platform_version -Xlinker ios -Xlinker 9.0 -Xlinker "$SDK_VER" \
@@ -441,7 +443,17 @@ build_device() {
 
     # Re-sign with entitlements from arm64 build
     echo "   Re-signing..." >&2
-    local IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | grep "Apple Development" | head -1 | sed 's/.*"\(.*\)"/\1/')
+    # Use the exact certificate Xcode chose for this provisioning profile.
+    # The first Apple Development identity may belong to another account or
+    # certificate, producing a locally valid signature that iOS rejects.
+    local CERTIFICATE_PREFIX="$BUILD_DIR/template-signing-cert-"
+    if ! codesign -d --extract-certificates="$CERTIFICATE_PREFIX" "$ARM64_APP" >/dev/null 2>&1 || \
+       [[ ! -s "${CERTIFICATE_PREFIX}0" ]]; then
+        echo "Could not identify the signed template's development certificate" >&2
+        exit 1
+    fi
+    local IDENTITY
+    IDENTITY=$(shasum -a 1 "${CERTIFICATE_PREFIX}0" | awk '{print $1}')
     if [ -n "$IDENTITY" ]; then
         # Extract entitlements from arm64 binary
         local ENTITLEMENTS="$BUILD_DIR/entitlements.plist"

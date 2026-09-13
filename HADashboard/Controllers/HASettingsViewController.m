@@ -17,6 +17,7 @@
 #import "HAStreamingManager.h"
 #import "HACameraRegistrationManager.h"
 #import "HARTSPCredentialManager.h"
+#import "HABLEProxyViewController.h"
 
 
 // NSUserDefaults keys for device integration
@@ -71,6 +72,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 
 // Local live camera/audio publisher (opt-in, foreground-only)
 @property (nonatomic, strong) UIView *liveStreamingSection;
+@property (nonatomic, strong) UIButton *bleProxyButton;
 @property (nonatomic, strong) UILabel *liveStreamingStatusLabel;
 @property (nonatomic, strong) UISwitch *liveStreamingSwitch;
 @property (nonatomic, strong) UISegmentedControl *liveStreamingCameraSegment;
@@ -375,6 +377,12 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 
     self.liveStreamingSection = [self createLiveStreamingSection];
     [container addSubview:self.liveStreamingSection];
+    self.bleProxyButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    self.bleProxyButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.bleProxyButton setTitle:@"Bluetooth Proxy · Configure" forState:UIControlStateNormal];
+    self.bleProxyButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+    [self.bleProxyButton addTarget:self action:@selector(openBLEProxy:) forControlEvents:UIControlEventTouchUpInside];
+    [container addSubview:self.bleProxyButton];
 
     // Clear cache button
     self.clearCacheButton = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -487,6 +495,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         @"autoReload":self.autoReloadSection,
         @"camMute":   self.cameraMuteSection,
         @"liveStream":self.liveStreamingSection,
+        @"bleProxy":self.bleProxyButton,
         @"clrCache":  self.clearCacheButton,
         @"intHdr":    self.integrationSectionHeader,
         @"intSec":    self.integrationSection,
@@ -499,7 +508,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     NSDictionary *metrics = @{@"p": @16, @"sh": @32, @"hg": @10, @"fh": @44};
 
     [container addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[proxWake]-p-[demo]-p-[autoReload]-p-[camMute]-p-[liveStream]-p-[clrCache(fh)]-sh-[intHdr]-hg-[intSec]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
+        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[proxWake]-p-[demo]-p-[autoReload]-p-[camMute]-p-[liveStream]-p-[bleProxy(fh)]-p-[clrCache(fh)]-sh-[intHdr]-hg-[intSec]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
         options:0 metrics:metrics views:views]];
 
     for (NSString *name in views) {
@@ -1196,6 +1205,10 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 }
 
 #pragma mark - Connection Summary
+
+- (void)openBLEProxy:(id)sender {
+    [self.navigationController pushViewController:[[HABLEProxyViewController alloc] init] animated:YES];
+}
 
 - (UIView *)createConnectionSummaryRow {
     UIButton *row = [UIButton buttonWithType:UIButtonTypeCustom];

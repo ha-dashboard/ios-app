@@ -1,5 +1,6 @@
 #import "HAAppSceneDelegate.h"
 #import "HAAppDelegate.h"
+#import "HABLEProxyManager.h"
 
 @implementation HAAppSceneDelegate
 
@@ -30,6 +31,10 @@
     (void)scene;
     HAAppDelegate *appDelegate = (HAAppDelegate *)[UIApplication sharedApplication].delegate;
     [appDelegate suspendForegroundServices];
+}
+
+- (void)sceneDidEnterBackground:(UIScene *)scene {
+    [[HABLEProxyManager sharedManager] suspend];
 }
 
 @end

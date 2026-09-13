@@ -112,6 +112,10 @@ TARGET=""
 NO_BUILD=false
 DRY_RUN=false
 KIOSK_MODE=""
+BLE_PROXY_MODE=""
+BLE_PROXY_REGISTER=false
+HADASHBOARD_RSD_HOST=""
+HADASHBOARD_RSD_PORT=""
 RESET_MODE=false
 DEMO_MODE=""
 TOKEN_OVERRIDE=""
@@ -121,7 +125,7 @@ DASHBOARD_OVERRIDE_SET=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        sim|sim-ios93|sim-ios103|iphone|mini5|mini4|ipadpro|ipad-pro|ipad2|ipad2-usb|ipad3|ipad4|ipad4-usb|mac|all)
+        sim|sim-ios93|sim-ios103|iphone|device|mini5|mini4|ipadpro|ipad-pro|ipad2|ipad2-usb|ipad3|ipad4|ipad4-usb|mac|all)
             if [[ -z "$TARGET" ]]; then
                 TARGET="$1"
             else
@@ -142,6 +146,11 @@ while [[ $# -gt 0 ]]; do
         --default)    HA_DASHBOARD=""; DASHBOARD_OVERRIDE_SET=true; shift ;;
         --kiosk)      KIOSK_MODE="YES"; shift ;;
         --no-kiosk)   KIOSK_MODE="NO"; shift ;;
+        --ble-proxy)  BLE_PROXY_MODE="YES"; shift ;;
+        --no-ble-proxy) BLE_PROXY_MODE="NO"; shift ;;
+        --register-ble-proxy) BLE_PROXY_MODE="YES"; BLE_PROXY_REGISTER=true; shift ;;
+        --device-id) IPHONE_DEVICECTL_ID="$2"; IPHONE_UDID=""; shift 2 ;;
+        --rsd) HADASHBOARD_RSD_HOST="$2"; HADASHBOARD_RSD_PORT="$3"; shift 3 ;;
         --reset)      RESET_MODE=true; shift ;;
         --demo)       DEMO_MODE="YES"; shift ;;
         *)            echo "❌ Unknown argument: $1"; exit 1 ;;
@@ -365,6 +374,10 @@ if [[ "$TARGET" == "all" ]]; then
         OPTS+=(--no-kiosk)
     fi
     [[ "$RESET_MODE" == true ]] && OPTS+=(--reset)
+    [[ "$BLE_PROXY_MODE" == "YES" ]] && OPTS+=(--ble-proxy)
+    [[ "$BLE_PROXY_MODE" == "NO" ]] && OPTS+=(--no-ble-proxy)
+    [[ "$BLE_PROXY_REGISTER" == true ]] && OPTS+=(--register-ble-proxy)
+    [[ -n "$HADASHBOARD_RSD_HOST" ]] && OPTS+=(--rsd "$HADASHBOARD_RSD_HOST" "$HADASHBOARD_RSD_PORT")
     [[ -n "$DEMO_MODE" ]] && OPTS+=(--demo)
     [[ "$SERVER_OVERRIDE_SET" == true ]] && OPTS+=(--server "$HA_SERVER")
     if [[ "$DASHBOARD_OVERRIDE_SET" == true ]]; then
@@ -531,7 +544,7 @@ case "$TARGET" in
             APP="$PROJECT_DIR/build/rosettasim/Build/Products/Debug-iphonesimulator/HA Dashboard.app"
         fi
         ;;
-    iphone|mini5|mini4|ipadpro|ipad2|ipad2-usb|ipad3|ipad4|ipad4-usb)
+    iphone|device|mini5|mini4|ipadpro|ipad2|ipad2-usb|ipad3|ipad4|ipad4-usb)
         if [[ "$NO_BUILD" == false ]]; then
             APP="$("$PROJECT_DIR/scripts/build.sh" device)"
         else
@@ -612,6 +625,11 @@ if [[ -n "$DEMO_MODE" ]]; then
 fi
 
 USB_LAUNCH_ARGS=("${LAUNCH_ARGS[@]}")
+if [[ -n "$BLE_PROXY_MODE" ]]; then
+    LAUNCH_ARGS+=(-HABLEProxyEnabled "$BLE_PROXY_MODE")
+    [[ "$BLE_PROXY_REGISTER" == true ]] && LAUNCH_ARGS+=(-HABLEProxyRegister YES)
+    USB_LAUNCH_ARGS=("${LAUNCH_ARGS[@]}")
+fi
 
 write_ha_token_to_plist() {
     local plist_path="$1"
@@ -776,8 +794,10 @@ case "$TARGET" in
         echo "✅ Running on $LEGACY_LABEL simulator"
         ;;
 
-    iphone)
-        echo "📱 Deploying to iPhone..."
+    iphone|device)
+        _CORE_DEVICE_LABEL="iPhone"
+        [[ "$TARGET" == "device" ]] && _CORE_DEVICE_LABEL="selected iOS device"
+        echo "📱 Deploying to $_CORE_DEVICE_LABEL..."
         export DEVELOPER_DIR="$XCODE26/Contents/Developer"
 
         if [[ -z "$IPHONE_DEVICECTL_ID" ]]; then
@@ -793,7 +813,7 @@ case "$TARGET" in
         xcrun devicectl device install app \
             --device "$IPHONE_DEVICECTL_ID" \
             "$APP" 2>&1 | tail -3
-        echo "   ✅ Exact artifact install completed on iPhone"
+        echo "   ✅ Exact artifact install completed on $_CORE_DEVICE_LABEL"
 
         echo "   Launching with dashboard: ${HA_DASHBOARD:-default}..."
         set +e
@@ -807,12 +827,12 @@ case "$TARGET" in
         printf '%s\n' "$_IPHONE_LAUNCH_OUTPUT" | tail -3
 
         if [[ "$_IPHONE_LAUNCH_STATUS" -eq 0 ]]; then
-            echo "✅ Installed and running on iPhone"
+            echo "✅ Installed and running on $_CORE_DEVICE_LABEL"
         elif printf '%s\n' "$_IPHONE_LAUNCH_OUTPUT" | grep -Fq 'FBSOpenApplicationErrorDomain' &&
              printf '%s\n' "$_IPHONE_LAUNCH_OUTPUT" | grep -Fq 'Locked'; then
-            echo "✅ Installed-only success on iPhone; unlock it and open HA Dashboard to complete runtime launch acceptance"
+            echo "✅ Installed-only success on $_CORE_DEVICE_LABEL; unlock it and open HA Dashboard to complete runtime launch acceptance"
         else
-            echo "❌ iPhone runtime launch failed after a successful install"
+            echo "❌ $_CORE_DEVICE_LABEL runtime launch failed after a successful install"
             exit "$_IPHONE_LAUNCH_STATUS"
         fi
         ;;
@@ -937,6 +957,13 @@ case "$TARGET" in
             exit 1
         fi
 
+        if [[ "$_MINI5_LAUNCHED" != true && -n "$HADASHBOARD_RSD_HOST" && -n "$HADASHBOARD_RSD_PORT" ]] && command -v pymobiledevice3 >/dev/null 2>&1; then
+            echo "   Launching through the supplied developer tunnel..."
+            _MINI5_ARGUMENT_STRING=$(python3 -c 'import shlex,sys; print(shlex.join(sys.argv[1:]))' "$BUNDLE_ID" "${LAUNCH_ARGS[@]}")
+            if pymobiledevice3 developer dvt launch --rsd "$HADASHBOARD_RSD_HOST" "$HADASHBOARD_RSD_PORT" "$_MINI5_ARGUMENT_STRING"; then
+                _MINI5_LAUNCHED=true
+            fi
+        fi
         if [[ "$_MINI5_LAUNCHED" == true ]]; then
             echo "✅ Running on iPad Mini 5"
         else
@@ -971,7 +998,7 @@ case "$TARGET" in
 
         _MINI4_LAUNCHED=false
         if command -v idevicedebug >/dev/null 2>&1 &&
-           idevicedebug -n -u "$IPAD_MINI4_UDID" --detach run "$BUNDLE_ID" >/dev/null 2>&1; then
+           idevicedebug -n -u "$IPAD_MINI4_UDID" --detach -- run "$BUNDLE_ID" "${LAUNCH_ARGS[@]}" >/dev/null 2>&1; then
             _MINI4_LAUNCHED=true
         fi
         if [[ "$_MINI4_LAUNCHED" == true ]]; then
@@ -1099,8 +1126,25 @@ case "$TARGET" in
         fi
         defaults write "$_PLIST_BASE" HADashboard -string "$HA_DASHBOARD"
         defaults write "$_PLIST_BASE" HAKioskMode -bool "$([ "$KIOSK_MODE" = "YES" ] && echo true || echo false)"
+        [[ -n "$BLE_PROXY_MODE" ]] && defaults write "$_PLIST_BASE" HABLEProxyEnabled -bool "$([ "$BLE_PROXY_MODE" = "YES" ] && echo true || echo false)"
         [[ -n "$DEMO_MODE" ]] && defaults write "$_PLIST_BASE" HADemoMode -bool true
         plutil -convert binary1 "$_PLIST"
+        if [[ -n "$BLE_PROXY_MODE" ]]; then
+            # Store the durable opt-in too so legacy deployments do not depend
+            # on when the BLE manager consumes preference-based launch options.
+            python3 - "$_PLIST" "$BLE_PROXY_MODE" "$BLE_PROXY_REGISTER" <<'PY'
+import plistlib
+import sys
+path, mode, register = sys.argv[1:]
+with open(path, "rb") as source:
+    values = plistlib.load(source)
+values["ha_ble_proxy_enabled"] = mode == "YES"
+if register == "true":
+    values["ha_ble_proxy_auto_register"] = True
+with open(path, "wb") as destination:
+    plistlib.dump(values, destination, fmt=plistlib.FMT_BINARY)
+PY
+        fi
 
         echo "   Transferring to $_IPAD_LABEL ($_IPAD_IP)..."
         ipad_scp "$APP_TAR" "root@${_IPAD_IP}:/tmp/HADashboard.app.tar.gz"
@@ -1144,6 +1188,10 @@ uicache 2>/dev/null || true
 rm -rf "/var/mobile/Library/Caches/$BUNDLE_ID" 2>/dev/null || true
 find /var/mobile/tmp -maxdepth 1 -name "$BUNDLE_ID*" -exec rm -rf {} \; 2>/dev/null || true
 
+# The app is stopped. Invalidate the preference daemon before replacing its
+# domain; otherwise an already cached domain can overwrite launch overrides.
+killall cfprefsd 2>/dev/null || true
+sleep 1
 PREFS_DIR=/var/mobile/Library/Preferences
 mkdir -p "$PREFS_DIR"
 mv /tmp/ha-prefs.plist "$PREFS_DIR/$BUNDLE_ID.plist"

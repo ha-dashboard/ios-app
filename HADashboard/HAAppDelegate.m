@@ -14,6 +14,7 @@
 #import "HADeviceIntegrationManager.h"
 #import "HADeviceRegistration.h"
 #import "HAStreamingManager.h"
+#import "HABLEProxyManager.h"
 
 /// Window subclass that detects system appearance changes (iOS 13+) and posts
 /// HAThemeDidChangeNotification so every view/VC refreshes — not just the
@@ -274,6 +275,7 @@
 }
 
 - (void)resumeForegroundServices {
+    dispatch_async(dispatch_get_main_queue(), ^{ [[HABLEProxyManager sharedManager] resume]; });
     if ([[HAAuthManager sharedManager] isConfigured]) {
         [[HAConnectionManager sharedManager] connect];
         [[HADeviceIntegrationManager sharedManager] start];
@@ -324,6 +326,10 @@
             });
         }
     }
+}
+
+- (void)applicationDidEnterBackground:(UIApplication *)application {
+    [[HABLEProxyManager sharedManager] suspend];
 }
 
 @end

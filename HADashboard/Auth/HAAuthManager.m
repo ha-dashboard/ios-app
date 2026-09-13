@@ -1,4 +1,5 @@
 #import "HAAuthManager.h"
+#import "HABLEProxyManager.h"
 #import "HAKeychainHelper.h"
 #import "HAOAuthClient.h"
 #import "HALog.h"
@@ -349,6 +350,7 @@ static NSString *const kCameraGlobalMuteKey = @"HACameraGlobalMute";
 
 - (void)clearCredentials {
     // Stop all opt-in services before removing their persisted state.
+    [[HABLEProxyManager sharedManager] reset];
     [HADeviceIntegrationManager sharedManager].enabled = NO;
     [[HADeviceRegistration sharedManager] resetLocalRegistration];
     [[HAStreamingManager sharedManager] clearLocalStreamConfiguration];

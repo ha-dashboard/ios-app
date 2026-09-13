@@ -139,6 +139,11 @@
       <li>Capture stops after the final authenticated media client disconnects. Listener and capture stop when you disable it, leave the foreground, log out, lose permission, or encounter a failure. The app does not record media, show a hidden preview, capture in the background, or accept remote commands that enable capture.</li>
     </ul>
 
+    <h2>Bluetooth Proxy</h2>
+    <p>Bluetooth Proxy is off by default. When enabled, it requests Bluetooth access and shares nearby BLE identifiers, names, signal strength, manufacturer data and service data with authenticated clients such as Home Assistant. Clients can connect to devices, read and write characteristics, and receive notifications. Proxy traffic uses authenticated encryption on the device's private IPv4 address, port 6053. The per-device key is stored in the device-only Keychain and is never sent to the developer or included in diagnostic snapshots.</p>
+    <p>Add to Home Assistant sends the key through your configured server's HTTP or HTTPS connection. HTTPS protects setup; HTTP setup requires a trusted local network. HA stores the key, including in backups. Explicit clipboard copies expire after 60 seconds on iOS 10 or later; on iOS 9 the app clears an unchanged copy when it can run. Anyone with the key and network access can use the proxy.</p>
+    <p>Device matching imports your HA Bluetooth registry and compares advertisements received by other scanners. Optional identification reads retrieve standard serial, system ID, manufacturer and model fields. Suggested matches require confirmation. Address associations, translated handle tables and bounded diagnostic snapshots remain on the device. Backgrounding the iOS app pauses the proxy. Turning it off stops its connections; Log Out &amp; Reset also deletes its local key, associations and snapshot. HA entries and their saved keys remain on your server until you remove them there.</p>
+
     <h2>Credentials and Local Storage</h2>
     <ul>
       <li>Home Assistant tokens are stored in the platform Keychain. Developer deployment values may bootstrap credentials once; persisted bootstrap values are removed after migration.</li>
@@ -151,7 +156,7 @@
     </ul>
 
     <h2>Local Network Access</h2>
-    <p>The app uses Bonjour/mDNS to discover Home Assistant and may host the optional RTSP listener. iOS and iPadOS 14 or later request Local Network permission; earlier supported releases do not show that system permission. Discovery results stay on the device.</p>
+    <p>The app uses Bonjour/mDNS to discover Home Assistant and may host the optional RTSP and Bluetooth proxy listeners. iOS and iPadOS 14 or later request Local Network permission; earlier supported releases do not show that system permission. Discovery results stay on the device.</p>
 
     <h2>User Controls and Retention</h2>
     <p>Turning off Register with Home Assistant stops reporting and removes local webhook credentials. Log Out &amp; Reset clears local Home Assistant and stream credentials, registration identity, preferences, cached Home Assistant state/history, local logs, and stream configuration. Devices and Generic Camera entries, including their saved stream credentials, remain in Home Assistant until you remove them there.</p>

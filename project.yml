@@ -52,6 +52,8 @@ targets:
         NSLocalNetworkUsageDescription: "Discover Home Assistant servers and host explicitly enabled camera and microphone streams for RTSP clients that connect to this device."
         NSCameraUsageDescription: "Allow HA Dashboard to stream live video to RTSP clients while Local Camera Stream is enabled."
         NSMicrophoneUsageDescription: "Allow HA Dashboard to include live audio in Local Camera Streams you enable."
+        NSBluetoothAlwaysUsageDescription: "Share nearby Bluetooth LE devices with your Home Assistant server while Bluetooth Proxy is enabled and HA Dashboard is open."
+        NSBluetoothPeripheralUsageDescription: "Share nearby Bluetooth LE devices with your Home Assistant server while Bluetooth Proxy is enabled and HA Dashboard is open."
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
           UISceneConfigurations:
@@ -60,6 +62,7 @@ targets:
                 UISceneDelegateClassName: HAAppSceneDelegate
         NSBonjourServices:
           - _home-assistant._tcp
+          - _esphomelib._tcp
         UILaunchStoryboardName: LaunchScreen
         UIRequiredDeviceCapabilities: [arm64]
         ITSAppUsesNonExemptEncryption: false
@@ -109,6 +112,7 @@ targets:
       - sdk: CoreMedia.framework
       - sdk: CoreVideo.framework
       - sdk: VideoToolbox.framework
+      - sdk: CoreBluetooth.framework
     preBuildScripts: []
     postBuildScripts: []
     scheme:

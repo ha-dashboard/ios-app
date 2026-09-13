@@ -18,6 +18,7 @@ Built to run from armv7 and arm64 devices on iOS 9.3.3 through current iOS 27 de
   channel to wake/dim an open kiosk, set brightness, navigate, change
   appearance/kiosk state, reload, or show an in-app banner
 - **mDNS discovery** — finds Home Assistant servers on your local network
+- **Bluetooth Proxy** — Opt-in, encrypted ESPHome-compatible BLE advertisements and GATT connections while the app is open, with HA registry matching and explicit address associations (BLE-capable hardware required; see [setup and limitations](docs/bluetooth-proxy.md))
 - **Triple auth** — trusted network support, long-lived access token, or full OAuth login flow with token refresh
 - **Universal binary** — armv7 + arm64 in one build, with an iOS 9.0 minimum encoded in both slices
 - **Demo mode** — Built-in dashboards with simulated entities and history
