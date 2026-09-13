@@ -51,13 +51,31 @@ The resolver considers:
 - Standard GATT serial/system identifiers and registered HA unit identifiers.
 - Address bytes in observed payloads, corroborated by an independent radio.
 - Timestamp-aligned changes in manufacturer and service-data payloads.
+- Stable identifier-shaped values from bounded read-only GATT probes, compared
+  across proxies. Matching serial-like MAC/UUID fields can establish a shared
+  synthetic identity without a registered HA device or native scanner.
 - Names, service inventories and packet shapes as candidate filters, not unique
   identities on their own.
+
+A separate provisional tier can reuse an independent native radio address when
+an identifier-shaped name (letters and digits), canonical service list and
+complete payload fields agree. Local reception must span thirty seconds with
+at least three distinct observation times and no gap over twenty seconds. The
+native reference must be no older than two minutes. If Apple supplies an extended
+payload, every byte of the complete shorter native field must agree; arbitrary
+common prefixes, missing channels and contradictory fields do not qualify.
+
+Provisional associations are explicitly described as such in their evidence.
+They are re-evaluated during scanning and are never persisted or published as
+verified proof. Competing local devices or native addresses with the same
+signature reject the association, including twins with differing extensions of
+the same native payload. This tier is observational evidence, not a guarantee
+of a unique hardware identity.
 
 Packet correlation requires twelve distinct changes, distributed over time,
 with strong agreement and clock alignment. It retains a bounded fifteen-minute
 window to accommodate slow sensors. Static readings and repeated snapshots do
-not increase confidence. HA's accumulated manufacturer dictionaries are never
+not qualify as packet-sequence evidence. HA's accumulated manufacturer dictionaries are never
 treated as individual packets; independent raw advertisements or authenticated
 peer observations supply the timing evidence.
 
@@ -78,17 +96,20 @@ Rejected decisions expose timing, agreement, freshness, or ambiguity reasons
 instead of showing only a count that has already exceeded the threshold.
 
 Generic associations are stored in HA's shared system store. Local Apple UUID
-bindings remain scoped to the configured HA account. Peer observations are
-shared only for active learning requests and relevant profiles, using bounded
-batches. Origin lineage prevents a derived proxy from validating its ancestor.
+bindings remain scoped to the configured HA account. An automatically synchronized, bounded inventory also shares unresolved
+observations, original local aliases and hashed GATT fingerprints independently
+of the verified catalog. Publication rotates through payload-limited batches;
+receivers merge batches and expire stale observations. Newer devices replace
+older observations when a local inventory reaches capacity. Origin lineage prevents a derived proxy from validating its ancestor.
 Previously verified bindings survive restarts, and the earlier stored-association
 format is migrated as data rather than through device-specific parsing rules.
 
 Because HA's shared store does not provide an atomic compare-and-swap, each peer
 reconciles missing catalog additions against its still-valid local proofs. This
 repairs additions lost to concurrent writes without overwriting an existing
-association at the same address. Proofs must still match HA's current registry
-and the local account scope.
+association at the same address. Registered-device proofs must still match HA's current registry and local
+account scope. Observed native and peer-only identities have separate validated
+provenance and do not require registry membership.
 
 Each receiving Apple device must establish its own local peripheral-to-HA
 binding. Importing a shared catalog entry alone does not equate an unfamiliar
