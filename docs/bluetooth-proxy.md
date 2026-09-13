@@ -29,47 +29,48 @@ previous blanket exemption flag is omitted so App Store Connect presents its
 
 ## Device identity
 
-Apple supplies local peripheral UUIDs instead of Bluetooth MAC addresses. The
-proxy therefore distinguishes:
+The resolver is generic. It has no sensor-brand names, company-ID tables, model
+patterns or vendor service UUIDs in its production matching rules. It imports
+HA's device registry and existing discovery metadata as data, so those rules do
+not need to be copied or maintained in this app.
 
-- Addresses embedded in supported SwitchBot manufacturer advertisements.
-- Hardware addresses explicitly associated by the user.
-- Local aliases for devices whose address is unknown.
+Synchronization starts automatically with the HA connection, listens for
+registry and shared-state changes, and periodically refreshes. A manual refresh
+is optional. Known identities, standard identification fields and relevant live
+peer observations are imported without user-managed synchronization.
 
-The proxy imports known HA identities and independent scanner observations
-automatically. It can bind Blue Connect device identifiers to independently
-observed addresses, including registry entries without Bluetooth connections.
-An unambiguous GATT serial can also match an address registered in HA. Generic
-names, services and matching measurements never authorize an automatic link.
-Recognized addresses also display HA’s friendly device names.
-Conflicting records or addresses require confirmation. All HA Dashboard proxy
-sources are excluded from address evidence; native and ESP32 scanners remain
-eligible. Verified Blue Connect associations are saved in HA’s shared frontend
-system store, using a separate namespaced key for each HA device. Writes require
-an HA administrator; other signed-in proxies can reuse the association after a
-restart without a live ESP32 supplying address evidence. Each read validates the
-HA device ID, integration identifier, vendor and proof schema against the current
-registry. Conflicting records are not overwritten automatically. In-memory
-matches are scoped to the current HA connection and refresh every five minutes.
-HA backups include these non-secret associations; resetting one proxy does not
-delete associations used by other proxies. Supported Blue Connect advertisements are briefly
-buffered during the initial import to avoid premature alias discoveries. Known
-but unresolved identities remain pending instead of being forwarded under a
-local alias. The buffer holds at most 256 packets and discards packets older
-than 30 seconds. Missing vendor fields in a later Core Bluetooth callback do
-not erase previously observed identity evidence or fabricate wire payloads.
+The resolver considers:
 
-Tap a nearby device to inspect matching evidence and known Bluetooth devices. The matching view
-compares registry information and advertisements received by other scanners.
-It can also read standard GATT serial, system ID, manufacturer and model fields
-when a device provides them. Matching names, readings and service UUIDs are
-suggestions, not proof of identity; confirm the physical device before linking.
+- Standard GATT serial/system identifiers and registered HA unit identifiers.
+- Address bytes in observed payloads, corroborated by an independent radio.
+- Timestamp-aligned changes in manufacturer and service-data payloads.
+- Names, service inventories and packet shapes as candidate filters, not unique
+  identities on their own.
 
-An alias is not a hardware MAC. It may create a separate HA identity, will not
-automatically match other iPads or ESP32 proxies, and cannot substitute for the
-address used by encrypted BTHome payloads. Each iPad needs its own association
-between Apple's local identifier and the known device. Some devices provide no
-unique readable identifier and require manual association.
+Packet correlation requires twelve distinct changes, distributed over time,
+with strong agreement and clock alignment. It retains a bounded fifteen-minute
+window to accommodate slow sensors. Static readings and repeated snapshots do
+not increase confidence. HA's accumulated manufacturer dictionaries are never
+treated as individual packets; independent raw advertisements or authenticated
+peer observations supply the timing evidence.
+
+Generic associations are stored in HA's shared system store. Local Apple UUID
+bindings remain scoped to the configured HA account. Peer observations are
+shared only for active learning requests and relevant profiles, using bounded
+batches. Origin lineage prevents a derived proxy from validating its ancestor.
+Previously verified bindings survive restarts, and the earlier stored-association
+format is migrated as data rather than through device-specific parsing rules.
+
+Unambiguous standard identity or corroborated evidence can establish a binding.
+Indistinguishable candidates remain pending. Public Bluetooth APIs cannot prove
+that two identical observable signals belong to different units; confirmation
+may be necessary in those cases. Confirmed associations then synchronize
+automatically. Generic names or equal sensor readings never justify merging
+all matching devices into one address.
+
+Read-only identification probes are bounded and use standard Device Information
+characteristics. The app does not send vendor control commands for matching.
+Unknown aliases are explicitly labelled and are not hardware MAC addresses.
 
 ## Discovery modes
 

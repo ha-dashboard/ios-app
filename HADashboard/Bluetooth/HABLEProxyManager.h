@@ -26,6 +26,8 @@ typedef NS_ENUM(NSUInteger, HABLEScanMode) {
 - (BOOL)setAdditionalScanServiceUUIDs:(NSArray<NSString *> *)values error:(NSError **)error;
 - (void)refreshScanServices;
 - (void)registerWithHomeAssistant;
+- (void)refreshIdentityInformation;
+- (NSArray<NSDictionary *> *)identityCandidatesForObservation:(NSDictionary *)observation;
 - (NSString *)encryptionKey;
 - (void)resume;
 - (void)suspend;

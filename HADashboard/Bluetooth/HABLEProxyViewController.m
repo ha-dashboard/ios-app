@@ -45,7 +45,7 @@
     if (section == 0) return @"Share nearby Bluetooth LE devices with Home Assistant while HA Dashboard is open. The connection is encrypted. Locking the screen or leaving the iOS app pauses the proxy. Uses Apple's public Bluetooth APIs.";
     if (section == 1) return @"Register with Home Assistant automatically enables and registers the proxy unless you have switched it off here. Administrator access is required. You can also tap Add to Home Assistant, or add ESPHome manually using this address, port 6053 and the encryption key. HA must reach this device on the local network. Use HTTPS or a trusted local network.";
     if (section == 2) return @"Automatic starts with broad discovery. If no devices are discovered, it imports advertised service UUIDs from HA and tries service filters. Filtered scans can miss devices that do not advertise a known service. Additional UUIDs are combined with HA's services.";
-    return @"Addresses published in supported SwitchBot advertisements are recognised automatically. Other devices use local aliases because Apple does not expose their hardware addresses. Tap a device to associate a verified address. Aliases do not match other proxies and cannot decrypt address-dependent sensor messages. Refresh to update this device list.";
+    return @"Identities are learned automatically from Home Assistant, standard identifiers and synchronized observations. Ambiguous devices remain pending. Tap a device to inspect the evidence or confirm an association. Local aliases are not hardware addresses.";
 }
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
     UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:nil];
@@ -66,7 +66,7 @@
         else { cell.textLabel.text = @"Additional service UUIDs"; cell.detailTextLabel.text = [NSString stringWithFormat:@"%lu manually added", (unsigned long)manager.additionalScanServiceUUIDs.count]; }
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     }
-    else { NSDictionary *device = self.devices[path.row]; cell.textLabel.text = device[@"ha_name"] ?: device[@"name"]; cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@ dBm\n%@", device[@"address"], device[@"rssi"], [device[@"identity_pending"] boolValue] ? @"Waiting for HA identity" : [device[@"identity"] isEqual:@"local_alias"] ? @"Local alias" : [device[@"identity"] isEqual:@"switchbot_advertised_mac"] ? @"Address published by SwitchBot" : [device[@"identity"] isEqual:@"ha_matched_mac"] ? @"Matched with Home Assistant" : @"Associated hardware address"]; cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator; }
+    else { NSDictionary *device = self.devices[path.row]; cell.textLabel.text = device[@"ha_name"] ?: device[@"name"]; cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@ dBm\n%@", device[@"address"], device[@"rssi"], [device[@"identity_pending"] boolValue] ? @"Waiting for HA identity" : [device[@"identity"] isEqual:@"local_alias"] ? @"Local alias" : [device[@"identity"] isEqual:@"ha_matched_mac"] ? @"Matched with Home Assistant" : @"Associated hardware address"]; cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator; }
     return cell;
 }
 - (void)toggled:(UISwitch *)toggle { [HABLEProxyManager sharedManager].enabled = toggle.on; }

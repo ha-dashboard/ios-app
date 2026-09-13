@@ -1,285 +1,437 @@
 #import "HABLEIdentityResolver.h"
+#import "HABLEIdentityEvidence.h"
 #import "HABLEProto.h"
 #import "HAConnectionManager.h"
 #import "HAAuthManager.h"
+#import <CommonCrypto/CommonDigest.h>
+#import <fnmatch.h>
 
-static NSData *HABLEHexData(NSString *value) {
-    if (![value isKindOfClass:[NSString class]] || value.length % 2 || value.length > 4096) return nil;
+static NSString *const HABLECatalogKey = @"ha_dashboard.ble_identity.v2";
+static NSString *const HABLELocalBindingsKey = @"ha_ble_identity_bindings_v2";
+static NSData *HABLEHexData(id value) {
+    if (![value isKindOfClass:NSString.class] || [value length] % 2 || [value length] > 8192) return nil;
     if ([value rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdefABCDEF"] invertedSet]].location != NSNotFound) return nil;
-    NSMutableData *data = [NSMutableData data];
-    for (NSUInteger i = 0; i < value.length; i += 2) { unsigned v = 0; [[NSScanner scannerWithString:[value substringWithRange:NSMakeRange(i, 2)]] scanHexInt:&v]; uint8_t b = v; [data appendBytes:&b length:1]; }
+    NSMutableData *data = NSMutableData.data;
+    for (NSUInteger i = 0; i < [value length]; i += 2) { unsigned byte = 0; [[NSScanner scannerWithString:[value substringWithRange:NSMakeRange(i,2)]] scanHexInt:&byte]; uint8_t b = byte; [data appendBytes:&b length:1]; }
     return data;
 }
-static NSString *HABLEFullUUID(NSString *value) {
-    NSString *uuid = value.lowercaseString;
-    if (uuid.length == 4) return [NSString stringWithFormat:@"0000%@-0000-1000-8000-00805f9b34fb", uuid];
-    if (uuid.length == 8) return [uuid stringByAppendingString:@"-0000-1000-8000-00805f9b34fb"];
-    return uuid;
+static NSString *HABLEHash(NSString *value) {
+    NSData *data = [value dataUsingEncoding:NSUTF8StringEncoding]; uint8_t bytes[32]; CC_SHA256(data.bytes,(CC_LONG)data.length,bytes);
+    NSMutableString *hash = NSMutableString.string; for (NSUInteger i=0;i<32;i++) [hash appendFormat:@"%02x",bytes[i]]; return hash;
+}
+static NSString *HABLEString(id value) { return [value isKindOfClass:NSString.class] ? value : @""; }
+static BOOL HABLEUnitIdentifier(NSString *value) {
+    if (value.length < 8 || value.length > 128) return NO;
+    return [value rangeOfCharacterFromSet:NSCharacterSet.letterCharacterSet].location != NSNotFound && [value rangeOfCharacterFromSet:NSCharacterSet.decimalDigitCharacterSet].location != NSNotFound;
+}
+static NSDictionary *HABLEProfile(NSDictionary *observation) {
+    NSData *manufacturer = [[NSData alloc] initWithBase64EncodedString:HABLEString(observation[@"manufacturer_data"]) options:0];
+    if (!manufacturer.length) manufacturer = [[NSData alloc] initWithBase64EncodedString:HABLEString(observation[@"identity_manufacturer_data"]) options:0];
+    return @{@"name":HABLEString(observation[@"name"]), @"services":[HABLEIdentityEvidence canonicalServices:observation[@"service_uuids"]], @"manufacturer_length":@(manufacturer.length), @"manufacturer_prefix":manufacturer.length>=2 ? [[manufacturer subdataWithRange:NSMakeRange(0,2)] base64EncodedStringWithOptions:0] : @""};
+}
+static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
+    if ([b[@"required_prefix"] isKindOfClass:NSString.class]) return [a[@"manufacturer_prefix"] isEqual:b[@"required_prefix"]] && [HABLEString(a[@"name"]) caseInsensitiveCompare:HABLEString(b[@"name"])]==NSOrderedSame;
+    NSArray *as = [a[@"services"] isKindOfClass:NSArray.class] ? a[@"services"] : @[], *bs = [b[@"services"] isKindOfClass:NSArray.class] ? b[@"services"] : @[];
+    if (as.count && bs.count) {
+        for (NSString *uuid in as) if ([bs containsObject:uuid]) return YES;
+        return NO;
+    }
+    NSString *an = HABLEString(a[@"name"]), *bn = HABLEString(b[@"name"]);
+    return an.length && bn.length && ![an isEqual:@"Unnamed device"] && [an caseInsensitiveCompare:bn] == NSOrderedSame &&
+        [a[@"manufacturer_length"] isKindOfClass:NSNumber.class] && [a[@"manufacturer_length"] unsignedIntegerValue] && [a[@"manufacturer_length"] isEqual:b[@"manufacturer_length"]];
 }
 
 @interface HABLEIdentityResolver ()
 @property (nonatomic, copy, readwrite) NSArray<NSDictionary *> *knownDevices;
 @property (nonatomic, copy, readwrite) NSString *status;
-@property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *advertisements;
-@property (nonatomic, strong) NSMutableSet<NSString *> *excludedSources;
-@property (nonatomic, assign) NSInteger subscription;
-@property (nonatomic, assign) NSUInteger generation;
-@property (nonatomic, copy) NSArray<NSDictionary *> *registryDevices;
-@property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *sharedBindings;
-@property (nonatomic, strong) NSMutableSet<NSString *> *occupiedBindingKeys;
-@property (nonatomic, strong) NSMutableSet<NSString *> *publishingBindings;
+@property (nonatomic, assign, readwrite) BOOL needsRegistryRefresh;
+@property (nonatomic, strong) HABLEIdentityEvidence *evidence;
+@property (nonatomic, strong) NSMutableDictionary *remoteInfo;
+@property (nonatomic, strong) NSMutableDictionary *localObservations;
+@property (nonatomic, strong) NSMutableDictionary *localBindings;
+@property (nonatomic, strong) NSMutableDictionary *catalog;
+@property (nonatomic, strong) NSMutableDictionary *peerValues;
+@property (nonatomic, strong) NSMutableDictionary *discoveryMatchers;
+@property (nonatomic, strong) NSMutableSet *proxySources;
+@property (nonatomic, strong) NSMutableSet *writesInFlight;
+@property (nonatomic, strong) NSMutableDictionary *pendingPublications;
+@property (nonatomic, assign) BOOL publicationInFlight;
+@property (nonatomic, assign) NSTimeInterval nextPublication;
+@property (nonatomic, strong) NSMutableSet *legacyReads;
+@property (nonatomic, copy) NSArray *registryDevices;
+@property (nonatomic, strong) NSMutableArray<NSNumber *> *subscriptions;
+@property (nonatomic, copy) NSString *sourceAddress;
 @property (nonatomic, copy) NSString *sourceServer;
+@property (nonatomic, copy) NSString *scope;
 @property (nonatomic, assign) NSUInteger sourceRevision;
+@property (nonatomic, assign) NSUInteger generation;
+@property (nonatomic, assign) BOOL loaded;
+@property (nonatomic, assign) BOOL publishing;
+@property (nonatomic, assign) NSTimeInterval nextPublish;
+@property (nonatomic, assign) NSTimeInterval peerLearningUntil;
+@property (nonatomic, assign) BOOL previouslyLearning;
 @end
 
 @implementation HABLEIdentityResolver
+- (HAConnectionManager *)connection { return [HAConnectionManager sharedManager]; }
 - (instancetype)init {
-    if ((self = [super init])) { _knownDevices = @[]; _advertisements = [NSMutableDictionary dictionary]; _subscription = -1; _status = @"Not synchronised"; _sharedBindings = [NSMutableDictionary dictionary]; _occupiedBindingKeys = [NSMutableSet set]; _publishingBindings = [NSMutableSet set]; }
-    return self;
+    if ((self=[super init])) {
+        _knownDevices=@[]; _registryDevices=@[]; _status=@"Waiting for automatic synchronization"; _evidence=[HABLEIdentityEvidence new];
+        _remoteInfo=NSMutableDictionary.dictionary; _localObservations=NSMutableDictionary.dictionary; _localBindings=NSMutableDictionary.dictionary;
+        _catalog=NSMutableDictionary.dictionary; _discoveryMatchers=NSMutableDictionary.dictionary; _peerValues=NSMutableDictionary.dictionary; _proxySources=NSMutableSet.set; _writesInFlight=NSMutableSet.set; _pendingPublications=NSMutableDictionary.dictionary; _legacyReads=NSMutableSet.set; _subscriptions=NSMutableArray.array;
+    } return self;
 }
 - (void)dealloc { [self cancel]; }
+- (BOOL)sourceIsCurrent {
+    HAAuthManager *auth=HAAuthManager.sharedManager;
+    return self.sourceServer.length && [auth.serverURL isEqual:self.sourceServer] && auth.authenticationRevision==self.sourceRevision;
+}
 - (void)cancel {
     self.generation++;
-    if (self.subscription >= 0) [[HAConnectionManager sharedManager] unsubscribeFromEventWithId:self.subscription];
-    self.subscription = -1;
+    if ([self sourceIsCurrent] && self.connection.connected) for (NSNumber *subscription in self.subscriptions) [self.connection unsubscribeFromEventWithId:subscription.integerValue];
+    [self.subscriptions removeAllObjects]; [self.writesInFlight removeAllObjects]; self.publicationInFlight=NO; self.publishing=NO;
 }
-// Registry adapters are not sensor candidates. Only our own proxy sources are
-// excluded from address evidence; excluding every Bluetooth adapter also hid
-// the independent ESP32/native scanners needed to recover real addresses.
 - (void)loadRegistry:(NSArray *)devices entries:(NSArray *)entries excludingSource:(NSString *)source {
-    self.excludedSources = [NSMutableSet setWithObject:source.uppercaseString ?: @""];
-    NSMutableSet *adapters = [NSMutableSet set];
-    for (NSDictionary *entry in entries) if ([entry[@"domain"] isEqual:@"bluetooth"] && [entry[@"entry_id"] isKindOfClass:[NSString class]]) [adapters addObject:entry[@"entry_id"]];
-    NSMutableArray *records = [NSMutableArray array];
+    self.sourceAddress=source.uppercaseString; [self.proxySources removeAllObjects];
+    NSMutableSet *adapters=NSMutableSet.set; NSMutableDictionary *domains=NSMutableDictionary.dictionary; NSMutableArray *records=NSMutableArray.array;
+    for(NSDictionary *entry in entries)if([entry[@"entry_id"] isKindOfClass:NSString.class] && [entry[@"domain"] isKindOfClass:NSString.class])domains[entry[@"entry_id"]]=entry[@"domain"];
+    for (NSDictionary *entry in entries) if ([entry[@"domain"] isEqual:@"bluetooth"]) [adapters addObject:entry[@"entry_id"]];
     for (NSDictionary *device in devices) {
-        NSString *manufacturer = [device[@"manufacturer"] isKindOfClass:[NSString class]] ? [device[@"manufacturer"] lowercaseString] : @"";
-        BOOL proxy = [manufacturer isEqual:@"ha-dashboard"] || [manufacturer isEqual:@"ha dashboard"] || [device[@"model"] isEqual:@"iOS CoreBluetooth proxy"];
-        BOOL adapter = NO;
-        for (NSString *entry in device[@"config_entries"]) if ([adapters containsObject:entry]) adapter = YES;
-        if (proxy) for (NSArray *pair in device[@"connections"]) if (pair.count == 2 && [pair[1] isKindOfClass:[NSString class]]) [self.excludedSources addObject:[pair[1] uppercaseString]];
-        if (proxy || adapter) continue;
-        NSMutableDictionary *record = [NSMutableDictionary dictionary];
-        for (NSString *key in @[@"manufacturer", @"model", @"serial_number", @"name", @"name_by_user", @"id"]) if ([device[key] isKindOfClass:[NSString class]]) record[key] = device[key];
-        record[@"device_id"] = record[@"id"] ?: @"";
-        record[@"label"] = record[@"name_by_user"] ?: record[@"name"] ?: record[@"device_id"];
-        NSMutableArray *addresses = [NSMutableArray array], *identifiers = [NSMutableArray array];
-        for (NSArray *pair in device[@"connections"]) {
-            uint64_t address;
-            if (pair.count == 2 && [pair[0] isEqual:@"bluetooth"] && [pair[1] isKindOfClass:[NSString class]] && HABLEParseAddress(pair[1], &address)) [addresses addObject:HABLEAddressString(address)];
-        }
-        for (NSArray *pair in device[@"identifiers"]) if (pair.count == 2 && [pair[0] isKindOfClass:[NSString class]] && [pair[1] isKindOfClass:[NSString class]]) {
-            [identifiers addObject:pair];
-            if ([pair[0] isEqual:@"blue_connect"] && [pair[1] rangeOfString:@"^B2[0-9A-F]{8}$" options:NSRegularExpressionSearch | NSCaseInsensitiveSearch].location != NSNotFound) record[@"blue_connect_identifier"] = [pair[1] uppercaseString];
-        }
-        record[@"addresses"] = addresses; record[@"identifiers"] = identifiers;
-        if (addresses.count || identifiers.count || record[@"serial_number"]) [records addObject:record];
-        if (records.count >= 2048) break;
+        NSString *manufacturer=[HABLEString(device[@"manufacturer"]) lowercaseString];
+        // Recognize our own transport nodes, never a list of sensor vendors.
+        BOOL proxy=[manufacturer isEqual:@"ha-dashboard"] || [manufacturer isEqual:@"ha dashboard"] || [device[@"model"] isEqual:@"iOS CoreBluetooth proxy"];
+        BOOL adapter=NO; for (NSString *entry in device[@"config_entries"]) if ([adapters containsObject:entry]) adapter=YES;
+        if (proxy) for (NSArray *pair in device[@"connections"]) if (pair.count==2 && [pair[1] isKindOfClass:NSString.class]) [self.proxySources addObject:[pair[1] uppercaseString]];
+        if (proxy || adapter || [device[@"entry_type"] isEqual:@"service"]) continue;
+        NSMutableDictionary *record=NSMutableDictionary.dictionary;
+        for (NSString *key in @[@"manufacturer",@"model",@"serial_number",@"name",@"name_by_user",@"id"]) if ([device[key] isKindOfClass:NSString.class]) record[key]=device[key];
+        record[@"device_id"]=record[@"id"] ?: @""; record[@"label"]=record[@"name_by_user"] ?: record[@"name"] ?: record[@"device_id"];
+        NSMutableArray *addresses=NSMutableArray.array,*identifiers=NSMutableArray.array;
+        for (NSArray *pair in device[@"connections"]) { uint64_t address; if (pair.count==2 && [pair[0] isEqual:@"bluetooth"] && HABLEParseAddress(HABLEString(pair[1]),&address)) [addresses addObject:HABLEAddressString(address)]; }
+        for (NSArray *pair in device[@"identifiers"]) if (pair.count==2 && [pair[0] isKindOfClass:NSString.class] && [pair[1] isKindOfClass:NSString.class]) [identifiers addObject:pair];
+        NSMutableSet *recordDomains=NSMutableSet.set;for(NSString *entryID in device[@"config_entries"])if(domains[entryID])[recordDomains addObject:domains[entryID]];record[@"domains"]=recordDomains.allObjects;
+        record[@"addresses"]=addresses; record[@"identifiers"]=identifiers; [records addObject:record]; if (records.count>=2048) break;
     }
-    self.registryDevices = records;
-    [self rebuildKnownDevices];
+    self.registryDevices=records; [self rebuildKnownDevices];
 }
 - (void)rebuildKnownDevices {
-    NSMutableArray *known = [NSMutableArray array];
+    NSMutableArray *known=NSMutableArray.array;
     for (NSDictionary *record in self.registryDevices) {
-        NSMutableDictionary *addresses = [NSMutableDictionary dictionary];
-        for (NSString *address in record[@"addresses"]) addresses[address] = @"registry_bluetooth";
-        NSDictionary *binding = self.sharedBindings[record[@"device_id"]];
-        if (binding && !addresses[binding[@"address"]]) addresses[binding[@"address"]] = @"shared_identity";
-        for (NSString *address in self.advertisements) {
-            NSDictionary *ad = self.advertisements[address]; NSString *name = ad[@"name"];
-            if (![name isKindOfClass:[NSString class]] || !name.length) continue;
-            BOOL match = [name caseInsensitiveCompare:record[@"name"] ?: @""] == NSOrderedSame;
-            for (NSArray *pair in record[@"identifiers"]) if ([name caseInsensitiveCompare:pair[1]] == NSOrderedSame) match = YES;
-            if (match && !addresses[address]) addresses[address] = @"independent_advertisement";
+        NSMutableSet *addresses=[NSMutableSet setWithArray:record[@"addresses"]];
+        for (NSString *address in self.catalog) if ([self.catalog[address][@"device_id"] isEqual:record[@"device_id"]]) [addresses addObject:address];
+        for (NSString *address in self.remoteInfo) {
+            NSString *name=HABLEString(self.remoteInfo[address][@"name"]);
+            for (NSArray *pair in record[@"identifiers"]) if (name.length && HABLEUnitIdentifier(pair[1]) && [name caseInsensitiveCompare:pair[1]]==NSOrderedSame) [addresses addObject:address];
         }
-        if (!addresses.count && ![record[@"blue_connect_identifier"] length] && ![record[@"serial_number"] length]) continue;
-        for (NSString *address in addresses.count ? addresses.allKeys : @[@""]) {
-            NSMutableDictionary *item = [record mutableCopy]; item[@"address"] = address; item[@"address_provenance"] = addresses[address] ?: @"unresolved"; [known addObject:item];
-            if ([binding[@"address"] isEqual:address]) item[@"shared_identity"] = binding;
-        }
+        BOOL hasUnit=NO;for(NSArray *pair in record[@"identifiers"])if(HABLEUnitIdentifier(pair[1]))hasUnit=YES;
+        if (!addresses.count && ![record[@"serial_number"] length] && !hasUnit) continue;
+        for (NSString *address in addresses.count ? addresses.allObjects : @[@""]) { NSMutableDictionary *item=[record mutableCopy];item[@"address"]=address;[known addObject:item]; }
     }
-    self.knownDevices = [known sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) { return [a[@"label"] localizedCaseInsensitiveCompare:b[@"label"]]; }];
+    self.knownDevices=[known sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a,NSDictionary *b){return [a[@"label"] localizedCaseInsensitiveCompare:b[@"label"]];}];
 }
-- (NSString *)sharedKeyForDeviceID:(NSString *)deviceID { return [@"ha_dashboard.ble_identity.v1." stringByAppendingString:deviceID]; }
-- (BOOL)sourceIsCurrent {
-    HAAuthManager *auth = [HAAuthManager sharedManager];
-    return self.sourceServer.length && [auth.serverURL isEqual:self.sourceServer] && auth.authenticationRevision == self.sourceRevision;
-}
-- (void)loadSharedValue:(id)value forRecord:(NSDictionary *)record {
-    NSString *deviceID = record[@"device_id"];
-    if (!deviceID.length) return;
-    if (value && value != [NSNull null]) [self.occupiedBindingKeys addObject:deviceID];
+- (BOOL)validBinding:(NSDictionary *)binding {
     uint64_t address;
-    if (![value isKindOfClass:[NSDictionary class]] || ![value[@"schema"] isKindOfClass:[NSNumber class]] || [value[@"schema"] integerValue] != 1 ||
-        ![value[@"profile"] isEqual:@"blue_connect-v1"] || ![value[@"device_id"] isEqual:deviceID] ||
-        ![value[@"identifier"] isEqual:record[@"blue_connect_identifier"]] ||
-        ![value[@"manufacturer_id"] isEqual:@305] || ![value[@"evidence_kind"] isEqual:@"independent_scanner"] ||
-        ![value[@"address"] isKindOfClass:[NSString class]] || !HABLEParseAddress(value[@"address"], &address)) return;
-    NSMutableDictionary *binding = [value mutableCopy]; binding[@"address"] = HABLEAddressString(address);
-    self.sharedBindings[deviceID] = binding;
+    if (![binding isKindOfClass:NSDictionary.class] || ![binding[@"profile"] isKindOfClass:NSDictionary.class] || ![binding[@"lineage"] isKindOfClass:NSArray.class] || [binding[@"lineage"] count]>32 || ![binding[@"schema"] isEqual:@2] || !HABLEParseAddress(HABLEString(binding[@"address"]),&address) || ![binding[@"proof_id"] isKindOfClass:NSString.class]) return NO;
+    if (![@[@"embedded_address",@"serial",@"named_identifier",@"packet_sequence",@"confirmed"] containsObject:binding[@"method"]]) return NO;
+    for (NSDictionary *record in self.registryDevices) if ([record[@"device_id"] isEqual:binding[@"device_id"]]) {
+        if ([binding[@"method"] isEqual:@"serial"] && ![record[@"serial_number"] isEqual:binding[@"unit_identifier"]]) return NO;
+        if ([binding[@"method"] isEqual:@"named_identifier"] && ![self registeredIdentifierForName:HABLEString(binding[@"unit_identifier"]) record:record]) return NO;
+        if ([record[@"addresses"] containsObject:HABLEAddressString(address)]) return YES;
+        for (NSArray *pair in record[@"identifiers"]) if ([pair[1] isEqual:binding[@"unit_identifier"]] && HABLEUnitIdentifier(pair[1])) return YES;
+    }
+    return NO;
+}
+- (void)loadCatalog:(id)value {
+    if (![value isKindOfClass:NSDictionary.class] || ![value[@"schema"] isEqual:@2] || ![value[@"bindings"] isKindOfClass:NSDictionary.class]) return;
+    NSMutableDictionary *valid=NSMutableDictionary.dictionary;
+    for (NSString *address in value[@"bindings"]) { NSDictionary *binding=value[@"bindings"][address];if ([self validBinding:binding] && [binding[@"address"] isEqual:address]) valid[address]=binding;if(valid.count>=512)break; }
+    self.catalog=valid; [self rebuildKnownDevices];
+}
+- (void)loadLocalBindings {
+    NSDictionary *saved=[NSUserDefaults.standardUserDefaults dictionaryForKey:HABLELocalBindingsKey];
+    [self.localBindings removeAllObjects];
+    if (![saved[@"scope"] isEqual:self.scope] || ![saved[@"bindings"] isKindOfClass:NSDictionary.class]) return;
+    for (NSString *identifier in saved[@"bindings"]) {
+        NSDictionary *binding=saved[@"bindings"][identifier]; NSDictionary *shared=self.catalog[binding[@"address"]];
+        if ([self validBinding:binding] && [shared[@"proof_id"] isEqual:binding[@"proof_id"]]) self.localBindings[identifier]=binding;
+        if(self.localBindings.count>=256)break;
+    }
+}
+- (void)saveLocalBindings { if(self.scope.length) [NSUserDefaults.standardUserDefaults setObject:@{@"scope":self.scope,@"bindings":self.localBindings} forKey:HABLELocalBindingsKey]; }
+- (void)observeAdvertisements:(NSArray *)advertisements {
+    for (NSDictionary *ad in advertisements) {
+        NSString *address=HABLEString(ad[@"address"]).uppercaseString,*source=HABLEString(ad[@"source"]).uppercaseString;uint64_t numeric;
+        if (!HABLEParseAddress(address,&numeric) || !source.length || [self.proxySources containsObject:source] || [source isEqual:self.sourceAddress]) continue;
+        if(self.remoteInfo.count>=256 && !self.remoteInfo[address])continue;
+        NSData *raw=HABLEHexData(ad[@"raw"]); NSArray *tokens=[HABLEIdentityEvidence tokensForRawAdvertisement:raw];
+        NSMutableDictionary *info=[ad mutableCopy];info[@"tokens"]=tokens;
+        NSUInteger length=0;for(NSString *token in tokens)if([token hasPrefix:@"m:"])length=[[[NSData alloc]initWithBase64EncodedString:[token substringFromIndex:2] options:0]length];
+        info[@"profile"]=@{@"name":HABLEString(ad[@"name"]),@"services":[HABLEIdentityEvidence canonicalServices:ad[@"service_uuids"]],@"manufacturer_length":@(length)};
+        self.remoteInfo[address]=info;
+        // A merged manufacturer-data dictionary is metadata, not a packet trace.
+        if (tokens.count && [ad[@"time"] isKindOfClass:NSNumber.class]) [self.evidence recordRemoteTokens:tokens address:address source:source atTime:[ad[@"time"] doubleValue]];
+    }
     [self rebuildKnownDevices];
 }
-- (void)loadSharedBindingsWithCompletion:(void (^)(void))completion {
-    dispatch_group_t group = dispatch_group_create(); NSUInteger count = 0, generation = self.generation;
-    __weak typeof(self) weakSelf = self;
-    for (NSDictionary *record in self.registryDevices) {
-        NSString *deviceID = record[@"device_id"];
-        if (![record[@"blue_connect_identifier"] length] || !deviceID.length || deviceID.length > 128) continue;
-        if (++count > 32) break;
+- (NSString *)peerKey:(NSString *)source { return [@"ha_dashboard.ble_observations.v2." stringByAppendingString:source]; }
+- (void)observePeer:(id)value source:(NSString *)source {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;
+    if (![value isKindOfClass:NSDictionary.class] || ![value[@"time"] isKindOfClass:NSNumber.class] || ![value[@"schema"] isEqual:@2] || ![value[@"source"] isEqual:source] || [source isEqual:self.sourceAddress]) return;
+    NSTimeInterval at=[value[@"time"] doubleValue]; if(at<now-30 || at>now+5)return;
+    double learning=[value[@"learning_until"] isKindOfClass:NSNumber.class] ? MIN(now+30,[value[@"learning_until"] doubleValue]) : 0;
+    NSMutableArray *requested=NSMutableArray.array; if([value[@"requested_profiles"] isKindOfClass:NSArray.class]) for(id profile in value[@"requested_profiles"]) if([profile isKindOfClass:NSDictionary.class] && requested.count<16)[requested addObject:profile];
+    self.peerValues[source]=@{@"learning_until":@(learning),@"requested_profiles":requested};
+    self.peerLearningUntil=MAX(self.peerLearningUntil,learning);
+    if (![value[@"records"] isKindOfClass:NSArray.class])return;
+    NSUInteger count=0;
+    for(NSDictionary *record in value[@"records"]) {
+        if(++count>128)break; if(![record isKindOfClass:NSDictionary.class] || ![record[@"address"] isKindOfClass:NSString.class] || ![record[@"time"] isKindOfClass:NSNumber.class])continue; NSDictionary *proof=self.catalog[record[@"address"]];
+        if(!proof || ![proof[@"proof_id"] isEqual:record[@"proof_id"]] || ![record[@"lineage"] isKindOfClass:NSArray.class] || [record[@"lineage"] containsObject:self.sourceAddress])continue;
+        if(record[@"last_seen"] && ![record[@"last_seen"] isKindOfClass:NSNumber.class])continue;
+        if(![record[@"tokens"] isKindOfClass:NSArray.class] || [record[@"tokens"] count]>16)continue;
+        BOOL valid=YES; for(id token in record[@"tokens"]) {
+            if(![token isKindOfClass:NSString.class] || [token length]>4096 || (![(NSString *)token hasPrefix:@"m:"] && ![(NSString *)token hasPrefix:@"s:"])) { valid=NO; continue; }
+            NSRange colon=[token rangeOfString:@":" options:NSBackwardsSearch]; NSData *bytes=[[NSData alloc] initWithBase64EncodedString:[token substringFromIndex:colon.location+1] options:0];
+            if(bytes.length<4 || bytes.length>2048)valid=NO;
+        }
+        if(!valid)continue;
+        NSString *address=record[@"address"];
+        self.remoteInfo[address]=@{@"name":HABLEString(proof[@"profile"][@"name"]),@"profile":proof[@"profile"] ?: @{},@"source":source,@"lineage":record[@"lineage"],@"tokens":record[@"tokens"],@"time":record[@"time"]};
+        [self.evidence recordRemoteTokens:record[@"tokens"] address:address source:source atTime:[record[@"time"] doubleValue] lastSeen:[(record[@"last_seen"] ?: record[@"time"]) doubleValue]];
+    }
+    [self rebuildKnownDevices];
+}
+- (void)loadDiscoveryMatchers:(void (^)(void))completion {
+    NSMutableSet *domains=NSMutableSet.set;for(NSDictionary *record in self.registryDevices)for(NSString *domain in record[@"domains"])if(domains.count<128)[domains addObject:domain];
+    if(!domains.count){completion();return;}
+    NSUInteger generation=self.generation;__weak typeof(self) weakSelf=self;
+    [self.connection sendCommand:@{@"type":@"manifest/list",@"integrations":domains.allObjects} completion:^(id result,NSError *error){
+        HABLEIdentityResolver *self=weakSelf;if(!self || generation!=self.generation || ![self sourceIsCurrent])return;
+        if(!error && [result isKindOfClass:NSArray.class])for(NSDictionary *manifest in result)if([manifest[@"domain"] isKindOfClass:NSString.class] && [manifest[@"bluetooth"] isKindOfClass:NSArray.class])self.discoveryMatchers[manifest[@"domain"]]=manifest[@"bluetooth"];
+        completion();
+    }];
+}
+- (BOOL)observation:(NSDictionary *)observation matchesDiscoveryRule:(NSDictionary *)rule {
+    if(![rule isKindOfClass:NSDictionary.class] || !rule.count)return NO;
+    if(!rule[@"local_name"] && !rule[@"service_uuid"] && !rule[@"manufacturer_id"] && !rule[@"manufacturer_data_start"])return NO;
+    NSSet *supported=[NSSet setWithArray:@[@"local_name",@"service_uuid",@"manufacturer_id",@"manufacturer_data_start",@"connectable"]];
+    for(NSString *key in rule)if(![supported containsObject:key])return NO;
+    NSString *pattern=rule[@"local_name"];
+    if(pattern && (![pattern isKindOfClass:NSString.class] || pattern.length>128 || fnmatch(pattern.UTF8String,HABLEString(observation[@"name"]).UTF8String,0)!=0))return NO;
+    if(rule[@"service_uuid"]) {NSString *uuid=HABLECanonicalUUID(rule[@"service_uuid"]);if(!uuid || ![[HABLEIdentityEvidence canonicalServices:observation[@"service_uuids"]] containsObject:uuid])return NO;}
+    NSData *manufacturer=[[NSData alloc]initWithBase64EncodedString:HABLEString(observation[@"manufacturer_data"]) options:0];
+    if(!manufacturer.length)manufacturer=[[NSData alloc]initWithBase64EncodedString:HABLEString(observation[@"identity_manufacturer_data"]) options:0];
+    const uint8_t *bytes=manufacturer.bytes;
+    if(rule[@"manufacturer_id"] && (manufacturer.length<2 || ![rule[@"manufacturer_id"] isKindOfClass:NSNumber.class] || [rule[@"manufacturer_id"] unsignedIntegerValue]!=(bytes[0]|(bytes[1]<<8))))return NO;
+    if(rule[@"manufacturer_data_start"]) {NSData *prefix=HABLEHexData(rule[@"manufacturer_data_start"]);if(!prefix || manufacturer.length<2+prefix.length || ![[manufacturer subdataWithRange:NSMakeRange(2,prefix.length)] isEqual:prefix])return NO;}
+    if(rule[@"connectable"] && ![rule[@"connectable"] isKindOfClass:NSNumber.class])return NO;
+    if([rule[@"connectable"] boolValue] && ![observation[@"connectable"] boolValue])return NO;
+    return YES;
+}
+- (void)loadLegacyAssociations:(void (^)(void))completion {
+    dispatch_group_t group=dispatch_group_create();NSUInteger count=0,generation=self.generation;__weak typeof(self) weakSelf=self;
+    for(NSDictionary *record in self.registryDevices) {
+        NSString *unit=[self registeredIdentifierForName:HABLEString(record[@"name"]) record:record];
+        if(!unit || ![record[@"device_id"] length])continue;if(++count>32)break;
+        BOOL present=NO;for(NSDictionary *binding in self.catalog.allValues)if([binding[@"device_id"] isEqual:record[@"device_id"]])present=YES;if(present)continue;
         dispatch_group_enter(group);
-        [[HAConnectionManager sharedManager] sendCommand:@{@"type":@"frontend/get_system_data", @"key":[self sharedKeyForDeviceID:deviceID]} completion:^(id result, NSError *error) {
-            HABLEIdentityResolver *self = weakSelf;
-            if (self && generation == self.generation && [self sourceIsCurrent] && !error && [result isKindOfClass:[NSDictionary class]]) [self loadSharedValue:result[@"value"] forRecord:record];
+        [self.connection sendCommand:@{@"type":@"frontend/get_system_data",@"key":[@"ha_dashboard.ble_identity.v1." stringByAppendingString:record[@"device_id"]]} completion:^(id result,NSError *error){
+            HABLEIdentityResolver *self=weakSelf;
+            if(self && generation==self.generation && [self sourceIsCurrent] && !error && [result isKindOfClass:NSDictionary.class]) {
+                id old=result[@"value"];uint64_t address;
+                if([old isKindOfClass:NSDictionary.class] && [old[@"schema"] isEqual:@1] && [old[@"device_id"] isEqual:record[@"device_id"]] && [old[@"identifier"] isEqual:unit] && [old[@"evidence_kind"] isEqual:@"independent_scanner"] && HABLEParseAddress(HABLEString(old[@"address"]),&address) && [old[@"manufacturer_id"] isKindOfClass:NSNumber.class] && [old[@"manufacturer_id"] unsignedLongLongValue]<=65535) {
+                    uint16_t number=[old[@"manufacturer_id"] unsignedIntValue];uint8_t bytes[]={number&255,number>>8};
+                    NSDictionary *binding=@{@"schema":@2,@"address":HABLEAddressString(address),@"device_id":record[@"device_id"],@"method":@"named_identifier",@"unit_identifier":unit,@"proof_id":HABLEHash([NSString stringWithFormat:@"legacy|%@|%@",record[@"device_id"],old[@"address"]]),@"lineage":@[],@"profile":@{@"name":unit,@"services":@[],@"manufacturer_length":@0,@"required_prefix":[[NSData dataWithBytes:bytes length:2] base64EncodedStringWithOptions:0]}};
+                    [self publishBinding:binding];self.catalog[binding[@"address"]]=binding;[self rebuildKnownDevices];
+                }
+            }
             dispatch_group_leave(group);
         }];
     }
-    dispatch_group_notify(group, dispatch_get_main_queue(), ^{ HABLEIdentityResolver *self = weakSelf; if (self && generation == self.generation && [self sourceIsCurrent]) completion(); });
+    dispatch_group_notify(group,dispatch_get_main_queue(),^{HABLEIdentityResolver *self=weakSelf;if(self && generation==self.generation && [self sourceIsCurrent])completion();});
 }
-- (void)rememberAutomaticMatch:(NSDictionary *)match {
-    NSString *deviceID = match[@"device_id"], *identifier = match[@"blue_connect_identifier"], *address = match[@"address"];
-    if (!deviceID.length || deviceID.length > 128 || !identifier.length || !address.length || ![match[@"automatic_match"] boolValue] || ![self sourceIsCurrent] ||
-        [self.occupiedBindingKeys containsObject:deviceID] || [self.publishingBindings containsObject:deviceID]) return;
-    NSDictionary *advertisement = self.advertisements[address];
-    if (![advertisement[@"name"] isKindOfClass:[NSString class]] || [advertisement[@"name"] caseInsensitiveCompare:identifier] != NSOrderedSame ||
-        HABLEHexData(advertisement[@"manufacturer_data"][@"305"]).length != 11) return;
-    [self.publishingBindings addObject:deviceID];
-    NSUInteger generation = self.generation; __weak typeof(self) weakSelf = self;
-    NSString *key = [self sharedKeyForDeviceID:deviceID];
-    // Recheck before writing. Existing or conflicting records are never
-    // overwritten automatically; normal concurrent discoveries are idempotent.
-    [[HAConnectionManager sharedManager] sendCommand:@{@"type":@"frontend/get_system_data", @"key":key} completion:^(id result, NSError *error) {
-        HABLEIdentityResolver *self = weakSelf; if (!self || generation != self.generation || ![self sourceIsCurrent]) return;
-        if (error || ![result isKindOfClass:[NSDictionary class]]) return;
-        id existing = result[@"value"];
-        if (existing && existing != [NSNull null]) { [self loadSharedValue:existing forRecord:match]; return; }
-        NSDictionary *value = @{@"schema":@1, @"profile":@"blue_connect-v1", @"device_id":deviceID, @"identifier":identifier, @"address":address, @"manufacturer_id":@305,
-            @"evidence_kind":@"independent_scanner", @"source":advertisement[@"source"], @"verified_at":@([[NSDate date] timeIntervalSince1970])};
-        // HA enforces administrator permission for this system-store write.
-        [[HAConnectionManager sharedManager] sendCommand:@{@"type":@"frontend/set_system_data", @"key":key, @"value":value} completion:^(id result, NSError *error) {
-            HABLEIdentityResolver *self = weakSelf; if (!self || generation != self.generation || ![self sourceIsCurrent] || error) return;
-            [self loadSharedValue:value forRecord:match];
-        }];
-    }];
-}
-- (void)observeAdvertisements:(NSArray *)advertisements {
-    for (NSDictionary *advertisement in advertisements) {
-        uint64_t value; NSString *address = advertisement[@"address"], *source = advertisement[@"source"];
-        if (![address isKindOfClass:[NSString class]] || !HABLEParseAddress(address, &value) || ![source isKindOfClass:[NSString class]] || !source.length || [self.excludedSources containsObject:source.uppercaseString]) continue;
-        if (self.advertisements.count < 2048 || self.advertisements[HABLEAddressString(value)]) self.advertisements[HABLEAddressString(value)] = advertisement;
+- (void)startSubscriptions {
+    NSUInteger generation=self.generation;__weak typeof(self) weakSelf=self;HAConnectionManager *connection=self.connection;
+    if(![NSUserDefaults.standardUserDefaults boolForKey:@"HABLEIdentitySharedOnly"]) {
+        NSInteger n=[connection subscribeWithCommand:@{@"type":@"bluetooth/subscribe_advertisements"} handler:^(NSDictionary *event){HABLEIdentityResolver *self=weakSelf;if(self && generation==self.generation && [self sourceIsCurrent] && [event[@"add"] isKindOfClass:NSArray.class])[self observeAdvertisements:event[@"add"]];}];[self.subscriptions addObject:@(n)];
     }
-    [self rebuildKnownDevices];
+    NSInteger n=[connection subscribeWithCommand:@{@"type":@"frontend/subscribe_system_data",@"key":HABLECatalogKey} handler:^(NSDictionary *event){HABLEIdentityResolver *self=weakSelf;if(self && generation==self.generation && [self sourceIsCurrent])[self loadCatalog:event[@"value"]];}];[self.subscriptions addObject:@(n)];
+    n=[connection subscribeToEventType:@"device_registry_updated" handler:^(NSDictionary *event){HABLEIdentityResolver *self=weakSelf;if(self && generation==self.generation)self.needsRegistryRefresh=YES;}];[self.subscriptions addObject:@(n)];
+    NSUInteger count=0;for(NSString *source in self.proxySources) {
+        if([source isEqual:self.sourceAddress])continue;if(++count>16)break;
+        n=[connection subscribeWithCommand:@{@"type":@"frontend/subscribe_system_data",@"key":[self peerKey:source]} handler:^(NSDictionary *event){HABLEIdentityResolver *self=weakSelf;if(self && generation==self.generation && [self sourceIsCurrent])[self observePeer:event[@"value"] source:source];}];[self.subscriptions addObject:@(n)];
+    }
 }
 - (void)refreshExcludingSource:(NSString *)source completion:(void (^)(NSError *))completion {
-    [self cancel]; self.knownDevices = @[]; self.registryDevices = @[]; [self.advertisements removeAllObjects];
-    [self.sharedBindings removeAllObjects]; [self.occupiedBindingKeys removeAllObjects]; [self.publishingBindings removeAllObjects];
-    HAAuthManager *auth = [HAAuthManager sharedManager]; self.sourceServer = auth.serverURL; self.sourceRevision = auth.authenticationRevision;
-    NSUInteger generation = self.generation;
-    HAConnectionManager *connection = [HAConnectionManager sharedManager];
-    if (!connection.connected) {
-        self.status = @"Connect to Home Assistant to import known devices";
-        completion([NSError errorWithDomain:@"HABLEIdentity" code:1 userInfo:@{NSLocalizedDescriptionKey:self.status}]); return;
-    }
-    self.status = @"Reading Home Assistant device identities";
-    __weak typeof(self) weakSelf = self;
-    [connection sendCommand:@{@"type":@"config_entries/get"} completion:^(id entries, NSError *entryError) {
-        HABLEIdentityResolver *self = weakSelf; if (!self || generation != self.generation) return;
-        if (entryError || ![entries isKindOfClass:[NSArray class]]) { self.status = @"Could not identify Home Assistant scanner sources"; completion(entryError ?: [NSError errorWithDomain:@"HABLEIdentity" code:2 userInfo:nil]); return; }
-        [connection sendCommand:@{@"type":@"config/device_registry/list"} completion:^(id result, NSError *error) {
-            HABLEIdentityResolver *self = weakSelf; if (!self || generation != self.generation) return;
-            if (error || ![result isKindOfClass:[NSArray class]]) { self.status = @"Could not read Home Assistant devices"; completion(error ?: [NSError errorWithDomain:@"HABLEIdentity" code:2 userInfo:nil]); return; }
-            [self loadRegistry:result entries:entries excludingSource:source];
-            [self loadSharedBindingsWithCompletion:^{
-            HABLEIdentityResolver *self = weakSelf; if (!self || generation != self.generation) return;
-            if ([[NSUserDefaults standardUserDefaults] boolForKey:@"HABLEIdentitySharedOnly"]) {
-                self.status = @"Using stored HA identities without scanner comparison"; completion(nil); return;
-            }
-            self.status = @"Comparing independent Bluetooth observations";
-            self.subscription = [connection subscribeWithCommand:@{@"type":@"bluetooth/subscribe_advertisements"} handler:^(NSDictionary *event) {
-                HABLEIdentityResolver *self = weakSelf; if (!self || generation != self.generation) return;
-                if ([event[@"add"] isKindOfClass:[NSArray class]]) [self observeAdvertisements:event[@"add"]];
-            } completion:^(BOOL success, NSError *error) {
-                HABLEIdentityResolver *self = weakSelf; if (!self || generation != self.generation) return;
-                if (!success) { [self cancel]; self.status = self.sharedBindings.count ? @"Using stored identities; live scanner comparison needs administrator access" : @"Registry imported; advertisement matching needs administrator access"; completion(nil); return; }
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                    HABLEIdentityResolver *self = weakSelf; if (!self || generation != self.generation) return;
-                    [self cancel]; self.status = [NSString stringWithFormat:@"Imported %lu identities from HA", (unsigned long)self.knownDevices.count]; completion(nil);
-                });
-            }];
+    [self cancel];self.needsRegistryRefresh=NO; self.status=@"Synchronizing HA identities automatically";
+    HAAuthManager *auth=HAAuthManager.sharedManager;self.sourceServer=auth.serverURL;self.sourceRevision=auth.authenticationRevision;
+    HAConnectionManager *connection=self.connection;NSUInteger generation=self.generation;__weak typeof(self) weakSelf=self;
+    if(!connection.connected){completion([NSError errorWithDomain:@"HABLEIdentity" code:1 userInfo:@{NSLocalizedDescriptionKey:@"HA is not connected"}]);return;}
+    [connection sendCommand:@{@"type":@"auth/current_user"} completion:^(id user,NSError *error){
+        HABLEIdentityResolver *self=weakSelf;if(!self || generation!=self.generation || ![self sourceIsCurrent])return;
+        if(error || ![user isKindOfClass:NSDictionary.class] || ![user[@"id"] isKindOfClass:NSString.class]){completion(error ?: [NSError errorWithDomain:@"HABLEIdentity" code:2 userInfo:nil]);return;}
+        self.scope=HABLEHash([NSString stringWithFormat:@"%@|%@",self.sourceServer,user[@"id"]]);
+        [connection sendCommand:@{@"type":@"config_entries/get"} completion:^(id entries,NSError *error){
+            HABLEIdentityResolver *self=weakSelf;if(!self || generation!=self.generation || ![self sourceIsCurrent])return;
+            if(error || ![entries isKindOfClass:NSArray.class]){completion(error ?: [NSError errorWithDomain:@"HABLEIdentity" code:3 userInfo:nil]);return;}
+            [connection sendCommand:@{@"type":@"config/device_registry/list"} completion:^(id devices,NSError *error){
+                HABLEIdentityResolver *self=weakSelf;if(!self || generation!=self.generation || ![self sourceIsCurrent])return;
+                if(error || ![devices isKindOfClass:NSArray.class]){completion(error ?: [NSError errorWithDomain:@"HABLEIdentity" code:4 userInfo:nil]);return;}
+                [self loadRegistry:devices entries:entries excludingSource:source];
+                [connection sendCommand:@{@"type":@"frontend/get_system_data",@"key":HABLECatalogKey} completion:^(id data,NSError *error){
+                    HABLEIdentityResolver *self=weakSelf;if(!self || generation!=self.generation || ![self sourceIsCurrent])return;
+                    if(!error && [data isKindOfClass:NSDictionary.class])[self loadCatalog:data[@"value"]];
+                    [self loadDiscoveryMatchers:^{
+                    [self loadLegacyAssociations:^{
+                    HABLEIdentityResolver *self=weakSelf;if(!self || generation!=self.generation || ![self sourceIsCurrent])return;
+                    if(!self.loaded)[self loadLocalBindings]; self.loaded=YES;[self startSubscriptions];
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,2*NSEC_PER_SEC),dispatch_get_main_queue(),^{HABLEIdentityResolver *self=weakSelf;if(!self || generation!=self.generation || ![self sourceIsCurrent])return;self.status=@"Automatically watching HA identities and peer evidence";completion(nil);});
+                    }];
+                    }];
+                }];
             }];
         }];
     }];
 }
+- (void)recordObservation:(NSDictionary *)observation identifier:(NSString *)identifier {
+    if(!identifier.length)return;if(self.localObservations.count>=256 && !self.localObservations[identifier])return;
+    self.localObservations[identifier]=observation;[self.evidence recordLocal:observation identifier:identifier atTime:[observation[@"last_seen"] doubleValue]];
+}
+- (void)removeIdentifier:(NSString *)identifier { [self.localObservations removeObjectForKey:identifier];[self.evidence removeIdentifier:identifier]; }
+- (NSString *)registeredIdentifierForName:(NSString *)name record:(NSDictionary *)record {
+    if(!HABLEUnitIdentifier(name))return nil;
+    for(NSArray *pair in record[@"identifiers"])if([name caseInsensitiveCompare:pair[1]]==NSOrderedSame)return pair[1];
+    return nil;
+}
+- (BOOL)proof:(NSDictionary *)proof matches:(NSDictionary *)observation {
+    NSString *method=proof[@"method"];
+    if([method isEqual:@"embedded_address"])return [HABLEIdentityEvidence observation:observation containsAddress:proof[@"address"]];
+    if([method isEqual:@"serial"])return [observation[@"serial_number"] isEqual:proof[@"unit_identifier"]];
+    if([method isEqual:@"named_identifier"])return [HABLEString(observation[@"name"]) caseInsensitiveCompare:HABLEString(proof[@"unit_identifier"])]==NSOrderedSame && [HABLEIdentityEvidence tokensForObservation:observation].count && HABLEProfilesCompatible(HABLEProfile(observation),proof[@"profile"]);
+    return NO;
+}
 - (NSArray *)candidatesForObservation:(NSDictionary *)observation {
-    NSMutableArray *result = [NSMutableArray array];
-    NSData *manufacturer = [[NSData alloc] initWithBase64EncodedString:observation[@"manufacturer_data"] ?: @"" options:0];
-    if (!manufacturer.length) manufacturer = [[NSData alloc] initWithBase64EncodedString:observation[@"identity_manufacturer_data"] ?: @"" options:0];
-    NSDictionary *services = observation[@"service_data"] ?: @{};
-    for (NSDictionary *known in self.knownDevices) {
-        NSInteger score = 0; NSMutableArray *evidence = [NSMutableArray array];
-        NSString *address = known[@"address"]; NSDictionary *advertisement = self.advertisements[address];
-        if (address.length && [observation[@"address"] isKindOfClass:[NSString class]] && ![observation[@"identity"] isEqual:@"local_alias"] && [observation[@"address"] caseInsensitiveCompare:address] == NSOrderedSame) { score += 200; [evidence addObject:@"Hardware address matches"]; }
-        NSString *serial = observation[@"serial_number"];
-        if (serial.length && [known[@"serial_number"] isEqualToString:serial]) { score += 150; [evidence addObject:@"Serial number matches"]; }
-        if (manufacturer.length >= 8) {
-            const uint8_t *bytes = manufacturer.bytes;
-            NSString *company = [NSString stringWithFormat:@"%u", bytes[0] | (bytes[1] << 8)];
-            NSData *remote = HABLEHexData(advertisement[@"manufacturer_data"][company]);
-            if (remote && [remote isEqualToData:[manufacturer subdataWithRange:NSMakeRange(2, manufacturer.length - 2)]]) { score += 70; [evidence addObject:@"Manufacturer payload matches"]; }
-        }
-        for (NSString *uuid in services) {
-            NSData *local = [[NSData alloc] initWithBase64EncodedString:services[uuid] options:0];
-            NSData *remote = HABLEHexData(advertisement[@"service_data"][HABLEFullUUID(uuid)]);
-            if (local.length >= 6 && [local isEqualToData:remote]) { score += 50; [evidence addObject:@"Service payload matches"]; break; }
-        }
-        NSString *name = observation[@"name"];
-        if (name.length && ![name isEqualToString:@"Unnamed device"] && ([name caseInsensitiveCompare:known[@"name"] ?: @""] == NSOrderedSame || [name caseInsensitiveCompare:advertisement[@"name"] ?: @""] == NSOrderedSame)) { score += 20; [evidence addObject:@"Device name matches"]; }
-        for (NSArray *identifier in known[@"identifiers"]) if (name.length && [name caseInsensitiveCompare:identifier[1]] == NSOrderedSame) { score += 60; [evidence addObject:@"HA integration identifier matches"]; break; }
-        NSMutableSet *uuids = [NSMutableSet set]; for (NSString *uuid in observation[@"service_uuids"]) [uuids addObject:HABLEFullUUID(uuid)];
-        for (NSString *uuid in observation[@"gatt_service_uuids"]) [uuids addObject:HABLEFullUUID(uuid)];
-        for (NSString *uuid in advertisement[@"service_uuids"]) if ([uuids containsObject:HABLEFullUUID(uuid)]) { score += 5; [evidence addObject:@"Advertised service matches"]; break; }
-        NSMutableDictionary *candidate = [known mutableCopy]; candidate[@"score"] = @(score);
-        BOOL verified = NO;
-        // A generic name, service UUID or matching measurement is insufficient.
-        // Blue Connect advertises the device ID used by its HA integration.
-        // Require the matching vendor envelope on both radios and an address
-        // observed independently of every HA Dashboard proxy.
-        NSString *blueID = known[@"blue_connect_identifier"];
-        NSData *bluePayload = HABLEHexData(advertisement[@"manufacturer_data"][@"305"]);
-        if (address.length && blueID.length && name.length && [name caseInsensitiveCompare:blueID] == NSOrderedSame &&
-            [advertisement[@"name"] isKindOfClass:[NSString class]] && [advertisement[@"name"] caseInsensitiveCompare:blueID] == NSOrderedSame &&
-            manufacturer.length >= 2 && bluePayload.length == 11) {
-            const uint8_t *bytes = manufacturer.bytes;
-            if (bytes[0] == 0x31 && bytes[1] == 0x01) { verified = YES; score += 150; [evidence addObject:@"Blue Connect ID and vendor match an independent scanner"]; }
-        }
-        if (address.length && blueID.length && name.length && [name caseInsensitiveCompare:blueID] == NSOrderedSame && manufacturer.length >= 2 && known[@"shared_identity"]) {
-            const uint8_t *bytes = manufacturer.bytes;
-            if (bytes[0] == 0x31 && bytes[1] == 0x01) { verified = YES; score += 150; [evidence addObject:@"Verified Blue Connect association stored in HA"]; }
-        }
-        if (address.length && [known[@"address_provenance"] isEqual:@"registry_bluetooth"] && serial.length >= 4 &&
-            ![[serial lowercaseString] isEqual:@"unknown"] && [serial rangeOfCharacterFromSet:[NSCharacterSet characterSetWithCharactersInString:@"123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"]].location != NSNotFound &&
-            [known[@"serial_number"] isEqual:serial]) { verified = YES; [evidence addObject:@"GATT serial matches HA's registered Bluetooth address"]; }
-        candidate[@"automatic_match"] = @(verified); candidate[@"score"] = @(score);
-        candidate[@"evidence"] = evidence.count ? [evidence componentsJoinedByString:@" · "] : @"Known to HA; identity has not been matched";
-        [result addObject:candidate];
+    NSMutableArray *result=NSMutableArray.array;NSString *identifier=observation[@"identifier"],*name=HABLEString(observation[@"name"]),*serial=HABLEString(observation[@"serial_number"]);NSTimeInterval now=NSDate.date.timeIntervalSince1970;
+    NSDictionary *profile=HABLEProfile(observation);NSArray *tokens=[HABLEIdentityEvidence tokensForObservation:observation];
+    for(NSDictionary *known in self.knownDevices) {
+        NSString *address=known[@"address"];NSDictionary *remote=self.remoteInfo[address],*shared=self.catalog[address];NSMutableDictionary *candidate=[known mutableCopy];NSMutableArray *reasons=NSMutableArray.array;
+        NSInteger score=0;NSString *method=nil,*unit=nil;NSArray *lineage=remote[@"lineage"] ?: @[];
+        BOOL embedded=address.length && [HABLEIdentityEvidence observation:observation containsAddress:address];
+        if(embedded){score+=60;[reasons addObject:@"Known HA address appears in the observed payload"];}
+        if(address.length && serial.length>=6 && [serial rangeOfCharacterFromSet:NSCharacterSet.decimalDigitCharacterSet].location!=NSNotFound && [serial rangeOfCharacterFromSet:[NSCharacterSet characterSetWithCharactersInString:@"123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"]].location!=NSNotFound && ![serial.lowercaseString isEqual:@"unknown"] && [serial isEqual:known[@"serial_number"]]){method=@"serial";unit=serial;score+=200;[reasons addObject:@"Standard serial matches HA"];}
+        NSString *named=[self registeredIdentifierForName:name record:known];
+        if(named){score+=40;[reasons addObject:@"Name matches a registered unit identifier"];}else if(name.length && [name caseInsensitiveCompare:HABLEString(known[@"name"])]==NSOrderedSame){score+=10;[reasons addObject:@"Name matches"];}
+        BOOL compatible=remote && HABLEProfilesCompatible(profile,remote[@"profile"]);
+        if(compatible){score+=5;[reasons addObject:@"Observed BLE profile is compatible"];}
+        BOOL payload=[HABLEIdentityEvidence tokens:tokens agreeWith:remote[@"tokens"]];
+        BOOL sameName=!name.length || [name isEqual:@"Unnamed device"] || ![HABLEString(remote[@"name"]) length] || [name caseInsensitiveCompare:HABLEString(remote[@"name"])]==NSOrderedSame;
+        if(embedded && sameName && payload && compatible && fabs(now-[remote[@"time"] doubleValue])<=120 && ![self.proxySources containsObject:remote[@"source"]]){method=@"embedded_address";score+=160;[reasons addObject:@"Address occurrence corroborated by an independent radio"];}
+        if(named && [HABLEString(remote[@"name"]) caseInsensitiveCompare:named]==NSOrderedSame && payload && compatible && fabs(now-[remote[@"time"] doubleValue])<=120 && ![self.proxySources containsObject:remote[@"source"]]){method=@"named_identifier";unit=named;score+=160;[reasons addObject:@"Unit identifier and current payload agree with an independent scanner"];}
+        if([self validBinding:shared] && [self proof:shared matches:observation]){method=shared[@"method"];unit=shared[@"unit_identifier"];score+=180;[reasons addObject:@"Verified generic HA association matches"];}
+        NSDictionary *saved=self.localBindings[identifier];
+        if([saved[@"address"] isEqual:address] && [self validBinding:saved] && HABLEProfilesCompatible(profile,saved[@"profile"])){method=saved[@"method"];unit=saved[@"unit_identifier"];lineage=saved[@"lineage"] ?: @[];score+=180;[reasons addObject:@"Previously verified binding for this Apple peripheral"];}
+        NSDictionary *correlation=identifier.length && compatible ? [self.evidence correlationForIdentifier:identifier address:address now:now] : nil;
+        if([correlation[@"distinct_packets"] unsignedIntegerValue]) [reasons addObject:[NSString stringWithFormat:@"Learning: %lu / 12 distinct payload changes agree",(unsigned long)[correlation[@"distinct_packets"] unsignedIntegerValue]]];
+        if([correlation[@"qualified"] boolValue] && ![self.evidence hasCompetingLocalIdentifier:identifier address:address now:now]){method=method ?: @"packet_sequence";unit=unit ?: named;score+=120;[reasons addObject:[NSString stringWithFormat:@"%lu distinct payloads agree in time",(unsigned long)[correlation[@"distinct_packets"] unsignedIntegerValue]]];}
+        candidate[@"automatic_match"]=@(address.length && method!=nil);candidate[@"score"]=@(score);candidate[@"method"]=method ?: @"";candidate[@"unit_identifier"]=unit ?: @"";candidate[@"profile"]=profile;candidate[@"lineage"]=lineage;candidate[@"local_identifier"]=identifier ?: @"";
+        candidate[@"reference_sources"]=correlation[@"sources"] ?: (remote[@"source"] ? @[remote[@"source"]] : @[]);
+        candidate[@"evidence"]=reasons.count ? [reasons componentsJoinedByString:@" · "] : @"Identity unresolved";[result addObject:candidate];
     }
-    // Scores rank suggestions. Automatic matches require separate, explicit
-    // identity evidence; equal readings, RSSI and generic names are insufficient.
-    return [result sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) { NSComparisonResult score = [b[@"score"] compare:a[@"score"]]; return score == NSOrderedSame ? [a[@"label"] localizedCaseInsensitiveCompare:b[@"label"]] : score; }];
+    return [result sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a,NSDictionary *b){return [b[@"score"] compare:a[@"score"]];}];
 }
 - (NSDictionary *)automaticMatchForObservation:(NSDictionary *)observation {
-    NSDictionary *match = nil;
-    for (NSDictionary *candidate in [self candidatesForObservation:observation]) if ([candidate[@"automatic_match"] boolValue]) {
-        if (match) return nil; // Conflicting HA records or radio addresses need confirmation.
-        match = candidate;
+    NSDictionary *match=nil;
+    for(NSDictionary *candidate in [self candidatesForObservation:observation])if([candidate[@"automatic_match"] boolValue]){if(match)return nil;match=candidate;}
+    if(!match)return nil;
+    NSString *identifier=observation[@"identifier"];
+    if([match[@"method"] isEqual:@"packet_sequence"]) for(NSString *other in self.remoteInfo) {
+        if([other isEqual:match[@"address"]] || !HABLEProfilesCompatible(HABLEProfile(observation),self.remoteInfo[other][@"profile"]))continue;
+        NSDictionary *e=[self.evidence correlationForIdentifier:identifier address:other now:NSDate.date.timeIntervalSince1970];
+        if([e[@"compared_events"] unsignedIntegerValue] && [e[@"matched_events"] doubleValue]/[e[@"compared_events"] doubleValue]>=.9)return nil;
     }
     return match;
 }
 - (BOOL)hasKnownIdentityForObservation:(NSDictionary *)observation {
-    NSString *name = observation[@"name"], *serial = observation[@"serial_number"];
-    for (NSDictionary *record in self.registryDevices) {
-        if (name.length && [record[@"blue_connect_identifier"] length] && [name caseInsensitiveCompare:record[@"blue_connect_identifier"]] == NSOrderedSame) return YES;
-        if (serial.length >= 4 && [serial isEqual:record[@"serial_number"]]) return YES;
+    NSDictionary *profile=HABLEProfile(observation);
+    for(NSDictionary *record in self.registryDevices)for(NSString *domain in record[@"domains"])for(NSDictionary *rule in self.discoveryMatchers[domain])if([self observation:observation matchesDiscoveryRule:rule])return YES;
+    for(NSDictionary *known in self.knownDevices) {
+        if([self registeredIdentifierForName:HABLEString(observation[@"name"]) record:known] || ([observation[@"serial_number"] length]>=6 && [observation[@"serial_number"] isEqual:known[@"serial_number"]]))return YES;
+        NSDictionary *remote=self.remoteInfo[known[@"address"]];NSDictionary *otherProfile=remote[@"profile"] ?: self.catalog[known[@"address"]][@"profile"];if(otherProfile && HABLEProfilesCompatible(profile,otherProfile))return YES;
+    }return NO;
+}
+- (void)rememberAutomaticMatch:(NSDictionary *)match {
+    if(![match[@"automatic_match"] boolValue] || ![self sourceIsCurrent])return;
+    NSString *address=match[@"address"],*identifier=match[@"local_identifier"];if(!address.length || !identifier.length)return;
+    NSMutableDictionary *binding=[match mutableCopy];binding[@"schema"]=@2;
+    NSDictionary *existing=self.catalog[address];binding[@"proof_id"]=existing[@"proof_id"] ?: HABLEHash([NSString stringWithFormat:@"%@|%@|%@|%@",address,match[@"device_id"],match[@"method"],match[@"unit_identifier"]]);
+    NSMutableOrderedSet *lineage=[NSMutableOrderedSet orderedSetWithArray:match[@"lineage"] ?: @[]];if(self.sourceAddress.length)[lineage addObject:self.sourceAddress];binding[@"lineage"]=lineage.array;
+    if(![self validBinding:binding])return;
+    self.localBindings[identifier]=binding;[self saveLocalBindings];
+    [self publishBinding:binding];
+}
+- (void)publishBinding:(NSDictionary *)binding {
+    NSString *address=binding[@"address"];
+    if(![self validBinding:binding] || self.catalog[address])return;
+    if(self.pendingPublications.count<512)self.pendingPublications[address]=binding;
+    [self pumpPublications];
+}
+- (void)pumpPublications {
+    if(self.publicationInFlight || !self.pendingPublications.count || ![self sourceIsCurrent] || !self.connection.connected || NSDate.date.timeIntervalSince1970<self.nextPublication)return;
+    NSString *address=self.pendingPublications.allKeys.firstObject;NSDictionary *binding=self.pendingPublications[address];
+    if(![self validBinding:binding]){[self.pendingPublications removeObjectForKey:address];return;}
+    self.publicationInFlight=YES;NSUInteger generation=self.generation;__weak typeof(self) weakSelf=self;HAConnectionManager *connection=self.connection;
+    [connection sendCommand:@{@"type":@"frontend/get_system_data",@"key":HABLECatalogKey} completion:^(id result,NSError *error){
+        HABLEIdentityResolver *self=weakSelf;if(!self || generation!=self.generation || ![self sourceIsCurrent])return;
+        id value=[result isKindOfClass:NSDictionary.class] ? result[@"value"] : nil;
+        if(error || (value && value!=NSNull.null && (![value isKindOfClass:NSDictionary.class] || ![value[@"schema"] isEqual:@2]))) {self.publicationInFlight=NO;self.nextPublication=NSDate.date.timeIntervalSince1970+60;return;}
+        if(!value || value==NSNull.null)value=@{};
+        NSMutableDictionary *updated=[value mutableCopy];NSMutableDictionary *bindings=[value[@"bindings"] isKindOfClass:NSDictionary.class] ? [value[@"bindings"] mutableCopy] : NSMutableDictionary.dictionary;
+        if(bindings[address]){[self loadCatalog:value];[self.pendingPublications removeObjectForKey:address];self.publicationInFlight=NO;[self pumpPublications];return;}
+        if(bindings.count>=512){self.publicationInFlight=NO;self.nextPublication=NSDate.date.timeIntervalSince1970+60;return;}
+        bindings[address]=binding;updated[@"schema"]=@2;updated[@"bindings"]=bindings;
+        [connection sendCommand:@{@"type":@"frontend/set_system_data",@"key":HABLECatalogKey,@"value":updated} completion:^(id result,NSError *error){
+            HABLEIdentityResolver *self=weakSelf;if(!self || generation!=self.generation || ![self sourceIsCurrent])return;
+            self.publicationInFlight=NO;
+            if(error){self.nextPublication=NSDate.date.timeIntervalSince1970+60;return;}
+            [self.pendingPublications removeObjectForKey:address];self.catalog[address]=binding;[self rebuildKnownDevices];[self pumpPublications];
+        }];
+    }];
+}
+- (void)rememberConfirmedAddress:(NSString *)address observation:(NSDictionary *)observation {
+    NSString *identifier=observation[@"identifier"];
+    if(!identifier.length || [self.localBindings[identifier][@"address"] isEqual:address])return;
+    NSDictionary *selected=nil;
+    for(NSDictionary *record in self.registryDevices) if([record[@"addresses"] containsObject:address] || [self registeredIdentifierForName:HABLEString(observation[@"name"]) record:record]) {
+        if(selected)return;selected=record;
     }
-    return NO;
+    if(!selected)return;
+    NSMutableDictionary *match=[selected mutableCopy];match[@"address"]=address;match[@"local_identifier"]=identifier;match[@"automatic_match"]=@YES;match[@"method"]=@"confirmed";
+    match[@"unit_identifier"]=[self registeredIdentifierForName:HABLEString(observation[@"name"]) record:selected] ?: @"";match[@"profile"]=HABLEProfile(observation);match[@"lineage"]=@[];
+    [self rememberAutomaticMatch:match];
+}
+- (void)maintainSynchronization {
+    if(!self.loaded || ![self sourceIsCurrent] || !self.connection.connected)return;
+    [self pumpPublications];
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;if(now<self.nextPublish || self.publishing)return;
+    BOOL learning=NO;NSMutableArray *requested=NSMutableArray.array;
+    for(NSString *identifier in self.localObservations) {NSDictionary *observation=self.localObservations[identifier];if(now-[observation[@"last_seen"] doubleValue]<=120 && !self.localBindings[identifier] && [self hasKnownIdentityForObservation:observation]) {
+        BOOL nativeAvailable=NO;for(NSDictionary *remote in self.remoteInfo.allValues)if(![self.proxySources containsObject:remote[@"source"]] && now-[remote[@"time"] doubleValue]<120 && HABLEProfilesCompatible(HABLEProfile(observation),remote[@"profile"]))nativeAvailable=YES;
+        if(!nativeAvailable && requested.count<16){learning=YES;[requested addObject:HABLEProfile(observation)];}
+    }}
+    BOOL provide=learning || self.peerLearningUntil>now;
+    if(!provide && !self.previouslyLearning)return;
+    self.nextPublish=now+8;self.previouslyLearning=provide;NSMutableArray *records=NSMutableArray.array;
+    NSMutableArray *wanted=NSMutableArray.array;for(NSDictionary *peer in self.peerValues.allValues)if([peer[@"learning_until"] doubleValue]>now && [peer[@"requested_profiles"] isKindOfClass:NSArray.class])for(NSDictionary *profile in peer[@"requested_profiles"])if([profile isKindOfClass:NSDictionary.class] && wanted.count<64)[wanted addObject:profile];
+    if(provide)for(NSString *identifier in self.localBindings) {
+        NSDictionary *binding=self.localBindings[identifier];BOOL relevant=NO;for(NSDictionary *profile in wanted)if(HABLEProfilesCompatible(binding[@"profile"],profile))relevant=YES;if(!relevant)continue;
+        if(![self.catalog[binding[@"address"]][@"proof_id"] isEqual:binding[@"proof_id"]])continue;
+        for(NSDictionary *event in [self.evidence recentLocalEventsForIdentifier:identifier now:now]) {
+            if(records.count>=128)break;[records addObject:@{@"address":binding[@"address"],@"proof_id":binding[@"proof_id"],@"lineage":binding[@"lineage"],@"time":event[@"time"],@"last_seen":event[@"last_seen"],@"tokens":event[@"tokens"]}];
+        }
+        if(records.count>=128)break;
+    }
+    NSDictionary *value=@{@"schema":@2,@"source":self.sourceAddress ?: @"",@"time":@(now),@"learning_until":@(learning ? now+24 : 0),@"requested_profiles":requested,@"records":records};
+    self.publishing=YES;NSUInteger generation=self.generation;__weak typeof(self) weakSelf=self;
+    [self.connection sendCommand:@{@"type":@"frontend/set_system_data",@"key":[self peerKey:self.sourceAddress],@"value":value} completion:^(id result,NSError *error){HABLEIdentityResolver *self=weakSelf;if(!self || generation!=self.generation)return;self.publishing=NO;if(error)self.nextPublish=NSDate.date.timeIntervalSince1970+60;}];
 }
 @end

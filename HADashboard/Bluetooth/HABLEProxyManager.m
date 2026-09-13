@@ -100,7 +100,6 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableDictionary *> *observations;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, CBPeripheral *> *peripherals;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *mappings;
-@property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *advertisedAddresses;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *identityMetadata;
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, HABLEPeripheralSession *> *sessions;
 @property (nonatomic, copy) NSString *installationID;
@@ -115,6 +114,8 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *automaticMappings;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *identityLabels;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *identityCheckTimes;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *identityProbeTimes;
+@property (nonatomic, assign) NSTimeInterval nextIdentityProbeAt;
 @property (nonatomic, copy) NSString *identityScope;
 @property (nonatomic, assign) NSUInteger identityGeneration;
 @property (nonatomic, assign) BOOL importingIdentities;
@@ -158,7 +159,6 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         NSString *suffix = [[_adapterAddress stringByReplacingOccurrencesOfString:@":" withString:@""] lowercaseString];
         _nodeName = [@"ha-dash-" stringByAppendingString:suffix];
         _observations = [NSMutableDictionary dictionary]; _peripherals = [NSMutableDictionary dictionary]; _sessions = [NSMutableDictionary dictionary];
-        _advertisedAddresses = [NSMutableDictionary dictionary];
         _identityMetadata = [[[NSUserDefaults standardUserDefaults] dictionaryForKey:@"ha_ble_proxy_identity_metadata"] mutableCopy] ?: [NSMutableDictionary dictionary];
         _mappings = [[defaults dictionaryForKey:HABLEMappingKey] mutableCopy] ?: [NSMutableDictionary dictionary];
         _status = @"Off";
@@ -169,9 +169,11 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         [defaults removeObjectForKey:@"HABLEProxyRegister"];
         _registration = [[HABLEProxyRegistration alloc] init];
         _identityResolver = [[HABLEIdentityResolver alloc] init];
-        _automaticMappings = [NSMutableDictionary dictionary]; _identityLabels = [NSMutableDictionary dictionary]; _identityCheckTimes = [NSMutableDictionary dictionary];
+        _automaticMappings = [NSMutableDictionary dictionary]; _identityLabels = [NSMutableDictionary dictionary]; _identityCheckTimes = [NSMutableDictionary dictionary]; _identityProbeTimes = [NSMutableDictionary dictionary];
         _pendingIdentityAdvertisements = [NSMutableArray array];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(integrationRegistrationDidChange:) name:HADeviceIntegrationEnabledDidChangeNotification object:nil];
+        for (NSString *name in @[HAConnectionManagerDidConnectNotification, HAConnectionManagerHADidStartNotification, HAConnectionManagerDidReceiveRegistriesNotification]) [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(identityConnectionDidChange:) name:name object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(identityConnectionDidDisconnect:) name:HAConnectionManagerDidDisconnectNotification object:nil];
         _handleTables = [[[NSUserDefaults standardUserDefaults] dictionaryForKey:@"ha_ble_proxy_handle_tables"] mutableCopy] ?: [NSMutableDictionary dictionary];
         _scanSubscription = -1; _scanServiceStatus = @"Services can be imported from Home Assistant";
         NSMutableArray *imported = [NSMutableArray array], *additional = [NSMutableArray array];
@@ -374,10 +376,10 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 - (void)reset {
     self.enabled = NO;
     self.central.delegate = nil; self.central = nil;
-    [self.observations removeAllObjects]; [self.peripherals removeAllObjects]; [self.mappings removeAllObjects]; [self.advertisedAddresses removeAllObjects]; [self.handleTables removeAllObjects]; [self.identityMetadata removeAllObjects];
+    [self.observations removeAllObjects]; [self.peripherals removeAllObjects]; [self.mappings removeAllObjects]; [self.handleTables removeAllObjects]; [self.identityMetadata removeAllObjects];
     NSDictionary *query = @{(__bridge id)kSecClass:(__bridge id)kSecClassGenericPassword, (__bridge id)kSecAttrService:@"org.hadashboard.ble-proxy", (__bridge id)kSecAttrAccount:@"noise-key"};
     SecItemDelete((__bridge CFDictionaryRef)query);
-    for (NSString *key in @[@"ha_ble_proxy_enabled", @"ha_ble_proxy_installation", @"ha_ble_proxy_address_mapping", @"ha_ble_proxy_handle_tables", @"ha_ble_proxy_identity_metadata", @"ha_ble_proxy_auto_register", HABLEScanModeKey, HABLEImportedServicesKey, HABLEAdditionalServicesKey, @"HABLEProxyEnabled", @"HABLEProxyRegister", @"HABLEProxyServiceUUIDs", @"HABLEProxyScanMode"]) [[NSUserDefaults standardUserDefaults] removeObjectForKey:key];
+    for (NSString *key in @[@"ha_ble_proxy_enabled", @"ha_ble_proxy_installation", @"ha_ble_proxy_address_mapping", @"ha_ble_proxy_handle_tables", @"ha_ble_proxy_identity_metadata", @"ha_ble_proxy_auto_register", HABLEScanModeKey, HABLEImportedServicesKey, HABLEAdditionalServicesKey, @"HABLEProxyEnabled", @"HABLEProxyRegister", @"HABLEProxyServiceUUIDs", @"HABLEProxyScanMode", @"ha_ble_identity_bindings_v2"]) [[NSUserDefaults standardUserDefaults] removeObjectForKey:key];
     self.importedScanServiceUUIDs = @[]; self.additionalScanServiceUUIDs = @[]; self.usingServiceFilters = NO; self.nextScanImport = 0;
     self.scanServiceStatus = @"Services can be imported from Home Assistant";
     self.installationID = [NSUUID UUID].UUIDString; self.adapterAddress = HABLEAddressString(HABLEAlias(self.installationID));
@@ -385,7 +387,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     self.registration = [[HABLEProxyRegistration alloc] init]; self.nextRegistrationAttempt = 0;
     self.registeredContext = nil; self.integrationRegistrationWasEnabled = NO;
     [[NSUserDefaults standardUserDefaults] setBool:NO forKey:HABLEEnabledKey];
-    [self.automaticMappings removeAllObjects]; [self.identityLabels removeAllObjects]; [self.identityCheckTimes removeAllObjects];
+    [self.automaticMappings removeAllObjects]; [self.identityLabels removeAllObjects]; [self.identityCheckTimes removeAllObjects]; [self.identityProbeTimes removeAllObjects]; self.nextIdentityProbeAt = 0;
     self.identityResolver = [[HABLEIdentityResolver alloc] init]; self.identityScope = nil; self.identitiesReady = NO; self.identityPacketsDropped = 0;
     self.advertisementCount = self.forwardedCount = self.discoveryCallbacks = self.unknownRSSICount = 0;
     self.gattReads = self.gattWrites = self.gattNotifications = 0;
@@ -397,7 +399,6 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 - (uint64_t)addressForIdentifier:(NSString *)identifier {
     uint64_t address;
     if (HABLEParseAddress(self.mappings[identifier], &address)) return address;
-    if (HABLEParseAddress(self.advertisedAddresses[identifier], &address)) return address;
     if (HABLEParseAddress(self.automaticMappings[identifier][@"address"], &address)) return address;
     return HABLEAlias([self.installationID stringByAppendingString:identifier]);
 }
@@ -411,22 +412,11 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         NSString *oldest;
         for (NSString *candidate in self.observations) if (!self.sessions[@([self addressForIdentifier:candidate])] && (!oldest || [self.observations[candidate][@"last_seen"] doubleValue] < [self.observations[oldest][@"last_seen"] doubleValue])) oldest = candidate;
         if (!oldest) return;
-        [self.observations removeObjectForKey:oldest]; [self.peripherals removeObjectForKey:oldest]; [self.advertisedAddresses removeObjectForKey:oldest];
-        [self.automaticMappings removeObjectForKey:oldest]; [self.identityLabels removeObjectForKey:oldest]; [self.identityCheckTimes removeObjectForKey:oldest];
+        [self.observations removeObjectForKey:oldest]; [self.peripherals removeObjectForKey:oldest];
+        [self.automaticMappings removeObjectForKey:oldest]; [self.identityLabels removeObjectForKey:oldest]; [self.identityCheckTimes removeObjectForKey:oldest]; [self.identityResolver removeIdentifier:oldest];
     }
     NSData *manufacturer = advertisement[CBAdvertisementDataManufacturerDataKey];
     NSData *identityManufacturer = manufacturer.length ? manufacturer : [[NSData alloc] initWithBase64EncodedString:previous[@"identity_manufacturer_data"] ?: previous[@"manufacturer_data"] ?: @"" options:0];
-    if (manufacturer.length >= 8) {
-        const uint8_t *bytes = manufacturer.bytes;
-        // SwitchBot company 0x0969 includes the device address in the first
-        // six manufacturer payload bytes. This uses data the device publishes;
-        // it does not attempt to derive an address from Apple's opaque UUID.
-        // Verified against the same real devices observed by an ESPHome proxy.
-        if (bytes[0] == 0x69 && bytes[1] == 0x09) {
-            uint64_t embedded = 0; for (NSUInteger i = 2; i < 8; i++) embedded = (embedded << 8) | bytes[i];
-            if (embedded && embedded != 0xffffffffffffULL) self.advertisedAddresses[identifier] = HABLEAddressString(embedded);
-        }
-    }
     uint64_t address = [self addressForIdentifier:identifier];
     NSString *name = advertisement[CBAdvertisementDataLocalNameKey] ?: peripheral.name ?: @"Unnamed device";
     NSData *previousManufacturer = [[NSData alloc] initWithBase64EncodedString:previous[@"identity_manufacturer_data"] ?: previous[@"manufacturer_data"] ?: @"" options:0];
@@ -451,41 +441,36 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         NSMutableData *entry = [NSMutableData data]; HABLEPutString(entry, 1, [NSString stringWithFormat:@"%04x", bytes[0] | (bytes[1] << 8)]);
         HABLEPutBytes(entry, 3, [manufacturer subdataWithRange:NSMakeRange(2, manufacturer.length - 2)]); HABLEPutBytes(packet, 6, entry);
     }
-    self.observations[identifier] = [@{@"identifier":identifier, @"name":name, @"address":HABLEAddressString(address), @"identity":self.mappings[identifier] ? @"user_associated_mac" : self.advertisedAddresses[identifier] ? @"switchbot_advertised_mac" : @"local_alias", @"rssi":RSSI, @"connectable":advertisement[CBAdvertisementDataIsConnectable] ?: @NO, @"last_seen":@([[NSDate date] timeIntervalSince1970]), @"service_uuids":uuids, @"service_data":serviceDump, @"manufacturer_data":[manufacturer base64EncodedStringWithOptions:0] ?: @""} mutableCopy];
+    self.observations[identifier] = [@{@"identifier":identifier, @"name":name, @"address":HABLEAddressString(address), @"identity":self.mappings[identifier] ? @"user_associated_mac" : @"local_alias", @"rssi":RSSI, @"connectable":advertisement[CBAdvertisementDataIsConnectable] ?: @NO, @"last_seen":@([[NSDate date] timeIntervalSince1970]), @"service_uuids":uuids, @"service_data":serviceDump, @"manufacturer_data":[manufacturer base64EncodedStringWithOptions:0] ?: @""} mutableCopy];
     if (self.identityMetadata[identifier]) [self.observations[identifier] addEntriesFromDictionary:self.identityMetadata[identifier]];
+    self.observations[identifier][@"first_seen"] = previous[@"first_seen"] ?: @([[NSDate date] timeIntervalSince1970]);
     self.observations[identifier][@"identity_manufacturer_data"] = [identityManufacturer base64EncodedStringWithOptions:0] ?: @"";
     [self updateIdentityResolution];
+    [self.identityResolver recordObservation:self.observations[identifier] identifier:identifier];
     [self matchIdentifier:identifier];
     [self flushIdentityAdvertisements];
-    // Hold supported device identities briefly during the initial HA import,
-    // so a temporary local alias cannot immediately create a duplicate flow.
-    const uint8_t *manufacturerBytes = identityManufacturer.bytes;
-    BOOL blue = (identityManufacturer.length >= 2 && manufacturerBytes[0] == 0x31 && manufacturerBytes[1] == 0x01) ||
-        (identityManufacturer.length < 2 && [name rangeOfString:@"^B2[0-9A-F]{8}$" options:NSRegularExpressionSearch | NSCaseInsensitiveSearch].location != NSNotFound);
-    BOOL missingName = !name.length || [name isEqual:@"Unnamed device"];
-    BOOL trusted = self.mappings[identifier] || self.advertisedAddresses[identifier] || self.automaticMappings[identifier];
-    BOOL knownUnresolved = !trusted && (blue || [self.observations[identifier][@"serial_number"] length] >= 4) && self.identitiesReady && [self.identityResolver hasKnownIdentityForObservation:self.observations[identifier]];
-    if (!trusted && (blue || [self.observations[identifier][@"serial_number"] length] >= 4) &&
-        (!self.identitiesReady || (blue && (identityManufacturer.length < 2 || missingName)) || knownUnresolved)) {
+    BOOL trusted = self.mappings[identifier] || self.automaticMappings[identifier];
+    BOOL potentialKnown = self.identitiesReady && [self.identityResolver hasKnownIdentityForObservation:self.observations[identifier]];
+    if (!trusted && (!self.identitiesReady || potentialKnown)) {
         self.observations[identifier][@"identity_pending"] = @YES;
         if (self.pendingIdentityAdvertisements.count >= 256) { [self.pendingIdentityAdvertisements removeObjectAtIndex:0]; self.identityPacketsDropped++; }
-        [self.pendingIdentityAdvertisements addObject:@{@"identifier":identifier, @"packet":packet, @"queued_at":@(CFAbsoluteTimeGetCurrent()), @"requires_vendor":@(blue), @"requires_name":@(blue)}];
+        [self.pendingIdentityAdvertisements addObject:@{@"identifier":identifier, @"packet":packet, @"queued_at":@(CFAbsoluteTimeGetCurrent())}];
     } else [self forwardPacket:packet identifier:identifier];
 }
 - (void)forwardPacket:(NSData *)packet identifier:(NSString *)identifier {
     if (!self.observations[identifier]) return;
     NSMutableData *encoded = [packet mutableCopy]; HABLEPutInteger(encoded, 1, [self addressForIdentifier:identifier]);
-    HABLEPutInteger(encoded, 7, (self.mappings[identifier] || self.advertisedAddresses[identifier] || self.automaticMappings[identifier]) ? 0 : 1);
+    HABLEPutInteger(encoded, 7, (self.mappings[identifier] || self.automaticMappings[identifier]) ? 0 : 1);
     if ([self.server broadcastAdvertisement:encoded]) self.forwardedCount++;
 }
 - (void)matchIdentifier:(NSString *)identifier {
     NSMutableDictionary *observation = self.observations[identifier];
     if (!observation) return;
-    if (self.identitiesReady || self.mappings[identifier] || self.advertisedAddresses[identifier]) [observation removeObjectForKey:@"identity_pending"];
+    if (self.identitiesReady || self.mappings[identifier]) [observation removeObjectForKey:@"identity_pending"];
     CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
-    if (self.mappings[identifier] || self.advertisedAddresses[identifier]) {
+    if (self.mappings[identifier]) {
         if (self.identitiesReady && now >= [self.identityCheckTimes[identifier] doubleValue]) {
-            self.identityCheckTimes[identifier] = @(now + 30);
+            self.identityCheckTimes[identifier] = @(now + (self.automaticMappings[identifier] ? 10 : 2));
             NSString *address = HABLEAddressString([self addressForIdentifier:identifier]); NSDictionary *match = nil;
             for (NSDictionary *known in self.identityResolver.knownDevices) if ([known[@"address"] isEqual:address]) {
                 if (match) { match = nil; break; }
@@ -493,12 +478,13 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
             }
             if (match) self.identityLabels[identifier] = match; else [self.identityLabels removeObjectForKey:identifier];
         }
+        [self.identityResolver rememberConfirmedAddress:self.mappings[identifier] observation:observation];
         NSDictionary *known = self.identityLabels[identifier];
         if (known) { observation[@"ha_name"] = known[@"label"]; observation[@"identity_evidence"] = @"Address matches Home Assistant"; }
         return;
     }
     if (self.identitiesReady && now >= [self.identityCheckTimes[identifier] doubleValue]) {
-        self.identityCheckTimes[identifier] = @(now + 30);
+        self.identityCheckTimes[identifier] = @(now + (self.automaticMappings[identifier] ? 10 : 2));
         NSDictionary *match = [self.identityResolver automaticMatchForObservation:observation];
         uint64_t address = 0; BOOL available = match && HABLEParseAddress(match[@"address"], &address);
         if (self.sessions[@([self addressForIdentifier:identifier])] || (available && self.sessions[@(address)])) return;
@@ -512,6 +498,12 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     observation[@"identity"] = match ? @"ha_matched_mac" : @"local_alias";
     if (match) { observation[@"ha_name"] = match[@"label"]; observation[@"identity_evidence"] = match[@"evidence"]; }
 }
+- (void)identityConnectionDidChange:(NSNotification *)note { self.nextIdentityRefresh = 0; }
+- (void)identityConnectionDidDisconnect:(NSNotification *)note {
+    [self.identityResolver cancel]; self.identityGeneration++; self.importingIdentities = NO; self.nextIdentityRefresh = 0;
+}
+- (void)refreshIdentityInformation { self.nextIdentityRefresh = 0; [self updateIdentityResolution]; }
+- (NSArray *)identityCandidatesForObservation:(NSDictionary *)observation { return [self.identityResolver candidatesForObservation:observation]; }
 - (void)updateIdentityResolution {
     HAAuthManager *auth = [HAAuthManager sharedManager];
     NSString *scope = [NSString stringWithFormat:@"%@|%lu", auth.serverURL ?: @"", (unsigned long)auth.authenticationRevision];
@@ -523,9 +515,11 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         self.identitiesReady = NO; self.nextIdentityRefresh = 0;
     }
     if (!self.running) return;
+    if (self.identityResolver.needsRegistryRefresh) self.nextIdentityRefresh = 0;
+    [self.identityResolver maintainSynchronization];
     if (!self.importingIdentities && [HAConnectionManager sharedManager].connected && CFAbsoluteTimeGetCurrent() >= self.nextIdentityRefresh) {
         self.importingIdentities = YES; self.nextIdentityRefresh = CFAbsoluteTimeGetCurrent() + 300;
-        HABLEIdentityResolver *resolver = [[HABLEIdentityResolver alloc] init]; self.identityImportResolver = resolver;
+        HABLEIdentityResolver *resolver = self.identityResolver; self.identityImportResolver = resolver;
         NSUInteger generation = self.identityGeneration; __weak typeof(self) weakSelf = self;
         [resolver refreshExcludingSource:self.adapterAddress completion:^(NSError *error) {
             HABLEProxyManager *self = weakSelf; if (!self || self.identityGeneration != generation) return;
@@ -545,12 +539,9 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     for (NSDictionary *item in self.pendingIdentityAdvertisements) {
         NSString *identifier = item[@"identifier"];
         if (CFAbsoluteTimeGetCurrent() - [item[@"queued_at"] doubleValue] > 30) { self.identityPacketsDropped++; continue; }
-        NSData *vendor = [[NSData alloc] initWithBase64EncodedString:self.observations[identifier][@"identity_manufacturer_data"] ?: @"" options:0];
-        BOOL trusted = self.mappings[identifier] || self.advertisedAddresses[identifier] || self.automaticMappings[identifier];
+        BOOL trusted = self.mappings[identifier] || self.automaticMappings[identifier];
         BOOL unknown = ![self.identityResolver hasKnownIdentityForObservation:self.observations[identifier]];
-        NSString *name = self.observations[identifier][@"name"];
-        BOOL hasName = name.length && ![name isEqual:@"Unnamed device"];
-        if (trusted || (self.identitiesReady && unknown && (![item[@"requires_vendor"] boolValue] || vendor.length >= 2) && (![item[@"requires_name"] boolValue] || hasName))) [self forwardPacket:item[@"packet"] identifier:identifier];
+        if (trusted || (self.identitiesReady && unknown)) [self forwardPacket:item[@"packet"] identifier:identifier];
         else [waiting addObject:item];
     }
     self.pendingIdentityAdvertisements = waiting;
@@ -649,7 +640,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     [self.automaticMappings removeObjectForKey:identifier]; [self.identityLabels removeObjectForKey:identifier]; [self.identityCheckTimes removeObjectForKey:identifier];
     [[NSUserDefaults standardUserDefaults] setObject:self.mappings forKey:HABLEMappingKey];
     self.observations[identifier][@"address"] = HABLEAddressString([self addressForIdentifier:identifier]);
-    self.observations[identifier][@"identity"] = self.mappings[identifier] ? @"user_associated_mac" : self.advertisedAddresses[identifier] ? @"switchbot_advertised_mac" : @"local_alias";
+    self.observations[identifier][@"identity"] = self.mappings[identifier] ? @"user_associated_mac" : @"local_alias";
     [self flushIdentityAdvertisements];
     [self changed]; return YES;
 }
@@ -669,11 +660,29 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         [self updateRadio];
         [self updateAutomaticRegistration];
         [self updateIdentityResolution];
+        [self probePendingIdentity];
         [self flushIdentityAdvertisements];
         if (self.running) self.status = self.usingServiceFilters && !self.scanServiceUUIDs.count ? @"Import or enter Bluetooth service UUIDs to scan" : [NSString stringWithFormat:@"%@ · %lu client(s) · %lu devices · %lu connections", self.usingServiceFilters ? @"Scanning known services" : @"Scanning", (unsigned long)self.server.authenticatedClients, (unsigned long)self.observations.count, (unsigned long)self.sessions.count];
         [self changed];
     }
     if (!(self.tickCount % 20)) [self writeDiagnostics];
+}
+- (void)probePendingIdentity {
+    NSTimeInterval now = NSDate.date.timeIntervalSince1970;
+    if (!self.identitiesReady || now < self.nextIdentityProbeAt || self.sessions.count >= HABLESlots) return;
+    for (HABLEPeripheralSession *session in self.sessions.allValues) if (session.identityCompletion) return;
+    for (NSString *identifier in self.observations) {
+        NSDictionary *observation = self.observations[identifier];
+        if (self.mappings[identifier] || self.automaticMappings[identifier] || ![observation[@"connectable"] boolValue] || now-[observation[@"last_seen"] doubleValue]>15 || now-[observation[@"first_seen"] doubleValue]<60 || now-[self.identityProbeTimes[identifier] doubleValue]<3600 || ![self.identityResolver hasKnownIdentityForObservation:observation]) continue;
+        self.identityProbeTimes[identifier] = @(now); self.nextIdentityProbeAt = now + 60;
+        __weak typeof(self) weakSelf = self;
+        [self inspectIdentifier:identifier completion:^(NSDictionary *identity, NSError *error) {
+            HABLEProxyManager *self = weakSelf; if (!self) return;
+            [self.identityCheckTimes removeObjectForKey:identifier];
+            if (identity) [self matchIdentifier:identifier];
+        }];
+        return;
+    }
 }
 - (void)writeDiagnostics {
     NSData *data = [NSJSONSerialization dataWithJSONObject:[self diagnostics] options:NSJSONWritingPrettyPrinted error:nil];

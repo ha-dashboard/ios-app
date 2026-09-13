@@ -15,24 +15,24 @@
 - (void)viewDidLoad {
     [super viewDidLoad]; self.title = @"Match with Home Assistant";
     self.tableView.rowHeight = UITableViewAutomaticDimension; self.tableView.estimatedRowHeight = 70;
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(modelChanged:) name:HABLEProxyDidChangeNotification object:nil];
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRefresh target:self action:@selector(refresh:)]; [self refresh:nil];
 }
-- (void)viewWillDisappear:(BOOL)animated { [super viewWillDisappear:animated]; [self.resolver cancel]; }
-- (void)refresh:(id)sender {
-    self.navigationItem.rightBarButtonItem.enabled = NO;
-    __weak typeof(self) weakSelf = self;
-    [self.resolver refreshExcludingSource:[HABLEProxyManager sharedManager].adapterAddress completion:^(NSError *error) {
-        HABLEIdentityViewController *self = weakSelf; if (!self) return;
-        self.navigationItem.rightBarButtonItem.enabled = YES;
-        self.candidates = [self.resolver candidatesForObservation:self.observation]; [self.tableView reloadData];
-    }];
+- (void)dealloc { [[NSNotificationCenter defaultCenter] removeObserver:self]; [self.resolver cancel]; }
+- (void)modelChanged:(NSNotification *)note {
+    for (NSDictionary *device in [HABLEProxyManager sharedManager].devices) if ([device[@"identifier"] isEqual:self.observation[@"identifier"]]) { self.observation = device; break; }
+    self.candidates = [[HABLEProxyManager sharedManager] identityCandidatesForObservation:self.observation];
     [self.tableView reloadData];
+}
+- (void)refresh:(id)sender {
+    [[HABLEProxyManager sharedManager] refreshIdentityInformation];
+    [self modelChanged:nil];
 }
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 2; }
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return section == 0 ? 3 : self.candidates.count; }
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section { return section == 0 ? self.observation[@"name"] : @"Known Home Assistant devices"; }
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-    return section == 0 ? self.resolver.status : @"The app compares broadcasts received by other HA scanners with this device. Identical readings, names and services can belong to multiple devices. Check the evidence and confirm the physical device before linking. Apple identifiers are local to each iPad, so an association must be established on each proxy.";
+    return section == 0 ? @"HA identities and peer observations synchronize automatically." : @"HA identities, confirmed associations and fresh peer evidence synchronize automatically. Identical readings, names and services can belong to multiple devices. Ambiguous matches stay pending; confirm the physical device before creating an association.";
 }
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
     UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:nil]; cell.textLabel.numberOfLines = cell.detailTextLabel.numberOfLines = 0;
@@ -67,7 +67,7 @@
         [[HABLEProxyManager sharedManager] inspectIdentifier:self.observation[@"identifier"] completion:^(NSDictionary *identity, NSError *error) {
             HABLEIdentityViewController *self = weakSelf; if (!self) return;
             self.identifying = NO;
-            if (identity) { NSMutableDictionary *updated = [self.observation mutableCopy]; [updated addEntriesFromDictionary:identity]; self.observation = updated; self.candidates = [self.resolver candidatesForObservation:updated]; }
+            if (identity) { NSMutableDictionary *updated = [self.observation mutableCopy]; [updated addEntriesFromDictionary:identity]; self.observation = updated; self.candidates = [[HABLEProxyManager sharedManager] identityCandidatesForObservation:updated]; }
             [self.tableView reloadData];
             if (error) { UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Identification unavailable" message:error.localizedDescription preferredStyle:UIAlertControllerStyleAlert]; [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]]; [self presentViewController:alert animated:YES completion:nil]; }
         }];
