@@ -100,11 +100,14 @@ administrator API (`esphome/get_encryption_key`), keeping it in memory:
 # HA_SERVER and HA_TOKEN must already be supplied to the environment.
 build/ble-proxy-venv/bin/python scripts/ble-proxy-gatt-probe.py \
   --host PROXY_IP --address FIXTURE_ADDRESS --ha-entry PROXY_ENTRY_ID \
-  --fixture FIXTURE_RECEIPT.json --output RESULT.json --stress-reconnect 3
+  --fixture FIXTURE_RECEIPT.json --output RESULT.json --stress-reconnect 3 \
+  --check-client-isolation
 ```
 
 Use it only with the controlled peripheral from `scripts/ble-test-peripheral.m`.
 The driver checks its service UUID and marker before sending a test write.
+The optional client-isolation check verifies prompt rejection of a second
+client and confirms that the original connection remains readable.
 
 Native transport checks:
 

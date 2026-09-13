@@ -2,10 +2,57 @@
 #import "HABLEProto.h"
 #import "HABLEProxyManager.h"
 #import "HABLEProxyRegistration.h"
+#import "HABLEAPIServer.h"
+
+@interface HABLEProxyManager (ProtocolTestAccess)
+- (void)deviceRequest:(NSDictionary *)fields connection:(HABLEAPIConnection *)connection;
+@end
+
+@interface HABLECapturingServer : HABLEAPIServer
+@property (nonatomic) NSUInteger responseType;
+@property (nonatomic, strong) NSData *responseData;
+@property (nonatomic, strong) HABLEAPIConnection *recipient;
+@end
+@implementation HABLECapturingServer
+- (void)sendType:(NSUInteger)type data:(NSData *)data to:(HABLEAPIConnection *)connection {
+    self.responseType = type; self.responseData = data; self.recipient = connection;
+}
+@end
 
 @interface HABLEProxyTests : XCTestCase
 @end
 @implementation HABLEProxyTests
+- (void)testDisconnectOfUnknownDeviceAcknowledgesConnectionState {
+    HABLEProxyManager *manager = [[HABLEProxyManager alloc] init];
+    HABLECapturingServer *server = [[HABLECapturingServer alloc] initWithName:@"test" address:@"02:00:00:00:00:01" key:[NSMutableData dataWithLength:32]];
+    [manager setValue:server forKey:@"server"];
+    HABLEAPIConnection *client = [[HABLEAPIConnection alloc] init];
+    [manager deviceRequest:@{@1:@[@0x020000000099ULL], @2:@[@1]} connection:client];
+    XCTAssertEqual(server.responseType, (NSUInteger)69);
+    XCTAssertEqual(server.recipient, client);
+    NSDictionary *response = HABLEDecode(server.responseData);
+    XCTAssertEqual(HABLEInteger(response, 1), 0x020000000099ULL);
+    XCTAssertEqual(HABLEInteger(response, 2), (uint64_t)0);
+    XCTAssertEqual(HABLEInteger(response, 4), (uint64_t)0);
+}
+- (void)testForeignClientCannotClaimOrDisconnectAnOwnedDevice {
+    HABLEProxyManager *manager = [[HABLEProxyManager alloc] init];
+    HABLECapturingServer *server = [[HABLECapturingServer alloc] initWithName:@"test" address:@"02:00:00:00:00:01" key:[NSMutableData dataWithLength:32]];
+    [manager setValue:server forKey:@"server"];
+    HABLEAPIConnection *owner = [[HABLEAPIConnection alloc] init], *other = [[HABLEAPIConnection alloc] init];
+    id session = [[NSClassFromString(@"HABLEPeripheralSession") alloc] init];
+    NSNumber *address = @0x020000000099ULL;
+    [session setValue:address forKey:@"address"]; [session setValue:owner forKey:@"owner"];
+    NSMutableDictionary *sessions = [manager valueForKey:@"sessions"]; sessions[address] = session;
+    for (NSNumber *operation in @[@5, @1]) {
+        server.responseType = 0;
+        [manager deviceRequest:@{@1:@[address], @2:@[operation]} connection:other];
+        XCTAssertEqual(server.responseType, (NSUInteger)69);
+        XCTAssertEqual(server.recipient, other);
+        XCTAssertNotEqual(HABLEInteger(HABLEDecode(server.responseData), 4), (uint64_t)0);
+        XCTAssertEqual(sessions[address], session);
+    }
+}
 - (void)testExistingHomeAssistantEntryUpdatesAreSuccessful {
     XCTAssertTrue([HABLEProxyRegistration isSuccessfulExistingEntryReason:@"already_configured"]);
     XCTAssertTrue([HABLEProxyRegistration isSuccessfulExistingEntryReason:@"already_configured_updates"]);

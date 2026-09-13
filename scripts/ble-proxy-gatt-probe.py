@@ -87,6 +87,34 @@ async def probe(args, key):
         cached = bytes(await client.bluetooth_gatt_read(address, handle))
         assert cached == payload, "Cached handle changed across the physical reconnect"
         receipt["checks"].append({"cached_handle_reconnect": "passed", "handle": handle})
+        if args.check_client_isolation:
+            other = APIClient(args.host, 6053, noise_psk=key)
+            other_states = []
+            try:
+                await other.connect()
+                started = time.monotonic()
+                await other.bluetooth_device_disconnect(0x020000000099, timeout=2)
+                receipt["checks"].append({"unknown_disconnect": "acknowledged", "seconds": time.monotonic() - started})
+                started = time.monotonic()
+                try:
+                    cancel_other = await other.bluetooth_device_connect(
+                        address, lambda up, mtu, error: other_states.append({"connected": up, "error": error}),
+                        timeout=2, disconnect_timeout=2, feature_flags=flags, has_cache=True, address_type=1,
+                    )
+                except Exception:
+                    # A connection-state rejection must arrive; a timeout or
+                    # transport exception alone does not establish isolation.
+                    assert other_states and not other_states[-1]["connected"] and other_states[-1]["error"], "No explicit rejection of the second client"
+                else:
+                    cancel_other()
+                    raise AssertionError("A second client claimed the owned connection")
+                receipt["checks"].append({"foreign_connect": "rejected", "seconds": time.monotonic() - started, "states": other_states})
+                await other.bluetooth_device_disconnect(address, timeout=2)
+                assert connected, "The foreign client disconnected the original owner"
+                assert bytes(await client.bluetooth_gatt_read(address, handle)) == payload, "The original owner's GATT connection was disrupted"
+                receipt["checks"].append({"foreign_disconnect": "owner_still_connected_and_readable"})
+            finally:
+                await other.disconnect(force=True)
         for iteration in range(args.stress_reconnect):
             for cancel in cancels:
                 cancel()
@@ -127,6 +155,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", required=True)
     parser.add_argument("--ha-entry", help="Read this proxy's key using HA_SERVER and HA_TOKEN, instead of stdin")
     parser.add_argument("--stress-reconnect", type=int, default=0)
+    parser.add_argument("--check-client-isolation", action="store_true", help="Check prompt failure responses and preserve a connection owned by another client")
     options = parser.parse_args()
 
     async def main():

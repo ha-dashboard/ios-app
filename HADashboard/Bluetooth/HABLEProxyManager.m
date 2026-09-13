@@ -403,9 +403,25 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 - (void)deviceRequest:(NSDictionary *)fields connection:(HABLEAPIConnection *)connection {
     NSNumber *address = @(HABLEInteger(fields, 1)); NSUInteger type = (NSUInteger)HABLEInteger(fields, 2);
     HABLEPeripheralSession *session = self.sessions[address];
-    if (type == 1) { if (session.owner == connection) [self.central cancelPeripheralConnection:session.peripheral]; return; }
+    if (type == 1) {
+        if (session && session.owner == connection) [self.central cancelPeripheralConnection:session.peripheral];
+        else {
+            // A disconnect is idempotent for this client. Do not cancel another
+            // client's session, but always complete this client's state waiter.
+            HABLEPeripheralSession *response = [[HABLEPeripheralSession alloc] init];
+            response.address = address; response.owner = connection;
+            [self connectionResponse:response connected:NO error:session ? 132 : 0];
+        }
+        return;
+    }
     if (type != 0 && type != 4 && type != 5) { [self gattError:address handle:0 error:6 connection:connection]; return; }
-    if (session || self.sessions.count >= HABLESlots) { [self gattError:address handle:0 error:132 connection:connection]; return; }
+    if (session || self.sessions.count >= HABLESlots) {
+        // aioesphomeapi subscribes to connection responses (69), not GATT
+        // errors (82), while connecting. Complete failures through that API.
+        HABLEPeripheralSession *response = [[HABLEPeripheralSession alloc] init];
+        response.address = address; response.owner = connection;
+        [self connectionResponse:response connected:NO error:132]; return;
+    }
     CBPeripheral *peripheral;
     for (NSString *identifier in self.peripherals) if ([self addressForIdentifier:identifier] == address.unsignedLongLongValue) { peripheral = self.peripherals[identifier]; break; }
     session = [[HABLEPeripheralSession alloc] init]; session.address = address; session.owner = connection; session.peripheral = peripheral;
