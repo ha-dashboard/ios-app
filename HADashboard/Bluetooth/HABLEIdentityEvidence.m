@@ -23,6 +23,20 @@ static NSString *HABLELittleEndianUUID(const uint8_t *bytes, NSUInteger length) 
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableArray<NSDictionary *> *> *remotes;
 @end
 @implementation HABLEIdentityEvidence
++ (NSDictionary *)mergeFingerprintReads:(NSDictionary *)reads previous:(NSDictionary *)previous session:(NSString *)session atTime:(NSTimeInterval)time {
+    NSMutableDictionary *result=[previous mutableCopy] ?: NSMutableDictionary.dictionary;
+    for(NSString *path in reads) {
+        NSDictionary *read=reads[path],*old=previous[path];
+        if(![read[@"sha256"] isKindOfClass:NSString.class] || ![read[@"length"] unsignedIntegerValue])continue;
+        if([old[@"session"] isEqual:session])continue;
+        BOOL same=[old[@"sha256"] isEqual:read[@"sha256"]] && [old[@"length"] isEqual:read[@"length"]];
+        NSUInteger sessions=old ? MIN(255,[old[@"sessions"] unsignedIntegerValue]+1) : 1;
+        BOOL varying=[old[@"varying"] boolValue] || (old && !same);
+        NSMutableDictionary *value=[read mutableCopy];value[@"session"]=session;value[@"sessions"]=@(sessions);value[@"varying"]=@(varying);value[@"stable_across_sessions"]=@(same && sessions>=2 && !varying);value[@"last_seen"]=@(time);
+        if(result.count<64 || result[path])result[path]=value;
+    }
+    return result;
+}
 - (instancetype)init { if ((self = [super init])) { _locals = [NSMutableDictionary dictionary]; _remotes = [NSMutableDictionary dictionary]; } return self; }
 + (NSArray *)canonicalServices:(NSArray *)values {
     NSMutableSet *services = [NSMutableSet set];

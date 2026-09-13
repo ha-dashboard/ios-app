@@ -44,6 +44,20 @@
 @interface HABLEIdentityEvidenceTests : XCTestCase
 @end
 @implementation HABLEIdentityEvidenceTests
+- (void)testOpaqueFingerprintsRequireSeparateSessionsAndRememberVariation {
+    NSDictionary *reads=@{@"service/characteristic":@{@"sha256":@"hash-a",@"length":@16}};
+    NSDictionary *first=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:@{} session:@"one" atTime:1];
+    XCTAssertFalse([first[@"service/characteristic"][@"stable_across_sessions"] boolValue]);
+    NSDictionary *replay=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:first session:@"one" atTime:2];
+    XCTAssertEqualObjects(replay,first);
+    NSDictionary *stable=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:first session:@"two" atTime:3];
+    XCTAssertTrue([stable[@"service/characteristic"][@"stable_across_sessions"] boolValue]);
+    NSDictionary *changed=[HABLEIdentityEvidence mergeFingerprintReads:@{@"service/characteristic":@{@"sha256":@"hash-b",@"length":@16}} previous:stable session:@"three" atTime:4];
+    XCTAssertTrue([changed[@"service/characteristic"][@"varying"] boolValue]);
+    NSDictionary *again=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:changed session:@"four" atTime:5];
+    XCTAssertFalse([again[@"service/characteristic"][@"stable_across_sessions"] boolValue]);
+    XCTAssertEqualObjects([HABLEIdentityEvidence mergeFingerprintReads:@{} previous:again session:@"five" atTime:6],again);
+}
 - (void)testAutomaticImportStartsPersistentSubscriptionsAndLoadsHADiscoveryMetadata {
     HABLETransportTestResolver *resolver=[HABLETransportTestResolver new];resolver.fakeConnection=[HABLEFakeIdentityConnection new];resolver.currentScope=YES;
     XCTestExpectation *done=[self expectationWithDescription:@"automatic import"];

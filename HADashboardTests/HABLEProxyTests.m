@@ -50,6 +50,9 @@ static NSUInteger HABLERejectedRequestCount;
 - (void)updateAutomaticRegistrationWithIntegrationEnabled:(BOOL)enabled connected:(BOOL)connected context:(NSString *)context;
 - (void)registerWithHomeAssistantAutomatically:(BOOL)automatic;
 - (void)matchIdentifier:(NSString *)identifier;
+- (void)finishOperation:(id)session error:(NSUInteger)error;
+- (void)discoveryPartDone:(id)session;
+- (NSTimeInterval)identityProbeIntervalForObservation:(NSDictionary *)observation;
 - (void)updateIdentityResolution;
 - (void)flushIdentityAdvertisements;
 - (void)centralManager:(CBCentralManager *)central didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:(NSDictionary *)advertisement RSSI:(NSNumber *)RSSI;
@@ -65,8 +68,16 @@ static NSUInteger HABLERejectedRequestCount;
 @interface HABLEObservedPeripheral : NSObject
 @property (nonatomic, strong) NSUUID *identifier;
 @property (nonatomic, copy) NSString *name;
+@property (nonatomic, copy) NSArray *services;
 @end
 @implementation HABLEObservedPeripheral
+@end
+
+@interface HABLEFingerprintPolicyProxy : HABLEProxyManager
+@property NSUInteger pumps;
+@end
+@implementation HABLEFingerprintPolicyProxy
+- (void)pump:(id)session { self.pumps++; }
 @end
 
 @interface HABLERegistrationPolicyProxy : HABLEProxyManager
@@ -112,6 +123,45 @@ static NSUInteger HABLERejectedRequestCount;
 @interface HABLEProxyTests : XCTestCase
 @end
 @implementation HABLEProxyTests
+- (void)testFailedFingerprintReadPreservesRemainingReads {
+    HABLEFingerprintPolicyProxy *manager=[HABLEFingerprintPolicyProxy new];id session=[NSClassFromString(@"HABLEPeripheralSession") new];
+    [session setValue:@{@"type":@73,@"fields":@{@2:@[@1]}} forKey:@"pending"];
+    [session setValue:[@[@{@"type":@73}] mutableCopy] forKey:@"operations"];
+    [session setValue:[@{@1:@"path"} mutableCopy] forKey:@"identityReadPaths"];
+    [session setValue:NSMutableDictionary.dictionary forKey:@"identityValues"];
+    [session setValue:[^(NSDictionary *v,NSError *e){} copy] forKey:@"identityCompletion"];
+    [manager finishOperation:session error:14];
+    XCTAssertNil([session valueForKey:@"pending"]);XCTAssertEqual(manager.pumps,1u);
+    XCTAssertEqual([[session valueForKey:@"operations"] count],1u);
+    XCTAssertEqualObjects(([session valueForKey:@"identityValues"][@"gatt_read_errors"][@"path"]),@14);
+}
+- (void)testFingerprintVerificationRevisitIsBounded {
+    HABLEProxyManager *manager=[HABLEProxyManager new];
+    NSDictionary *fingerprints=@{@"path":@{@"sessions":@1}};
+    XCTAssertEqual(([manager identityProbeIntervalForObservation:@{@"gatt_fingerprints":fingerprints,@"gatt_probe_attempts":@1}]),60);
+    XCTAssertEqual(([manager identityProbeIntervalForObservation:@{@"gatt_fingerprints":fingerprints,@"gatt_probe_attempts":@2}]),3600);
+}
+- (void)testFingerprintDiscoveryOnlyQueuesBoundedReadableCharacteristics {
+    HABLEFingerprintPolicyProxy *manager=[HABLEFingerprintPolicyProxy new];id session=[NSClassFromString(@"HABLEPeripheralSession") new];
+    HABLEObservedPeripheral *peripheral=[HABLEObservedPeripheral new];peripheral.identifier=NSUUID.UUID;
+    CBMutableService *service=[[CBMutableService alloc] initWithType:[CBUUID UUIDWithString:@"1234"] primary:YES];NSMutableArray *chars=NSMutableArray.array;
+    for(NSUInteger i=0;i<20;i++)[chars addObject:[[CBMutableCharacteristic alloc] initWithType:[CBUUID UUIDWithString:[NSString stringWithFormat:@"%04X",(unsigned)(0xC300+i)]] properties:CBCharacteristicPropertyRead value:nil permissions:CBAttributePermissionsReadable]];
+    [chars addObject:[[CBMutableCharacteristic alloc] initWithType:[CBUUID UUIDWithString:@"A100"] properties:CBCharacteristicPropertyWrite value:nil permissions:CBAttributePermissionsWriteable]];
+    service.characteristics=chars;peripheral.services=@[service];
+    [session setValue:peripheral forKey:@"peripheral"];[session setValue:@1 forKey:@"address"];[session setValue:@1 forKey:@"discoveryWork"];[session setValue:@1 forKey:@"nextHandle"];[session setValue:@YES forKey:@"preparingConnection"];
+    for(NSString *key in @[@"handles",@"handleIDs",@"identityValues",@"identityFields",@"identityReadPaths"])[session setValue:NSMutableDictionary.dictionary forKey:key];
+    [session setValue:NSMutableArray.array forKey:@"operations"];[session setValue:[^(NSDictionary *v,NSError *e){} copy] forKey:@"identityCompletion"];
+    id saved=[NSUserDefaults.standardUserDefaults objectForKey:@"ha_ble_proxy_handle_tables"];
+    [manager discoveryPartDone:session];
+    XCTAssertEqual([[session valueForKey:@"operations"] count],16u);
+    XCTAssertEqualObjects(([session valueForKey:@"identityValues"][@"gatt_readable_characteristic_count"]),@20);
+    XCTAssertEqualObjects(([session valueForKey:@"identityValues"][@"gatt_reads_truncated"]),@YES);
+    for(NSDictionary *operation in [session valueForKey:@"operations"]) {
+        XCTAssertEqualObjects(operation[@"type"],@73);
+        CBCharacteristic *c=[session valueForKey:@"handles"][@(HABLEInteger(operation[@"fields"],2))];XCTAssertTrue((c.properties & CBCharacteristicPropertyRead)!=0);
+    }
+    if(saved)[NSUserDefaults.standardUserDefaults setObject:saved forKey:@"ha_ble_proxy_handle_tables"];else[NSUserDefaults.standardUserDefaults removeObjectForKey:@"ha_ble_proxy_handle_tables"];
+}
 - (void)testDiscoveryBurstDoesNotRescanThePendingRegistryBeforeImport {
     HABLEDiscoveryPolicyProxy *proxy=[HABLEDiscoveryPolicyProxy new];HABLECountingResolver *resolver=[HABLECountingResolver new];
     [proxy setValue:resolver forKey:@"identityResolver"];[proxy setValue:@YES forKey:@"running"];

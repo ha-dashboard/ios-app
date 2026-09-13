@@ -1,3 +1,4 @@
+#import "HABLEIdentityEvidence.h"
 #import "HABLEProxyManager.h"
 #import "HABLEAPIServer.h"
 #import "HABLEProto.h"
@@ -40,6 +41,7 @@ static const NSUInteger HABLESlots = 3;
 @property (nonatomic, copy) void (^identityCompletion)(NSDictionary *, NSError *);
 @property (nonatomic, strong) NSMutableDictionary *identityValues;
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSString *> *identityFields;
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSString *> *identityReadPaths;
 @end
 @implementation HABLEPeripheralSession
 @end
@@ -569,13 +571,17 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     [self deviceRequest:@{@1:@[address], @2:@[@5]} connection:nil];
     HABLEPeripheralSession *session = self.sessions[address];
     if (!session) { completion(nil, [NSError errorWithDomain:@"HABLEIdentity" code:2 userInfo:@{NSLocalizedDescriptionKey:@"Could not start the identification connection."}]); return; }
-    session.identityCompletion = completion; session.identityValues = [NSMutableDictionary dictionary]; session.identityFields = [NSMutableDictionary dictionary];
+    session.identityCompletion = completion; session.identityValues = [NSMutableDictionary dictionary]; session.identityFields = [NSMutableDictionary dictionary]; session.identityReadPaths = NSMutableDictionary.dictionary; session.identityValues[@"gatt_probe_session"] = NSUUID.UUID.UUIDString;
 }
 - (void)finishIdentity:(HABLEPeripheralSession *)session error:(NSString *)message {
     void (^completion)(NSDictionary *, NSError *) = session.identityCompletion;
     session.identityCompletion = nil;
     if (!completion) return;
     session.identityValues[@"identification_read_at"] = @([[NSDate date] timeIntervalSince1970]);
+    NSString *peripheralID=session.peripheral.identifier.UUIDString;
+    session.identityValues[@"gatt_probe_attempts"]=@(MIN(255,[self.identityMetadata[peripheralID][@"gatt_probe_attempts"] unsignedIntegerValue]+1));
+    session.identityValues[@"gatt_fingerprints"]=[HABLEIdentityEvidence mergeFingerprintReads:session.identityValues[@"gatt_fingerprint_reads"] ?: @{} previous:self.identityMetadata[peripheralID][@"gatt_fingerprints"] session:session.identityValues[@"gatt_probe_session"] atTime:NSDate.date.timeIntervalSince1970];
+    [session.identityValues removeObjectForKey:@"gatt_fingerprint_reads"];
     NSDictionary *identity = [session.identityValues copy];
     if (!message) {
         NSString *identifier = session.peripheral.identifier.UUIDString;
@@ -679,13 +685,18 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     }
     if (!(self.tickCount % 20)) [self writeDiagnostics];
 }
+- (NSTimeInterval)identityProbeIntervalForObservation:(NSDictionary *)observation {
+    if([observation[@"gatt_probe_attempts"] unsignedIntegerValue]>=2)return 3600;
+    for(NSDictionary *value in [observation[@"gatt_fingerprints"] allValues])if([value[@"sessions"] unsignedIntegerValue]==1)return 60;
+    return 3600;
+}
 - (void)probePendingIdentity {
     NSTimeInterval now = NSDate.date.timeIntervalSince1970;
     if (!self.identitiesReady || now < self.nextIdentityProbeAt || self.sessions.count >= HABLESlots) return;
     for (HABLEPeripheralSession *session in self.sessions.allValues) if (session.identityCompletion) return;
     for (NSString *identifier in self.observations) {
         NSDictionary *observation = self.observations[identifier];
-        if (self.mappings[identifier] || self.automaticMappings[identifier] || ![observation[@"connectable"] boolValue] || now-[observation[@"last_seen"] doubleValue]>15 || now-[observation[@"first_seen"] doubleValue]<60 || now-[self.identityProbeTimes[identifier] doubleValue]<3600 || ![self.identityResolver hasKnownIdentityForObservation:observation]) continue;
+        if (self.mappings[identifier] || self.automaticMappings[identifier] || ![observation[@"connectable"] boolValue] || now-[observation[@"last_seen"] doubleValue]>15 || now-[observation[@"first_seen"] doubleValue]<60 || now-[self.identityProbeTimes[identifier] doubleValue]<[self identityProbeIntervalForObservation:observation] || ![self.identityResolver hasKnownIdentityForObservation:observation]) continue;
         self.identityProbeTimes[identifier] = @(now); self.nextIdentityProbeAt = now + 60;
         __weak typeof(self) weakSelf = self;
         [self inspectIdentifier:identifier completion:^(NSDictionary *identity, NSError *error) {
@@ -845,6 +856,11 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 }
 - (void)finishOperation:(HABLEPeripheralSession *)session error:(NSUInteger)error {
     if (!session.pending) return;
+    if(error && session.identityCompletion && [session.pending[@"type"] integerValue]==73) {
+        NSNumber *handle=@(HABLEInteger(session.pending[@"fields"],2));NSString *path=session.identityReadPaths[handle];
+        NSMutableDictionary *errors=session.identityValues[@"gatt_read_errors"];if(!errors){errors=NSMutableDictionary.dictionary;session.identityValues[@"gatt_read_errors"]=errors;}if(path)errors[path]=@(error);
+        session.pending=nil;[self pump:session];return;
+    }
     if (error && session.identityCompletion) {
         session.pending = nil; session.discovering = NO; [session.operations removeAllObjects];
         [self finishIdentity:session error:@"The device could not provide its identifying characteristics."]; return;
@@ -921,16 +937,26 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         NSMutableArray *serviceUUIDs = [NSMutableArray array], *characteristicUUIDs = [NSMutableArray array];
         NSDictionary *fields = @{@"2A25":@"serial_number", @"2A24":@"model_number", @"2A29":@"manufacturer_name", @"2A23":@"system_id"};
         for (CBService *service in session.peripheral.services) [serviceUUIDs addObject:HABLEAdvertisementUUID(service.UUID)];
+        NSMutableArray *readCandidates=NSMutableArray.array;
         for (NSNumber *handle in session.handles) {
             id attribute = session.handles[handle]; if (![attribute isKindOfClass:[CBCharacteristic class]]) continue;
             CBCharacteristic *characteristic = attribute;
             [characteristicUUIDs addObject:HABLEAdvertisementUUID(characteristic.UUID)];
             NSString *field = fields[characteristic.UUID.UUIDString.uppercaseString];
-            if (field && [characteristic.service.UUID isEqual:[CBUUID UUIDWithString:@"180A"]] && (characteristic.properties & CBCharacteristicPropertyRead)) {
-                session.identityFields[handle] = field;
-                [session.operations addObject:@{@"type":@73, @"fields":@{@1:@[session.address], @2:@[handle]}}];
+            if(characteristic.properties & CBCharacteristicPropertyRead) {
+                BOOL standard=field && [characteristic.service.UUID isEqual:[CBUUID UUIDWithString:@"180A"]];
+                if(standard)session.identityFields[handle]=field;
+                NSString *path=[session.handleIDs allKeysForObject:handle].firstObject;
+                if(path)[readCandidates addObject:@{@"handle":handle,@"path":path,@"priority":@(standard ? ([field isEqual:@"serial_number"] ? 0 : [field isEqual:@"system_id"] ? 1 : 2) : 3)}];
             }
         }
+        [readCandidates sortUsingComparator:^NSComparisonResult(NSDictionary *a,NSDictionary *b){NSComparisonResult order=[a[@"priority"] compare:b[@"priority"]];return order==NSOrderedSame ? [a[@"path"] compare:b[@"path"]] : order;}];
+        for(NSDictionary *candidate in readCandidates) {
+            if(session.identityReadPaths.count>=16)break;NSNumber *handle=candidate[@"handle"];session.identityReadPaths[handle]=candidate[@"path"];
+            [session.operations addObject:@{@"type":@73,@"fields":@{@1:@[session.address],@2:@[handle]}}];
+        }
+        session.identityValues[@"gatt_readable_characteristic_count"]=@(readCandidates.count);
+        session.identityValues[@"gatt_reads_truncated"]=@(readCandidates.count>session.identityReadPaths.count);
         session.identityValues[@"gatt_service_uuids"] = serviceUUIDs;
         session.identityValues[@"gatt_characteristic_uuids"] = characteristicUUIDs;
         [self pump:session]; return;
@@ -968,6 +994,18 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
             NSString *text = [field isEqual:@"system_id"] ? nil : [[NSString alloc] initWithData:value encoding:NSUTF8StringEncoding];
             if (!text) { NSMutableString *hex = [NSMutableString string]; const uint8_t *bytes = value.bytes; for (NSUInteger i = 0; i < value.length; i++) [hex appendFormat:@"%02X", bytes[i]]; text = hex; }
             session.identityValues[field] = [text stringByTrimmingCharactersInSet:[NSCharacterSet controlCharacterSet]];
+        }
+        NSString *path=session.identityReadPaths[handle];
+        if(path && value.length && value.length<=512) {
+            uint8_t hash[CC_SHA256_DIGEST_LENGTH];CC_SHA256(value.bytes,(CC_LONG)value.length,hash);NSMutableString *hex=NSMutableString.string;
+            for(NSUInteger i=0;i<sizeof(hash);i++)[hex appendFormat:@"%02x",hash[i]];
+            NSMutableDictionary *reads=session.identityValues[@"gatt_fingerprint_reads"];if(!reads){reads=NSMutableDictionary.dictionary;session.identityValues[@"gatt_fingerprint_reads"]=reads;}
+            reads[path]=@{@"sha256":hex,@"length":@(value.length)};
+        }
+        if(field && self.identitiesReady) {
+            NSMutableDictionary *candidate=[self.observations[peripheral.identifier.UUIDString] mutableCopy] ?: NSMutableDictionary.dictionary;
+            [candidate addEntriesFromDictionary:session.identityValues];
+            if([self.identityResolver automaticMatchForObservation:candidate])[session.operations removeAllObjects];
         }
         self.gattReads++; [self finishOperation:session error:0]; return;
     }
