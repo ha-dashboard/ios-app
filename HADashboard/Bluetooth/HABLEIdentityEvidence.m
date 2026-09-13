@@ -152,7 +152,7 @@ static NSString *HABLELittleEndianUUID(const uint8_t *bytes, NSUInteger length) 
         double agreement=compared ? (double)matched/compared : 0;[skews sortUsingSelector:@selector(compare:)];double skew=skews.count ? [skews[skews.count/2] doubleValue] : INFINITY;
         BOOL passes=values.count>=12 && buckets.count>=6 && matched>=12 && agreement>=.9 && last-first>=30 && fabs(skew)<=3 && now-last<=120 && now-lastReference<=120;
         if((compared>=3 && agreement<.5) || (compared && !matched && localValues.count==1 && remoteValues.count==1))contradiction=YES;
-        NSDictionary *result=@{@"qualified":@(passes),@"distinct_packets":@(values.count),@"matched_events":@(matched),@"compared_events":@(compared),@"span":@(MAX(0,last-first)),@"median_skew":@(isfinite(skew)?skew:0),@"sources":sources.allObjects};
+        NSDictionary *result=@{@"qualified":@(passes),@"distinct_packets":@(values.count),@"matched_events":@(matched),@"compared_events":@(compared),@"span":@(MAX(0,last-first)),@"median_skew":@(isfinite(skew)?skew:0),@"agreement":@(agreement),@"time_buckets":@(buckets.count),@"local_age":@(now-last),@"reference_age":@(now-lastReference),@"sources":sources.allObjects};
         if([result[@"distinct_packets"] unsignedIntegerValue]>[best[@"distinct_packets"] unsignedIntegerValue] || (![best[@"compared_events"] unsignedIntegerValue] && compared))best=result;
         qualified=qualified || passes;
     }

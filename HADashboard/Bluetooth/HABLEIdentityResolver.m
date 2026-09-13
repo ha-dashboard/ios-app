@@ -339,7 +339,16 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         if([saved[@"address"] isEqual:address] && [self validBinding:saved] && HABLEProfilesCompatible(profile,saved[@"profile"])){method=saved[@"method"];unit=saved[@"unit_identifier"];lineage=saved[@"lineage"] ?: @[];score+=180;[reasons addObject:@"Previously verified binding for this Apple peripheral"];}
         NSDictionary *correlation=identifier.length && compatible ? [self.evidence correlationForIdentifier:identifier address:address now:now] : nil;
         if([correlation[@"distinct_packets"] unsignedIntegerValue]) [reasons addObject:[NSString stringWithFormat:@"Learning: %lu / 12 distinct payload changes agree",(unsigned long)[correlation[@"distinct_packets"] unsignedIntegerValue]]];
-        if([correlation[@"qualified"] boolValue] && ![self.evidence hasCompetingLocalIdentifier:identifier address:address now:now]){method=method ?: @"packet_sequence";unit=unit ?: named;score+=120;[reasons addObject:[NSString stringWithFormat:@"%lu distinct payloads agree in time",(unsigned long)[correlation[@"distinct_packets"] unsignedIntegerValue]]];}
+        if([correlation[@"distinct_packets"] unsignedIntegerValue]>=12 && ![correlation[@"qualified"] boolValue]) {
+            if([correlation[@"contradictory_channel"] boolValue])[reasons addObject:@"Unresolved: another payload channel contradicts this match"];
+            if([correlation[@"agreement"] doubleValue]<.9)[reasons addObject:@"Unresolved: too many payload changes disagree"];
+            if(fabs([correlation[@"median_skew"] doubleValue])>3)[reasons addObject:@"Unresolved: observation timing does not align"];
+            if([correlation[@"time_buckets"] unsignedIntegerValue]<6 || [correlation[@"span"] doubleValue]<30)[reasons addObject:@"Unresolved: changes need a longer observation period"];
+            if([correlation[@"local_age"] doubleValue]>120 || [correlation[@"reference_age"] doubleValue]>120)[reasons addObject:@"Unresolved: recent corroborating evidence is missing"];
+        }
+        BOOL competingLocal=[correlation[@"qualified"] boolValue] && [self.evidence hasCompetingLocalIdentifier:identifier address:address now:now];
+        if(competingLocal)[reasons addObject:@"Ambiguous: another local peripheral has matching observations"];
+        if([correlation[@"qualified"] boolValue] && !competingLocal){method=method ?: @"packet_sequence";unit=unit ?: named;score+=120;[reasons addObject:[NSString stringWithFormat:@"%lu distinct payloads agree in time",(unsigned long)[correlation[@"distinct_packets"] unsignedIntegerValue]]];}
         candidate[@"automatic_match"]=@(address.length && method!=nil);candidate[@"score"]=@(score);candidate[@"method"]=method ?: @"";candidate[@"unit_identifier"]=unit ?: @"";candidate[@"profile"]=profile;candidate[@"lineage"]=lineage;candidate[@"local_identifier"]=identifier ?: @"";
         candidate[@"reference_sources"]=correlation[@"sources"] ?: (remote[@"source"] ? @[remote[@"source"]] : @[]);
         candidate[@"evidence"]=reasons.count ? [reasons componentsJoinedByString:@" · "] : @"Identity unresolved";[result addObject:candidate];
@@ -349,13 +358,13 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 - (NSDictionary *)automaticMatchForObservation:(NSDictionary *)observation {
     NSDictionary *match=nil;NSArray *candidates=[self candidatesForObservation:observation];
     if([observation[@"identifier"] length] && (self.lastEvidence.count<256 || self.lastEvidence[observation[@"identifier"]]))self.lastEvidence[observation[@"identifier"]]=candidates.firstObject[@"evidence"] ?: @"No known candidate yet";
-    for(NSDictionary *candidate in candidates)if([candidate[@"automatic_match"] boolValue]){if(match)return nil;match=candidate;}
+    for(NSDictionary *candidate in candidates)if([candidate[@"automatic_match"] boolValue]){if(match){if([observation[@"identifier"] length])self.lastEvidence[observation[@"identifier"]]=@"Ambiguous: multiple known devices satisfy the identity evidence";return nil;}match=candidate;}
     if(!match)return nil;
     NSString *identifier=observation[@"identifier"];
     if([match[@"method"] isEqual:@"packet_sequence"]) for(NSString *other in self.remoteInfo) {
         if([other isEqual:match[@"address"]] || !HABLEProfilesCompatible(HABLEProfile(observation),self.remoteInfo[other][@"profile"]))continue;
         NSDictionary *e=[self.evidence correlationForIdentifier:identifier address:other now:NSDate.date.timeIntervalSince1970];
-        if([e[@"compared_events"] unsignedIntegerValue] && [e[@"matched_events"] doubleValue]/[e[@"compared_events"] doubleValue]>=.9)return nil;
+        if([e[@"compared_events"] unsignedIntegerValue] && [e[@"matched_events"] doubleValue]/[e[@"compared_events"] doubleValue]>=.9){self.lastEvidence[identifier]=@"Ambiguous: another remote address has matching observations";return nil;}
     }
     return match;
 }

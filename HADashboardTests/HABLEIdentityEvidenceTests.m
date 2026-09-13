@@ -151,6 +151,15 @@
     HABLEIdentityResolver *r=[self resolver];NSDictionary *m=[r automaticMatchForObservation:@{@"identifier":@"local",@"name":@"Anything",@"serial_number":@"SN-901827"}];
     XCTAssertEqualObjects(m[@"address"],@"00:11:22:33:44:55");
 }
+- (void)testDuplicateStandardIdentifiersReportExplicitAmbiguity {
+    HABLEIdentityResolver *r=[HABLEIdentityResolver new];
+    [r loadRegistry:@[
+        @{@"id":@"one",@"serial_number":@"SN-901827",@"connections":@[@[@"bluetooth",@"00:11:22:33:44:55"]]},
+        @{@"id":@"two",@"serial_number":@"SN-901827",@"connections":@[@[@"bluetooth",@"00:11:22:33:44:66"]]}
+    ] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    XCTAssertNil(([r automaticMatchForObservation:@{@"identifier":@"local",@"serial_number":@"SN-901827"}]));
+    XCTAssertTrue(([[r evidenceForIdentifier:@"local"] hasPrefix:@"Ambiguous:"]));
+}
 - (void)testGenericSharedRecordRequiresCurrentRegistryAndProofSchema {
     HABLEIdentityResolver *r=[self resolver];NSDictionary *binding=@{@"schema":@2,@"address":@"00:11:22:33:44:55",@"device_id":@"sensor",@"method":@"serial",@"unit_identifier":@"SN-901827",@"proof_id":@"proof-one",@"profile":@{},@"lineage":@[]};
     [r loadCatalog:@{@"schema":@2,@"bindings":@{@"00:11:22:33:44:55":binding}}];
