@@ -97,6 +97,10 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 @property (nonatomic, strong) NSMutableDictionary *peerValues;
 @property (nonatomic, strong) NSMutableDictionary *peerInventories;
 @property (nonatomic) NSTimeInterval nextInventoryPublish;
+@property (nonatomic) NSTimeInterval nextNativeSnapshot;
+@property (nonatomic) NSTimeInterval lastNativeSnapshot;
+@property (nonatomic) NSInteger nativeSubscription;
+@property (nonatomic) NSUInteger nativeSubscriptionEpoch;
 @property (nonatomic) BOOL inventoryPublishing;
 @property (nonatomic) NSUInteger inventoryCursor;
 @property (nonatomic) BOOL inventoryPartial;
@@ -138,7 +142,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     return self.sourceServer.length && [auth.serverURL isEqual:self.sourceServer] && auth.authenticationRevision==self.sourceRevision;
 }
 - (void)cancel {
-    self.generation++;
+    self.generation++;self.nativeSubscriptionEpoch++;self.nativeSubscription=0;self.nextNativeSnapshot=0;self.lastNativeSnapshot=0;
     if ([self sourceIsCurrent] && self.connection.connected) for (NSNumber *subscription in self.subscriptions) [self.connection unsubscribeFromEventWithId:subscription.integerValue];
     [self.subscriptions removeAllObjects]; [self.writesInFlight removeAllObjects]; self.publicationInFlight=NO; self.publishing=NO; self.inventoryPublishing=NO;
 }
@@ -259,6 +263,9 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     for (NSDictionary *ad in advertisements) {
         NSString *address=HABLEString(ad[@"address"]).uppercaseString,*source=HABLEString(ad[@"source"]).uppercaseString;uint64_t numeric;
         if (!HABLEParseAddress(address,&numeric) || !source.length || [self.proxySources containsObject:source] || [source isEqual:self.sourceAddress]) continue;
+        // Retired-subscription deliveries and old snapshots cannot regress
+        // the current source timestamp or replace newer payload evidence.
+        if(self.remoteInfo[address] && [ad[@"time"] doubleValue]<[self.remoteInfo[address][@"time"] doubleValue])continue;
         if(self.remoteInfo.count>=256 && !self.remoteInfo[address]) {
             NSString *oldest=HABLEEvictionKey(self.remoteInfo,@"time",[ad[@"time"] doubleValue]);
             if(!oldest)continue;[self.remoteInfo removeObjectForKey:oldest];
@@ -361,7 +368,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         NSUInteger count=0;for(NSDictionary *row in [self.peerInventories[source] allValues])if(now-[row[@"last_seen"] doubleValue]<=120)count++;
         if(count){sources++;observations+=count;}
     }
-    return @{@"peer_sources":@(sources),@"peer_observations":@(observations),@"last_publish":@(self.lastInventoryPublish),@"publish_error":@(self.inventoryPublishError),@"partial_batch":@(self.inventoryPartial)};
+    return @{@"peer_sources":@(sources),@"peer_observations":@(observations),@"last_publish":@(self.lastInventoryPublish),@"publish_error":@(self.inventoryPublishError),@"partial_batch":@(self.inventoryPartial),@"native_snapshot_received_at":@(self.lastNativeSnapshot)};
 }
 - (void)maintainInventory {
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;
@@ -459,11 +466,28 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     }
     dispatch_group_notify(group,dispatch_get_main_queue(),^{HABLEIdentityResolver *self=weakSelf;if(self && generation==self.generation && [self sourceIsCurrent])completion();});
 }
+- (void)refreshNativeAdvertisements {
+    if([NSUserDefaults.standardUserDefaults boolForKey:@"HABLEIdentitySharedOnly"] || ![self sourceIsCurrent] || !self.connection.connected)return;
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;if(now<self.nextNativeSnapshot)return;
+    self.nextNativeSnapshot=now+30;
+    if(self.nativeSubscription) {
+        [self.connection unsubscribeFromEventWithId:self.nativeSubscription];
+        [self.subscriptions removeObject:@(self.nativeSubscription)];
+    }
+    NSUInteger generation=self.generation,epoch=++self.nativeSubscriptionEpoch;__weak typeof(self) weakSelf=self;
+    self.nativeSubscription=[self.connection subscribeWithCommand:@{@"type":@"bluetooth/subscribe_advertisements"} handler:^(NSDictionary *event){
+        HABLEIdentityResolver *self=weakSelf;
+        if(!self || generation!=self.generation || epoch!=self.nativeSubscriptionEpoch || ![self sourceIsCurrent])return;
+        if([event[@"add"] isKindOfClass:NSArray.class]) {
+            self.lastNativeSnapshot=NSDate.date.timeIntervalSince1970;
+            [self observeAdvertisements:event[@"add"]];
+        }
+    }];
+    [self.subscriptions addObject:@(self.nativeSubscription)];
+}
 - (void)startSubscriptions {
     NSUInteger generation=self.generation;__weak typeof(self) weakSelf=self;HAConnectionManager *connection=self.connection;
-    if(![NSUserDefaults.standardUserDefaults boolForKey:@"HABLEIdentitySharedOnly"]) {
-        NSInteger n=[connection subscribeWithCommand:@{@"type":@"bluetooth/subscribe_advertisements"} handler:^(NSDictionary *event){HABLEIdentityResolver *self=weakSelf;if(self && generation==self.generation && [self sourceIsCurrent] && [event[@"add"] isKindOfClass:NSArray.class])[self observeAdvertisements:event[@"add"]];}];[self.subscriptions addObject:@(n)];
-    }
+    [self refreshNativeAdvertisements];
     NSInteger n=[connection subscribeWithCommand:@{@"type":@"frontend/subscribe_system_data",@"key":HABLECatalogKey} handler:^(NSDictionary *event){HABLEIdentityResolver *self=weakSelf;if(self && generation==self.generation && [self sourceIsCurrent])[self loadCatalog:event[@"value"]];}];[self.subscriptions addObject:@(n)];
     n=[connection subscribeToEventType:@"device_registry_updated" handler:^(NSDictionary *event){HABLEIdentityResolver *self=weakSelf;if(self && generation==self.generation)self.needsRegistryRefresh=YES;}];[self.subscriptions addObject:@(n)];
     NSUInteger count=0;for(NSString *source in self.proxySources) {
@@ -578,6 +602,10 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         if(competingLocal && !method)[reasons addObject:@"Ambiguous: another local peripheral has matching observations"];
         if([correlation[@"qualified"] boolValue] && !competingLocal){method=method ?: @"packet_sequence";unit=unit ?: named;score+=120;[reasons addObject:[NSString stringWithFormat:@"%lu distinct payloads agree in time",(unsigned long)[correlation[@"distinct_packets"] unsignedIntegerValue]]];}
         NSDictionary *local=self.localObservations[identifier];
+        if(!method && remote[@"native_anchor"] && [name isEqual:remote[@"name"]]) {
+            NSTimeInterval referenceAge=now-[remote[@"time"] doubleValue],span=[local[@"last_seen"] doubleValue]-[local[@"passive_since"] doubleValue];
+            [reasons addObject:[NSString stringWithFormat:@"Passive evidence: reference %.0fs old, local span %.0fs (%lu samples), signature %@",MAX(0,referenceAge),local[@"passive_since"] ? MAX(0,span) : 0,(unsigned long)[local[@"passive_samples"] unsignedIntegerValue],[local[@"passive_signature"] isEqual:remote[@"passive_signature"]] ? @"agrees" : @"differs"]];
+        }
         if(!method && remote[@"native_anchor"] && ![self.proxySources containsObject:remote[@"source"]] && HABLEPassiveReady(local,@"last_seen",now) && isfinite([remote[@"time"] doubleValue]) && [remote[@"time"] doubleValue]<=now+5 && now-[remote[@"time"] doubleValue]<=120 && [local[@"passive_signature"] isEqual:remote[@"passive_signature"]] && [local[@"passive_signature"] isEqual:[self passiveSignatureForObservation:observation]] && !(serial.length && [known[@"serial_number"] length] && ![serial isEqual:known[@"serial_number"]]) && ![HABLEIdentityEvidence identifierFingerprints:observation[@"gatt_fingerprints"] conflictWith:shared[@"fingerprint_profile"]]) {
             method=@"passive_signature";score+=80;candidate[@"passive_signature"]=local[@"passive_signature"];
             [reasons addObject:@"Provisional: exact name, services and payload agree with a fresh independent radio observation after sustained local reception; not a verified hardware identity"];
@@ -748,7 +776,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 }
 - (void)maintainSynchronization {
     if(!self.loaded || ![self sourceIsCurrent] || !self.connection.connected)return;
-    [self pumpPublications]; [self maintainInventory];
+    [self refreshNativeAdvertisements]; [self pumpPublications]; [self maintainInventory];
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;if(now<self.nextPublish || self.publishing)return;self.nextPublish=now+8;
     BOOL learning=NO;NSMutableArray *requested=NSMutableArray.array;
     for(NSString *identifier in self.localObservations) {NSDictionary *observation=self.localObservations[identifier];if(now-[observation[@"last_seen"] doubleValue]<=120 && !self.localBindings[identifier] && [self hasKnownIdentityForObservation:observation]) {

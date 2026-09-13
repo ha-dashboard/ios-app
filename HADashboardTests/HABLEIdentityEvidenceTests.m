@@ -7,6 +7,7 @@
 - (void)loadRegistry:(NSArray *)devices entries:(NSArray *)entries excludingSource:(NSString *)source;
 - (void)observeAdvertisements:(NSArray *)advertisements;
 - (void)loadCatalog:(id)value;
+- (void)refreshNativeAdvertisements;
 - (void)observePeer:(id)value source:(NSString *)source;
 - (void)observeInventory:(id)value source:(NSString *)source;
 - (NSArray *)localInventoryAtTime:(NSTimeInterval)now;
@@ -19,10 +20,12 @@
 @property (nonatomic, copy) void (^pendingUser)(id,NSError *);
 @property (nonatomic, strong) NSMutableArray *commands;
 @property (nonatomic, strong) NSMutableArray *subscriptions;
+@property (nonatomic, strong) NSMutableArray *unsubscriptions;
+@property (nonatomic, copy) void (^advertisementHandler)(NSDictionary *);
 @property (nonatomic, copy) void (^registryHandler)(NSDictionary *);
 @end
 @implementation HABLEFakeIdentityConnection
-- (instancetype)init { if((self=[super init])){_connected=YES;_commands=NSMutableArray.array;_subscriptions=NSMutableArray.array;}return self; }
+- (instancetype)init { if((self=[super init])){_connected=YES;_commands=NSMutableArray.array;_subscriptions=NSMutableArray.array;_unsubscriptions=NSMutableArray.array;}return self; }
 - (void)sendCommand:(NSDictionary *)command completion:(void (^)(id,NSError *))completion {
     [self.commands addObject:command];NSString *type=command[@"type"];
     if([type isEqual:@"auth/current_user"]){if(self.delayUser)self.pendingUser=completion;else completion(@{@"id":@"test-user"},nil);}
@@ -31,9 +34,9 @@
     else if([type isEqual:@"manifest/list"])completion(@[@{@"domain":@"arbitrary_integration",@"bluetooth":@[@{@"local_name":@"Sample*",@"service_uuid":@"1234",@"connectable":@NO}]}],nil);
     else completion(@{@"value":NSNull.null},nil);
 }
-- (NSInteger)subscribeWithCommand:(NSDictionary *)command handler:(void (^)(NSDictionary *))handler { [self.subscriptions addObject:command[@"type"]];return self.subscriptions.count; }
+- (NSInteger)subscribeWithCommand:(NSDictionary *)command handler:(void (^)(NSDictionary *))handler { [self.subscriptions addObject:command[@"type"]];if([command[@"type"] isEqual:@"bluetooth/subscribe_advertisements"])self.advertisementHandler=handler;return self.subscriptions.count; }
 - (NSInteger)subscribeToEventType:(NSString *)type handler:(void (^)(NSDictionary *))handler { self.registryHandler=handler;[self.subscriptions addObject:type];return self.subscriptions.count; }
-- (void)unsubscribeFromEventWithId:(NSInteger)identifier {}
+- (void)unsubscribeFromEventWithId:(NSInteger)identifier { [self.unsubscriptions addObject:@(identifier)]; }
 @end
 @interface HABLETransportTestResolver : HABLEIdentityResolver
 @property (nonatomic, strong) HABLEFakeIdentityConnection *fakeConnection;
@@ -176,6 +179,27 @@
     XCTAssertEqualObjects([resolver automaticMatchForObservation:o][@"method"],@"passive_signature");
     NSMutableDictionary *twin=[o mutableCopy];twin[@"identifier"]=@"b";twin[@"manufacturer_data"]=@"AQIDBAUGBwgLCg==";[resolver recordObservation:twin identifier:@"b"];
     XCTAssertNil([resolver automaticMatchForObservation:o]);
+}
+- (void)testNativeSnapshotRefreshIsBoundedAndIgnoresRetiredCallbacks {
+    HABLETransportTestResolver *resolver=[HABLETransportTestResolver new];resolver.fakeConnection=[HABLEFakeIdentityConnection new];resolver.currentScope=YES;
+    [resolver loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    [resolver refreshNativeAdvertisements];void (^retired)(NSDictionary *)=resolver.fakeConnection.advertisementHandler;
+    XCTAssertEqual(resolver.fakeConnection.subscriptions.count,1u);
+    [resolver refreshNativeAdvertisements];XCTAssertEqual(resolver.fakeConnection.subscriptions.count,1u);
+    [resolver setValue:@0 forKey:@"nextNativeSnapshot"];[resolver refreshNativeAdvertisements];
+    XCTAssertEqual(resolver.fakeConnection.subscriptions.count,2u);XCTAssertEqualObjects(resolver.fakeConnection.unsubscriptions,(@[@1]));
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;
+    NSDictionary *ad=@{@"address":@"AA:BB:CC:DD:EE:01",@"source":@"20:00:00:00:00:01",@"time":@(now-10),@"name":@"Unit1234",@"raw":@"09ff0102030405060708"};
+    retired(@{@"add":@[ad]});XCTAssertEqual([[resolver valueForKey:@"remoteInfo"] count],0u);
+    resolver.fakeConnection.advertisementHandler(@{@"add":@[ad]});
+    NSDictionary *stored=[resolver valueForKey:@"remoteInfo"][@"AA:BB:CC:DD:EE:01"];
+    XCTAssertEqualObjects(stored[@"time"],ad[@"time"]);XCTAssertEqualObjects(stored[@"passive_samples"],@1);
+    resolver.fakeConnection.advertisementHandler(@{@"add":@[ad]});
+    XCTAssertEqualObjects([resolver valueForKey:@"remoteInfo"][@"AA:BB:CC:DD:EE:01"][@"passive_samples"],@1);
+    NSMutableDictionary *older=[ad mutableCopy];older[@"time"]=@(now-20);older[@"name"]=@"Wrong1234";
+    resolver.fakeConnection.advertisementHandler(@{@"add":@[older]});
+    XCTAssertEqualObjects([resolver valueForKey:@"remoteInfo"][@"AA:BB:CC:DD:EE:01"][@"name"],@"Unit1234");
+    [resolver cancel];XCTAssertEqualObjects(resolver.fakeConnection.unsubscriptions,(@[@1,@2]));
 }
 - (NSDictionary *)stableIdentifierFields {
     NSData *json=[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:55"}} options:0 error:nil];
