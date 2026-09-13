@@ -194,6 +194,31 @@ delivery, and real GATT operations as separate acceptance results. The local
 device observations. Validate its timestamp when collecting it; a stale file
 does not prove a running app.
 
+Current identity and activation validation (build 178):
+
+- 74 signed regression tests passed, including delayed HA startup, partial
+  advertisements, conflicting identifiers, persisted associations and opt-out.
+- Six proxy receipts agreed on the existing Blue Connect address. HA retained
+  its one configured sensor, and the restart monitor reported zero duplicate
+  discovery prompts in seven checks over one minute, followed by a clear final
+  check after the remaining deployments.
+- A build 178 restart with live identity comparison disabled forwarded both
+  observed pool advertisements under the address stored in HA. This verifies
+  the shared-identity path independently of fresh scanner address evidence.
+- The iPhone 11 buffered its initial pool advertisement until identity import
+  completed, then matched it with no dropped packets. Known unresolved devices
+  now remain pending instead of escaping through a startup timeout as aliases.
+- All nine available iOS devices received build 178. Eight have runtime
+  receipts; the second iPad Pro was locked after installation. The iPad 2
+  reports unsupported BLE hardware. Catalyst was restored to normal mode.
+
+A read-only pool connection through the matched Mac proxy discovered its vendor
+GATT services. The pool does not expose the standard Device Information service,
+so its automatic identity uses the Blue Connect identifier and vendor evidence.
+A separate Mini 5 pool connection attempt timed out at a weak signal; matching
+an identity does not establish reliable radio range. Earlier complete GATT
+acceptance is recorded separately below.
+
 Physical validation on 13 September 2026 established encrypted HA advertisement
 forwarding and active GATT operation using public APIs. Build 173 was installed
 and launched on all nine available iOS devices, plus Catalyst. Fresh diagnostics
