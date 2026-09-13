@@ -193,7 +193,21 @@ static NSString *HABLELittleEndianUUID(const uint8_t *bytes, NSUInteger length) 
 - (void)append:(NSArray *)tokens key:(NSString *)key to:(NSMutableDictionary *)storage source:(NSString *)source atTime:(NSTimeInterval)time {
     if (!tokens.count || !key.length || !isfinite(time)) return;
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;if(time<now-HABLEEvidenceWindow || time>now+5)return;
-    NSMutableArray *events=storage[key];if(!events){if(storage.count>=256)return;events=NSMutableArray.array;storage[key]=events;}
+    NSMutableArray *events=storage[key];
+    if(!events) {
+        // Rotating addresses must not permanently fill the observation window.
+        if(storage.count>=256) {
+            NSString *oldest=nil;NSTimeInterval oldestTime=DBL_MAX;
+            for(NSString *other in storage) {
+                NSTimeInterval last=0;for(NSDictionary *event in storage[other])last=MAX(last,[event[@"last_seen"] doubleValue]);
+                if(last<oldestTime){oldest=other;oldestTime=last;}
+            }
+            // An out-of-order snapshot must not evict more recent evidence.
+            if(time<=oldestTime)return;
+            [storage removeObjectForKey:oldest];
+        }
+        events=NSMutableArray.array;storage[key]=events;
+    }
     NSIndexSet *expired=[events indexesOfObjectsPassingTest:^BOOL(NSDictionary *event,NSUInteger index,BOOL *stop){return [event[@"last_seen"] doubleValue]<now-HABLEEvidenceWindow;}];[events removeObjectsAtIndexes:expired];
     for(NSString *token in tokens) {
         NSString *channel=[token substringToIndex:[token rangeOfString:@":" options:NSBackwardsSearch].location+1];

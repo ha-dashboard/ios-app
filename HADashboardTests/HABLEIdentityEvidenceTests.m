@@ -46,6 +46,43 @@
 @interface HABLEIdentityEvidenceTests : XCTestCase
 @end
 @implementation HABLEIdentityEvidenceTests
+- (void)testObservationInventoryAdmitsNewDevicesAfterCapacity {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;
+    HABLEIdentityResolver *resolver=[HABLEIdentityResolver new];
+    HABLEIdentityEvidence *evidence=[HABLEIdentityEvidence new];
+    NSDictionary *payload=@{@"manufacturer_data":@"AQIDBA=="};
+    for(NSUInteger i=0;i<256;i++) {
+        NSString *identifier=[NSString stringWithFormat:@"device-%lu",(unsigned long)i];
+        NSMutableDictionary *o=[payload mutableCopy];o[@"identifier"]=identifier;o[@"last_seen"]=@(now-300+i);
+        [resolver recordObservation:o identifier:identifier];[evidence recordLocal:o identifier:identifier atTime:now-300+i];
+    }
+    NSDictionary *newDevice=@{@"identifier":@"new",@"last_seen":@(now),@"manufacturer_data":@"AQIDBA=="};
+    [resolver recordObservation:newDevice identifier:@"new"];[evidence recordLocal:newDevice identifier:@"new" atTime:now];
+    NSDictionary *inventory=[resolver valueForKey:@"localObservations"];
+    XCTAssertEqual(inventory.count,256u);XCTAssertNotNil(inventory[@"new"]);XCTAssertNil(inventory[@"device-0"]);
+    XCTAssertEqual([evidence recentLocalEventsForIdentifier:@"new" now:now].count,1u);
+    XCTAssertEqual([evidence recentLocalEventsForIdentifier:@"device-0" now:now].count,0u);
+    // Replayed older snapshots cannot push newer devices out of the window.
+    [evidence recordLocal:payload identifier:@"replay" atTime:now-400];
+    XCTAssertEqual([evidence recentLocalEventsForIdentifier:@"replay" now:now].count,0u);
+    XCTAssertEqual([evidence recentLocalEventsForIdentifier:@"new" now:now].count,1u);
+}
+- (void)testNativeInventoryRotatesWithoutEvictingNewerEvidenceForReplay {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;
+    HABLEIdentityResolver *resolver=[HABLEIdentityResolver new];
+    [resolver loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    for(NSUInteger i=0;i<256;i++) {
+        NSString *address=[NSString stringWithFormat:@"10:11:22:33:44:%02lX",(unsigned long)i];
+        [resolver observeAdvertisements:@[@{@"address":address,@"source":@"20:00:00:00:00:01",@"time":@(now-300+i),@"name":@"Unit",@"raw":@"05ff01020304"}]];
+    }
+    NSDictionary *newDevice=@{@"address":@"10:11:22:33:55:00",@"source":@"20:00:00:00:00:01",@"time":@(now),@"name":@"New unit",@"raw":@"05ff01020304"};
+    [resolver observeAdvertisements:@[newDevice]];
+    NSDictionary *inventory=[resolver valueForKey:@"remoteInfo"];
+    XCTAssertEqual(inventory.count,256u);XCTAssertNotNil(inventory[newDevice[@"address"]]);XCTAssertNil(inventory[@"10:11:22:33:44:00"]);
+    NSMutableDictionary *replay=[newDevice mutableCopy];replay[@"address"]=@"10:11:22:33:66:00";replay[@"time"]=@(now-400);
+    [resolver observeAdvertisements:@[replay]];
+    XCTAssertNil(inventory[replay[@"address"]]);XCTAssertNotNil(inventory[newDevice[@"address"]]);
+}
 - (NSDictionary *)stableIdentifierFields {
     NSData *json=[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:55"}} options:0 error:nil];
     NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:json path:@"s/1234/c/5678"];

@@ -25,6 +25,15 @@ static NSString *HABLESharedFingerprintAddress(NSString *identity) {
     for(NSUInteger i=1;i<6;i++)address=(address<<8)|bytes[i];return HABLEAddressString(address);
 }
 static NSString *HABLEString(id value) { return [value isKindOfClass:NSString.class] ? value : @""; }
+// Return the oldest observation only when this input is newer than it.
+static NSString *HABLEEvictionKey(NSDictionary *storage, NSString *field, NSTimeInterval incoming) {
+    NSString *oldest=nil;NSTimeInterval oldestTime=DBL_MAX;
+    for(NSString *key in storage) {
+        NSTimeInterval time=[storage[key][field] doubleValue];
+        if(time<oldestTime){oldest=key;oldestTime=time;}
+    }
+    return isfinite(incoming) && incoming>oldestTime ? oldest : nil;
+}
 static BOOL HABLEUnitIdentifier(NSString *value) {
     if (value.length < 8 || value.length > 128) return NO;
     return [value rangeOfCharacterFromSet:NSCharacterSet.letterCharacterSet].location != NSNotFound && [value rangeOfCharacterFromSet:NSCharacterSet.decimalDigitCharacterSet].location != NSNotFound;
@@ -222,7 +231,10 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     for (NSDictionary *ad in advertisements) {
         NSString *address=HABLEString(ad[@"address"]).uppercaseString,*source=HABLEString(ad[@"source"]).uppercaseString;uint64_t numeric;
         if (!HABLEParseAddress(address,&numeric) || !source.length || [self.proxySources containsObject:source] || [source isEqual:self.sourceAddress]) continue;
-        if(self.remoteInfo.count>=256 && !self.remoteInfo[address])continue;
+        if(self.remoteInfo.count>=256 && !self.remoteInfo[address]) {
+            NSString *oldest=HABLEEvictionKey(self.remoteInfo,@"time",[ad[@"time"] doubleValue]);
+            if(!oldest)continue;[self.remoteInfo removeObjectForKey:oldest];
+        }
         NSData *raw=HABLEHexData(ad[@"raw"]); NSArray *tokens=[HABLEIdentityEvidence tokensForRawAdvertisement:raw];
         NSMutableDictionary *info=[ad mutableCopy];info[@"tokens"]=tokens;
         NSUInteger length=0;for(NSString *token in tokens)if([token hasPrefix:@"m:"])length=[[[NSData alloc]initWithBase64EncodedString:[token substringFromIndex:[token rangeOfString:@":" options:NSBackwardsSearch].location+1] options:0]length];
@@ -461,7 +473,11 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     }];
 }
 - (void)recordObservation:(NSDictionary *)observation identifier:(NSString *)identifier {
-    if(!identifier.length)return;if(self.localObservations.count>=256 && !self.localObservations[identifier])return;
+    if(!identifier.length)return;
+    if(self.localObservations.count>=256 && !self.localObservations[identifier]) {
+        NSString *oldest=HABLEEvictionKey(self.localObservations,@"last_seen",[observation[@"last_seen"] doubleValue]);
+        if(!oldest)return;[self removeIdentifier:oldest];
+    }
     self.localObservations[identifier]=observation;[self.evidence recordLocal:observation identifier:identifier atTime:[observation[@"last_seen"] doubleValue]];
 }
 - (NSString *)evidenceForIdentifier:(NSString *)identifier { return self.lastEvidence[identifier] ?: @"Waiting for sufficient identity evidence"; }
