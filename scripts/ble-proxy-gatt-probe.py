@@ -96,18 +96,15 @@ async def probe(args, key):
                 await other.bluetooth_device_disconnect(0x020000000099, timeout=2)
                 receipt["checks"].append({"unknown_disconnect": "acknowledged", "seconds": time.monotonic() - started})
                 started = time.monotonic()
-                try:
-                    cancel_other = await other.bluetooth_device_connect(
-                        address, lambda up, mtu, error: other_states.append({"connected": up, "error": error}),
-                        timeout=2, disconnect_timeout=2, feature_flags=flags, has_cache=True, address_type=1,
-                    )
-                except Exception:
-                    # A connection-state rejection must arrive; a timeout or
-                    # transport exception alone does not establish isolation.
-                    assert other_states and not other_states[-1]["connected"] and other_states[-1]["error"], "No explicit rejection of the second client"
-                else:
-                    cancel_other()
-                    raise AssertionError("A second client claimed the owned connection")
+                cancel_other = await other.bluetooth_device_connect(
+                    address, lambda up, mtu, error: other_states.append({"connected": up, "error": error}),
+                    timeout=2, disconnect_timeout=2, feature_flags=flags, has_cache=True, address_type=1,
+                )
+                cancel_other()
+                # aioesphomeapi resolves on either outcome. The callback state,
+                # not a normally returned coroutine, distinguishes rejection.
+                receipt["second_client_states"] = other_states
+                assert other_states and not other_states[-1]["connected"] and other_states[-1]["error"], "No explicit rejection of the second client"
                 receipt["checks"].append({"foreign_connect": "rejected", "seconds": time.monotonic() - started, "states": other_states})
                 await other.bluetooth_device_disconnect(address, timeout=2)
                 assert connected, "The foreign client disconnected the original owner"

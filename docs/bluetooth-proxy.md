@@ -129,7 +129,12 @@ connection allocation identified that iPad as the route, and the app recorded
 the writes and reply notification. Controlled physical tests on the Mini 4 and
 Mini 5 then verified reads, writes, notifications, readback and cached-handle
 reconnects. The Mini 4 also passed three immediate reconnects after dropping the
-network transport with a BLE connection allocated. Native transport checks
+network transport with a BLE connection allocated. Build 167 repeated these
+checks on both Minis, including three transport-drop reconnects per device.
+Both also acknowledged unknown disconnects and rejected an additional client's
+connection in approximately 8–10 ms while preserving the original client's
+ability to read the peripheral. The focused BLE suite passed 8 tests.
+Native transport checks
 passed 10 tests; an isolated signed Catalyst regression run passed 50 tests,
 including existing auth, registration and streaming checks plus BLE setup,
 framing and reset checks. Broader device and failure-path
