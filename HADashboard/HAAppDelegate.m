@@ -108,6 +108,19 @@
 
     NSString *bootURL = [defaults stringForKey:@"HAServerURL"];
     NSString *bootToken = [defaults stringForKey:@"HAAccessToken"];
+    // Explicit developer launch only: preferences can remain cached after a
+    // device file transfer. Consume a fixed, sandbox-local file instead of
+    // exposing credentials in process arguments. Never retain the transfer.
+    if ([[NSProcessInfo processInfo].arguments containsObject:@"-HAImportBootstrapAuth"]) {
+        NSString *documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+        NSString *path = [documents stringByAppendingPathComponent:@".ha-bootstrap-auth.json"];
+        NSData *data = [NSData dataWithContentsOfFile:path options:NSDataReadingUncached error:nil];
+        BOOL removed = [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+        id value = removed && data.length > 0 && data.length <= 16384 ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+        if ([value isKindOfClass:[NSDictionary class]] && [value[@"server"] isKindOfClass:[NSString class]] && [value[@"token"] isKindOfClass:[NSString class]]) {
+            bootURL = value[@"server"]; bootToken = value[@"token"];
+        }
+    }
     HALogI(@"startup", @"NSUserDefaults read END (url=%@, token=%@)",
         bootURL.length > 0 ? @"YES" : @"NO",
         bootToken.length > 0 ? @"YES" : @"NO");

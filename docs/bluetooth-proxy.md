@@ -111,6 +111,14 @@ Remove unwanted ESPHome entries separately in HA.
 For an explicitly selected CoreDevice target, use
 `device --device-id ID`. Normal installations remain opt-in.
 
+For a developer-authorized credential replacement, transfer a private JSON file
+containing `server` and `token` to the app's
+`Documents/.ha-bootstrap-auth.json`, then launch with
+`-HAImportBootstrapAuth`. The app consumes and deletes the file before saving
+credentials to Keychain. Keep the transfer file out of receipts and logs, remove
+the local temporary copy, and verify that the device copy was consumed. Do not
+put the token in process arguments. Ordinary deployments retain credentials.
+
 For a Mini 5 that is reachable through MobileDevice Wi-Fi but missing from
 CoreDevice, the validated launch path is a personalized developer image followed
 by a lockdown tunnel:
