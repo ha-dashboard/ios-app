@@ -46,6 +46,19 @@ static NSData *HABLEDiagnosticBytes(id value) {
     }
     return data;
 }
+static NSString *HABLEStandardIdentifierFormat(NSString *path) {
+    NSArray *parts=[path componentsSeparatedByString:@"/"];if(parts.count!=3 || ![parts[0] isEqual:@"s"])return nil;
+    NSMutableArray *uuids=NSMutableArray.array;
+    for(NSUInteger i=1;i<3;i++) {
+        NSArray *attribute=[parts[i] componentsSeparatedByString:@"#"];
+        if(attribute.count!=2 || ![attribute[1] length] || [attribute[1] rangeOfCharacterFromSet:NSCharacterSet.decimalDigitCharacterSet.invertedSet].location!=NSNotFound)return nil;
+        NSString *uuid=HABLECanonicalUUID(attribute[0]);if(!uuid)return nil;[uuids addObject:uuid];
+    }
+    if(![uuids[0] isEqual:HABLECanonicalUUID(@"180A")])return nil;
+    if([uuids[1] isEqual:HABLECanonicalUUID(@"2A25")])return @"gatt_serial";
+    if([uuids[1] isEqual:HABLECanonicalUUID(@"2A23")])return @"gatt_system_id";
+    return nil;
+}
 @implementation HABLEIdentityEvidence
 + (NSArray *)nativeObservationsFromDiagnostics:(id)diagnostics requestedAt:(NSTimeInterval)time {
     if(!isfinite(time) || ![diagnostics isKindOfClass:NSDictionary.class])return @[];
@@ -82,6 +95,21 @@ static NSData *HABLEDiagnosticBytes(id value) {
         for(NSUInteger i=0;i<sizeof(hash);i++)[hex appendFormat:@"%02x",hash[i]];
         return @{@"sha256":hex,@"length":@(bytes.length),@"kind":kind};
     };
+    NSString *standard=HABLEStandardIdentifierFormat(path);
+    if(standard) {
+        NSData *normalized=data;
+        if([standard isEqual:@"gatt_serial"]) {
+            NSString *serial=[[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            if(serial.length<6 || [serial rangeOfCharacterFromSet:NSCharacterSet.controlCharacterSet].location!=NSNotFound || [@[@"unknown",@"default",@"not available",@"serial number",@"serialnumber"] containsObject:serial.lowercaseString])return @{};
+            BOOL varies=NO;for(NSUInteger i=1;i<serial.length;i++)if([serial characterAtIndex:i]!=[serial characterAtIndex:0])varies=YES;
+            normalized=[serial dataUsingEncoding:NSUTF8StringEncoding];if(!varies || normalized.length>128)return @{};
+        } else {
+            if(data.length!=8)return @{};BOOL allZero=YES,allFF=YES;const uint8_t *bytes=data.bytes;
+            for(NSUInteger i=0;i<data.length;i++){allZero=allZero && bytes[i]==0;allFF=allFF && bytes[i]==255;}
+            if(allZero || allFF)return @{};
+        }
+        NSMutableDictionary *value=[fingerprint(normalized,@"standard_identifier") mutableCopy];value[@"format"]=standard;return @{path:value};
+    }
     id object=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
     if(![object isKindOfClass:NSDictionary.class] && ![object isKindOfClass:NSArray.class])return @{path:fingerprint(data,@"opaque")};
     NSSet *sensitive=[NSSet setWithArray:@[@"password",@"passwd",@"pwd",@"psk",@"secret",@"token",@"accesstoken",@"refreshtoken",@"apikey",@"privatekey",@"key",@"credential",@"credentials",@"authorization",@"auth",@"pin",@"pairingcode"]];
@@ -114,7 +142,11 @@ static NSData *HABLEDiagnosticBytes(id value) {
     return result;
 }
 + (BOOL)isIdentifierFingerprint:(NSDictionary *)value path:(NSString *)path {
-    if(![value isKindOfClass:NSDictionary.class] || ![value[@"stable_across_sessions"] isKindOfClass:NSNumber.class] || ![value[@"varying"] isKindOfClass:NSNumber.class] || ![value[@"sessions"] isKindOfClass:NSNumber.class] || ![value[@"stable_across_sessions"] boolValue] || [value[@"varying"] boolValue] || [value[@"sessions"] unsignedIntegerValue]<2 || ![@[@"mac",@"uuid"] containsObject:value[@"format"]])return NO;
+    if(![value isKindOfClass:NSDictionary.class] || ![value[@"stable_across_sessions"] isKindOfClass:NSNumber.class] || ![value[@"varying"] isKindOfClass:NSNumber.class] || ![value[@"sessions"] isKindOfClass:NSNumber.class] || ![value[@"stable_across_sessions"] boolValue] || [value[@"varying"] boolValue] || [value[@"sessions"] unsignedIntegerValue]<2 || ![@[@"mac",@"uuid",@"gatt_serial",@"gatt_system_id"] containsObject:value[@"format"]])return NO;
+    if([@[@"gatt_serial",@"gatt_system_id"] containsObject:value[@"format"]]) {
+        if(![HABLEStandardIdentifierFormat(path) isEqual:value[@"format"]] || ![value[@"length"] isKindOfClass:NSNumber.class])return NO;
+        NSUInteger length=[value[@"length"] unsignedIntegerValue];return [value[@"format"] isEqual:@"gatt_serial"] ? length>=6 && length<=128 : length==8;
+    }
     NSUInteger expected=[value[@"format"] isEqual:@"mac"] ? 21 : 40;
     if(![value[@"length"] isKindOfClass:NSNumber.class] || [value[@"length"] unsignedIntegerValue]!=expected)return NO;
     NSRange json=[path rangeOfString:@"/json/"];if(json.location==NSNotFound)return NO;

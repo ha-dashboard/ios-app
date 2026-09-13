@@ -45,6 +45,19 @@ must compare evidence rather than equating its unrelated Apple UUID with the
 first proxy's UUID. The standalone timeout does not create verified bindings or
 merge ambiguous candidates.
 
+A sole proxy can also create a fingerprint-derived logical identity after two
+separate stable reads of an eligible identifier. Eligible fields include the
+standard Device Information Serial Number and System ID characteristics, plus
+context-filtered MAC/UUID fields in structured characteristic values. Model
+strings, generic profiles, changing values and placeholder identifiers do not
+qualify. No second proxy or registered HA device is required.
+
+The shared proof retains all collected identifier fields. A later proxy can match
+an available secondary field without changing the canonical address originally
+chosen from another field. Matching remains subject to conflicts and competing
+devices; the resulting address is a logical identity, not an assertion that the
+read value was the peripheral's Bluetooth MAC.
+
 ## Device identity
 
 The resolver is generic. It has no sensor-brand names, company-ID tables, model

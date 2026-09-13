@@ -586,8 +586,8 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     if (!completion) return;
     session.identityValues[@"identification_read_at"] = @([[NSDate date] timeIntervalSince1970]);
     NSString *peripheralID=session.peripheral.identifier.UUIDString;
-    BOOL sameSchema=[self.identityMetadata[peripheralID][@"gatt_fingerprint_schema"] isEqual:@3];
-    session.identityValues[@"gatt_fingerprint_schema"]=@3;
+    BOOL sameSchema=[self.identityMetadata[peripheralID][@"gatt_fingerprint_schema"] isEqual:@4];
+    session.identityValues[@"gatt_fingerprint_schema"]=@4;
     session.identityValues[@"gatt_probe_attempts"]=@(sameSchema ? MIN(255,[self.identityMetadata[peripheralID][@"gatt_probe_attempts"] unsignedIntegerValue]+1) : 1);
     session.identityValues[@"gatt_fingerprints"]=[HABLEIdentityEvidence mergeFingerprintReads:session.identityValues[@"gatt_fingerprint_reads"] ?: @{} previous:sameSchema ? self.identityMetadata[peripheralID][@"gatt_fingerprints"] : @{} session:session.identityValues[@"gatt_probe_session"] atTime:NSDate.date.timeIntervalSince1970];
     [session.identityValues removeObjectForKey:@"gatt_fingerprint_reads"];
@@ -697,7 +697,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 - (NSTimeInterval)identityProbeIntervalForObservation:(NSDictionary *)observation {
     NSString *identifier=observation[@"identifier"];
     if(identifier.length && [self.identityProbeAttempts[identifier] unsignedIntegerValue]>=2)return 3600;
-    if(![observation[@"gatt_fingerprint_schema"] isEqual:@3])for(NSDictionary *value in [observation[@"gatt_fingerprints"] allValues])if([value[@"kind"] isEqual:@"json_scalar"])return 60;
+    if(![observation[@"gatt_fingerprint_schema"] isEqual:@4])for(NSDictionary *value in [observation[@"gatt_fingerprints"] allValues])if([@[@"json_scalar",@"opaque"] containsObject:value[@"kind"]])return 60;
     if([observation[@"gatt_probe_attempts"] unsignedIntegerValue]>=2)return 3600;
     for(NSDictionary *value in [observation[@"gatt_fingerprints"] allValues])if([value[@"sessions"] unsignedIntegerValue]==1)return 60;
     return 3600;
