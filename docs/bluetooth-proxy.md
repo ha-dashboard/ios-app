@@ -42,7 +42,17 @@ peer observations are imported without user-managed synchronization.
 The initial import reads HA registry IDs, Bluetooth addresses, registered unit
 identifiers, friendly names, model and serial metadata, plus the installed
 integrations' discovery manifests. A registry update triggers another import;
-reconnection and a five-minute fallback refresh cover missed updates. Shared
+reconnection and a five-minute fallback refresh cover missed updates. The native
+advertisement subscription renews every thirty seconds to obtain a current HA
+snapshot even when unchanged payloads produce sparse update events. Original
+observation times are retained; replayed snapshots do not add samples, and
+retired callbacks or older observations cannot replace newer evidence. Once a
+minute, an authenticated Bluetooth diagnostics request also imports individual
+scanners' raw observations. This preserves independent native evidence when the
+general feed selects a proxy reporting the same canonical address. Only bounded
+BLE fields are retained; app-proxy sources are excluded, and scanner monotonic
+timestamps preserve observation age. Diagnostic byte literals are decoded with
+a restricted parser, never evaluated. Shared
 associations and peer evidence have their own live subscriptions. A friendly
 name is used for display after identification, not substituted for an identity.
 

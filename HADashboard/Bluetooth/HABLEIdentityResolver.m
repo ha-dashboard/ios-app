@@ -3,6 +3,7 @@
 #import "HABLEProto.h"
 #import "HAConnectionManager.h"
 #import "HAAuthManager.h"
+#import "HAAPIClient.h"
 #import <CommonCrypto/CommonDigest.h>
 #import <fnmatch.h>
 #import <math.h>
@@ -101,6 +102,13 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 @property (nonatomic) NSTimeInterval lastNativeSnapshot;
 @property (nonatomic) NSInteger nativeSubscription;
 @property (nonatomic) NSUInteger nativeSubscriptionEpoch;
+@property (nonatomic, strong) HAAPIClient *nativeDiagnosticsClient;
+@property (nonatomic, copy) NSString *nativeDiagnosticsEntry;
+@property (nonatomic) BOOL nativeDiagnosticsInFlight;
+@property (nonatomic) NSTimeInterval nextNativeDiagnostics;
+@property (nonatomic) NSTimeInterval lastNativeDiagnostics;
+@property (nonatomic) NSInteger nativeDiagnosticsError;
+@property (nonatomic) NSUInteger nativeDiagnosticsObservations;
 @property (nonatomic) BOOL inventoryPublishing;
 @property (nonatomic) NSUInteger inventoryCursor;
 @property (nonatomic) BOOL inventoryPartial;
@@ -142,6 +150,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     return self.sourceServer.length && [auth.serverURL isEqual:self.sourceServer] && auth.authenticationRevision==self.sourceRevision;
 }
 - (void)cancel {
+    [self.nativeDiagnosticsClient cancelAllRequests];self.nativeDiagnosticsClient=nil;self.nativeDiagnosticsInFlight=NO;self.nextNativeDiagnostics=0;
     self.generation++;self.nativeSubscriptionEpoch++;self.nativeSubscription=0;self.nextNativeSnapshot=0;self.lastNativeSnapshot=0;
     if ([self sourceIsCurrent] && self.connection.connected) for (NSNumber *subscription in self.subscriptions) [self.connection unsubscribeFromEventWithId:subscription.integerValue];
     [self.subscriptions removeAllObjects]; [self.writesInFlight removeAllObjects]; self.publicationInFlight=NO; self.publishing=NO; self.inventoryPublishing=NO;
@@ -150,7 +159,11 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     self.sourceAddress=source.uppercaseString; [self.proxySources removeAllObjects]; [self.potentialKnownIdentifiers removeAllObjects];
     NSMutableSet *adapters=NSMutableSet.set; NSMutableDictionary *domains=NSMutableDictionary.dictionary; NSMutableArray *records=NSMutableArray.array;
     for(NSDictionary *entry in entries)if([entry[@"entry_id"] isKindOfClass:NSString.class] && [entry[@"domain"] isKindOfClass:NSString.class])domains[entry[@"entry_id"]]=entry[@"domain"];
-    for (NSDictionary *entry in entries) if ([entry[@"domain"] isEqual:@"bluetooth"]) [adapters addObject:entry[@"entry_id"]];
+    self.nativeDiagnosticsEntry=nil;
+    for (NSDictionary *entry in entries) if ([entry[@"domain"] isEqual:@"bluetooth"]) {
+        NSString *entryID=HABLEString(entry[@"entry_id"]);if(!entryID.length)continue;[adapters addObject:entryID];
+        if(!self.nativeDiagnosticsEntry && entryID.length<=128 && [entryID rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-"] invertedSet]].location==NSNotFound)self.nativeDiagnosticsEntry=entryID;
+    }
     for (NSDictionary *device in devices) {
         NSString *manufacturer=[HABLEString(device[@"manufacturer"]) lowercaseString];
         // Recognize our own transport nodes, never a list of sensor vendors.
@@ -368,7 +381,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         NSUInteger count=0;for(NSDictionary *row in [self.peerInventories[source] allValues])if(now-[row[@"last_seen"] doubleValue]<=120)count++;
         if(count){sources++;observations+=count;}
     }
-    return @{@"peer_sources":@(sources),@"peer_observations":@(observations),@"last_publish":@(self.lastInventoryPublish),@"publish_error":@(self.inventoryPublishError),@"partial_batch":@(self.inventoryPartial),@"native_snapshot_received_at":@(self.lastNativeSnapshot)};
+    return @{@"peer_sources":@(sources),@"peer_observations":@(observations),@"last_publish":@(self.lastInventoryPublish),@"publish_error":@(self.inventoryPublishError),@"partial_batch":@(self.inventoryPartial),@"native_snapshot_received_at":@(self.lastNativeSnapshot),@"native_diagnostics_at":@(self.lastNativeDiagnostics),@"native_diagnostics_error":@(self.nativeDiagnosticsError),@"native_diagnostics_observations":@(self.nativeDiagnosticsObservations)};
 }
 - (void)maintainInventory {
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;
@@ -465,6 +478,31 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         }];
     }
     dispatch_group_notify(group,dispatch_get_main_queue(),^{HABLEIdentityResolver *self=weakSelf;if(self && generation==self.generation && [self sourceIsCurrent])completion();});
+}
+- (HAAPIClient *)nativeDiagnosticsAPIClient {
+    if(!self.nativeDiagnosticsClient) {
+        HAAuthManager *auth=HAAuthManager.sharedManager;
+        if(!auth.restBaseURL || !auth.accessToken.length)return nil;
+        self.nativeDiagnosticsClient=[[HAAPIClient alloc] initWithBaseURL:auth.restBaseURL token:auth.accessToken];
+    }
+    return self.nativeDiagnosticsClient;
+}
+- (void)refreshNativeScannerDiagnostics {
+    if([NSUserDefaults.standardUserDefaults boolForKey:@"HABLEIdentitySharedOnly"] || !self.nativeDiagnosticsEntry.length || self.nativeDiagnosticsInFlight || ![self sourceIsCurrent] || !self.connection.connected)return;
+    NSTimeInterval requested=NSDate.date.timeIntervalSince1970;if(requested<self.nextNativeDiagnostics)return;
+    self.nextNativeDiagnostics=requested+60;HAAPIClient *client=[self nativeDiagnosticsAPIClient];if(!client)return;
+    self.nativeDiagnosticsInFlight=YES;NSUInteger generation=self.generation;__weak typeof(self) weakSelf=self;
+    [client getJSONAtPath:[@"diagnostics/config_entry/" stringByAppendingString:self.nativeDiagnosticsEntry] completion:^(id response,NSError *error){
+        HABLEIdentityResolver *self=weakSelf;if(!self || generation!=self.generation || ![self sourceIsCurrent])return;
+        self.nativeDiagnosticsInFlight=NO;self.nativeDiagnosticsError=error.code;
+        if(error){self.nextNativeDiagnostics=NSDate.date.timeIntervalSince1970+120;return;}
+        // Retain only BLE observations. The diagnostics envelope, adapter
+        // internals and unrelated server data are never stored or published.
+        NSMutableArray *observations=NSMutableArray.array;
+        for(NSDictionary *row in [HABLEIdentityEvidence nativeObservationsFromDiagnostics:response requestedAt:requested])if(![self.proxySources containsObject:row[@"source"]] && ![row[@"source"] isEqual:self.sourceAddress])[observations addObject:row];
+        self.lastNativeDiagnostics=NSDate.date.timeIntervalSince1970;self.nativeDiagnosticsObservations=observations.count;
+        [self observeAdvertisements:observations];
+    }];
 }
 - (void)refreshNativeAdvertisements {
     if([NSUserDefaults.standardUserDefaults boolForKey:@"HABLEIdentitySharedOnly"] || ![self sourceIsCurrent] || !self.connection.connected)return;
@@ -776,7 +814,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 }
 - (void)maintainSynchronization {
     if(!self.loaded || ![self sourceIsCurrent] || !self.connection.connected)return;
-    [self refreshNativeAdvertisements]; [self pumpPublications]; [self maintainInventory];
+    [self refreshNativeAdvertisements]; [self refreshNativeScannerDiagnostics]; [self pumpPublications]; [self maintainInventory];
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;if(now<self.nextPublish || self.publishing)return;self.nextPublish=now+8;
     BOOL learning=NO;NSMutableArray *requested=NSMutableArray.array;
     for(NSString *identifier in self.localObservations) {NSDictionary *observation=self.localObservations[identifier];if(now-[observation[@"last_seen"] doubleValue]<=120 && !self.localBindings[identifier] && [self hasKnownIdentityForObservation:observation]) {

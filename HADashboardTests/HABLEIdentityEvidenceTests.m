@@ -2,12 +2,15 @@
 #import "HABLEIdentityEvidence.h"
 #import "HABLEIdentityResolver.h"
 #import "HAConnectionManager.h"
+#import "HAAPIClient.h"
 
 @interface HABLEIdentityResolver (GenericTests)
 - (void)loadRegistry:(NSArray *)devices entries:(NSArray *)entries excludingSource:(NSString *)source;
 - (void)observeAdvertisements:(NSArray *)advertisements;
 - (void)loadCatalog:(id)value;
 - (void)refreshNativeAdvertisements;
+- (void)refreshNativeScannerDiagnostics;
+- (HAAPIClient *)nativeDiagnosticsAPIClient;
 - (void)observePeer:(id)value source:(NSString *)source;
 - (void)observeInventory:(id)value source:(NSString *)source;
 - (NSArray *)localInventoryAtTime:(NSTimeInterval)now;
@@ -38,13 +41,23 @@
 - (NSInteger)subscribeToEventType:(NSString *)type handler:(void (^)(NSDictionary *))handler { self.registryHandler=handler;[self.subscriptions addObject:type];return self.subscriptions.count; }
 - (void)unsubscribeFromEventWithId:(NSInteger)identifier { [self.unsubscriptions addObject:@(identifier)]; }
 @end
+@interface HABLEFakeDiagnosticsClient : NSObject
+@property (nonatomic, strong) NSMutableArray *paths;
+@property (nonatomic, copy) HAAPIResponseBlock pending;
+@end
+@implementation HABLEFakeDiagnosticsClient
+- (instancetype)init {if((self=[super init]))_paths=NSMutableArray.array;return self;}
+- (void)getJSONAtPath:(NSString *)path completion:(HAAPIResponseBlock)completion {[self.paths addObject:path];self.pending=completion;}
+@end
 @interface HABLETransportTestResolver : HABLEIdentityResolver
 @property (nonatomic, strong) HABLEFakeIdentityConnection *fakeConnection;
 @property (nonatomic) BOOL currentScope;
+@property (nonatomic, strong) HABLEFakeDiagnosticsClient *fakeDiagnostics;
 @end
 @implementation HABLETransportTestResolver
 - (HAConnectionManager *)connection { return (HAConnectionManager *)self.fakeConnection; }
 - (BOOL)sourceIsCurrent { return self.currentScope; }
+- (HAAPIClient *)nativeDiagnosticsAPIClient {return (HAAPIClient *)self.fakeDiagnostics;}
 @end
 @interface HABLEIdentityEvidenceTests : XCTestCase
 @end
@@ -200,6 +213,45 @@
     resolver.fakeConnection.advertisementHandler(@{@"add":@[older]});
     XCTAssertEqualObjects([resolver valueForKey:@"remoteInfo"][@"AA:BB:CC:DD:EE:01"][@"name"],@"Unit1234");
     [resolver cancel];XCTAssertEqualObjects(resolver.fakeConnection.unsubscriptions,(@[@1,@2]));
+}
+- (NSMutableDictionary *)scannerDiagnosticsFixture {
+    NSString *address=@"AA:BB:CC:DD:EE:01";
+    NSMutableDictionary *scanner=[@{@"source":@"20:00:00:00:00:01",@"monotonic_time":@1000,
+        @"discovered_device_timestamps":@{address:@999.5},
+        @"raw_advertisement_data":@{address:@{@"__type":@"<class 'bytes'>",@"repr":@"b'\\t\\xff\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08'"}},
+        @"discovered_devices_and_advertisement_data":@[@{@"address":address,@"name":@"Unit1234",@"advertisement_data":@[@"Unit1234",@{},@{},@[@"1234"]]}]} mutableCopy];
+    return scanner;
+}
+- (void)testScannerDiagnosticsPreserveNativeSourcePayloadAndObservationAge {
+    NSDictionary *scanner=[self scannerDiagnosticsFixture];NSDictionary *envelope=@{@"data":@{@"manager":@{@"scanners":@[scanner]},@"unrelated":@"must not be retained"}};
+    NSArray *rows=[HABLEIdentityEvidence nativeObservationsFromDiagnostics:envelope requestedAt:100000];XCTAssertEqual(rows.count,1u);
+    XCTAssertEqualObjects(rows.firstObject[@"source"],@"20:00:00:00:00:01");XCTAssertEqualObjects(rows.firstObject[@"raw"],@"09ff0102030405060708");
+    XCTAssertEqualWithAccuracy([rows.firstObject[@"time"] doubleValue],99999.5,0.001);XCTAssertNil(rows.firstObject[@"unrelated"]);
+}
+- (void)testScannerDiagnosticsRejectStaleFutureAndMalformedByteLiterals {
+    NSMutableDictionary *scanner=[self scannerDiagnosticsFixture];NSString *address=@"AA:BB:CC:DD:EE:01";
+    for(NSNumber *timestamp in @[@800,@1001]) {
+        scanner[@"discovered_device_timestamps"]=@{address:timestamp};
+        XCTAssertEqual([HABLEIdentityEvidence nativeObservationsFromDiagnostics:@{@"data":@{@"manager":@{@"scanners":@[scanner]}}} requestedAt:100000].count,0u);
+    }
+    scanner[@"discovered_device_timestamps"]=@{address:@999};
+    for(NSString *literal in @[@"__import__('os')",@"b'\\xgg'",@"b'\\x1'",@"b'\\q'"]) {
+        scanner[@"raw_advertisement_data"]=@{address:@{@"__type":@"<class 'bytes'>",@"repr":literal}};
+        XCTAssertEqual([HABLEIdentityEvidence nativeObservationsFromDiagnostics:@{@"data":@{@"manager":@{@"scanners":@[scanner]}}} requestedAt:100000].count,0u);
+    }
+}
+- (void)testSourceDiagnosticsImportIsBoundedAndRejectsProxyEcho {
+    HABLETransportTestResolver *resolver=[HABLETransportTestResolver new];resolver.fakeConnection=[HABLEFakeIdentityConnection new];resolver.fakeDiagnostics=[HABLEFakeDiagnosticsClient new];resolver.currentScope=YES;
+    [resolver loadRegistry:@[] entries:@[@{@"entry_id":@"bluetooth-entry",@"domain":@"bluetooth"}] excludingSource:@"02:00:00:00:00:01"];
+    [resolver refreshNativeScannerDiagnostics];[resolver refreshNativeScannerDiagnostics];XCTAssertEqualObjects(resolver.fakeDiagnostics.paths,(@[@"diagnostics/config_entry/bluetooth-entry"]));
+    NSDictionary *envelope=@{@"data":@{@"manager":@{@"scanners":@[[self scannerDiagnosticsFixture]]}}};
+    resolver.fakeDiagnostics.pending(envelope,nil);XCTAssertEqual([[resolver valueForKey:@"remoteInfo"] count],1u);
+    [resolver refreshNativeScannerDiagnostics];XCTAssertEqual(resolver.fakeDiagnostics.paths.count,1u);
+    [[resolver valueForKey:@"remoteInfo"] removeAllObjects];[[resolver valueForKey:@"proxySources"] addObject:@"20:00:00:00:00:01"];
+    [resolver setValue:@0 forKey:@"nextNativeDiagnostics"];[resolver refreshNativeScannerDiagnostics];resolver.fakeDiagnostics.pending(envelope,nil);
+    XCTAssertEqual([[resolver valueForKey:@"remoteInfo"] count],0u);
+    [resolver setValue:@0 forKey:@"nextNativeDiagnostics"];[resolver refreshNativeScannerDiagnostics];HAAPIResponseBlock old=resolver.fakeDiagnostics.pending;[resolver cancel];old(envelope,nil);
+    XCTAssertEqual([[resolver valueForKey:@"remoteInfo"] count],0u);
 }
 - (NSDictionary *)stableIdentifierFields {
     NSData *json=[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:55"}} options:0 error:nil];

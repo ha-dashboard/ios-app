@@ -23,7 +23,58 @@ static NSString *HABLELittleEndianUUID(const uint8_t *bytes, NSUInteger length) 
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableArray<NSDictionary *> *> *locals;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableArray<NSDictionary *> *> *remotes;
 @end
+// Home Assistant diagnostics encode bytes as a Python repr. Decode only
+// the bounded literal grammar; never evaluate diagnostic text as code.
+static int HABLEDiagnosticHex(unichar c) {
+    if(c>='0' && c<='9')return c-'0';if(c>='a' && c<='f')return c-'a'+10;if(c>='A' && c<='F')return c-'A'+10;return -1;
+}
+static NSData *HABLEDiagnosticBytes(id value) {
+    if(![value isKindOfClass:NSDictionary.class] || ![value[@"__type"] isEqual:@"<class 'bytes'>"])return nil;
+    NSString *literal=value[@"repr"];if(![literal isKindOfClass:NSString.class] || literal.length<3 || literal.length>16384 || [literal characterAtIndex:0]!='b')return nil;
+    unichar quote=[literal characterAtIndex:1];if((quote!='\'' && quote!='"') || [literal characterAtIndex:literal.length-1]!=quote)return nil;
+    NSMutableData *data=NSMutableData.data;
+    for(NSUInteger i=2;i<literal.length-1;i++) {
+        unichar c=[literal characterAtIndex:i];
+        if(c=='\\') {
+            if(++i>=literal.length-1)return nil;c=[literal characterAtIndex:i];
+            if(c=='x') {
+                if(i+2>=literal.length-1)return nil;int high=HABLEDiagnosticHex([literal characterAtIndex:++i]),low=HABLEDiagnosticHex([literal characterAtIndex:++i]);if(high<0 || low<0)return nil;c=(high<<4)|low;
+            } else if(c=='n')c='\n';else if(c=='r')c='\r';else if(c=='t')c='\t';
+            else if(c!='\\' && c!='\'' && c!='"')return nil;
+        } else if(c<32 || c>126 || c==quote)return nil;
+        uint8_t byte=(uint8_t)c;[data appendBytes:&byte length:1];if(data.length>4096)return nil;
+    }
+    return data;
+}
 @implementation HABLEIdentityEvidence
++ (NSArray *)nativeObservationsFromDiagnostics:(id)diagnostics requestedAt:(NSTimeInterval)time {
+    if(!isfinite(time) || ![diagnostics isKindOfClass:NSDictionary.class])return @[];
+    id data=diagnostics[@"data"],manager=[data isKindOfClass:NSDictionary.class] ? data[@"manager"] : nil;
+    id scanners=[manager isKindOfClass:NSDictionary.class] ? manager[@"scanners"] : nil;
+    if(![scanners isKindOfClass:NSArray.class] || [scanners count]>64)return @[];
+    NSMutableArray *result=NSMutableArray.array;
+    for(id scanner in scanners) {
+        if(![scanner isKindOfClass:NSDictionary.class])continue;
+        NSString *source=scanner[@"source"];uint64_t addressValue;
+        if(![source isKindOfClass:NSString.class] || !HABLEParseAddress(source,&addressValue) || ![scanner[@"monotonic_time"] isKindOfClass:NSNumber.class])continue;
+        double monotonic=[scanner[@"monotonic_time"] doubleValue];if(!isfinite(monotonic))continue;
+        id devices=scanner[@"discovered_devices_and_advertisement_data"],timestamps=scanner[@"discovered_device_timestamps"],raw=scanner[@"raw_advertisement_data"];
+        if(![devices isKindOfClass:NSArray.class] || [devices count]>2048 || ![timestamps isKindOfClass:NSDictionary.class] || ![raw isKindOfClass:NSDictionary.class])continue;
+        for(id device in devices) {
+            if(![device isKindOfClass:NSDictionary.class])continue;NSString *address=device[@"address"];
+            if(![address isKindOfClass:NSString.class] || !HABLEParseAddress(address,&addressValue) || ![timestamps[address] isKindOfClass:NSNumber.class])continue;
+            double age=monotonic-[timestamps[address] doubleValue];if(!isfinite(age) || age<0 || age>120)continue;
+            NSData *bytes=HABLEDiagnosticBytes(raw[address]);if(!bytes.length)continue;
+            id advertisement=device[@"advertisement_data"];if(![advertisement isKindOfClass:NSArray.class] || [advertisement count]<4 || ![advertisement[3] isKindOfClass:NSArray.class] || [advertisement[3] count]>64)continue;
+            NSString *name=[device[@"name"] isKindOfClass:NSString.class] ? device[@"name"] : @"";if(name.length>256)continue;
+            NSMutableString *hex=NSMutableString.string;const uint8_t *b=bytes.bytes;for(NSUInteger i=0;i<bytes.length;i++)[hex appendFormat:@"%02x",b[i]];
+            [result addObject:@{@"address":address.uppercaseString,@"source":source.uppercaseString,@"name":name,@"time":@(time-age),@"raw":hex,@"service_uuids":[self canonicalServices:advertisement[3]]}];
+            if(result.count>=512)return result;
+        }
+    }
+    return result;
+}
+
 + (NSDictionary *)fingerprintsForValue:(NSData *)data path:(NSString *)path {
     if(!data.length || data.length>512 || !path.length)return @{};
     NSDictionary *(^fingerprint)(NSData *,NSString *)=^NSDictionary *(NSData *bytes,NSString *kind) {
