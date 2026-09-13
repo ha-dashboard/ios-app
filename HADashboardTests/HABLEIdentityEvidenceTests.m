@@ -144,6 +144,16 @@
     o=[self recordPassiveUnit:@"Unit1234" identifier:@"a" address:@"AA:BB:CC:DD:EE:01" resolver:resolver atTime:now];
     XCTAssertNil([resolver automaticMatchForObservation:o]);
 }
+- (void)testPassiveSignatureAcceptsFreshReferenceWithoutCountingSnapshotReplays {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;HABLEIdentityResolver *resolver=[HABLEIdentityResolver new];
+    [resolver loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    NSDictionary *o=[self recordPassiveUnit:@"Unit1234" identifier:@"a" address:@"AA:BB:CC:DD:EE:01" resolver:resolver atTime:now-30];
+    for(NSUInteger i=1;i<4;i++){NSMutableDictionary *next=[o mutableCopy];next[@"last_seen"]=@(now-30+i*10);[resolver recordObservation:next identifier:@"a"];o=next;}
+    XCTAssertEqualObjects([resolver automaticMatchForObservation:o][@"method"],@"passive_signature");
+    NSMutableDictionary *remote=[[resolver valueForKey:@"remoteInfo"][@"AA:BB:CC:DD:EE:01"] mutableCopy];remote[@"time"]=@(now-121);
+    [[resolver valueForKey:@"remoteInfo"] setObject:remote forKey:@"AA:BB:CC:DD:EE:01"];
+    XCTAssertNil([resolver automaticMatchForObservation:o]);
+}
 - (NSDictionary *)stableIdentifierFields {
     NSData *json=[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:55"}} options:0 error:nil];
     NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:json path:@"s/1234/c/5678"];
