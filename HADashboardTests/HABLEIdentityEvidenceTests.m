@@ -174,6 +174,19 @@
     [r loadRegistry:@[@{@"id":@"sensor",@"name":@"Room climate",@"serial_number":@"SN-901827",@"connections":@[@[@"bluetooth",@"00:11:22:33:44:55"]],@"identifiers":@[@[@"arbitrary_integration",@"UNIT-901827"]]}] entries:@[] excludingSource:@"02:00:00:00:00:01"];
     return r;
 }
+- (void)testAddressCorroborationAllowsExtensionsButRejectsChangedPrefixesAndConflicts {
+    uint8_t bytes[]={0x34,0x12,0,0x11,0x22,0x33,0x44,0x55,0x99,0xaa};
+    NSData *base=[NSData dataWithBytes:bytes length:sizeof(bytes)];NSMutableData *extended=[base mutableCopy];[extended appendData:[@"extension" dataUsingEncoding:NSUTF8StringEncoding]];
+    NSArray *shortTokens=[HABLEIdentityEvidence tokensForObservation:@{@"manufacturer_data":[base base64EncodedStringWithOptions:0]}];
+    NSArray *longTokens=[HABLEIdentityEvidence tokensForObservation:@{@"manufacturer_data":[extended base64EncodedStringWithOptions:0]}];
+    XCTAssertTrue(([HABLEIdentityEvidence tokens:longTokens corroborateAddress:@"00:11:22:33:44:55" withTokens:shortTokens]));
+    XCTAssertTrue(([HABLEIdentityEvidence tokens:shortTokens corroborateAddress:@"00:11:22:33:44:55" withTokens:longTokens]));
+    XCTAssertFalse(([HABLEIdentityEvidence tokens:longTokens corroborateAddress:@"00:11:22:33:44:66" withTokens:shortTokens]));
+    ((uint8_t *)extended.mutableBytes)[9]^=1;
+    NSArray *changed=[HABLEIdentityEvidence tokensForObservation:@{@"manufacturer_data":[extended base64EncodedStringWithOptions:0]}];
+    XCTAssertFalse(([HABLEIdentityEvidence tokens:changed corroborateAddress:@"00:11:22:33:44:55" withTokens:shortTokens]));
+    XCTAssertFalse(([HABLEIdentityEvidence tokens:[longTokens arrayByAddingObject:@"s:1234:4:AQIDBA=="] corroborateAddress:@"00:11:22:33:44:55" withTokens:[shortTokens arrayByAddingObject:@"s:1234:4:BQYHCA=="]]));
+}
 - (void)testObservedAddressCanMatchWithoutAnyHADeviceRegistration {
     HABLEIdentityResolver *r=[HABLEIdentityResolver new];
     [r loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];
@@ -195,6 +208,10 @@
     [peer setValue:[@{@"local":binding} mutableCopy] forKey:@"localBindings"];
     different[@"manufacturer_data"]=[[@"another packet layout" dataUsingEncoding:NSUTF8StringEncoding] base64EncodedStringWithOptions:0];
     XCTAssertEqualObjects(([peer automaticMatchForObservation:different][@"address"]),@"00:11:22:33:44:55");
+    NSMutableDictionary *localTwin=[o mutableCopy];localTwin[@"identifier"]=@"other-local";localTwin[@"last_seen"]=@(NSDate.date.timeIntervalSince1970);
+    NSMutableData *extended=[NSMutableData dataWithBytes:bytes length:sizeof(bytes)];((uint8_t *)extended.mutableBytes)[9]=0xaa;[extended appendData:[@"extra" dataUsingEncoding:NSUTF8StringEncoding]];
+    localTwin[@"manufacturer_data"]=[extended base64EncodedStringWithOptions:0];[r recordObservation:localTwin identifier:@"other-local"];
+    XCTAssertNil([r automaticMatchForObservation:o]);[r removeIdentifier:@"other-local"];
     NSMutableDictionary *second=[ad mutableCopy];second[@"address"]=@"00:11:22:33:44:66";[r observeAdvertisements:@[second]];
     XCTAssertNil([r automaticMatchForObservation:o]);
     XCTAssertTrue(([[r evidenceForIdentifier:@"local"] hasPrefix:@"Ambiguous:"]));

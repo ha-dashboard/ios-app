@@ -346,7 +346,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 }
 - (BOOL)proof:(NSDictionary *)proof matches:(NSDictionary *)observation {
     NSString *method=proof[@"method"];
-    if([method isEqual:@"embedded_address"] && [proof[@"identity_kind"] isEqual:@"observed_native"])return [HABLEIdentityEvidence observation:observation containsAddress:proof[@"address"]] && HABLEProfilesCompatible(HABLEProfile(observation),proof[@"profile"]) && [HABLEIdentityEvidence tokens:[HABLEIdentityEvidence tokensForObservation:observation] agreeWith:[HABLEIdentityEvidence tokensForRawAdvertisement:HABLEHexData(proof[@"native_anchor"][@"raw"])]];
+    if([method isEqual:@"embedded_address"] && [proof[@"identity_kind"] isEqual:@"observed_native"])return [HABLEIdentityEvidence observation:observation containsAddress:proof[@"address"]] && HABLEProfilesCompatible(HABLEProfile(observation),proof[@"profile"]) && [HABLEIdentityEvidence tokens:[HABLEIdentityEvidence tokensForObservation:observation] corroborateAddress:proof[@"address"] withTokens:[HABLEIdentityEvidence tokensForRawAdvertisement:HABLEHexData(proof[@"native_anchor"][@"raw"])]];
     if([method isEqual:@"embedded_address"])return [HABLEIdentityEvidence observation:observation containsAddress:proof[@"address"]];
     if([method isEqual:@"serial"])return [observation[@"serial_number"] isEqual:proof[@"unit_identifier"]];
     if([method isEqual:@"named_identifier"])return [HABLEString(observation[@"name"]) caseInsensitiveCompare:HABLEString(proof[@"unit_identifier"])]==NSOrderedSame && [HABLEIdentityEvidence tokensForObservation:observation].count && HABLEProfilesCompatible(HABLEProfile(observation),proof[@"profile"]);
@@ -367,7 +367,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         if(compatible){score+=5;[reasons addObject:@"Observed BLE profile is compatible"];}
         BOOL payload=[HABLEIdentityEvidence tokens:tokens agreeWith:remote[@"tokens"]];
         BOOL sameName=!name.length || [name isEqual:@"Unnamed device"] || ![HABLEString(remote[@"name"]) length] || [name caseInsensitiveCompare:HABLEString(remote[@"name"])]==NSOrderedSame;
-        if(embedded && sameName && payload && compatible && fabs(now-[remote[@"time"] doubleValue])<=120 && ![self.proxySources containsObject:remote[@"source"]]){method=@"embedded_address";score+=160;[reasons addObject:@"Address occurrence corroborated by an independent radio"];}
+        if(embedded && sameName && [HABLEIdentityEvidence tokens:tokens corroborateAddress:address withTokens:remote[@"tokens"]] && compatible && fabs(now-[remote[@"time"] doubleValue])<=120 && ![self.proxySources containsObject:remote[@"source"]]){method=@"embedded_address";score+=160;[reasons addObject:@"Address occurrence corroborated by an independent radio"];}
         if(named && [HABLEString(remote[@"name"]) caseInsensitiveCompare:named]==NSOrderedSame && payload && compatible && fabs(now-[remote[@"time"] doubleValue])<=120 && ![self.proxySources containsObject:remote[@"source"]]){method=@"named_identifier";unit=named;score+=160;[reasons addObject:@"Unit identifier and current payload agree with an independent scanner"];}
         if([self validBinding:shared] && [self proof:shared matches:observation]){method=shared[@"method"];unit=shared[@"unit_identifier"];score+=180;[reasons addObject:@"Verified generic HA association matches"];}
         NSDictionary *saved=self.localBindings[identifier];
@@ -396,13 +396,20 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     for(NSDictionary *candidate in candidates)if([candidate[@"automatic_match"] boolValue]){if(match){if([observation[@"identifier"] length])self.lastEvidence[observation[@"identifier"]]=@"Ambiguous: multiple known devices satisfy the identity evidence";return nil;}match=candidate;}
     if(!match)return nil;
     NSString *identifier=observation[@"identifier"];
+    if([match[@"identity_kind"] isEqual:@"observed_native"]) for(NSString *other in self.localObservations) {
+        NSDictionary *peer=self.localObservations[other];
+        if([other isEqual:identifier] || NSDate.date.timeIntervalSince1970-[peer[@"last_seen"] doubleValue]>120)continue;
+        if(HABLEProfilesCompatible(HABLEProfile(observation),HABLEProfile(peer)) && [HABLEIdentityEvidence tokens:[HABLEIdentityEvidence tokensForObservation:observation] corroborateAddress:match[@"address"] withTokens:[HABLEIdentityEvidence tokensForObservation:peer]]) {
+            self.lastEvidence[identifier]=@"Ambiguous: multiple local peripherals carry the same address-bearing payload";return nil;
+        }
+    }
     if([match[@"identity_kind"] isEqual:@"observed_native"] && [self.evidence hasCompetingLocalIdentifier:identifier address:match[@"address"] now:NSDate.date.timeIntervalSince1970]) {
         self.lastEvidence[identifier]=@"Ambiguous: another local peripheral shares this observed identity evidence";return nil;
     }
     if([match[@"identity_kind"] isEqual:@"observed_native"]) for(NSString *other in self.remoteInfo) {
         NSDictionary *remote=self.remoteInfo[other];
         if([other isEqual:match[@"address"]] || !remote[@"native_anchor"] || fabs(NSDate.date.timeIntervalSince1970-[remote[@"time"] doubleValue])>120)continue;
-        if(HABLEProfilesCompatible(HABLEProfile(observation),remote[@"profile"]) && [HABLEIdentityEvidence tokens:[HABLEIdentityEvidence tokensForObservation:observation] agreeWith:remote[@"tokens"]]) {
+        if(HABLEProfilesCompatible(HABLEProfile(observation),remote[@"profile"]) && ([HABLEIdentityEvidence tokens:[HABLEIdentityEvidence tokensForObservation:observation] agreeWith:remote[@"tokens"]] || [HABLEIdentityEvidence tokens:[HABLEIdentityEvidence tokensForObservation:observation] corroborateAddress:match[@"address"] withTokens:remote[@"tokens"]])) {
             self.lastEvidence[identifier]=@"Ambiguous: multiple radio addresses carry the same observed payload";return nil;
         }
     }

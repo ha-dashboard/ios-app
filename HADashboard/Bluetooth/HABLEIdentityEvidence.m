@@ -67,6 +67,28 @@ static NSString *HABLELittleEndianUUID(const uint8_t *bytes, NSUInteger length) 
     }
     return common;
 }
++ (BOOL)tokens:(NSArray<NSString *> *)local corroborateAddress:(NSString *)address withTokens:(NSArray<NSString *> *)remote {
+    NSDictionary *(^parts)(NSString *)=^NSDictionary *(NSString *token) {
+        NSRange last=[token rangeOfString:@":" options:NSBackwardsSearch];if(last.location==NSNotFound)return nil;
+        NSString *prefix=[token substringToIndex:last.location];NSRange lengthSeparator=[prefix rangeOfString:@":" options:NSBackwardsSearch];
+        if(lengthSeparator.location==NSNotFound)return nil;
+        NSData *data=[[NSData alloc] initWithBase64EncodedString:[token substringFromIndex:last.location+1] options:0];
+        return data ? @{@"channel":[prefix substringToIndex:lengthSeparator.location+1],@"bytes":data} : nil;
+    };
+    BOOL addressed=NO;
+    for(NSString *token in local) {
+        NSDictionary *a=parts(token);if(!a)continue;BOOL comparable=NO,agrees=NO;
+        for(NSString *other in remote) {
+            NSDictionary *b=parts(other);if(![a[@"channel"] isEqual:b[@"channel"]])continue;comparable=YES;
+            NSData *left=a[@"bytes"],*right=b[@"bytes"],*shorter=left.length<=right.length ? left : right,*longer=left.length<=right.length ? right : left;
+            BOOL contains=shorter.length>=8 && [self observation:@{@"manufacturer_data":[shorter base64EncodedStringWithOptions:0]} containsAddress:address];
+            BOOL prefix=shorter.length && [[longer subdataWithRange:NSMakeRange(0,shorter.length)] isEqual:shorter];
+            if([left isEqual:right] || (contains && shorter.length>=10 && prefix)){agrees=YES;if(contains)addressed=YES;}
+        }
+        if(comparable && !agrees)return NO;
+    }
+    return addressed;
+}
  + (BOOL)observation:(NSDictionary *)observation containsUUID:(NSString *)uuid {
     NSString *hex=[HABLECanonicalUUID(uuid) stringByReplacingOccurrencesOfString:@"-" withString:@""];if(hex.length!=32)return NO;
     uint8_t bytes[16],reverse[16];for(NSUInteger i=0;i<16;i++){unsigned n=0;[[NSScanner scannerWithString:[hex substringWithRange:NSMakeRange(i*2,2)]]scanHexInt:&n];bytes[i]=n;reverse[15-i]=n;}
