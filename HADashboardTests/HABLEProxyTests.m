@@ -160,6 +160,17 @@ static NSUInteger HABLERejectedRequestCount;
     }
     XCTAssertEqual(manager.inspections,2u);
 }
+- (void)testRecentManualReadAndCachedWeakProbeAreNotRepeatedAfterRestart {
+    HABLEFailingProbeProxy *manager=[HABLEFailingProbeProxy new];NSTimeInterval now=NSDate.date.timeIntervalSince1970;
+    [manager setValue:@YES forKey:@"identitiesReady"];[manager setValue:[HABLECountingResolver new] forKey:@"identityResolver"];
+    NSMutableDictionary *observation=[@{@"identifier":@"recent",@"connectable":@YES,@"last_seen":@(now),@"first_seen":@(now-120),@"rssi":@(-50),@"identification_read_at":@(now),@"gatt_probe_attempts":@1,@"gatt_fingerprints":@{@"path":@{@"sessions":@1}}} mutableCopy];
+    [manager setValue:[@{@"recent":observation} mutableCopy] forKey:@"observations"];
+    [manager probePendingIdentity];XCTAssertEqual(manager.inspections,0u);
+    observation[@"identification_read_at"]=@(now-120);observation[@"gatt_probe_attempts"]=@2;
+    [manager probePendingIdentity];XCTAssertEqual(manager.inspections,0u);
+    observation[@"gatt_fingerprints"]=@{@"path":@{@"sessions":@2,@"kind":@"json_scalar"}};
+    [manager probePendingIdentity];XCTAssertEqual(manager.inspections,1u,@"Old structured data needs one bounded format-aware refresh");
+}
 - (void)testFingerprintDiscoveryOnlyQueuesBoundedReadableCharacteristics {
     HABLEFingerprintPolicyProxy *manager=[HABLEFingerprintPolicyProxy new];id session=[NSClassFromString(@"HABLEPeripheralSession") new];
     HABLEObservedPeripheral *peripheral=[HABLEObservedPeripheral new];peripheral.identifier=NSUUID.UUID;

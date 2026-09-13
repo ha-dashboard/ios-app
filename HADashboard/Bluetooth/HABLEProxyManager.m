@@ -692,6 +692,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 - (NSTimeInterval)identityProbeIntervalForObservation:(NSDictionary *)observation {
     NSString *identifier=observation[@"identifier"];
     if(identifier.length && [self.identityProbeAttempts[identifier] unsignedIntegerValue]>=2)return 3600;
+    if(![observation[@"gatt_fingerprint_schema"] isEqual:@3])for(NSDictionary *value in [observation[@"gatt_fingerprints"] allValues])if([value[@"kind"] isEqual:@"json_scalar"])return 60;
     if([observation[@"gatt_probe_attempts"] unsignedIntegerValue]>=2)return 3600;
     for(NSDictionary *value in [observation[@"gatt_fingerprints"] allValues])if([value[@"sessions"] unsignedIntegerValue]==1)return 60;
     return 3600;
@@ -707,7 +708,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     }];
     for (NSString *identifier in probeOrder) {
         NSDictionary *observation = self.observations[identifier];
-        if (self.mappings[identifier] || self.automaticMappings[identifier] || ![observation[@"connectable"] boolValue] || now-[observation[@"last_seen"] doubleValue]>15 || now-[observation[@"first_seen"] doubleValue]<60 || now-[self.identityProbeTimes[identifier] doubleValue]<[self identityProbeIntervalForObservation:observation] || ![self.identityResolver hasKnownIdentityForObservation:observation]) continue;
+        if (self.mappings[identifier] || self.automaticMappings[identifier] || ![observation[@"connectable"] boolValue] || now-[observation[@"last_seen"] doubleValue]>15 || now-[observation[@"first_seen"] doubleValue]<60 || now-MAX([self.identityProbeTimes[identifier] doubleValue],[observation[@"identification_read_at"] doubleValue])<[self identityProbeIntervalForObservation:observation] || ![self.identityResolver hasKnownIdentityForObservation:observation]) continue;
         self.identityProbeAttempts[identifier]=@(MIN(255,[self.identityProbeAttempts[identifier] unsignedIntegerValue]+1));
         self.identityProbeTimes[identifier] = @(now); self.nextIdentityProbeAt = now + 60;
         __weak typeof(self) weakSelf = self;
