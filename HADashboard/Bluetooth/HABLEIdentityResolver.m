@@ -49,6 +49,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 @property (nonatomic, strong) NSMutableDictionary *remoteInfo;
 @property (nonatomic, strong) NSMutableDictionary *localObservations;
 @property (nonatomic, strong) NSMutableDictionary *lastEvidence;
+@property (nonatomic, strong) NSMutableSet *potentialKnownIdentifiers;
 @property (nonatomic, strong) NSMutableDictionary *localBindings;
 @property (nonatomic, strong) NSMutableDictionary *catalog;
 @property (nonatomic, strong) NSMutableDictionary *peerValues;
@@ -78,7 +79,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 - (instancetype)init {
     if ((self=[super init])) {
         _knownDevices=@[]; _registryDevices=@[]; _status=@"Waiting for automatic synchronization"; _evidence=[HABLEIdentityEvidence new];
-        _remoteInfo=NSMutableDictionary.dictionary; _localObservations=NSMutableDictionary.dictionary; _lastEvidence=NSMutableDictionary.dictionary; _localBindings=NSMutableDictionary.dictionary;
+        _remoteInfo=NSMutableDictionary.dictionary; _localObservations=NSMutableDictionary.dictionary; _lastEvidence=NSMutableDictionary.dictionary; _potentialKnownIdentifiers=NSMutableSet.set; _localBindings=NSMutableDictionary.dictionary;
         _catalog=NSMutableDictionary.dictionary; _discoveryMatchers=NSMutableDictionary.dictionary; _peerValues=NSMutableDictionary.dictionary; _proxySources=NSMutableSet.set; _writesInFlight=NSMutableSet.set; _pendingPublications=NSMutableDictionary.dictionary; _legacyReads=NSMutableSet.set; _subscriptions=NSMutableArray.array;
     } return self;
 }
@@ -93,7 +94,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     [self.subscriptions removeAllObjects]; [self.writesInFlight removeAllObjects]; self.publicationInFlight=NO; self.publishing=NO;
 }
 - (void)loadRegistry:(NSArray *)devices entries:(NSArray *)entries excludingSource:(NSString *)source {
-    self.sourceAddress=source.uppercaseString; [self.proxySources removeAllObjects];
+    self.sourceAddress=source.uppercaseString; [self.proxySources removeAllObjects]; [self.potentialKnownIdentifiers removeAllObjects];
     NSMutableSet *adapters=NSMutableSet.set; NSMutableDictionary *domains=NSMutableDictionary.dictionary; NSMutableArray *records=NSMutableArray.array;
     for(NSDictionary *entry in entries)if([entry[@"entry_id"] isKindOfClass:NSString.class] && [entry[@"domain"] isKindOfClass:NSString.class])domains[entry[@"entry_id"]]=entry[@"domain"];
     for (NSDictionary *entry in entries) if ([entry[@"domain"] isEqual:@"bluetooth"]) [adapters addObject:entry[@"entry_id"]];
@@ -303,7 +304,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     self.localObservations[identifier]=observation;[self.evidence recordLocal:observation identifier:identifier atTime:[observation[@"last_seen"] doubleValue]];
 }
 - (NSString *)evidenceForIdentifier:(NSString *)identifier { return self.lastEvidence[identifier] ?: @"Waiting for sufficient identity evidence"; }
-- (void)removeIdentifier:(NSString *)identifier { [self.lastEvidence removeObjectForKey:identifier]; [self.localObservations removeObjectForKey:identifier];[self.evidence removeIdentifier:identifier]; }
+- (void)removeIdentifier:(NSString *)identifier { [self.potentialKnownIdentifiers removeObject:identifier]; [self.lastEvidence removeObjectForKey:identifier]; [self.localObservations removeObjectForKey:identifier];[self.evidence removeIdentifier:identifier]; }
 - (NSString *)registeredIdentifierForName:(NSString *)name record:(NSDictionary *)record {
     if(!HABLEUnitIdentifier(name))return nil;
     for(NSArray *pair in record[@"identifiers"])if([name caseInsensitiveCompare:pair[1]]==NSOrderedSame)return pair[1];
@@ -359,12 +360,21 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     return match;
 }
 - (BOOL)hasKnownIdentityForObservation:(NSDictionary *)observation {
-    NSDictionary *profile=HABLEProfile(observation);
-    for(NSDictionary *record in self.registryDevices)for(NSString *domain in record[@"domains"])for(NSDictionary *rule in self.discoveryMatchers[domain])if([self observation:observation matchesDiscoveryRule:rule])return YES;
-    for(NSDictionary *known in self.knownDevices) {
-        if([self registeredIdentifierForName:HABLEString(observation[@"name"]) record:known] || ([observation[@"serial_number"] length]>=6 && [observation[@"serial_number"] isEqual:known[@"serial_number"]]))return YES;
-        NSDictionary *remote=self.remoteInfo[known[@"address"]];NSDictionary *otherProfile=remote[@"profile"] ?: self.catalog[known[@"address"]][@"profile"];if(otherProfile && HABLEProfilesCompatible(profile,otherProfile))return YES;
-    }return NO;
+    NSString *identifier=observation[@"identifier"];
+    if(identifier.length && [self.potentialKnownIdentifiers containsObject:identifier])return YES;
+    BOOL known=NO;NSDictionary *profile=HABLEProfile(observation);
+    // Each integration's rules are evaluated once, not once per registry device.
+    for(NSArray *rules in self.discoveryMatchers.allValues) {
+        for(NSDictionary *rule in rules)if([self observation:observation matchesDiscoveryRule:rule]){known=YES;break;}
+        if(known)break;
+    }
+    if(!known)for(NSDictionary *record in self.knownDevices) {
+        if([self registeredIdentifierForName:HABLEString(observation[@"name"]) record:record] || ([observation[@"serial_number"] length]>=6 && [observation[@"serial_number"] isEqual:record[@"serial_number"]])){known=YES;break;}
+        NSDictionary *remote=self.remoteInfo[record[@"address"]];NSDictionary *otherProfile=remote[@"profile"] ?: self.catalog[record[@"address"]][@"profile"];
+        if(otherProfile && HABLEProfilesCompatible(profile,otherProfile)){known=YES;break;}
+    }
+    if(known && identifier.length && self.potentialKnownIdentifiers.count<256)[self.potentialKnownIdentifiers addObject:identifier];
+    return known;
 }
 - (void)rememberAutomaticMatch:(NSDictionary *)match {
     if(![match[@"automatic_match"] boolValue] || ![self sourceIsCurrent])return;
@@ -419,7 +429,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 - (void)maintainSynchronization {
     if(!self.loaded || ![self sourceIsCurrent] || !self.connection.connected)return;
     [self pumpPublications];
-    NSTimeInterval now=NSDate.date.timeIntervalSince1970;if(now<self.nextPublish || self.publishing)return;
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;if(now<self.nextPublish || self.publishing)return;self.nextPublish=now+8;
     BOOL learning=NO;NSMutableArray *requested=NSMutableArray.array;
     for(NSString *identifier in self.localObservations) {NSDictionary *observation=self.localObservations[identifier];if(now-[observation[@"last_seen"] doubleValue]<=120 && !self.localBindings[identifier] && [self hasKnownIdentityForObservation:observation]) {
         BOOL nativeAvailable=NO;for(NSDictionary *remote in self.remoteInfo.allValues)if(![self.proxySources containsObject:remote[@"source"]] && now-[remote[@"time"] doubleValue]<120 && HABLEProfilesCompatible(HABLEProfile(observation),remote[@"profile"]))nativeAvailable=YES;

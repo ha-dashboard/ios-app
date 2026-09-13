@@ -87,6 +87,12 @@ static NSUInteger HABLERejectedRequestCount;
 - (void)cancel { self.cancellations++; [super cancel]; }
 @end
 
+@interface HABLECountingResolver : HABLEIdentityResolver
+@property NSUInteger classifications;
+@end
+@implementation HABLECountingResolver
+- (BOOL)hasKnownIdentityForObservation:(NSDictionary *)observation { self.classifications++; return YES; }
+@end
 @interface HABLECapturingServer : HABLEAPIServer
 @property (nonatomic) NSUInteger responseType;
 @property (nonatomic, strong) NSData *responseData;
@@ -106,6 +112,18 @@ static NSUInteger HABLERejectedRequestCount;
 @interface HABLEProxyTests : XCTestCase
 @end
 @implementation HABLEProxyTests
+- (void)testDiscoveryBurstDoesNotRescanThePendingRegistryBeforeImport {
+    HABLEDiscoveryPolicyProxy *proxy=[HABLEDiscoveryPolicyProxy new];HABLECountingResolver *resolver=[HABLECountingResolver new];
+    [proxy setValue:resolver forKey:@"identityResolver"];[proxy setValue:@YES forKey:@"running"];
+    uint8_t bytes[]={1,2,3,4};NSDictionary *ad=@{CBAdvertisementDataLocalNameKey:@"opaque",CBAdvertisementDataManufacturerDataKey:[NSData dataWithBytes:bytes length:4]};
+    for(NSUInteger i=0;i<200;i++) {
+        HABLEObservedPeripheral *peripheral=[HABLEObservedPeripheral new];peripheral.identifier=NSUUID.UUID;peripheral.name=@"opaque";
+        [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-50];
+    }
+    [proxy flushIdentityAdvertisements];
+    XCTAssertEqual(resolver.classifications,0u,@"Pending import must not perform registry scans for every buffered packet");
+}
+
 - (void)testRemovingManualAssociationCannotPromoteAFriendlyNameIntoAnAddressMatch {
     NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
     id saved = [defaults objectForKey:@"ha_ble_proxy_address_mapping"];

@@ -420,9 +420,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     uint64_t address = [self addressForIdentifier:identifier];
     NSString *name = advertisement[CBAdvertisementDataLocalNameKey] ?: peripheral.name ?: @"Unnamed device";
     NSData *previousManufacturer = [[NSData alloc] initWithBase64EncodedString:previous[@"identity_manufacturer_data"] ?: previous[@"manufacturer_data"] ?: @"" options:0];
-    NSData *vendor = identityManufacturer.length >= 2 ? [identityManufacturer subdataWithRange:NSMakeRange(0, 2)] : [NSData data];
-    NSData *previousVendor = previousManufacturer.length >= 2 ? [previousManufacturer subdataWithRange:NSMakeRange(0, 2)] : [NSData data];
-    if (![previous[@"name"] isEqual:name] || ![vendor isEqual:previousVendor] || previousManufacturer.length != identityManufacturer.length) [self.identityCheckTimes removeObjectForKey:identifier];
+    if (![previous[@"name"] isEqual:name] || (previousManufacturer.length < 2 && identityManufacturer.length >= 2)) [self.identityCheckTimes removeObjectForKey:identifier];
     self.peripherals[identifier] = peripheral; self.advertisementCount++;
     NSMutableData *packet = [NSMutableData data]; HABLEPutString(packet, 2, name);
     int64_t rssi = RSSI.longLongValue; HABLEPutInteger(packet, 3, ((uint64_t)rssi << 1) ^ (uint64_t)(rssi >> 63));
@@ -446,13 +444,14 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     self.observations[identifier][@"first_seen"] = previous[@"first_seen"] ?: @([[NSDate date] timeIntervalSince1970]);
     NSMutableOrderedSet *identityServices = [NSMutableOrderedSet orderedSetWithArray:previous[@"identity_service_uuids"] ?: previous[@"service_uuids"] ?: @[]]; [identityServices addObjectsFromArray:uuids];
     self.observations[identifier][@"identity_service_uuids"] = identityServices.array;
+    if (![previous[@"identity_service_uuids"] isEqual:identityServices.array]) [self.identityCheckTimes removeObjectForKey:identifier];
     self.observations[identifier][@"identity_manufacturer_data"] = [identityManufacturer base64EncodedStringWithOptions:0] ?: @"";
     [self updateIdentityResolution];
     [self.identityResolver recordObservation:self.observations[identifier] identifier:identifier];
     [self matchIdentifier:identifier];
-    [self flushIdentityAdvertisements];
     BOOL trusted = self.mappings[identifier] || self.automaticMappings[identifier];
     BOOL potentialKnown = self.identitiesReady && [self.identityResolver hasKnownIdentityForObservation:self.observations[identifier]];
+    if (trusted || (self.identitiesReady && !potentialKnown)) [self flushIdentityAdvertisementsForIdentifier:identifier];
     if (!trusted && (!self.identitiesReady || potentialKnown)) {
         self.observations[identifier][@"identity_pending"] = @YES;
         if (self.pendingIdentityAdvertisements.count >= 256) { [self.pendingIdentityAdvertisements removeObjectAtIndex:0]; self.identityPacketsDropped++; }
@@ -519,7 +518,6 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     }
     if (!self.running) return;
     if (self.identityResolver.needsRegistryRefresh) self.nextIdentityRefresh = 0;
-    [self.identityResolver maintainSynchronization];
     if (!self.importingIdentities && [HAConnectionManager sharedManager].connected && CFAbsoluteTimeGetCurrent() >= self.nextIdentityRefresh) {
         self.importingIdentities = YES; self.nextIdentityRefresh = CFAbsoluteTimeGetCurrent() + 300;
         HABLEIdentityResolver *resolver = self.identityResolver; self.identityImportResolver = resolver;
@@ -537,14 +535,24 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         }];
     }
 }
+- (void)flushIdentityAdvertisementsForIdentifier:(NSString *)identifier {
+    if (!self.pendingIdentityAdvertisements.count) return;
+    NSMutableArray *waiting=[NSMutableArray array];
+    for(NSDictionary *item in self.pendingIdentityAdvertisements) {
+        if(![item[@"identifier"] isEqual:identifier]){[waiting addObject:item];continue;}
+        if(CFAbsoluteTimeGetCurrent()-[item[@"queued_at"] doubleValue]>30){self.identityPacketsDropped++;continue;}
+        [self forwardPacket:item[@"packet"] identifier:identifier];
+    }
+    self.pendingIdentityAdvertisements=waiting;
+}
 - (void)flushIdentityAdvertisements {
     NSMutableArray *waiting = [NSMutableArray array];
     for (NSDictionary *item in self.pendingIdentityAdvertisements) {
         NSString *identifier = item[@"identifier"];
         if (CFAbsoluteTimeGetCurrent() - [item[@"queued_at"] doubleValue] > 30) { self.identityPacketsDropped++; continue; }
         BOOL trusted = self.mappings[identifier] || self.automaticMappings[identifier];
-        BOOL unknown = ![self.identityResolver hasKnownIdentityForObservation:self.observations[identifier]];
-        if (trusted || (self.identitiesReady && unknown)) [self forwardPacket:item[@"packet"] identifier:identifier];
+        BOOL unknown = self.identitiesReady && !trusted && ![self.identityResolver hasKnownIdentityForObservation:self.observations[identifier]];
+        if (trusted || unknown) [self forwardPacket:item[@"packet"] identifier:identifier];
         else [waiting addObject:item];
     }
     self.pendingIdentityAdvertisements = waiting;
@@ -663,6 +671,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         [self updateRadio];
         [self updateAutomaticRegistration];
         [self updateIdentityResolution];
+        [self.identityResolver maintainSynchronization];
         [self probePendingIdentity];
         [self flushIdentityAdvertisements];
         if (self.running) self.status = self.usingServiceFilters && !self.scanServiceUUIDs.count ? @"Import or enter Bluetooth service UUIDs to scan" : [NSString stringWithFormat:@"%@ · %lu client(s) · %lu devices · %lu connections", self.usingServiceFilters ? @"Scanning known services" : @"Scanning", (unsigned long)self.server.authenticatedClients, (unsigned long)self.observations.count, (unsigned long)self.sessions.count];
