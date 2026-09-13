@@ -192,6 +192,27 @@ static NSUInteger HABLERejectedRequestCount;
     }
     if(saved)[NSUserDefaults.standardUserDefaults setObject:saved forKey:@"ha_ble_proxy_handle_tables"];else[NSUserDefaults.standardUserDefaults removeObjectForKey:@"ha_ble_proxy_handle_tables"];
 }
+- (void)testSingleProxyForwardsStableAliasAfterBoundedLearningWithoutAReference {
+    HABLEObservedPeripheral *peripheral=[HABLEObservedPeripheral new];peripheral.identifier=NSUUID.UUID;peripheral.name=@"Unit1234";
+    NSDictionary *advertisement=@{CBAdvertisementDataLocalNameKey:@"Unit1234",CBAdvertisementDataManufacturerDataKey:[NSData dataWithBytes:"12345678" length:8]};
+    uint64_t firstAddress=0;
+    // Both a failed import and a loaded integration with no resolvable unit
+    // reference must keep the transport usable. Recreating the manager models
+    // a restart with the same persisted installation identity.
+    for(NSNumber *ready in @[@NO,@YES]) {
+        HABLEDiscoveryPolicyProxy *proxy=[HABLEDiscoveryPolicyProxy new];[proxy setValue:@YES forKey:@"running"];[proxy setValue:ready forKey:@"identitiesReady"];[proxy setValue:[HABLECountingResolver new] forKey:@"identityResolver"];
+        HABLECapturingServer *server=[[HABLECapturingServer alloc] initWithName:@"test" address:@"02:00:00:00:00:01" key:[NSMutableData dataWithLength:32]];[proxy setValue:server forKey:@"server"];
+        [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:advertisement RSSI:@-50];XCTAssertEqual(server.capturedAdvertisements.count,0u);
+        NSString *identifier=peripheral.identifier.UUIDString;
+        [proxy valueForKey:@"observations"][identifier][@"first_seen"]=@(NSDate.date.timeIntervalSince1970-61);
+        [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:advertisement RSSI:@-50];
+        XCTAssertEqual(server.capturedAdvertisements.count,2u);
+        NSDictionary *packet=HABLEDecode(server.capturedAdvertisements.lastObject);uint64_t address=HABLEInteger(packet,1);XCTAssertNotEqual(address,0u);XCTAssertEqual(HABLEInteger(packet,7),1u);
+        if(firstAddress)XCTAssertEqual(address,firstAddress);else firstAddress=address;
+        XCTAssertNil([proxy valueForKey:@"observations"][identifier][@"identity_pending"]);XCTAssertEqual([[proxy valueForKey:@"automaticMappings"] count],0u);
+        XCTAssertEqual([[proxy valueForKey:@"pendingIdentityAdvertisements"] count],0u);
+    }
+}
 - (void)testDiscoveryBurstDoesNotRescanThePendingRegistryBeforeImport {
     HABLEDiscoveryPolicyProxy *proxy=[HABLEDiscoveryPolicyProxy new];HABLECountingResolver *resolver=[HABLECountingResolver new];
     [proxy setValue:resolver forKey:@"identityResolver"];[proxy setValue:@YES forKey:@"running"];

@@ -453,14 +453,21 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     [self updateIdentityResolution];
     [self.identityResolver recordObservation:self.observations[identifier] identifier:identifier];
     [self matchIdentifier:identifier];
-    BOOL trusted = self.mappings[identifier] || self.automaticMappings[identifier];
-    BOOL potentialKnown = self.identitiesReady && [self.identityResolver hasKnownIdentityForObservation:self.observations[identifier]];
-    if (trusted || (self.identitiesReady && !potentialKnown)) [self flushIdentityAdvertisementsForIdentifier:identifier];
-    if (!trusted && (!self.identitiesReady || potentialKnown)) {
+    BOOL holdIdentity = [self shouldHoldIdentityAdvertisementsForIdentifier:identifier];
+    if (!holdIdentity) { [self.observations[identifier] removeObjectForKey:@"identity_pending"]; [self flushIdentityAdvertisementsForIdentifier:identifier]; }
+    if (holdIdentity) {
         self.observations[identifier][@"identity_pending"] = @YES;
         if (self.pendingIdentityAdvertisements.count >= 256) { [self.pendingIdentityAdvertisements removeObjectAtIndex:0]; self.identityPacketsDropped++; }
         [self.pendingIdentityAdvertisements addObject:@{@"identifier":identifier, @"packet":packet, @"queued_at":@(CFAbsoluteTimeGetCurrent())}];
     } else [self forwardPacket:packet identifier:identifier];
+}
+- (BOOL)shouldHoldIdentityAdvertisementsForIdentifier:(NSString *)identifier {
+    if(self.mappings[identifier] || self.automaticMappings[identifier])return NO;
+    id firstSeen=self.observations[identifier][@"first_seen"];
+    // A class/discovery match is not a promise that an external reference
+    // exists. A sole proxy must eventually forward under its stable alias.
+    if([firstSeen isKindOfClass:NSNumber.class] && isfinite([firstSeen doubleValue]) && NSDate.date.timeIntervalSince1970-[firstSeen doubleValue]>=60)return NO;
+    return !self.identitiesReady || [self.identityResolver hasKnownIdentityForObservation:self.observations[identifier]];
 }
 - (void)forwardPacket:(NSData *)packet identifier:(NSString *)identifier {
     if (!self.observations[identifier]) return;
@@ -502,7 +509,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     observation[@"address"] = HABLEAddressString([self addressForIdentifier:identifier]);
     observation[@"identity"] = match ? ([match[@"identity_kind"] isEqual:@"observed_native"] ? @"shared_observed_address" : [match[@"identity_kind"] isEqual:@"observed_shared"] ? @"shared_alias" : @"ha_matched_mac") : @"local_alias";
     if (match) { [observation removeObjectForKey:@"identity_pending"]; observation[@"ha_name"] = match[@"label"]; observation[@"identity_evidence"] = match[@"evidence"]; }
-    else { [observation removeObjectForKey:@"ha_name"]; observation[@"identity_evidence"] = [self.identityResolver evidenceForIdentifier:identifier]; if (!self.identitiesReady || [self.identityResolver hasKnownIdentityForObservation:observation]) observation[@"identity_pending"] = @YES; else [observation removeObjectForKey:@"identity_pending"]; }
+    else { [observation removeObjectForKey:@"ha_name"]; observation[@"identity_evidence"] = [self.identityResolver evidenceForIdentifier:identifier]; if ([self shouldHoldIdentityAdvertisementsForIdentifier:identifier]) observation[@"identity_pending"] = @YES; else [observation removeObjectForKey:@"identity_pending"]; }
 }
 - (void)identityConnectionDidChange:(NSNotification *)note { self.nextIdentityRefresh = 0; }
 - (void)identityConnectionDidDisconnect:(NSNotification *)note {
@@ -554,9 +561,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     for (NSDictionary *item in self.pendingIdentityAdvertisements) {
         NSString *identifier = item[@"identifier"];
         if (CFAbsoluteTimeGetCurrent() - [item[@"queued_at"] doubleValue] > 30) { self.identityPacketsDropped++; continue; }
-        BOOL trusted = self.mappings[identifier] || self.automaticMappings[identifier];
-        BOOL unknown = self.identitiesReady && !trusted && ![self.identityResolver hasKnownIdentityForObservation:self.observations[identifier]];
-        if (trusted || unknown) [self forwardPacket:item[@"packet"] identifier:identifier];
+        if (![self shouldHoldIdentityAdvertisementsForIdentifier:identifier]) { [self.observations[identifier] removeObjectForKey:@"identity_pending"]; [self forwardPacket:item[@"packet"] identifier:identifier]; }
         else [waiting addObject:item];
     }
     self.pendingIdentityAdvertisements = waiting;

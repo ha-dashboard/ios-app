@@ -27,6 +27,24 @@ must review export-compliance classification for the bundled cryptography; the
 previous blanket exemption flag is omitted so App Store Connect presents its
 [encryption questionnaire](https://developer.apple.com/documentation/bundleresources/information-property-list/itsappusesnonexemptencryption).
 
+## Single-proxy operation
+
+An installation with one iPad does not require another scanner to forward BLE
+advertisements. Each peripheral already has a stable local transport alias derived
+from the persisted installation identity and its Core Bluetooth identifier.
+Unknown devices can forward once the initial import establishes that no candidate
+is pending. A potentially known device gets at most sixty seconds of learning
+before forwarding under that alias, even if import fails or matching remains
+unresolved. Identification and read-only probing continue after this deadline.
+
+The alias is not a recovered hardware MAC. It survives ordinary app restarts and
+upgrades while the installation and Core Bluetooth identifiers remain the same.
+Reinstallation, explicit reset or an OS identifier change can require additional
+fingerprint evidence to reconnect the previous identity. Joining a second proxy
+must compare evidence rather than equating its unrelated Apple UUID with the
+first proxy's UUID. The standalone timeout does not create verified bindings or
+merge ambiguous candidates.
+
 ## Device identity
 
 The resolver is generic. It has no sensor-brand names, company-ID tables, model
