@@ -34,6 +34,7 @@ static BOOL HABLESetupURLIsProtected(NSURL *URL) {
 @end
 @implementation HABLEProxyRegistration
 + (BOOL)isSetupURLAllowed:(NSURL *)URL { return HABLESetupURLIsProtected(URL); }
++ (BOOL)isSuccessfulExistingEntryReason:(NSString *)reason { return [reason isEqual:@"already_configured"] || [reason isEqual:@"already_configured_updates"]; }
 - (instancetype)init { if ((self = [super init])) _status = @"Not registered by this app"; return self; }
 - (void)cancel { self.generation++; [self.api cancelAllRequests]; self.api = nil; self.key = nil; self.completion = nil; if (self.registering) self.status = @"Setup paused"; self.registering = NO; }
 - (void)registerHost:(NSString *)host key:(NSString *)key completion:(void (^)(BOOL))completion {
@@ -61,7 +62,7 @@ static BOOL HABLESetupURLIsProtected(NSURL *URL) {
         if (auth.authenticationRevision != self.revision || ![auth.serverURL isEqual:self.server]) { [self finish:NO status:@"Home Assistant connection changed; try again"]; return; }
         NSString *type = result[@"type"], *step = result[@"step_id"];
         if ([type isEqual:@"create_entry"]) { self.entryID = result[@"result"][@"entry_id"]; [self finish:YES status:@"Added to Home Assistant"]; return; }
-        if ([type isEqual:@"abort"]) { BOOL exists = [result[@"reason"] isEqual:@"already_configured"]; [self finish:exists status:exists ? @"Already configured in Home Assistant" : [NSString stringWithFormat:@"Setup stopped: %@", result[@"reason"] ?: @"unknown reason"]]; return; }
+        if ([type isEqual:@"abort"]) { BOOL exists = [[self class] isSuccessfulExistingEntryReason:result[@"reason"]]; [self finish:exists status:exists ? @"Configured in Home Assistant" : [NSString stringWithFormat:@"Setup stopped: %@", result[@"reason"] ?: @"unknown reason"]]; return; }
         if ([result[@"errors"] isKindOfClass:[NSDictionary class]] && [result[@"errors"] count]) { [self finish:NO status:[NSString stringWithFormat:@"Home Assistant setup: %@", [result[@"errors"] allValues].firstObject]]; return; }
         NSString *flow = result[@"flow_id"];
         if (![flow isKindOfClass:[NSString class]] || ![type isEqual:@"form"]) { [self finish:NO status:@"Complete ESPHome setup in Home Assistant"]; return; }

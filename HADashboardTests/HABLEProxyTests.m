@@ -6,6 +6,12 @@
 @interface HABLEProxyTests : XCTestCase
 @end
 @implementation HABLEProxyTests
+- (void)testExistingHomeAssistantEntryUpdatesAreSuccessful {
+    XCTAssertTrue([HABLEProxyRegistration isSuccessfulExistingEntryReason:@"already_configured"]);
+    XCTAssertTrue([HABLEProxyRegistration isSuccessfulExistingEntryReason:@"already_configured_updates"]);
+    XCTAssertFalse([HABLEProxyRegistration isSuccessfulExistingEntryReason:@"invalid_auth"]);
+    XCTAssertFalse([HABLEProxyRegistration isSuccessfulExistingEntryReason:nil]);
+}
 - (void)testSetupKeyCannotBeSentToNonlocalHTTP {
     for (NSString *value in @[@"http://example.com", @"http://8.8.8.8", @"http://192.168.1.1.example.com", @"http:relative", @"ftp://192.168.1.1"]) {
         XCTAssertFalse([HABLEProxyRegistration isSetupURLAllowed:[NSURL URLWithString:value]], @"%@", value);
