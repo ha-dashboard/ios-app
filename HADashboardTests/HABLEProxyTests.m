@@ -22,6 +22,24 @@
 @interface HABLEProxyTests : XCTestCase
 @end
 @implementation HABLEProxyTests
+- (void)testServiceUUIDsAcceptHAFormatsAndRejectAddresses {
+    NSString *expected = @"0000fcd2-0000-1000-8000-00805f9b34fb";
+    for (NSString *value in @[@"FCD2", @"0xfcd2", @"0000FCD2", @"0000FCD200001000800000805F9B34FB", expected]) XCTAssertEqualObjects(HABLECanonicalUUID(value), expected);
+    for (id value in @[@"AA:BB:CC:DD:EE:FF", @"not-a-uuid", @"0000fcd2/0000/1000/8000/00805f9b34fb", @123]) XCTAssertNil(HABLECanonicalUUID(value));
+    XCTAssertNil(HABLECanonicalUUID(nil));
+}
+- (void)testServiceFiltersRejectPartialUpdatesAndReset {
+    HABLEProxyManager *manager = [[HABLEProxyManager alloc] init]; [manager reset];
+    XCTAssertTrue(([manager setAdditionalScanServiceUUIDs:@[@"FCD2", @"0000fcd2-0000-1000-8000-00805f9b34fb"] error:nil]));
+    XCTAssertEqual(manager.additionalScanServiceUUIDs.count, (NSUInteger)1);
+    NSArray *before = manager.additionalScanServiceUUIDs;
+    XCTAssertFalse(([manager setAdditionalScanServiceUUIDs:@[@"FD3D", @"invalid"] error:nil]));
+    XCTAssertEqualObjects(manager.additionalScanServiceUUIDs, before);
+    manager.scanMode = HABLEScanModeServices;
+    [manager reset];
+    XCTAssertEqual(manager.scanMode, HABLEScanModeAutomatic);
+    XCTAssertEqual(manager.scanServiceUUIDs.count, (NSUInteger)0);
+}
 - (void)testDisconnectOfUnknownDeviceAcknowledgesConnectionState {
     HABLEProxyManager *manager = [[HABLEProxyManager alloc] init];
     HABLECapturingServer *server = [[HABLECapturingServer alloc] initWithName:@"test" address:@"02:00:00:00:00:01" key:[NSMutableData dataWithLength:32]];

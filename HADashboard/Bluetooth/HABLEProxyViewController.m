@@ -30,16 +30,21 @@
         host.textLabel.text = manager.host ? [manager.host stringByAppendingString:@":6053"] : @"Proxy is not listening";
         UITableViewCell *registration = [self.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:2 inSection:1]];
         registration.detailTextLabel.text = manager.registrationStatus;
+        UITableViewCell *scan = [self.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:2]];
+        scan.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %lu known services", manager.usingServiceFilters ? @"Using service filters" : @"Broad discovery", (unsigned long)manager.scanServiceUUIDs.count];
+        UITableViewCell *import = [self.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:1 inSection:2]];
+        import.detailTextLabel.text = manager.scanServiceStatus;
         return;
     }
     self.devices = manager.devices; [self.tableView reloadData];
 }
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 3; }
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return section == 0 ? 2 : section == 1 ? 3 : self.devices.count; }
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section { return @[@"Bluetooth Proxy", @"Home Assistant setup", @"Nearby devices"][section]; }
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 4; }
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return section == 0 ? 2 : section <= 2 ? 3 : self.devices.count; }
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section { return @[@"Bluetooth Proxy", @"Home Assistant setup", @"Discovery", @"Nearby devices"][section]; }
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == 0) return @"Share nearby Bluetooth LE devices with Home Assistant while HA Dashboard is open. The connection is encrypted. Locking the screen or leaving the iOS app pauses the proxy. Uses Apple's public Bluetooth APIs.";
     if (section == 1) return @"Tap Add to Home Assistant while connected as an administrator, or add ESPHome manually using this address, port 6053 and the encryption key. HA must reach this device on the local network. Setup uses your configured HA connection; use HTTPS or a trusted local network.";
+    if (section == 2) return @"Automatic starts with broad discovery. If no devices are discovered, it imports advertised service UUIDs from HA and tries service filters. Filtered scans can miss devices that do not advertise a known service. Additional UUIDs are combined with HA's services.";
     return @"Addresses published in supported SwitchBot advertisements are recognised automatically. Other devices use local aliases because Apple does not expose their hardware addresses. Tap a device to associate a verified address. Aliases do not match other proxies and cannot decrypt address-dependent sensor messages. Refresh to update this device list.";
 }
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
@@ -53,6 +58,14 @@
     else if (path.section == 1 && path.row == 0) { cell.textLabel.text = manager.host ? [manager.host stringByAppendingString:@":6053"] : @"Proxy is not listening"; cell.detailTextLabel.text = manager.nodeName; }
     else if (path.section == 1 && path.row == 1) { cell.textLabel.text = @"Copy encryption key"; cell.textLabel.textColor = self.view.tintColor; cell.detailTextLabel.text = @"Only share this key with your Home Assistant server."; cell.isAccessibilityElement = YES; cell.accessibilityLabel = @"Copy encryption key"; cell.accessibilityTraits = UIAccessibilityTraitButton; }
     else if (path.section == 1) { cell.textLabel.text = @"Add to Home Assistant"; cell.detailTextLabel.text = manager.registrationStatus; cell.isAccessibilityElement = YES; cell.accessibilityLabel = @"Add to Home Assistant"; cell.accessibilityTraits = UIAccessibilityTraitButton; }
+    else if (path.section == 2) {
+        if (path.row == 0) {
+            cell.textLabel.text = [@"Scan mode: " stringByAppendingString:@[@"Automatic", @"Broad discovery", @"Known services"][manager.scanMode]];
+            cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %lu known services", manager.usingServiceFilters ? @"Using service filters" : @"Broad discovery", (unsigned long)manager.scanServiceUUIDs.count];
+        } else if (path.row == 1) { cell.textLabel.text = @"Import services from HA"; cell.detailTextLabel.text = manager.scanServiceStatus; }
+        else { cell.textLabel.text = @"Additional service UUIDs"; cell.detailTextLabel.text = [NSString stringWithFormat:@"%lu manually added", (unsigned long)manager.additionalScanServiceUUIDs.count]; }
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    }
     else { NSDictionary *device = self.devices[path.row]; cell.textLabel.text = device[@"name"]; cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@ dBm\n%@", device[@"address"], device[@"rssi"], [device[@"identity"] isEqual:@"local_alias"] ? @"Local alias" : [device[@"identity"] isEqual:@"switchbot_advertised_mac"] ? @"Address published by SwitchBot" : @"Associated hardware address"]; cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator; }
     return cell;
 }
@@ -74,7 +87,28 @@
         [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]]; [self presentViewController:alert animated:YES completion:nil];
     } else if (path.section == 1 && path.row == 2) {
         [manager registerWithHomeAssistant];
+    } else if (path.section == 2 && path.row == 0) {
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Discovery mode" message:@"Automatic adapts when broad scanning returns no discoveries." preferredStyle:UIAlertControllerStyleAlert];
+        NSArray *names = @[@"Automatic", @"Broad discovery", @"Known services"];
+        for (NSUInteger index = 0; index < names.count; index++) [alert addAction:[UIAlertAction actionWithTitle:names[index] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { manager.scanMode = index; [self refresh:nil]; }]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+        [self presentViewController:alert animated:YES completion:nil];
+    } else if (path.section == 2 && path.row == 1) {
+        [manager refreshScanServices];
     } else if (path.section == 2) {
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Additional service UUIDs" message:@"Enter advertised service UUIDs separated by commas. These are combined with services imported from HA." preferredStyle:UIAlertControllerStyleAlert];
+        __weak UIAlertController *weakAlert = alert;
+        [alert addTextFieldWithConfigurationHandler:^(UITextField *field) { field.text = [manager.additionalScanServiceUUIDs componentsJoinedByString:@", "]; field.placeholder = @"For example: FCD2"; field.autocorrectionType = UITextAutocorrectionTypeNo; field.keyboardType = UIKeyboardTypeASCIICapable; }];
+        [alert addAction:[UIAlertAction actionWithTitle:@"Save" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+            NSArray *values = [weakAlert.textFields.firstObject.text componentsSeparatedByCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@",; \n"]]; NSError *error;
+            if ([manager setAdditionalScanServiceUUIDs:values error:&error]) [self refresh:nil];
+            else dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 3), dispatch_get_main_queue(), ^{
+                UIAlertController *failure = [UIAlertController alertControllerWithTitle:@"Invalid service UUID" message:error.localizedDescription preferredStyle:UIAlertControllerStyleAlert];
+                [failure addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]]; [self presentViewController:failure animated:YES completion:nil];
+            });
+        }]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]]; [self presentViewController:alert animated:YES completion:nil];
+    } else if (path.section == 3) {
         [self.navigationController pushViewController:[[HABLEIdentityViewController alloc] initWithObservation:self.devices[path.row]] animated:YES];
     }
 }

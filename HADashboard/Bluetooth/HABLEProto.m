@@ -1,5 +1,20 @@
 #import "HABLEProto.h"
 
+NSString *HABLECanonicalUUID(NSString *value) {
+    if (![value isKindOfClass:[NSString class]] || value.length > 64) return nil;
+    NSString *uuid = [[value stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] lowercaseString];
+    if ([uuid hasPrefix:@"0x"]) uuid = [uuid substringFromIndex:2];
+    if ([uuid containsString:@"-"]) {
+        if (uuid.length != 36 || [uuid characterAtIndex:8] != '-' || [uuid characterAtIndex:13] != '-' || [uuid characterAtIndex:18] != '-' || [uuid characterAtIndex:23] != '-') return nil;
+        uuid = [uuid stringByReplacingOccurrencesOfString:@"-" withString:@""];
+    }
+    if (uuid.length != 4 && uuid.length != 8 && uuid.length != 32) return nil;
+    if ([uuid rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdef"] invertedSet]].location != NSNotFound) return nil;
+    if (uuid.length == 4) uuid = [@"0000" stringByAppendingString:uuid];
+    if (uuid.length == 8) uuid = [uuid stringByAppendingString:@"00001000800000805f9b34fb"];
+    return [NSString stringWithFormat:@"%@-%@-%@-%@-%@", [uuid substringToIndex:8], [uuid substringWithRange:NSMakeRange(8,4)], [uuid substringWithRange:NSMakeRange(12,4)], [uuid substringWithRange:NSMakeRange(16,4)], [uuid substringFromIndex:20]];
+}
+
 BOOL HABLEReadVarint(NSData *data, NSUInteger *offset, uint64_t *value) {
     const uint8_t *bytes = data.bytes;
     NSUInteger position = *offset;

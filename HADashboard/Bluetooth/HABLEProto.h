@@ -11,3 +11,4 @@ void HABLEPutBytes(NSMutableData *data, NSUInteger field, NSData *value);
 void HABLEPutString(NSMutableData *data, NSUInteger field, NSString *value);
 NSString *HABLEAddressString(uint64_t address);
 BOOL HABLEParseAddress(NSString *string, uint64_t *address);
+NSString *HABLECanonicalUUID(NSString *value);

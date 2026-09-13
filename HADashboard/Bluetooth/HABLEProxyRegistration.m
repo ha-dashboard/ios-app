@@ -1,6 +1,7 @@
 #import "HABLEProxyRegistration.h"
 #import "HAAPIClient.h"
 #import "HAAuthManager.h"
+#import "HALog.h"
 #import <arpa/inet.h>
 
 static BOOL HABLESetupURLIsProtected(NSURL *URL) {
@@ -48,12 +49,14 @@ static BOOL HABLESetupURLIsProtected(NSURL *URL) {
 }
 - (void)finish:(BOOL)success status:(NSString *)status {
     self.status = status; self.registering = NO; self.key = nil;
+    HALogI(@"bleproxy", @"HA proxy setup %@: %@", success ? @"completed" : @"stopped", status);
     void (^completion)(BOOL) = self.completion; self.completion = nil; if (completion) completion(success);
 }
 - (void)post:(NSString *)path body:(NSDictionary *)body {
     NSUInteger generation = self.generation;
     HAAuthManager *auth = [HAAuthManager sharedManager];
     if (++self.steps > 5 || auth.authenticationRevision != self.revision || ![auth.serverURL isEqual:self.server]) { [self finish:NO status:@"Home Assistant connection changed; try again"]; return; }
+    HALogI(@"bleproxy", @"HA proxy setup request %lu", (unsigned long)self.steps);
     __weak typeof(self) weakSelf = self;
     [self.api postJSONAtPath:path body:body completion:^(id result, NSError *error) {
         HABLEProxyRegistration *self = weakSelf; if (!self || generation != self.generation) return;
@@ -67,8 +70,8 @@ static BOOL HABLESetupURLIsProtected(NSURL *URL) {
         NSString *flow = result[@"flow_id"];
         if (![flow isKindOfClass:[NSString class]] || ![type isEqual:@"form"]) { [self finish:NO status:@"Complete ESPHome setup in Home Assistant"]; return; }
         NSString *next = [@"/api/config/config_entries/flow/" stringByAppendingString:flow];
-        if ([step isEqual:@"user"]) [self post:next body:@{@"host":self.host, @"port":@6053}];
-        else if ([step isEqual:@"encryption_key"]) [self post:next body:@{@"noise_psk":self.key}];
+        if ([step isEqual:@"user"]) { self.status = @"Verifying the proxy address with Home Assistant"; [self post:next body:@{@"host":self.host, @"port":@6053}]; }
+        else if ([step isEqual:@"encryption_key"]) { self.status = @"Completing encrypted proxy setup"; [self post:next body:@{@"noise_psk":self.key}]; }
         else [self finish:NO status:@"Complete the remaining ESPHome setup step in Home Assistant"];
     }];
 }

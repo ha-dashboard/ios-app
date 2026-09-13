@@ -1,6 +1,11 @@
 #import <Foundation/Foundation.h>
 
 extern NSString *const HABLEProxyDidChangeNotification;
+typedef NS_ENUM(NSUInteger, HABLEScanMode) {
+    HABLEScanModeAutomatic = 0,
+    HABLEScanModeBroad = 1,
+    HABLEScanModeServices = 2,
+};
 @interface HABLEProxyManager : NSObject
 + (instancetype)sharedManager;
 @property (nonatomic, assign, getter=isEnabled) BOOL enabled;
@@ -13,6 +18,13 @@ extern NSString *const HABLEProxyDidChangeNotification;
 @property (nonatomic, readonly) NSUInteger forwardedCount;
 @property (nonatomic, readonly) NSArray<NSDictionary *> *devices;
 @property (nonatomic, readonly) NSString *registrationStatus;
+@property (nonatomic, assign) HABLEScanMode scanMode;
+@property (nonatomic, readonly) BOOL usingServiceFilters;
+@property (nonatomic, readonly) NSArray<NSString *> *scanServiceUUIDs;
+@property (nonatomic, readonly) NSArray<NSString *> *additionalScanServiceUUIDs;
+@property (nonatomic, readonly) NSString *scanServiceStatus;
+- (BOOL)setAdditionalScanServiceUUIDs:(NSArray<NSString *> *)values error:(NSError **)error;
+- (void)refreshScanServices;
 - (void)registerWithHomeAssistant;
 - (NSString *)encryptionKey;
 - (void)resume;

@@ -15,6 +15,9 @@
 NSString *const HABLEProxyDidChangeNotification = @"HABLEProxyDidChangeNotification";
 static NSString *const HABLEEnabledKey = @"ha_ble_proxy_enabled";
 static NSString *const HABLEMappingKey = @"ha_ble_proxy_address_mapping";
+static NSString *const HABLEScanModeKey = @"ha_ble_proxy_scan_mode";
+static NSString *const HABLEImportedServicesKey = @"ha_ble_proxy_imported_services";
+static NSString *const HABLEAdditionalServicesKey = @"ha_ble_proxy_additional_services";
 static const NSUInteger HABLESlots = 3;
 
 @interface HABLEPeripheralSession : NSObject
@@ -107,6 +110,21 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 @property (nonatomic, assign) NSUInteger gattNotifications;
 @property (nonatomic, assign) NSUInteger discoveryCallbacks;
 @property (nonatomic, assign) NSUInteger unknownRSSICount;
+@property (nonatomic, assign) BOOL initializing;
+@property (nonatomic, assign, readwrite) BOOL usingServiceFilters;
+@property (nonatomic, copy, readwrite) NSString *scanServiceStatus;
+@property (nonatomic, copy) NSArray<NSString *> *importedScanServiceUUIDs;
+@property (nonatomic, copy, readwrite) NSArray<NSString *> *additionalScanServiceUUIDs;
+@property (nonatomic, assign) NSUInteger scanStartGeneration;
+@property (nonatomic, assign) NSUInteger scanImportGeneration;
+@property (nonatomic, assign) NSUInteger scanStartCallbacks;
+@property (nonatomic, assign) NSInteger scanSubscription;
+@property (nonatomic, assign) BOOL importingScanServices;
+@property (nonatomic, assign) CFAbsoluteTime scanStartedAt;
+@property (nonatomic, assign) CFAbsoluteTime nextScanImport;
+- (void)startScanUsingServices:(BOOL)services;
+- (void)updateScanPolicy;
+- (void)cancelScanImport;
 - (void)pump:(HABLEPeripheralSession *)session;
 @end
 
@@ -114,6 +132,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 + (instancetype)sharedManager { static HABLEProxyManager *manager; static dispatch_once_t once; dispatch_once(&once, ^{ manager = [[self alloc] init]; }); return manager; }
 - (instancetype)init {
     if ((self = [super init])) {
+        _initializing = YES;
         NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
         _installationID = [defaults stringForKey:@"ha_ble_proxy_installation"];
         if (!_installationID) { _installationID = [NSUUID UUID].UUIDString; [defaults setObject:_installationID forKey:@"ha_ble_proxy_installation"]; }
@@ -132,10 +151,124 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         [defaults removeObjectForKey:@"HABLEProxyRegister"];
         _registration = [[HABLEProxyRegistration alloc] init];
         _handleTables = [[[NSUserDefaults standardUserDefaults] dictionaryForKey:@"ha_ble_proxy_handle_tables"] mutableCopy] ?: [NSMutableDictionary dictionary];
+        _scanSubscription = -1; _scanServiceStatus = @"Services can be imported from Home Assistant";
+        NSMutableArray *imported = [NSMutableArray array], *additional = [NSMutableArray array];
+        for (NSString *value in [defaults arrayForKey:HABLEImportedServicesKey]) { NSString *uuid = HABLECanonicalUUID(value); if (uuid && imported.count < 128 && ![imported containsObject:uuid]) [imported addObject:uuid]; }
+        for (NSString *value in [defaults arrayForKey:HABLEAdditionalServicesKey]) { NSString *uuid = HABLECanonicalUUID(value); if (uuid && additional.count < 128 && ![additional containsObject:uuid]) [additional addObject:uuid]; }
+        _importedScanServiceUUIDs = imported; _additionalScanServiceUUIDs = additional;
+        NSString *launchServices = [defaults stringForKey:@"HABLEProxyServiceUUIDs"];
+        if (launchServices) { [self setAdditionalScanServiceUUIDs:[launchServices componentsSeparatedByCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@",; \n"]] error:nil]; [defaults removeObjectForKey:@"HABLEProxyServiceUUIDs"]; }
+        if ([defaults objectForKey:@"HABLEProxyScanMode"]) { self.scanMode = [defaults integerForKey:@"HABLEProxyScanMode"]; [defaults removeObjectForKey:@"HABLEProxyScanMode"]; }
+        _initializing = NO;
     }
     return self;
 }
 - (BOOL)isEnabled { return [[NSUserDefaults standardUserDefaults] boolForKey:HABLEEnabledKey]; }
+- (HABLEScanMode)scanMode {
+    NSInteger value = [[NSUserDefaults standardUserDefaults] integerForKey:HABLEScanModeKey];
+    return value >= HABLEScanModeAutomatic && value <= HABLEScanModeServices ? (HABLEScanMode)value : HABLEScanModeAutomatic;
+}
+- (void)setScanMode:(HABLEScanMode)mode {
+    [[NSUserDefaults standardUserDefaults] setInteger:mode <= HABLEScanModeServices ? mode : HABLEScanModeAutomatic forKey:HABLEScanModeKey];
+    if (self.running) [self startScanUsingServices:self.scanMode == HABLEScanModeServices];
+    [self changed];
+}
+- (NSArray<NSString *> *)scanServiceUUIDs {
+    NSMutableOrderedSet *values = [NSMutableOrderedSet orderedSet];
+    for (NSString *uuid in self.additionalScanServiceUUIDs) if (values.count < 128) [values addObject:uuid];
+    for (NSString *uuid in self.importedScanServiceUUIDs) if (values.count < 128) [values addObject:uuid];
+    return values.array;
+}
+- (BOOL)setAdditionalScanServiceUUIDs:(NSArray<NSString *> *)values error:(NSError **)error {
+    NSMutableOrderedSet *normal = [NSMutableOrderedSet orderedSet]; BOOL valid = [values isKindOfClass:[NSArray class]];
+    if (valid) for (id value in values) {
+        if ([value isKindOfClass:[NSString class]] && ![value stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]].length) continue;
+        NSString *uuid = HABLECanonicalUUID(value);
+        if (!uuid) { valid = NO; break; }
+        [normal addObject:uuid]; if (normal.count > 128) { valid = NO; break; }
+    }
+    if (!valid) {
+        if (error) *error = [NSError errorWithDomain:@"HABLEScanServices" code:1 userInfo:@{NSLocalizedDescriptionKey:@"Enter up to 128 valid Bluetooth service UUIDs, separated by commas."}];
+        return NO;
+    }
+    self.additionalScanServiceUUIDs = normal.array;
+    [[NSUserDefaults standardUserDefaults] setObject:self.additionalScanServiceUUIDs forKey:HABLEAdditionalServicesKey];
+    if (self.running && (self.usingServiceFilters || self.scanMode == HABLEScanModeServices)) [self startScanUsingServices:YES];
+    [self changed]; return YES;
+}
+- (void)startScanUsingServices:(BOOL)services {
+    if (!self.running || self.central.state != CBCentralManagerStatePoweredOn) return;
+    NSUInteger generation = ++self.scanStartGeneration;
+    BOOL wasScanning = self.central.isScanning; if (wasScanning) [self.central stopScan];
+    self.usingServiceFilters = services; self.scanStartedAt = CFAbsoluteTimeGetCurrent(); self.scanStartCallbacks = self.discoveryCallbacks;
+    NSMutableArray *filters = [NSMutableArray array];
+    if (services) for (NSString *uuid in self.scanServiceUUIDs) [filters addObject:[CBUUID UUIDWithString:uuid]];
+    if (services && !filters.count) return;
+    void (^start)(void) = ^{
+        if (!self.running || generation != self.scanStartGeneration || [UIApplication sharedApplication].applicationState != UIApplicationStateActive) return;
+        self.scanStartedAt = CFAbsoluteTimeGetCurrent(); self.scanStartCallbacks = self.discoveryCallbacks;
+        [self.central scanForPeripheralsWithServices:services ? filters : nil options:@{CBCentralManagerScanOptionAllowDuplicatesKey:@YES}];
+        HALogI(@"bleproxy", @"Scanning %@ (%lu known services)", services ? @"known services" : @"broadly", (unsigned long)self.scanServiceUUIDs.count);
+    };
+    if (wasScanning) dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), start); else start();
+}
+- (void)updateScanPolicy {
+    if (!self.running) return;
+    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent(); HABLEScanMode mode = self.scanMode;
+    if (!self.central.isScanning && now - self.scanStartedAt > 2 && (mode != HABLEScanModeServices || self.scanServiceUUIDs.count)) {
+        [self startScanUsingServices:mode == HABLEScanModeServices || (mode == HABLEScanModeAutomatic && self.usingServiceFilters)];
+    }
+    BOOL broadIsQuiet = !self.usingServiceFilters && self.discoveryCallbacks == self.scanStartCallbacks && now - self.scanStartedAt >= 10;
+    if ((mode == HABLEScanModeServices || self.usingServiceFilters || (mode == HABLEScanModeAutomatic && broadIsQuiet)) && !self.importingScanServices && now >= self.nextScanImport && [HAConnectionManager sharedManager].connected) [self refreshScanServices];
+    if (mode == HABLEScanModeBroad && self.usingServiceFilters) [self startScanUsingServices:NO];
+    else if (mode == HABLEScanModeServices && !self.usingServiceFilters) [self startScanUsingServices:YES];
+    else if (mode == HABLEScanModeAutomatic) {
+        if (broadIsQuiet && self.scanServiceUUIDs.count) [self startScanUsingServices:YES];
+        // Periodically try broad discovery again so a quiet initial environment
+        // does not permanently hide devices outside the learned service set.
+        else if (self.usingServiceFilters && now - self.scanStartedAt >= 60) [self startScanUsingServices:NO];
+    }
+}
+- (void)cancelScanImport {
+    self.scanImportGeneration++;
+    if (self.importingScanServices) { self.nextScanImport = 0; self.scanServiceStatus = @"Service import paused"; }
+    if (self.scanSubscription >= 0) [[HAConnectionManager sharedManager] unsubscribeFromEventWithId:self.scanSubscription];
+    self.scanSubscription = -1; self.importingScanServices = NO;
+}
+- (void)refreshScanServices {
+    [self cancelScanImport];
+    HAConnectionManager *connection = [HAConnectionManager sharedManager];
+    if (!connection.connected) { self.scanServiceStatus = @"Connect to Home Assistant to import services"; [self changed]; return; }
+    NSUInteger generation = self.scanImportGeneration; self.importingScanServices = YES;
+    self.nextScanImport = CFAbsoluteTimeGetCurrent() + 300;
+    self.scanServiceStatus = @"Reading services observed by Home Assistant"; [self changed];
+    NSMutableSet *received = [NSMutableSet set]; __weak typeof(self) weakSelf = self;
+    self.scanSubscription = [connection subscribeWithCommand:@{@"type":@"bluetooth/subscribe_advertisements"} handler:^(NSDictionary *event) {
+        HABLEProxyManager *self = weakSelf; if (!self || generation != self.scanImportGeneration) return;
+        NSArray *advertisements = [event[@"add"] isKindOfClass:[NSArray class]] ? event[@"add"] : @[];
+        for (id advertisement in advertisements) {
+            if (![advertisement isKindOfClass:[NSDictionary class]]) continue;
+            NSMutableArray *values = [NSMutableArray array];
+            if ([advertisement[@"service_uuids"] isKindOfClass:[NSArray class]]) [values addObjectsFromArray:advertisement[@"service_uuids"]];
+            if ([advertisement[@"service_data"] isKindOfClass:[NSDictionary class]]) [values addObjectsFromArray:[advertisement[@"service_data"] allKeys]];
+            for (id value in values) { NSString *uuid = HABLECanonicalUUID(value); if (uuid && received.count < 128) [received addObject:uuid]; }
+            if (received.count >= 128) break;
+        }
+    } completion:^(BOOL success, NSError *error) {
+        HABLEProxyManager *self = weakSelf; if (!self || generation != self.scanImportGeneration) return;
+        if (!success) { [self cancelScanImport]; self.nextScanImport = CFAbsoluteTimeGetCurrent() + 60; self.scanServiceStatus = @"HA administrator access is required to import scan services"; [self changed]; return; }
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            HABLEProxyManager *self = weakSelf; if (!self || generation != self.scanImportGeneration) return;
+            NSArray *values = [received.allObjects sortedArrayUsingSelector:@selector(compare:)];
+            BOOL changed = ![values isEqualToArray:self.importedScanServiceUUIDs];
+            [self cancelScanImport]; self.nextScanImport = CFAbsoluteTimeGetCurrent() + 300; self.importedScanServiceUUIDs = values;
+            [[NSUserDefaults standardUserDefaults] setObject:values forKey:HABLEImportedServicesKey];
+            self.scanServiceStatus = values.count ? [NSString stringWithFormat:@"%lu services imported from Home Assistant", (unsigned long)values.count] : @"HA has no advertised services to import; add a service UUID manually";
+            if (changed && self.running && (self.usingServiceFilters || self.scanMode == HABLEScanModeServices)) [self startScanUsingServices:YES];
+            [self updateScanPolicy]; [self changed];
+        });
+    }];
+}
 - (void)setEnabled:(BOOL)enabled {
     if (enabled && ![[NSUserDefaults standardUserDefaults] stringForKey:@"ha_ble_proxy_installation"]) [[NSUserDefaults standardUserDefaults] setObject:self.installationID forKey:@"ha_ble_proxy_installation"];
     [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:HABLEEnabledKey];
@@ -176,7 +309,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     }
     NSString *host = HABLELocalHost();
     if (!host) { [self stopTransport]; self.status = @"Connect to a local Wi-Fi network"; [self changed]; return; }
-    if (self.running && [host isEqualToString:self.host]) return;
+    if (self.running && [host isEqualToString:self.host]) { [self updateScanPolicy]; return; }
     [self stopTransport];
     NSData *key = [[NSData alloc] initWithBase64EncodedString:[self encryptionKey] ?: @"" options:0];
     if (key.length != 32) { self.status = @"Could not access the proxy encryption key"; [self changed]; return; }
@@ -189,10 +322,11 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     NSDictionary *values = @{@"version":@"2026.8.2", @"mac":[self.adapterAddress stringByReplacingOccurrencesOfString:@":" withString:@""], @"platform":@"HA Dashboard", @"board":@"CoreBluetooth", @"network":@"wifi", @"api_encryption":@"Noise_NNpsk0_25519_ChaChaPoly_SHA256"};
     for (NSString *key in values) txt[key] = [values[key] dataUsingEncoding:NSUTF8StringEncoding];
     [self.bonjour setTXTRecordData:[NSNetService dataFromTXTRecordDictionary:txt]]; [self.bonjour publish];
-    [self.central scanForPeripheralsWithServices:nil options:@{CBCentralManagerScanOptionAllowDuplicatesKey:@YES}];
+    [self startScanUsingServices:self.scanMode == HABLEScanModeServices];
     self.status = @"Scanning · waiting for Home Assistant"; HALogI(@"bleproxy", @"Encrypted BLE proxy listening on %@:6053 as %@", host, self.nodeName); [self changed];
 }
 - (void)stopTransport {
+    self.scanStartGeneration++; [self cancelScanImport];
     [self.registration cancel];
     if (self.central.state == CBCentralManagerStatePoweredOn) [self.central stopScan];
     for (HABLEPeripheralSession *session in [self.sessions.allValues copy]) {
@@ -213,7 +347,9 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     [self.observations removeAllObjects]; [self.peripherals removeAllObjects]; [self.mappings removeAllObjects]; [self.advertisedAddresses removeAllObjects]; [self.handleTables removeAllObjects]; [self.identityMetadata removeAllObjects];
     NSDictionary *query = @{(__bridge id)kSecClass:(__bridge id)kSecClassGenericPassword, (__bridge id)kSecAttrService:@"org.hadashboard.ble-proxy", (__bridge id)kSecAttrAccount:@"noise-key"};
     SecItemDelete((__bridge CFDictionaryRef)query);
-    for (NSString *key in @[@"ha_ble_proxy_enabled", @"ha_ble_proxy_installation", @"ha_ble_proxy_address_mapping", @"ha_ble_proxy_handle_tables", @"ha_ble_proxy_identity_metadata", @"ha_ble_proxy_auto_register", @"HABLEProxyEnabled", @"HABLEProxyRegister"]) [[NSUserDefaults standardUserDefaults] removeObjectForKey:key];
+    for (NSString *key in @[@"ha_ble_proxy_enabled", @"ha_ble_proxy_installation", @"ha_ble_proxy_address_mapping", @"ha_ble_proxy_handle_tables", @"ha_ble_proxy_identity_metadata", @"ha_ble_proxy_auto_register", HABLEScanModeKey, HABLEImportedServicesKey, HABLEAdditionalServicesKey, @"HABLEProxyEnabled", @"HABLEProxyRegister", @"HABLEProxyServiceUUIDs", @"HABLEProxyScanMode"]) [[NSUserDefaults standardUserDefaults] removeObjectForKey:key];
+    self.importedScanServiceUUIDs = @[]; self.additionalScanServiceUUIDs = @[]; self.usingServiceFilters = NO; self.nextScanImport = 0;
+    self.scanServiceStatus = @"Services can be imported from Home Assistant";
     self.installationID = [NSUUID UUID].UUIDString; self.adapterAddress = HABLEAddressString(HABLEAlias(self.installationID));
     self.nodeName = [@"ha-dash-" stringByAppendingString:[[self.adapterAddress stringByReplacingOccurrencesOfString:@":" withString:@""] lowercaseString]];
     self.registration = [[HABLEProxyRegistration alloc] init]; self.nextRegistrationAttempt = 0;
@@ -223,7 +359,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     [[NSFileManager defaultManager] removeItemAtPath:[directory stringByAppendingPathComponent:@"ble-proxy-diagnostics.json"] error:nil];
     [self changed];
 }
-- (void)changed { [[NSNotificationCenter defaultCenter] postNotificationName:HABLEProxyDidChangeNotification object:self]; }
+- (void)changed { if (!self.initializing) [[NSNotificationCenter defaultCenter] postNotificationName:HABLEProxyDidChangeNotification object:self]; }
 - (uint64_t)addressForIdentifier:(NSString *)identifier {
     uint64_t address;
     if (HABLEParseAddress(self.mappings[identifier], &address)) return address;
@@ -259,7 +395,9 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     NSMutableData *packet = [NSMutableData data]; HABLEPutInteger(packet, 1, address); HABLEPutString(packet, 2, name);
     int64_t rssi = RSSI.longLongValue; HABLEPutInteger(packet, 3, ((uint64_t)rssi << 1) ^ (uint64_t)(rssi >> 63));
     NSMutableArray *uuids = [NSMutableArray array];
-    for (CBUUID *uuid in advertisement[CBAdvertisementDataServiceUUIDsKey]) { [uuids addObject:uuid.UUIDString]; HABLEPutString(packet, 4, HABLEAdvertisementUUID(uuid)); }
+    NSMutableOrderedSet *advertisedServices = [NSMutableOrderedSet orderedSetWithArray:advertisement[CBAdvertisementDataServiceUUIDsKey] ?: @[]];
+    [advertisedServices addObjectsFromArray:advertisement[CBAdvertisementDataOverflowServiceUUIDsKey] ?: @[]];
+    for (CBUUID *uuid in advertisedServices) { [uuids addObject:uuid.UUIDString]; HABLEPutString(packet, 4, HABLEAdvertisementUUID(uuid)); }
     NSDictionary *services = advertisement[CBAdvertisementDataServiceDataKey]; NSMutableDictionary *serviceDump = [NSMutableDictionary dictionary];
     for (CBUUID *uuid in services) {
         NSData *value = services[uuid]; if (value.length > 2048) continue;
@@ -336,7 +474,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     [self changed]; return YES;
 }
 - (NSDictionary *)diagnostics {
-    return @{@"schema":@1, @"time":@([[NSDate date] timeIntervalSince1970]), @"enabled":@(self.enabled), @"running":@(self.running), @"status":self.status ?: @"", @"node":self.nodeName, @"adapter_alias":self.adapterAddress, @"host":self.host ?: @"", @"port":@6053, @"clients":@(self.server.authenticatedClients), @"advertisements":@(self.advertisementCount), @"forwarded":@(self.forwardedCount), @"active_connections":@(self.sessions.count), @"devices":self.devices, @"backend":@"public_core_bluetooth", @"transport":@"noise_nnpsk0", @"discovery_callbacks":@(self.discoveryCallbacks), @"unknown_rssi_callbacks":@(self.unknownRSSICount), @"central_state":@((NSInteger)self.central.state), @"scanning":@(self.central.isScanning), @"application_state":@((NSInteger)[UIApplication sharedApplication].applicationState), @"app_build":[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"", @"registration_status":self.registrationStatus ?: @"", @"registration_requested":@([[NSUserDefaults standardUserDefaults] boolForKey:@"ha_ble_proxy_auto_register"]), @"gatt_reads":@(self.gattReads), @"gatt_writes":@(self.gattWrites), @"gatt_notifications":@(self.gattNotifications)};
+    return @{@"schema":@1, @"time":@([[NSDate date] timeIntervalSince1970]), @"enabled":@(self.enabled), @"running":@(self.running), @"status":self.status ?: @"", @"node":self.nodeName, @"adapter_alias":self.adapterAddress, @"host":self.host ?: @"", @"port":@6053, @"clients":@(self.server.authenticatedClients), @"advertisements":@(self.advertisementCount), @"forwarded":@(self.forwardedCount), @"active_connections":@(self.sessions.count), @"devices":self.devices, @"backend":@"public_core_bluetooth", @"transport":@"noise_nnpsk0", @"discovery_callbacks":@(self.discoveryCallbacks), @"unknown_rssi_callbacks":@(self.unknownRSSICount), @"central_state":@((NSInteger)self.central.state), @"scanning":@(self.central.isScanning), @"application_state":@((NSInteger)[UIApplication sharedApplication].applicationState), @"app_build":[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"", @"scan_mode":@(self.scanMode), @"using_service_filters":@(self.usingServiceFilters), @"scan_service_uuids":self.scanServiceUUIDs, @"scan_service_status":self.scanServiceStatus ?: @"", @"registration_status":self.registrationStatus ?: @"", @"registration_requested":@([[NSUserDefaults standardUserDefaults] boolForKey:@"ha_ble_proxy_auto_register"]), @"gatt_reads":@(self.gattReads), @"gatt_writes":@(self.gattWrites), @"gatt_notifications":@(self.gattNotifications)};
 }
 - (void)tick:(NSTimer *)timer {
     self.tickCount++;
@@ -350,7 +488,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     if (!(self.tickCount % 4)) {
         [self updateRadio];
         if (self.running && [[NSUserDefaults standardUserDefaults] boolForKey:@"ha_ble_proxy_auto_register"] && [HAConnectionManager sharedManager].connected && CFAbsoluteTimeGetCurrent() >= self.nextRegistrationAttempt) [self registerWithHomeAssistant];
-        if (self.running) self.status = [NSString stringWithFormat:@"Scanning · %lu client(s) · %lu devices · %lu connections", (unsigned long)self.server.authenticatedClients, (unsigned long)self.observations.count, (unsigned long)self.sessions.count];
+        if (self.running) self.status = self.usingServiceFilters && !self.scanServiceUUIDs.count ? @"Import or enter Bluetooth service UUIDs to scan" : [NSString stringWithFormat:@"%@ · %lu client(s) · %lu devices · %lu connections", self.usingServiceFilters ? @"Scanning known services" : @"Scanning", (unsigned long)self.server.authenticatedClients, (unsigned long)self.observations.count, (unsigned long)self.sessions.count];
         [self changed];
     }
     if (!(self.tickCount % 20)) [self writeDiagnostics];

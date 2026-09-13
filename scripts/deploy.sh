@@ -20,6 +20,7 @@ set -euo pipefail
 #   --default     Use default (overview) dashboard instead of living-room
 #   --server URL  Override HA server URL
 #   --token-file X Read an access-token override from X without putting it in argv
+#   --ble-services X Additional advertised service UUIDs (comma-separated)
 #   --kiosk       Start in kiosk mode
 #   --no-kiosk    Disable kiosk mode
 #   --reset       Clear credentials and start at login screen
@@ -114,6 +115,8 @@ DRY_RUN=false
 KIOSK_MODE=""
 BLE_PROXY_MODE=""
 BLE_PROXY_REGISTER=false
+BLE_PROXY_SERVICES=""
+BLE_PROXY_SERVICES_SET=false
 HADASHBOARD_RSD_HOST=""
 HADASHBOARD_RSD_PORT=""
 RESET_MODE=false
@@ -149,6 +152,7 @@ while [[ $# -gt 0 ]]; do
         --ble-proxy)  BLE_PROXY_MODE="YES"; shift ;;
         --no-ble-proxy) BLE_PROXY_MODE="NO"; shift ;;
         --register-ble-proxy) BLE_PROXY_MODE="YES"; BLE_PROXY_REGISTER=true; shift ;;
+        --ble-services) BLE_PROXY_SERVICES="$2"; BLE_PROXY_SERVICES_SET=true; shift 2 ;;
         --device-id) IPHONE_DEVICECTL_ID="$2"; IPHONE_UDID=""; shift 2 ;;
         --rsd) HADASHBOARD_RSD_HOST="$2"; HADASHBOARD_RSD_PORT="$3"; shift 3 ;;
         --reset)      RESET_MODE=true; shift ;;
@@ -158,6 +162,25 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ "$TARGET" == "ipad-pro" ]] && TARGET="ipadpro"
+
+if [[ "$BLE_PROXY_SERVICES_SET" == true ]]; then
+    BLE_PROXY_SERVICES=$(python3 - "$BLE_PROXY_SERVICES" <<'PY'
+import re, sys, uuid
+values = []
+for value in filter(None, re.split(r"[,;\s]+", sys.argv[1])):
+    value = value.lower().removeprefix("0x")
+    if not re.fullmatch(r"[0-9a-f-]+", value) or len(value) not in (4, 8, 32, 36):
+        raise SystemExit("Invalid Bluetooth service UUID")
+    if len(value) == 4: value = "0000" + value
+    if len(value) == 8: value += "-0000-1000-8000-00805f9b34fb"
+    try: value = str(uuid.UUID(value))
+    except ValueError: raise SystemExit("Invalid Bluetooth service UUID")
+    if value not in values: values.append(value)
+if len(values) > 128: raise SystemExit("At most 128 additional BLE services are supported")
+print(",".join(values))
+PY
+)
+fi
 
 if [[ -n "$TOKEN_FILE" ]]; then
     if [[ ! -f "$TOKEN_FILE" ]]; then
@@ -377,6 +400,7 @@ if [[ "$TARGET" == "all" ]]; then
     [[ "$BLE_PROXY_MODE" == "YES" ]] && OPTS+=(--ble-proxy)
     [[ "$BLE_PROXY_MODE" == "NO" ]] && OPTS+=(--no-ble-proxy)
     [[ "$BLE_PROXY_REGISTER" == true ]] && OPTS+=(--register-ble-proxy)
+    [[ "$BLE_PROXY_SERVICES_SET" == true ]] && OPTS+=(--ble-services "$BLE_PROXY_SERVICES")
     [[ -n "$HADASHBOARD_RSD_HOST" ]] && OPTS+=(--rsd "$HADASHBOARD_RSD_HOST" "$HADASHBOARD_RSD_PORT")
     [[ -n "$DEMO_MODE" ]] && OPTS+=(--demo)
     [[ "$SERVER_OVERRIDE_SET" == true ]] && OPTS+=(--server "$HA_SERVER")
@@ -628,6 +652,10 @@ USB_LAUNCH_ARGS=("${LAUNCH_ARGS[@]}")
 if [[ -n "$BLE_PROXY_MODE" ]]; then
     LAUNCH_ARGS+=(-HABLEProxyEnabled "$BLE_PROXY_MODE")
     [[ "$BLE_PROXY_REGISTER" == true ]] && LAUNCH_ARGS+=(-HABLEProxyRegister YES)
+    USB_LAUNCH_ARGS=("${LAUNCH_ARGS[@]}")
+fi
+if [[ "$BLE_PROXY_SERVICES_SET" == true ]]; then
+    LAUNCH_ARGS+=(-HABLEProxyServiceUUIDs "$BLE_PROXY_SERVICES")
     USB_LAUNCH_ARGS=("${LAUNCH_ARGS[@]}")
 fi
 
@@ -1126,6 +1154,7 @@ case "$TARGET" in
         defaults write "$_PLIST_BASE" HADashboard -string "$HA_DASHBOARD"
         defaults write "$_PLIST_BASE" HAKioskMode -bool "$([ "$KIOSK_MODE" = "YES" ] && echo true || echo false)"
         [[ -n "$BLE_PROXY_MODE" ]] && defaults write "$_PLIST_BASE" HABLEProxyEnabled -bool "$([ "$BLE_PROXY_MODE" = "YES" ] && echo true || echo false)"
+        [[ "$BLE_PROXY_SERVICES_SET" == true ]] && defaults write "$_PLIST_BASE" HABLEProxyServiceUUIDs -string "$BLE_PROXY_SERVICES"
         [[ -n "$DEMO_MODE" ]] && defaults write "$_PLIST_BASE" HADemoMode -bool true
         plutil -convert binary1 "$_PLIST"
         if [[ -n "$BLE_PROXY_MODE" ]]; then

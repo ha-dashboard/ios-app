@@ -45,6 +45,29 @@ address used by encrypted BTHome payloads. Each iPad needs its own association
 between Apple's local identifier and the known device. Some devices provide no
 unique readable identifier and require manual association.
 
+## Discovery modes
+
+Automatic mode starts with broad Core Bluetooth discovery. If it receives no
+discoveries for ten seconds, it can import service UUIDs observed by Home
+Assistant and scan for those services. While using filters, it periodically
+tries broad discovery again. HA service imports refresh every five minutes.
+
+The Discovery section also provides explicit **Broad discovery** and **Known
+services** modes, a manual HA import, and additional service UUIDs. Manual UUIDs
+are combined with HA's imported services. A total of 128 filters is supported.
+HA's advertisement subscription requires administrator access; manual service
+UUIDs can be used when no other HA scanner has observed the device.
+
+These are advertised service UUIDs, not characteristic IDs or MAC addresses.
+Devices without a matching advertised service may be missed in filtered mode.
+Choosing filters does not establish a device's identity or automatically link
+its hardware address.
+
+A controlled test on a jailbroken iPad 4 running iOS 10.3.3 received zero
+callbacks with three broad-scan variants and 504 callbacks with an explicit
+service filter, while the nearby iPhone reference was verified advertising
+throughout. The automatic fallback is undergoing end-to-end device validation.
+
 ## Supported behaviour and limits
 
 - BLE advertisements visible to Core Bluetooth, preserving callback order.
@@ -79,7 +102,8 @@ Remove unwanted ESPHome entries separately in HA.
 ## Development and validation
 
 `scripts/deploy.sh` accepts `--ble-proxy`, `--no-ble-proxy`, and
-`--register-ble-proxy`. For an explicitly selected CoreDevice target, use
+`--register-ble-proxy`. Add service filters with `--ble-services FCD2,FD3D`.
+For an explicitly selected CoreDevice target, use
 `device --device-id ID`. Normal installations remain opt-in.
 
 For a Mini 5 that is reachable through MobileDevice Wi-Fi but missing from
