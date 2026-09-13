@@ -444,6 +444,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     }
     self.observations[identifier] = [@{@"identifier":identifier, @"name":name, @"address":HABLEAddressString(address), @"identity":self.mappings[identifier] ? @"user_associated_mac" : @"local_alias", @"rssi":RSSI, @"connectable":advertisement[CBAdvertisementDataIsConnectable] ?: @NO, @"last_seen":@([[NSDate date] timeIntervalSince1970]), @"service_uuids":uuids, @"service_data":serviceDump, @"manufacturer_data":[manufacturer base64EncodedStringWithOptions:0] ?: @""} mutableCopy];
     if (self.identityMetadata[identifier]) [self.observations[identifier] addEntriesFromDictionary:self.identityMetadata[identifier]];
+    self.observations[identifier][@"local_address"] = HABLEAddressString(HABLEAlias([self.installationID stringByAppendingString:identifier]));
     self.observations[identifier][@"first_seen"] = previous[@"first_seen"] ?: @([[NSDate date] timeIntervalSince1970]);
     NSMutableOrderedSet *identityServices = [NSMutableOrderedSet orderedSetWithArray:previous[@"identity_service_uuids"] ?: previous[@"service_uuids"] ?: @[]]; [identityServices addObjectsFromArray:uuids];
     self.observations[identifier][@"identity_service_uuids"] = identityServices.array;

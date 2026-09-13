@@ -210,6 +210,18 @@ static NSUInteger HABLERejectedRequestCount;
     XCTAssertEqualObjects(observation[@"identity"], @"local_alias");
     if (saved) [defaults setObject:saved forKey:@"ha_ble_proxy_address_mapping"]; else [defaults removeObjectForKey:@"ha_ble_proxy_address_mapping"];
 }
+- (void)testOriginalLocalAliasSurvivesCanonicalAddressRewriting {
+    HABLEDiscoveryPolicyProxy *proxy=[HABLEDiscoveryPolicyProxy new];[proxy setValue:@YES forKey:@"running"];
+    HABLEObservedPeripheral *peripheral=[HABLEObservedPeripheral new];peripheral.identifier=NSUUID.UUID;peripheral.name=@"Unit";
+    NSDictionary *ad=@{CBAdvertisementDataLocalNameKey:@"Unit"};
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@(-50)];
+    NSString *local=[proxy valueForKey:@"observations"][peripheral.identifier.UUIDString][@"local_address"];
+    XCTAssertEqual(local.length,17u);
+    [proxy valueForKey:@"mappings"][peripheral.identifier.UUIDString]=@"00:11:22:33:44:55";
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@(-50)];
+    NSDictionary *current=[proxy valueForKey:@"observations"][peripheral.identifier.UUIDString];
+    XCTAssertEqualObjects(current[@"address"],@"00:11:22:33:44:55");XCTAssertEqualObjects(current[@"local_address"],local);XCTAssertNotEqualObjects(current[@"address"],local);
+}
 - (void)testPublishedAddressesKeepTheirIdentityAndUseHAFriendlyNames {
     HABLEIdentityResolver *resolver = [[HABLEIdentityResolver alloc] init];
     [resolver loadRegistry:@[@{@"id":@"meter", @"name":@"Raw meter name", @"name_by_user":@"Bedroom climate", @"connections":@[@[@"bluetooth", @"00:11:22:33:44:55"]]}] entries:@[] excludingSource:@"02:00:00:00:00:01"];

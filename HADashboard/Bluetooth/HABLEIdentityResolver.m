@@ -5,6 +5,7 @@
 #import "HAAuthManager.h"
 #import <CommonCrypto/CommonDigest.h>
 #import <fnmatch.h>
+#import <math.h>
 
 static NSString *const HABLECatalogKey = @"ha_dashboard.ble_identity.v2";
 static NSString *const HABLELocalBindingsKey = @"ha_ble_identity_bindings_v2";
@@ -53,6 +54,11 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 @property (nonatomic, strong) NSMutableDictionary *localBindings;
 @property (nonatomic, strong) NSMutableDictionary *catalog;
 @property (nonatomic, strong) NSMutableDictionary *peerValues;
+@property (nonatomic, strong) NSMutableDictionary *peerInventories;
+@property (nonatomic) NSTimeInterval nextInventoryPublish;
+@property (nonatomic) BOOL inventoryPublishing;
+@property (nonatomic) NSUInteger inventoryCursor;
+@property (nonatomic) BOOL inventoryPartial;
 @property (nonatomic, strong) NSMutableDictionary *discoveryMatchers;
 @property (nonatomic, strong) NSMutableSet *proxySources;
 @property (nonatomic, strong) NSMutableSet *writesInFlight;
@@ -80,7 +86,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     if ((self=[super init])) {
         _knownDevices=@[]; _registryDevices=@[]; _status=@"Waiting for automatic synchronization"; _evidence=[HABLEIdentityEvidence new];
         _remoteInfo=NSMutableDictionary.dictionary; _localObservations=NSMutableDictionary.dictionary; _lastEvidence=NSMutableDictionary.dictionary; _potentialKnownIdentifiers=NSMutableSet.set; _localBindings=NSMutableDictionary.dictionary;
-        _catalog=NSMutableDictionary.dictionary; _discoveryMatchers=NSMutableDictionary.dictionary; _peerValues=NSMutableDictionary.dictionary; _proxySources=NSMutableSet.set; _writesInFlight=NSMutableSet.set; _pendingPublications=NSMutableDictionary.dictionary; _legacyReads=NSMutableSet.set; _subscriptions=NSMutableArray.array;
+        _catalog=NSMutableDictionary.dictionary; _discoveryMatchers=NSMutableDictionary.dictionary; _peerValues=NSMutableDictionary.dictionary; _peerInventories=NSMutableDictionary.dictionary; _proxySources=NSMutableSet.set; _writesInFlight=NSMutableSet.set; _pendingPublications=NSMutableDictionary.dictionary; _legacyReads=NSMutableSet.set; _subscriptions=NSMutableArray.array;
     } return self;
 }
 - (void)dealloc { [self cancel]; }
@@ -91,7 +97,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 - (void)cancel {
     self.generation++;
     if ([self sourceIsCurrent] && self.connection.connected) for (NSNumber *subscription in self.subscriptions) [self.connection unsubscribeFromEventWithId:subscription.integerValue];
-    [self.subscriptions removeAllObjects]; [self.writesInFlight removeAllObjects]; self.publicationInFlight=NO; self.publishing=NO;
+    [self.subscriptions removeAllObjects]; [self.writesInFlight removeAllObjects]; self.publicationInFlight=NO; self.publishing=NO; self.inventoryPublishing=NO;
 }
 - (void)loadRegistry:(NSArray *)devices entries:(NSArray *)entries excludingSource:(NSString *)source {
     self.sourceAddress=source.uppercaseString; [self.proxySources removeAllObjects]; [self.potentialKnownIdentifiers removeAllObjects];
@@ -209,6 +215,98 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     }
     [self rebuildKnownDevices];
 }
+- (NSString *)inventoryKey:(NSString *)source { return [@"ha_dashboard.ble_inventory.v1." stringByAppendingString:source]; }
+- (NSArray *)sanitizedInventoryTokens:(id)value {
+    if(![value isKindOfClass:NSArray.class] || [value count]>16)return @[];
+    NSMutableArray *result=NSMutableArray.array;
+    for(id token in value) {
+        if(![token isKindOfClass:NSString.class] || [token length]>4096 || (![token hasPrefix:@"m:"] && ![token hasPrefix:@"s:"]))return @[];
+        NSRange colon=[token rangeOfString:@":" options:NSBackwardsSearch];NSData *bytes=[[NSData alloc] initWithBase64EncodedString:[token substringFromIndex:colon.location+1] options:0];
+        if(bytes.length<4 || bytes.length>2048)return @[];[result addObject:token];
+    }
+    return result;
+}
+- (NSDictionary *)sanitizedFingerprints:(id)input {
+    if(![input isKindOfClass:NSDictionary.class])return @{};
+    NSMutableDictionary *result=NSMutableDictionary.dictionary;
+    for(id key in [[input allKeys] sortedArrayUsingComparator:^NSComparisonResult(id a,id b){return [[a description] compare:[b description]];}]) {
+        if(result.count>=32)break;id value=input[key];
+        if(![key isKindOfClass:NSString.class] || [key length]>512 || ![value isKindOfClass:NSDictionary.class])continue;
+        NSString *hash=HABLEString(value[@"sha256"]);
+        if(hash.length!=64 || !HABLEHexData(hash) || ![value[@"length"] isKindOfClass:NSNumber.class] || [value[@"length"] unsignedIntegerValue]>1024 || ![value[@"length"] unsignedIntegerValue])continue;
+        result[key]=@{@"sha256":hash.lowercaseString,@"length":value[@"length"],@"kind":[@[@"opaque",@"json_scalar"] containsObject:value[@"kind"]] ? value[@"kind"] : @"unknown",@"stable_across_sessions":@([value[@"stable_across_sessions"] isKindOfClass:NSNumber.class] && [value[@"stable_across_sessions"] boolValue] && [value[@"sessions"] isKindOfClass:NSNumber.class] && [value[@"sessions"] unsignedIntegerValue]>=2 && [value[@"varying"] isKindOfClass:NSNumber.class] && ![value[@"varying"] boolValue]),@"varying":@(![value[@"varying"] isKindOfClass:NSNumber.class] || [value[@"varying"] boolValue]),@"sessions":@([value[@"sessions"] isKindOfClass:NSNumber.class] ? MIN(255,[value[@"sessions"] unsignedIntegerValue]) : 0)};
+    }
+    return result;
+}
+- (NSArray *)localInventoryAtTime:(NSTimeInterval)now {
+    NSMutableArray *result=NSMutableArray.array;NSArray *identifiers=[self.localObservations.allKeys sortedArrayUsingSelector:@selector(compare:)];
+    NSUInteger bytes=0,visited=0,count=identifiers.count;
+    while(visited<count) {
+        NSString *identifier=identifiers[(self.inventoryCursor+visited)%count];visited++;
+        NSDictionary *observation=self.localObservations[identifier];NSString *alias=HABLEString(observation[@"local_address"]);uint64_t address;
+        if(now-[observation[@"last_seen"] doubleValue]>120 || !HABLEParseAddress(alias,&address))continue;
+        NSMutableDictionary *row=[@{@"local_address":alias,@"last_seen":observation[@"last_seen"],@"profile":HABLEProfile(observation),@"tokens":[HABLEIdentityEvidence tokensForObservation:observation],@"fingerprints":[self sanitizedFingerprints:observation[@"gatt_fingerprints"]]} mutableCopy];
+        NSDictionary *binding=self.localBindings[identifier];
+        if(binding && [self validBinding:binding] && [self.catalog[binding[@"address"]][@"proof_id"] isEqual:binding[@"proof_id"]]) {
+            row[@"address"]=binding[@"address"];row[@"proof_id"]=binding[@"proof_id"];row[@"lineage"]=binding[@"lineage"];
+        }
+        NSData *encoded=[NSJSONSerialization dataWithJSONObject:row options:0 error:nil];
+        if(encoded.length>16384){row[@"fingerprints"]=@{};row[@"fingerprints_truncated"]=@YES;encoded=[NSJSONSerialization dataWithJSONObject:row options:0 error:nil];}
+        if(encoded.length>16384){row[@"tokens"]=@[];row[@"advertisement_truncated"]=@YES;encoded=[NSJSONSerialization dataWithJSONObject:row options:0 error:nil];}
+        if(!encoded || encoded.length>16384)continue;
+        if(bytes+encoded.length>131072){visited--;break;}
+        bytes+=encoded.length;[result addObject:row];
+    }
+    self.inventoryPartial=visited<count;
+    if(count)self.inventoryCursor=(self.inventoryCursor+MAX(1,visited))%count;
+    return result;
+}
+- (void)observeInventory:(id)value source:(NSString *)source {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;
+    if(![self.proxySources containsObject:source] || [source isEqual:self.sourceAddress] || ![value isKindOfClass:NSDictionary.class] || ![value[@"schema"] isEqual:@1] || ![value[@"source"] isEqual:source] || ![value[@"time"] isKindOfClass:NSNumber.class] || ![value[@"observations"] isKindOfClass:NSArray.class] || [value[@"observations"] count]>256)return;
+    double time=[value[@"time"] doubleValue];if(!isfinite(time) || time<now-90 || time>now+5)return;
+    NSMutableDictionary *inventory=self.peerInventories[source];if(!inventory){inventory=NSMutableDictionary.dictionary;self.peerInventories[source]=inventory;}
+    for(NSString *alias in inventory.allKeys)if(now-[inventory[alias][@"last_seen"] doubleValue]>120)[inventory removeObjectForKey:alias];
+    for(id item in value[@"observations"]) {
+        if(![item isKindOfClass:NSDictionary.class] || ![item[@"last_seen"] isKindOfClass:NSNumber.class] || ![item[@"profile"] isKindOfClass:NSDictionary.class])continue;
+        NSString *alias=HABLEString(item[@"local_address"]);uint64_t address;double seen=[item[@"last_seen"] doubleValue];
+        if(!HABLEParseAddress(alias,&address) || !isfinite(seen) || seen<now-120 || seen>now+5)continue;
+        alias=HABLEAddressString(address);
+        NSDictionary *profile=item[@"profile"];NSString *name=HABLEString(profile[@"name"]);if(name.length>128)continue;
+        NSArray *services=[HABLEIdentityEvidence canonicalServices:profile[@"services"]];if(services.count>128)continue;
+        NSUInteger length=[profile[@"manufacturer_length"] isKindOfClass:NSNumber.class] ? [profile[@"manufacturer_length"] unsignedIntegerValue] : 0;if(length>2048)continue;
+        NSMutableDictionary *row=[@{@"source":source,@"local_address":alias,@"last_seen":@(seen),@"profile":@{@"name":name,@"services":services,@"manufacturer_length":@(length)},@"tokens":[self sanitizedInventoryTokens:item[@"tokens"]],@"fingerprints":[self sanitizedFingerprints:item[@"fingerprints"]]} mutableCopy];
+        NSDictionary *proof=self.catalog[HABLEString(item[@"address"])];
+        if([self validBinding:proof] && [proof[@"proof_id"] isEqual:item[@"proof_id"]] && [item[@"lineage"] isKindOfClass:NSArray.class] && [item[@"lineage"] count]<=32 && ![item[@"lineage"] containsObject:self.sourceAddress]) {
+            row[@"address"]=proof[@"address"];row[@"proof_id"]=proof[@"proof_id"];row[@"lineage"]=item[@"lineage"];
+        }
+        if(inventory.count<256 || inventory[alias])inventory[alias]=row;
+    }
+}
+- (NSArray *)peerObservationsForObservation:(NSDictionary *)observation {
+    NSMutableArray *result=NSMutableArray.array;NSTimeInterval now=NSDate.date.timeIntervalSince1970;NSDictionary *profile=HABLEProfile(observation);
+    for(NSString *source in self.peerInventories)if([self.proxySources containsObject:source])for(NSDictionary *row in [self.peerInventories[source] allValues])if(now-[row[@"last_seen"] doubleValue]<=120) {
+        NSString *name=HABLEString(profile[@"name"]);
+        BOOL sameName=name.length && ![name isEqual:@"Unnamed device"] && [name caseInsensitiveCompare:HABLEString(row[@"profile"][@"name"])]==NSOrderedSame;
+        if(sameName || HABLEProfilesCompatible(profile,row[@"profile"]))[result addObject:row];
+    }
+    return result;
+}
+- (void)maintainInventory {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;
+    for(NSString *source in self.peerInventories.allKeys) {
+        if(![self.proxySources containsObject:source]){[self.peerInventories removeObjectForKey:source];continue;}
+        NSMutableDictionary *rows=self.peerInventories[source];
+        for(NSString *alias in rows.allKeys)if(now-[rows[alias][@"last_seen"] doubleValue]>120)[rows removeObjectForKey:alias];
+        if(!rows.count)[self.peerInventories removeObjectForKey:source];
+    }
+    if(self.inventoryPublishing || now<self.nextInventoryPublish)return;
+    self.nextInventoryPublish=now+30;self.inventoryPublishing=YES;NSUInteger generation=self.generation;
+    NSDictionary *value=@{@"schema":@1,@"source":self.sourceAddress ?: @"",@"time":@(now),@"observations":[self localInventoryAtTime:now]};
+    if(self.inventoryPartial)self.nextInventoryPublish=now+3;
+    __weak typeof(self) weakSelf=self;
+    [self.connection sendCommand:@{@"type":@"frontend/set_system_data",@"key":[self inventoryKey:self.sourceAddress],@"value":value} completion:^(id response,NSError *error){HABLEIdentityResolver *self=weakSelf;if(!self || generation!=self.generation)return;self.inventoryPublishing=NO;if(error)self.nextInventoryPublish=NSDate.date.timeIntervalSince1970+60;}];
+}
 - (NSString *)peerKey:(NSString *)source { return [@"ha_dashboard.ble_observations.v2." stringByAppendingString:source]; }
 - (void)observePeer:(id)value source:(NSString *)source {
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;
@@ -300,6 +398,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     NSUInteger count=0;for(NSString *source in self.proxySources) {
         if([source isEqual:self.sourceAddress])continue;if(++count>16)break;
         n=[connection subscribeWithCommand:@{@"type":@"frontend/subscribe_system_data",@"key":[self peerKey:source]} handler:^(NSDictionary *event){HABLEIdentityResolver *self=weakSelf;if(self && generation==self.generation && [self sourceIsCurrent])[self observePeer:event[@"value"] source:source];}];[self.subscriptions addObject:@(n)];
+        n=[connection subscribeWithCommand:@{@"type":@"frontend/subscribe_system_data",@"key":[self inventoryKey:source]} handler:^(NSDictionary *event){HABLEIdentityResolver *self=weakSelf;if(self && generation==self.generation && [self sourceIsCurrent])[self observeInventory:event[@"value"] source:source];}];[self.subscriptions addObject:@(n)];
     }
 }
 - (void)refreshExcludingSource:(NSString *)source completion:(void (^)(NSError *))completion {
@@ -394,7 +493,11 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     NSDictionary *match=nil;NSArray *candidates=[self candidatesForObservation:observation];
     if([observation[@"identifier"] length] && (self.lastEvidence.count<256 || self.lastEvidence[observation[@"identifier"]]))self.lastEvidence[observation[@"identifier"]]=candidates.firstObject[@"evidence"] ?: @"No known candidate yet";
     for(NSDictionary *candidate in candidates)if([candidate[@"automatic_match"] boolValue]){if(match){if([observation[@"identifier"] length])self.lastEvidence[observation[@"identifier"]]=@"Ambiguous: multiple known devices satisfy the identity evidence";return nil;}match=candidate;}
-    if(!match)return nil;
+    if(!match) {
+        NSUInteger peers=[self peerObservationsForObservation:observation].count;
+        if(peers && [observation[@"identifier"] length])self.lastEvidence[observation[@"identifier"]]=[NSString stringWithFormat:@"%@ · %lu peer observations available; identity not yet verified",self.lastEvidence[observation[@"identifier"]] ?: @"Identity unresolved",(unsigned long)peers];
+        return nil;
+    }
     NSString *identifier=observation[@"identifier"];
     if([match[@"identity_kind"] isEqual:@"observed_native"]) for(NSString *other in self.localObservations) {
         NSDictionary *peer=self.localObservations[other];
@@ -434,6 +537,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         NSDictionary *remote=self.remoteInfo[record[@"address"]];NSDictionary *otherProfile=remote[@"profile"] ?: self.catalog[record[@"address"]][@"profile"];
         if(otherProfile && HABLEProfilesCompatible(profile,otherProfile)){known=YES;break;}
     }
+    if(!known && [self peerObservationsForObservation:observation].count)known=YES;
     if(known && identifier.length && self.potentialKnownIdentifiers.count<256)[self.potentialKnownIdentifiers addObject:identifier];
     return known;
 }
@@ -489,7 +593,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 }
 - (void)maintainSynchronization {
     if(!self.loaded || ![self sourceIsCurrent] || !self.connection.connected)return;
-    [self pumpPublications];
+    [self pumpPublications]; [self maintainInventory];
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;if(now<self.nextPublish || self.publishing)return;self.nextPublish=now+8;
     BOOL learning=NO;NSMutableArray *requested=NSMutableArray.array;
     for(NSString *identifier in self.localObservations) {NSDictionary *observation=self.localObservations[identifier];if(now-[observation[@"last_seen"] doubleValue]<=120 && !self.localBindings[identifier] && [self hasKnownIdentityForObservation:observation]) {

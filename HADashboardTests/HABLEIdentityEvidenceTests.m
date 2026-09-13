@@ -8,6 +8,8 @@
 - (void)observeAdvertisements:(NSArray *)advertisements;
 - (void)loadCatalog:(id)value;
 - (void)observePeer:(id)value source:(NSString *)source;
+- (void)observeInventory:(id)value source:(NSString *)source;
+- (NSArray *)localInventoryAtTime:(NSTimeInterval)now;
 - (HAConnectionManager *)connection;
 - (BOOL)sourceIsCurrent;
 @end
@@ -44,6 +46,32 @@
 @interface HABLEIdentityEvidenceTests : XCTestCase
 @end
 @implementation HABLEIdentityEvidenceTests
+- (void)testUnregisteredPeerInventoryIsSharedButNotPromotedToVerifiedIdentity {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;
+    HABLEIdentityResolver *sender=[HABLEIdentityResolver new];[sender loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    NSDictionary *observation=@{@"identifier":@"local",@"local_address":@"02:11:22:33:44:55",@"name":@"Unregistered unit",@"last_seen":@(now)};
+    [sender recordObservation:observation identifier:@"local"];
+    NSArray *inventory=[sender localInventoryAtTime:now];XCTAssertEqual(inventory.count,1u);XCTAssertNil(inventory[0][@"address"]);
+    HABLEIdentityResolver *receiver=[HABLEIdentityResolver new];[receiver loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:02"];
+    [receiver setValue:[NSMutableSet setWithArray:@[@"02:00:00:00:00:01",@"02:00:00:00:00:03"]] forKey:@"proxySources"];
+    NSMutableDictionary *row=[inventory[0] mutableCopy];row[@"address"]=@"00:11:22:33:44:55";row[@"proof_id"]=@"unverified-claim";
+    for(NSString *source in @[@"02:00:00:00:00:01",@"02:00:00:00:00:03"])[receiver observeInventory:@{@"schema":@1,@"source":source,@"time":@(now),@"observations":@[row]} source:source];
+    NSArray *peers=[receiver peerObservationsForObservation:observation];XCTAssertEqual(peers.count,2u);
+    for(NSDictionary *peer in peers)XCTAssertNil(peer[@"address"]);
+    XCTAssertTrue([receiver hasKnownIdentityForObservation:observation]);XCTAssertNil([receiver automaticMatchForObservation:observation]);
+}
+- (void)testInventoryRejectsUnknownSourcesStaleRowsAndMalformedFingerprints {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;HABLEIdentityResolver *r=[HABLEIdentityResolver new];
+    [r loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    NSDictionary *o=@{@"name":@"Unit",@"service_uuids":@[@"1234"]};
+    NSMutableDictionary *row=[@{@"local_address":@"02:11:22:33:44:55",@"last_seen":@(now),@"profile":@{@"name":@"Unit",@"services":@[@"1234"]},@"fingerprints":@{@"path":@{@"sha256":@"invalid",@"length":@16,@"sessions":NSNull.null}}} mutableCopy];
+    NSDictionary *value=@{@"schema":@1,@"source":@"02:00:00:00:00:02",@"time":@(now),@"observations":@[row]};
+    [r observeInventory:value source:@"02:00:00:00:00:02"];XCTAssertEqual([r peerObservationsForObservation:o].count,0u);
+    [r setValue:[NSMutableSet setWithObject:@"02:00:00:00:00:02"] forKey:@"proxySources"];
+    row[@"last_seen"]=@(now-121);[r observeInventory:value source:@"02:00:00:00:00:02"];XCTAssertEqual([r peerObservationsForObservation:o].count,0u);
+    row[@"last_seen"]=@(now);[r observeInventory:value source:@"02:00:00:00:00:02"];
+    XCTAssertEqual([r peerObservationsForObservation:o].count,1u);XCTAssertEqual([[r peerObservationsForObservation:o][0][@"fingerprints"] count],0u);
+}
 - (void)testStructuredFingerprintsSeparateChangingFieldsAndExcludeCredentials {
     NSDictionary *a=@{@"identity":@{@"id":@"unit-a"},@"rssi":@(-50),@"wifi":@{@"password":@"private",@"client_token":@"private",@"ssid":@"network"}};
     NSMutableDictionary *b=[a mutableCopy];b[@"rssi"]=@(-60);
