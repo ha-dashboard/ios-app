@@ -50,7 +50,10 @@ separate stable reads of an eligible identifier. Eligible fields include the
 standard Device Information Serial Number and System ID characteristics, plus
 context-filtered MAC/UUID fields in structured characteristic values. Model
 strings, generic profiles, changing values and placeholder identifiers do not
-qualify. No second proxy or registered HA device is required.
+qualify. No second proxy or registered HA device is required. Unresolved
+connectable devices enter the bounded automatic probe queue even without an
+integration matcher or external reference; discovery waits, connection-slot
+limits, per-device retry limits and read-only operation restrictions still apply.
 
 The shared proof retains all collected identifier fields. A later proxy can match
 an available secondary field without changing the canonical address originally

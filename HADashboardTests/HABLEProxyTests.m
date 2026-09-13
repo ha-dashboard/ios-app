@@ -192,6 +192,18 @@ static NSUInteger HABLERejectedRequestCount;
     }
     if(saved)[NSUserDefaults.standardUserDefaults setObject:saved forKey:@"ha_ble_proxy_handle_tables"];else[NSUserDefaults.standardUserDefaults removeObjectForKey:@"ha_ble_proxy_handle_tables"];
 }
+- (void)testStandaloneUnknownConnectableDeviceEntersTheBoundedProbeQueue {
+    HABLEFailingProbeProxy *proxy=[HABLEFailingProbeProxy new];[proxy setValue:@YES forKey:@"identitiesReady"];
+    HABLEIdentityResolver *resolver=[HABLEIdentityResolver new];[resolver loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];[proxy setValue:resolver forKey:@"identityResolver"];
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;
+    NSMutableDictionary *observation=[@{@"identifier":@"unregistered-unit",@"name":@"Unregistered unit",@"connectable":@YES,@"first_seen":@(now-120),@"last_seen":@(now),@"rssi":@-50} mutableCopy];
+    [proxy valueForKey:@"observations"][@"unregistered-unit"]=observation;
+    XCTAssertFalse([resolver hasKnownIdentityForObservation:observation]);
+    [proxy probePendingIdentity];XCTAssertEqual(proxy.inspections,1u);
+    [proxy probePendingIdentity];XCTAssertEqual(proxy.inspections,1u,@"Discovery without a reference must still respect the cooldown");
+    [proxy setValue:@0 forKey:@"nextIdentityProbeAt"];[proxy valueForKey:@"identityProbeTimes"][@"unregistered-unit"]=@(now-4000);observation[@"connectable"]=@NO;
+    [proxy probePendingIdentity];XCTAssertEqual(proxy.inspections,1u);
+}
 - (void)testSingleProxyForwardsStableAliasAfterBoundedLearningWithoutAReference {
     HABLEObservedPeripheral *peripheral=[HABLEObservedPeripheral new];peripheral.identifier=NSUUID.UUID;peripheral.name=@"Unit1234";
     NSDictionary *advertisement=@{CBAdvertisementDataLocalNameKey:@"Unit1234",CBAdvertisementDataManufacturerDataKey:[NSData dataWithBytes:"12345678" length:8]};

@@ -713,7 +713,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     }];
     for (NSString *identifier in probeOrder) {
         NSDictionary *observation = self.observations[identifier];
-        if (self.mappings[identifier] || self.automaticMappings[identifier] || ![observation[@"connectable"] boolValue] || now-[observation[@"last_seen"] doubleValue]>15 || now-[observation[@"first_seen"] doubleValue]<60 || now-MAX([self.identityProbeTimes[identifier] doubleValue],[observation[@"identification_read_at"] doubleValue])<[self identityProbeIntervalForObservation:observation] || ![self.identityResolver hasKnownIdentityForObservation:observation]) continue;
+        if (self.mappings[identifier] || self.automaticMappings[identifier] || ![observation[@"connectable"] boolValue] || now-[observation[@"last_seen"] doubleValue]>15 || now-[observation[@"first_seen"] doubleValue]<60 || now-MAX([self.identityProbeTimes[identifier] doubleValue],[observation[@"identification_read_at"] doubleValue])<[self identityProbeIntervalForObservation:observation]) continue;
         self.identityProbeAttempts[identifier]=@(MIN(255,[self.identityProbeAttempts[identifier] unsignedIntegerValue]+1));
         self.identityProbeTimes[identifier] = @(now); self.nextIdentityProbeAt = now + 60;
         __weak typeof(self) weakSelf = self;
