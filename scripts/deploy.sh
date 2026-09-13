@@ -1085,31 +1085,27 @@ case "$TARGET" in
         _CLEANUP_DIRS+=("$_DEPLOY_WORK_DIR")
         APP_TAR="$_DEPLOY_WORK_DIR/HADashboard.app.tar.gz"
         echo "   Packaging .app..."
-        if [[ "$TARGET" == "ipad4" ]]; then
-            # iOS 10+: strip Apple codesign (conflicts with ldid on-device)
-            _STAGE="$_DEPLOY_WORK_DIR/stage-jb"
-            mkdir -p "$_STAGE"
-            cp -R "$APP" "$_STAGE/"
-            _STAGED_APP="$_STAGE/$(basename "$APP")"
-            _JB_ENTITLEMENTS="$_STAGED_APP/HA-Dashboard.jailbreak.entitlements"
-            if ! codesign -d --entitlements :- "$_STAGED_APP/HA Dashboard" \
-                > "$_JB_ENTITLEMENTS" 2>/dev/null ||
-               ! plutil -lint "$_JB_ENTITLEMENTS" >/dev/null 2>&1; then
-                echo "❌ Could not preserve the signed app entitlements for iPad 4 Keychain access"
-                exit 1
-            fi
-            if ! plutil -extract application-identifier raw "$_JB_ENTITLEMENTS" >/dev/null 2>&1 &&
-               ! plutil -extract com.apple.application-identifier raw "$_JB_ENTITLEMENTS" >/dev/null 2>&1; then
-                echo "❌ The iPad 4 signing entitlements do not contain an application identifier"
-                exit 1
-            fi
-            codesign --remove-signature "$_STAGED_APP/HA Dashboard" 2>/dev/null || true
-            rm -f "$_STAGED_APP/embedded.mobileprovision"
-            tar -czf "$APP_TAR" -C "$_STAGE" "$(basename "$APP")"
-        else
-            # iOS 9: ldid -S works fine over Apple-signed binaries
-            tar -czf "$APP_TAR" -C "$(dirname "$APP")" "$(basename "$APP")"
+        # Preserve the app identity on every jailbreak target. A bare ldid -S
+        # drops the Keychain entitlements on iOS 9 as well as iOS 10.
+        _STAGE="$_DEPLOY_WORK_DIR/stage-jb"
+        mkdir -p "$_STAGE"
+        cp -R "$APP" "$_STAGE/"
+        _STAGED_APP="$_STAGE/$(basename "$APP")"
+        _JB_ENTITLEMENTS="$_STAGED_APP/HA-Dashboard.jailbreak.entitlements"
+        if ! codesign -d --entitlements :- "$_STAGED_APP/HA Dashboard" \
+            > "$_JB_ENTITLEMENTS" 2>/dev/null ||
+           ! plutil -lint "$_JB_ENTITLEMENTS" >/dev/null 2>&1; then
+            echo "❌ Could not preserve the signed app entitlements for $_IPAD_LABEL Keychain access"
+            exit 1
         fi
+        if ! plutil -extract application-identifier raw "$_JB_ENTITLEMENTS" >/dev/null 2>&1 &&
+           ! plutil -extract com.apple.application-identifier raw "$_JB_ENTITLEMENTS" >/dev/null 2>&1; then
+            echo "❌ The signing entitlements do not contain an application identifier"
+            exit 1
+        fi
+        codesign --remove-signature "$_STAGED_APP/HA Dashboard" 2>/dev/null || true
+        rm -f "$_STAGED_APP/embedded.mobileprovision"
+        tar -czf "$APP_TAR" -C "$_STAGE" "$(basename "$APP")"
 
         # Merge deploy preferences into existing plist on device
         _PLIST="$_DEPLOY_WORK_DIR/${TARGET}-prefs.plist"
@@ -1121,6 +1117,9 @@ case "$TARGET" in
         if [ "$RESET_MODE" = "true" ]; then
             defaults write "$_PLIST_BASE" HAClearCredentials -bool true
         else
+            # A previous deployment's one-shot reset must not erase credentials
+            # and feature opt-ins during an ordinary upgrade.
+            defaults delete "$_PLIST_BASE" HAClearCredentials 2>/dev/null || true
             defaults write "$_PLIST_BASE" HAServerURL -string "$HA_SERVER"
             write_ha_token_to_plist "$_PLIST"
         fi
@@ -1212,13 +1211,16 @@ REMOTE_INSTALL
         echo ""
         echo "── $_IPAD_LABEL log ─────────────────────────────────────"
         ipad_ssh '
-            LOG_PATH=$(find /var/mobile/Containers/Data/Application -path "*/Documents/ha-log.txt" -type f 2>/dev/null | head -1)
+            LOG_PATH=""
+            for CANDIDATE in /var/mobile/Containers/Data/Application/*/Documents/ha-log.txt /var/mobile/Documents/ha-log.txt; do
+                if [ -f "$CANDIDATE" ]; then LOG_PATH="$CANDIDATE"; break; fi
+            done
             if [ -n "$LOG_PATH" ]; then
-                tail -160 "$LOG_PATH"
+                cat "$LOG_PATH"
             else
                 echo "(no app-container log file found)"
             fi
-        '
+        ' | tail -160
         echo "────────────────────────────────────────────────────────"
         echo "   Backup retained at: $_BACKUP_DIR"
         ssh "${_SSH_OPTIONS[@]}" -O exit "root@$_IPAD_IP" >/dev/null 2>&1 || true
