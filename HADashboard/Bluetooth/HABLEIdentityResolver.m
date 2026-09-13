@@ -27,7 +27,7 @@ static BOOL HABLEUnitIdentifier(NSString *value) {
 static NSDictionary *HABLEProfile(NSDictionary *observation) {
     NSData *manufacturer = [[NSData alloc] initWithBase64EncodedString:HABLEString(observation[@"manufacturer_data"]) options:0];
     if (!manufacturer.length) manufacturer = [[NSData alloc] initWithBase64EncodedString:HABLEString(observation[@"identity_manufacturer_data"]) options:0];
-    return @{@"name":HABLEString(observation[@"name"]), @"services":[HABLEIdentityEvidence canonicalServices:observation[@"service_uuids"]], @"manufacturer_length":@(manufacturer.length), @"manufacturer_prefix":manufacturer.length>=2 ? [[manufacturer subdataWithRange:NSMakeRange(0,2)] base64EncodedStringWithOptions:0] : @""};
+    return @{@"name":HABLEString(observation[@"name"]), @"services":[HABLEIdentityEvidence canonicalServices:observation[@"identity_service_uuids"] ?: observation[@"service_uuids"]], @"manufacturer_length":@(manufacturer.length), @"manufacturer_prefix":manufacturer.length>=2 ? [[manufacturer subdataWithRange:NSMakeRange(0,2)] base64EncodedStringWithOptions:0] : @""};
 }
 static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     if ([b[@"required_prefix"] isKindOfClass:NSString.class]) return [a[@"manufacturer_prefix"] isEqual:b[@"required_prefix"]] && [HABLEString(a[@"name"]) caseInsensitiveCompare:HABLEString(b[@"name"])]==NSOrderedSame;
@@ -48,6 +48,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 @property (nonatomic, strong) HABLEIdentityEvidence *evidence;
 @property (nonatomic, strong) NSMutableDictionary *remoteInfo;
 @property (nonatomic, strong) NSMutableDictionary *localObservations;
+@property (nonatomic, strong) NSMutableDictionary *lastEvidence;
 @property (nonatomic, strong) NSMutableDictionary *localBindings;
 @property (nonatomic, strong) NSMutableDictionary *catalog;
 @property (nonatomic, strong) NSMutableDictionary *peerValues;
@@ -77,7 +78,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 - (instancetype)init {
     if ((self=[super init])) {
         _knownDevices=@[]; _registryDevices=@[]; _status=@"Waiting for automatic synchronization"; _evidence=[HABLEIdentityEvidence new];
-        _remoteInfo=NSMutableDictionary.dictionary; _localObservations=NSMutableDictionary.dictionary; _localBindings=NSMutableDictionary.dictionary;
+        _remoteInfo=NSMutableDictionary.dictionary; _localObservations=NSMutableDictionary.dictionary; _lastEvidence=NSMutableDictionary.dictionary; _localBindings=NSMutableDictionary.dictionary;
         _catalog=NSMutableDictionary.dictionary; _discoveryMatchers=NSMutableDictionary.dictionary; _peerValues=NSMutableDictionary.dictionary; _proxySources=NSMutableSet.set; _writesInFlight=NSMutableSet.set; _pendingPublications=NSMutableDictionary.dictionary; _legacyReads=NSMutableSet.set; _subscriptions=NSMutableArray.array;
     } return self;
 }
@@ -165,7 +166,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         if(self.remoteInfo.count>=256 && !self.remoteInfo[address])continue;
         NSData *raw=HABLEHexData(ad[@"raw"]); NSArray *tokens=[HABLEIdentityEvidence tokensForRawAdvertisement:raw];
         NSMutableDictionary *info=[ad mutableCopy];info[@"tokens"]=tokens;
-        NSUInteger length=0;for(NSString *token in tokens)if([token hasPrefix:@"m:"])length=[[[NSData alloc]initWithBase64EncodedString:[token substringFromIndex:2] options:0]length];
+        NSUInteger length=0;for(NSString *token in tokens)if([token hasPrefix:@"m:"])length=[[[NSData alloc]initWithBase64EncodedString:[token substringFromIndex:[token rangeOfString:@":" options:NSBackwardsSearch].location+1] options:0]length];
         info[@"profile"]=@{@"name":HABLEString(ad[@"name"]),@"services":[HABLEIdentityEvidence canonicalServices:ad[@"service_uuids"]],@"manufacturer_length":@(length)};
         self.remoteInfo[address]=info;
         // A merged manufacturer-data dictionary is metadata, not a packet trace.
@@ -216,17 +217,21 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     if(!rule[@"local_name"] && !rule[@"service_uuid"] && !rule[@"manufacturer_id"] && !rule[@"manufacturer_data_start"])return NO;
     NSSet *supported=[NSSet setWithArray:@[@"local_name",@"service_uuid",@"manufacturer_id",@"manufacturer_data_start",@"connectable"]];
     for(NSString *key in rule)if(![supported containsObject:key])return NO;
+    BOOL positive=NO;NSString *observedName=HABLEString(observation[@"name"]);BOOL named=observedName.length && ![observedName isEqual:@"Unnamed device"];
     NSString *pattern=rule[@"local_name"];
-    if(pattern && (![pattern isKindOfClass:NSString.class] || pattern.length>128 || fnmatch(pattern.UTF8String,HABLEString(observation[@"name"]).UTF8String,0)!=0))return NO;
-    if(rule[@"service_uuid"]) {NSString *uuid=HABLECanonicalUUID(rule[@"service_uuid"]);if(!uuid || ![[HABLEIdentityEvidence canonicalServices:observation[@"service_uuids"]] containsObject:uuid])return NO;}
+    if(pattern && (![pattern isKindOfClass:NSString.class] || pattern.length>128))return NO;
+    if(pattern && named && fnmatch(pattern.UTF8String,observedName.UTF8String,0)!=0)return NO;
+    if(pattern && named)positive=YES;
+    if(rule[@"service_uuid"]) {NSString *uuid=HABLECanonicalUUID(rule[@"service_uuid"]);if(!uuid || (![[HABLEIdentityEvidence canonicalServices:observation[@"identity_service_uuids"] ?: observation[@"service_uuids"]] containsObject:uuid] && ![HABLEIdentityEvidence observation:observation containsUUID:uuid]))return NO;positive=YES;}
     NSData *manufacturer=[[NSData alloc]initWithBase64EncodedString:HABLEString(observation[@"manufacturer_data"]) options:0];
     if(!manufacturer.length)manufacturer=[[NSData alloc]initWithBase64EncodedString:HABLEString(observation[@"identity_manufacturer_data"]) options:0];
     const uint8_t *bytes=manufacturer.bytes;
-    if(rule[@"manufacturer_id"] && (manufacturer.length<2 || ![rule[@"manufacturer_id"] isKindOfClass:NSNumber.class] || [rule[@"manufacturer_id"] unsignedIntegerValue]!=(bytes[0]|(bytes[1]<<8))))return NO;
-    if(rule[@"manufacturer_data_start"]) {NSData *prefix=HABLEHexData(rule[@"manufacturer_data_start"]);if(!prefix || manufacturer.length<2+prefix.length || ![[manufacturer subdataWithRange:NSMakeRange(2,prefix.length)] isEqual:prefix])return NO;}
+    if(rule[@"manufacturer_id"] && manufacturer.length>=2 && ( ![rule[@"manufacturer_id"] isKindOfClass:NSNumber.class] || [rule[@"manufacturer_id"] unsignedIntegerValue]!=(bytes[0]|(bytes[1]<<8))))return NO;
+    if(rule[@"manufacturer_id"] && manufacturer.length>=2)positive=YES;
+    if(rule[@"manufacturer_data_start"]) {NSData *prefix=HABLEHexData(rule[@"manufacturer_data_start"]);if(!prefix || manufacturer.length<2+prefix.length || ![[manufacturer subdataWithRange:NSMakeRange(2,prefix.length)] isEqual:prefix])return NO;positive=YES;}
     if(rule[@"connectable"] && ![rule[@"connectable"] isKindOfClass:NSNumber.class])return NO;
     if([rule[@"connectable"] boolValue] && ![observation[@"connectable"] boolValue])return NO;
-    return YES;
+    return positive;
 }
 - (void)loadLegacyAssociations:(void (^)(void))completion {
     dispatch_group_t group=dispatch_group_create();NSUInteger count=0,generation=self.generation;__weak typeof(self) weakSelf=self;
@@ -297,7 +302,8 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     if(!identifier.length)return;if(self.localObservations.count>=256 && !self.localObservations[identifier])return;
     self.localObservations[identifier]=observation;[self.evidence recordLocal:observation identifier:identifier atTime:[observation[@"last_seen"] doubleValue]];
 }
-- (void)removeIdentifier:(NSString *)identifier { [self.localObservations removeObjectForKey:identifier];[self.evidence removeIdentifier:identifier]; }
+- (NSString *)evidenceForIdentifier:(NSString *)identifier { return self.lastEvidence[identifier] ?: @"Waiting for sufficient identity evidence"; }
+- (void)removeIdentifier:(NSString *)identifier { [self.lastEvidence removeObjectForKey:identifier]; [self.localObservations removeObjectForKey:identifier];[self.evidence removeIdentifier:identifier]; }
 - (NSString *)registeredIdentifierForName:(NSString *)name record:(NSDictionary *)record {
     if(!HABLEUnitIdentifier(name))return nil;
     for(NSArray *pair in record[@"identifiers"])if([name caseInsensitiveCompare:pair[1]]==NSOrderedSame)return pair[1];
@@ -340,8 +346,9 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     return [result sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a,NSDictionary *b){return [b[@"score"] compare:a[@"score"]];}];
 }
 - (NSDictionary *)automaticMatchForObservation:(NSDictionary *)observation {
-    NSDictionary *match=nil;
-    for(NSDictionary *candidate in [self candidatesForObservation:observation])if([candidate[@"automatic_match"] boolValue]){if(match)return nil;match=candidate;}
+    NSDictionary *match=nil;NSArray *candidates=[self candidatesForObservation:observation];
+    if([observation[@"identifier"] length] && (self.lastEvidence.count<256 || self.lastEvidence[observation[@"identifier"]]))self.lastEvidence[observation[@"identifier"]]=candidates.firstObject[@"evidence"] ?: @"No known candidate yet";
+    for(NSDictionary *candidate in candidates)if([candidate[@"automatic_match"] boolValue]){if(match)return nil;match=candidate;}
     if(!match)return nil;
     NSString *identifier=observation[@"identifier"];
     if([match[@"method"] isEqual:@"packet_sequence"]) for(NSString *other in self.remoteInfo) {

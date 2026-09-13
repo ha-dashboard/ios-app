@@ -1,12 +1,13 @@
 #import "HABLEIdentityEvidence.h"
 #import "HABLEProto.h"
 #import <math.h>
+#import <float.h>
 
 static const NSTimeInterval HABLEEvidenceWindow = 900;
-static const NSUInteger HABLEEvidenceEvents = 96;
+static const NSUInteger HABLEEvidenceEvents = 256;
 static NSString *HABLEPayloadToken(NSString *channel, NSData *bytes) {
     if (bytes.length < 4 || bytes.length > 2048) return nil;
-    return [channel stringByAppendingString:[bytes base64EncodedStringWithOptions:0]];
+    return [NSString stringWithFormat:@"%@%lu:%@",channel,(unsigned long)bytes.length,[bytes base64EncodedStringWithOptions:0]];
 }
 static void HABLEAddToken(NSMutableArray *tokens, NSString *channel, NSData *bytes) {
     NSString *token = HABLEPayloadToken(channel, bytes);
@@ -66,6 +67,14 @@ static NSString *HABLELittleEndianUUID(const uint8_t *bytes, NSUInteger length) 
     }
     return common;
 }
+ + (BOOL)observation:(NSDictionary *)observation containsUUID:(NSString *)uuid {
+    NSString *hex=[HABLECanonicalUUID(uuid) stringByReplacingOccurrencesOfString:@"-" withString:@""];if(hex.length!=32)return NO;
+    uint8_t bytes[16],reverse[16];for(NSUInteger i=0;i<16;i++){unsigned n=0;[[NSScanner scannerWithString:[hex substringWithRange:NSMakeRange(i*2,2)]]scanHexInt:&n];bytes[i]=n;reverse[15-i]=n;}
+    for(NSString *token in [self tokensForObservation:observation]) {
+        NSData *data=[[NSData alloc]initWithBase64EncodedString:[token substringFromIndex:[token rangeOfString:@":" options:NSBackwardsSearch].location+1] options:0];
+        if(data.length>=16 && ([data rangeOfData:[NSData dataWithBytes:bytes length:16] options:0 range:NSMakeRange(0,data.length)].location!=NSNotFound || [data rangeOfData:[NSData dataWithBytes:reverse length:16] options:0 range:NSMakeRange(0,data.length)].location!=NSNotFound))return YES;
+    }return NO;
+}
 + (BOOL)observation:(NSDictionary *)observation containsAddress:(NSString *)address {
     uint64_t value; if (!HABLEParseAddress(address, &value)) return NO;
     uint8_t forward[6], reverse[6];
@@ -91,19 +100,22 @@ static NSString *HABLELittleEndianUUID(const uint8_t *bytes, NSUInteger length) 
 }
 - (void)append:(NSArray *)tokens key:(NSString *)key to:(NSMutableDictionary *)storage source:(NSString *)source atTime:(NSTimeInterval)time {
     if (!tokens.count || !key.length || !isfinite(time)) return;
-    NSTimeInterval now = NSDate.date.timeIntervalSince1970;
-    if (time < now - HABLEEvidenceWindow || time > now + 5) return;
-    NSMutableArray *events = storage[key];
-    if (!events) { if (storage.count >= 256) return; events = [NSMutableArray array]; storage[key] = events; }
-    while (events.count && [events.firstObject[@"last_seen"] doubleValue] < now - HABLEEvidenceWindow) [events removeObjectAtIndex:0];
-    NSDictionary *last=events.lastObject;
-    if ([last[@"tokens"] isEqual:tokens] && [last[@"source"] isEqual:source ?: @""] && time >= [last[@"time"] doubleValue]) {
-        NSMutableDictionary *updated=[last mutableCopy];updated[@"last_seen"]=@(MAX(time,[last[@"last_seen"] doubleValue]));events[events.count-1]=updated;return;
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;if(time<now-HABLEEvidenceWindow || time>now+5)return;
+    NSMutableArray *events=storage[key];if(!events){if(storage.count>=256)return;events=NSMutableArray.array;storage[key]=events;}
+    NSIndexSet *expired=[events indexesOfObjectsPassingTest:^BOOL(NSDictionary *event,NSUInteger index,BOOL *stop){return [event[@"last_seen"] doubleValue]<now-HABLEEvidenceWindow;}];[events removeObjectsAtIndexes:expired];
+    for(NSString *token in tokens) {
+        NSString *channel=[token substringToIndex:[token rangeOfString:@":" options:NSBackwardsSearch].location+1];
+        NSInteger latest=-1;
+        for(NSUInteger i=0;i<events.count;i++)if([events[i][@"channel"] isEqual:channel] && [events[i][@"source"] isEqual:source ?: @""])latest=i;
+        if(latest>=0 && [events[latest][@"token"] isEqual:token] && time>=[events[latest][@"time"] doubleValue]) {
+            NSMutableDictionary *updated=[events[latest] mutableCopy];updated[@"last_seen"]=@(MAX(time,[updated[@"last_seen"] doubleValue]));events[latest]=updated;continue;
+        }
+        BOOL duplicate=NO;
+        for(NSDictionary *old in events)if([old[@"token"] isEqual:token] && [old[@"source"] isEqual:source ?: @""] && time>=[old[@"time"] doubleValue]-1 && time<=[old[@"last_seen"] doubleValue]+1)duplicate=YES;
+        if(!duplicate)[events addObject:@{@"time":@(time),@"last_seen":@(time),@"token":token,@"tokens":@[token],@"channel":channel,@"source":source ?: @""}];
     }
-    for (NSDictionary *old in events) if ([old[@"source"] isEqual:source ?: @""] && [old[@"tokens"] isEqual:tokens] && time >= [old[@"time"] doubleValue]-1 && time <= [old[@"last_seen"] doubleValue]+1) return;
-    [events addObject:@{@"time":@(time), @"last_seen":@(time), @"tokens":tokens, @"source":source ?: @""}];
-    [events sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) { return [a[@"time"] compare:b[@"time"]]; }];
-    if (events.count > HABLEEvidenceEvents) [events removeObjectAtIndex:0];
+    [events sortUsingComparator:^NSComparisonResult(NSDictionary *a,NSDictionary *b){return [a[@"time"] compare:b[@"time"]];}];
+    while(events.count>HABLEEvidenceEvents)[events removeObjectAtIndex:0];
 }
 - (void)recordLocal:(NSDictionary *)observation identifier:(NSString *)identifier atTime:(NSTimeInterval)time {
     [self append:[[self class] tokensForObservation:observation] key:identifier to:self.locals source:nil atTime:time];
@@ -118,43 +130,33 @@ static NSString *HABLELittleEndianUUID(const uint8_t *bytes, NSUInteger length) 
     [self append:tokens key:address to:self.remotes source:source atTime:lastSeen];
 }
 - (NSDictionary *)correlationForIdentifier:(NSString *)identifier address:(NSString *)address now:(NSTimeInterval)now {
-    NSArray *local = self.locals[identifier], *remote = self.remotes[address];
-    NSMutableDictionary *valuesByChannel = [NSMutableDictionary dictionary], *bucketsByChannel = [NSMutableDictionary dictionary];
-    NSMutableSet *sources = [NSMutableSet set]; NSMutableArray *skews = [NSMutableArray array]; NSUInteger eligible = 0, matched = 0; NSTimeInterval first = now, last = 0, lastReference = 0;
-    for (NSDictionary *event in local) {
-        NSTimeInterval at = [event[@"time"] doubleValue]; NSTimeInterval end=[event[@"last_seen"] doubleValue]; if (end < now-HABLEEvidenceWindow) continue;
-        BOOL overlaps = NO, found = NO; NSArray *matchedTokens = nil; NSTimeInterval matchedRemoteEnd = 0, matchedRemoteStart = 0;
-        for (NSDictionary *other in remote) {
-            NSTimeInterval remoteStart=[other[@"time"] doubleValue],remoteEnd=[other[@"last_seen"] doubleValue];
-            if (at>remoteEnd+15 || remoteStart>end+15) continue;
-            overlaps = YES; BOOL conflict = NO; NSMutableArray *common = [NSMutableArray array];
-            for (NSString *token in event[@"tokens"]) {
-                NSString *channel = [token substringToIndex:[token rangeOfString:@":" options:NSBackwardsSearch].location + 1];
-                BOOL comparable = NO, equal = NO;
-                for (NSString *remoteToken in other[@"tokens"]) if ([remoteToken hasPrefix:channel]) { comparable = YES; if ([remoteToken isEqual:token]) equal = YES; }
-                if (comparable && !equal) conflict = YES;
-                if (equal) [common addObject:token];
+    NSArray *local=self.locals[identifier],*remote=self.remotes[address];NSMutableSet *channels=NSMutableSet.set;
+    for(NSDictionary *event in local)if([event[@"last_seen"] doubleValue]>=now-HABLEEvidenceWindow)[channels addObject:event[@"channel"]];
+    NSDictionary *best=@{@"qualified":@NO,@"distinct_packets":@0,@"matched_events":@0,@"compared_events":@0,@"span":@0,@"median_skew":@0,@"sources":@[]};
+    BOOL qualified=NO,contradiction=NO;
+    for(NSString *channel in channels) {
+        NSMutableSet *values=NSMutableSet.set,*buckets=NSMutableSet.set,*sources=NSMutableSet.set,*localValues=NSMutableSet.set,*remoteValues=NSMutableSet.set;
+        NSMutableArray *skews=NSMutableArray.array;NSUInteger compared=0,matched=0;double first=now,last=0,lastReference=0;
+        for(NSDictionary *event in remote)if([event[@"channel"] isEqual:channel] && [event[@"last_seen"] doubleValue]>=now-HABLEEvidenceWindow)[remoteValues addObject:event[@"token"]];
+        for(NSDictionary *event in local) {
+            if(![event[@"channel"] isEqual:channel] || [event[@"last_seen"] doubleValue]<now-HABLEEvidenceWindow)continue;
+            [localValues addObject:event[@"token"]];double at=[event[@"time"] doubleValue],end=[event[@"last_seen"] doubleValue];BOOL comparable=NO;NSDictionary *closest=nil;double distance=DBL_MAX;
+            for(NSDictionary *other in remote) {
+                if(![other[@"channel"] isEqual:channel])continue;double start=[other[@"time"] doubleValue],finish=[other[@"last_seen"] doubleValue];
+                if(at>finish+15 || start>end+15)continue;comparable=YES;
+                if([event[@"token"] isEqual:other[@"token"]] && fabs(at-start)<distance){closest=other;distance=fabs(at-start);}
             }
-            if (!conflict && common.count) { found = YES; matchedTokens = common; matchedRemoteEnd = remoteEnd; matchedRemoteStart = remoteStart; [sources addObject:other[@"source"]]; break; }
+            if(!comparable)continue;compared++;
+            if(closest){matched++;first=MIN(first,at);last=MAX(last,end);lastReference=MAX(lastReference,[closest[@"last_seen"] doubleValue]);[skews addObject:@(at-[closest[@"time"] doubleValue])];[sources addObject:closest[@"source"]];if(![values containsObject:event[@"token"]]){[values addObject:event[@"token"]];[buckets addObject:@((NSInteger)floor(at/5))];}}
         }
-        if (!overlaps) continue;
-        eligible++;
-        if (found) {
-            matched++; first = MIN(first,at); last = MAX(last,end); lastReference = MAX(lastReference,matchedRemoteEnd); [skews addObject:@(at-matchedRemoteStart)];
-            for (NSString *token in matchedTokens) {
-                NSString *channel = [token substringToIndex:[token rangeOfString:@":" options:NSBackwardsSearch].location + 1];
-                NSMutableSet *values = valuesByChannel[channel], *buckets = bucketsByChannel[channel];
-                if (!values) { values = [NSMutableSet set]; buckets = [NSMutableSet set]; valuesByChannel[channel] = values; bucketsByChannel[channel] = buckets; }
-                if (![values containsObject:token]) { [values addObject:token]; [buckets addObject:@((NSInteger)floor(at / 5))]; }
-            }
-        }
+        double agreement=compared ? (double)matched/compared : 0;[skews sortUsingSelector:@selector(compare:)];double skew=skews.count ? [skews[skews.count/2] doubleValue] : INFINITY;
+        BOOL passes=values.count>=12 && buckets.count>=6 && matched>=12 && agreement>=.9 && last-first>=30 && fabs(skew)<=3 && now-last<=120 && now-lastReference<=120;
+        if((compared>=3 && agreement<.5) || (compared && !matched && localValues.count==1 && remoteValues.count==1))contradiction=YES;
+        NSDictionary *result=@{@"qualified":@(passes),@"distinct_packets":@(values.count),@"matched_events":@(matched),@"compared_events":@(compared),@"span":@(MAX(0,last-first)),@"median_skew":@(isfinite(skew)?skew:0),@"sources":sources.allObjects};
+        if([result[@"distinct_packets"] unsignedIntegerValue]>[best[@"distinct_packets"] unsignedIntegerValue] || (![best[@"compared_events"] unsignedIntegerValue] && compared))best=result;
+        qualified=qualified || passes;
     }
-    NSUInteger distinct = 0, temporalBuckets = 0;
-    for (NSString *channel in valuesByChannel) if ([valuesByChannel[channel] count] > distinct) { distinct = [valuesByChannel[channel] count]; temporalBuckets = [bucketsByChannel[channel] count]; }
-    [skews sortUsingSelector:@selector(compare:)]; double skew = skews.count ? [skews[skews.count/2] doubleValue] : INFINITY;
-    // Static channels and partial-packet combinations cannot manufacture diversity.
-    BOOL qualified = fabs(skew)<=3 && distinct >= 12 && temporalBuckets >= 6 && matched >= 12 && eligible && (double)matched / eligible >= .9 && last - first >= 30 && now - last <= 120 && now - lastReference <= 120;
-    return @{@"qualified":@(qualified), @"distinct_packets":@(distinct), @"matched_events":@(matched), @"compared_events":@(eligible), @"span":@(MAX(0,last-first)), @"median_skew":@(isfinite(skew)?skew:0), @"sources":sources.allObjects};
+    NSMutableDictionary *result=[best mutableCopy];result[@"qualified"]=@(qualified && !contradiction);result[@"contradictory_channel"]=@(contradiction);return result;
 }
 - (BOOL)hasCompetingLocalIdentifier:(NSString *)identifier address:(NSString *)address now:(NSTimeInterval)now {
     for (NSString *other in self.locals) if (![other isEqual:identifier]) { NSDictionary *e=[self correlationForIdentifier:other address:address now:now]; if ([e[@"compared_events"] unsignedIntegerValue] && [e[@"matched_events"] doubleValue] / [e[@"compared_events"] doubleValue] >= .9) return YES; }

@@ -82,6 +82,17 @@
         [engine recordRemoteTokens:[HABLEIdentityEvidence tokensForObservation:[self observation:i+100+offset at:0]] address:address source:@"native" atTime:start+i*3.5+.2];
     }
 }
+- (void)testAlternatingLayoutsDoNotDiluteTheChangingChannel {
+    HABLEIdentityEvidence *engine=[HABLEIdentityEvidence new];NSTimeInterval start=NSDate.date.timeIntervalSince1970-55;
+    uint8_t fixed[20]={1,2,3,4,5,6,7,8};
+    for(NSUInteger i=0;i<16;i++) {
+        NSDictionary *value=[self observation:100+i at:start+i*3.5];
+        [engine recordLocal:value identifier:@"one" atTime:start+i*3.5];
+        [engine recordLocal:@{@"manufacturer_data":[[NSData dataWithBytes:fixed length:sizeof(fixed)] base64EncodedStringWithOptions:0]} identifier:@"one" atTime:start+i*3.5+1];
+        [engine recordRemoteTokens:[HABLEIdentityEvidence tokensForObservation:value] address:@"00:11:22:33:44:55" source:@"native" atTime:start+i*3.5+.2];
+    }
+    XCTAssertTrue(([[engine correlationForIdentifier:@"one" address:@"00:11:22:33:44:55" now:NSDate.date.timeIntervalSince1970][@"qualified"] boolValue]));
+}
 - (void)testShortPayloadSequencesAreGenericEvidence {
     HABLEIdentityEvidence *engine=[HABLEIdentityEvidence new];[self fill:engine local:@"one" address:@"00:11:22:33:44:55" offset:0];
     XCTAssertTrue(([[engine correlationForIdentifier:@"one" address:@"00:11:22:33:44:55" now:NSDate.date.timeIntervalSince1970][@"qualified"] boolValue]));
@@ -110,6 +121,12 @@
     uint8_t raw[]={5,0xff,0x11,0x22,0x33,0x44};NSData *payload=[NSData dataWithBytes:raw+2 length:4];
     XCTAssertEqualObjects([HABLEIdentityEvidence tokensForRawAdvertisement:[NSData dataWithBytes:raw length:sizeof(raw)]],[HABLEIdentityEvidence tokensForObservation:@{@"manufacturer_data":[payload base64EncodedStringWithOptions:0]}]);
     XCTAssertEqual([HABLEIdentityEvidence tokensForRawAdvertisement:[NSData dataWithBytes:raw length:4]].count,0u);
+}
+- (void)testKnownUUIDCanBeRecognizedInsideAnOpaquePayload {
+    uint8_t bytes[]={0xab,0xcd,0x00,0x00,0x12,0x34,0x00,0x00,0x10,0x00,0x80,0x00,0x00,0x80,0x5f,0x9b,0x34,0xfb,0xef};
+    NSDictionary *o=@{@"manufacturer_data":[[NSData dataWithBytes:bytes length:sizeof(bytes)] base64EncodedStringWithOptions:0]};
+    XCTAssertTrue(([HABLEIdentityEvidence observation:o containsUUID:@"1234"]));
+    XCTAssertFalse(([HABLEIdentityEvidence observation:o containsUUID:@"9999"]));
 }
 - (void)testEmbeddedAddressNeedsNoVendorLookup {
     uint8_t bytes[]={0xde,0xad,0x00,0x11,0x22,0x33,0x44,0x55,0xbe,0xef};

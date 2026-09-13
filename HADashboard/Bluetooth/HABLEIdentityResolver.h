@@ -13,5 +13,6 @@
 - (void)rememberAutomaticMatch:(NSDictionary *)match;
 - (void)rememberConfirmedAddress:(NSString *)address observation:(NSDictionary *)observation;
 - (void)maintainSynchronization;
+- (NSString *)evidenceForIdentifier:(NSString *)identifier;
 - (void)cancel;
 @end

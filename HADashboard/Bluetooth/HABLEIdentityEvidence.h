@@ -6,6 +6,7 @@
 + (NSArray<NSString *> *)tokensForRawAdvertisement:(NSData *)raw;
 + (BOOL)tokens:(NSArray<NSString *> *)local agreeWith:(NSArray<NSString *> *)remote;
 + (NSArray<NSString *> *)canonicalServices:(NSArray *)values;
++ (BOOL)observation:(NSDictionary *)observation containsUUID:(NSString *)uuid;
 + (BOOL)observation:(NSDictionary *)observation containsAddress:(NSString *)address;
 - (void)recordLocal:(NSDictionary *)observation identifier:(NSString *)identifier atTime:(NSTimeInterval)time;
 - (void)recordRemoteTokens:(NSArray<NSString *> *)tokens address:(NSString *)address source:(NSString *)source atTime:(NSTimeInterval)time;

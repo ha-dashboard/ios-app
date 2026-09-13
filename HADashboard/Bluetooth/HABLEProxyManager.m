@@ -444,6 +444,8 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     self.observations[identifier] = [@{@"identifier":identifier, @"name":name, @"address":HABLEAddressString(address), @"identity":self.mappings[identifier] ? @"user_associated_mac" : @"local_alias", @"rssi":RSSI, @"connectable":advertisement[CBAdvertisementDataIsConnectable] ?: @NO, @"last_seen":@([[NSDate date] timeIntervalSince1970]), @"service_uuids":uuids, @"service_data":serviceDump, @"manufacturer_data":[manufacturer base64EncodedStringWithOptions:0] ?: @""} mutableCopy];
     if (self.identityMetadata[identifier]) [self.observations[identifier] addEntriesFromDictionary:self.identityMetadata[identifier]];
     self.observations[identifier][@"first_seen"] = previous[@"first_seen"] ?: @([[NSDate date] timeIntervalSince1970]);
+    NSMutableOrderedSet *identityServices = [NSMutableOrderedSet orderedSetWithArray:previous[@"identity_service_uuids"] ?: previous[@"service_uuids"] ?: @[]]; [identityServices addObjectsFromArray:uuids];
+    self.observations[identifier][@"identity_service_uuids"] = identityServices.array;
     self.observations[identifier][@"identity_manufacturer_data"] = [identityManufacturer base64EncodedStringWithOptions:0] ?: @"";
     [self updateIdentityResolution];
     [self.identityResolver recordObservation:self.observations[identifier] identifier:identifier];
@@ -466,7 +468,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 - (void)matchIdentifier:(NSString *)identifier {
     NSMutableDictionary *observation = self.observations[identifier];
     if (!observation) return;
-    if (self.identitiesReady || self.mappings[identifier]) [observation removeObjectForKey:@"identity_pending"];
+    if (self.mappings[identifier]) [observation removeObjectForKey:@"identity_pending"];
     CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
     if (self.mappings[identifier]) {
         if (self.identitiesReady && now >= [self.identityCheckTimes[identifier] doubleValue]) {
@@ -496,7 +498,8 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     NSDictionary *match = self.automaticMappings[identifier];
     observation[@"address"] = HABLEAddressString([self addressForIdentifier:identifier]);
     observation[@"identity"] = match ? @"ha_matched_mac" : @"local_alias";
-    if (match) { observation[@"ha_name"] = match[@"label"]; observation[@"identity_evidence"] = match[@"evidence"]; }
+    if (match) { [observation removeObjectForKey:@"identity_pending"]; observation[@"ha_name"] = match[@"label"]; observation[@"identity_evidence"] = match[@"evidence"]; }
+    else { [observation removeObjectForKey:@"ha_name"]; observation[@"identity_evidence"] = [self.identityResolver evidenceForIdentifier:identifier]; if (!self.identitiesReady || [self.identityResolver hasKnownIdentityForObservation:observation]) observation[@"identity_pending"] = @YES; else [observation removeObjectForKey:@"identity_pending"]; }
 }
 - (void)identityConnectionDidChange:(NSNotification *)note { self.nextIdentityRefresh = 0; }
 - (void)identityConnectionDidDisconnect:(NSNotification *)note {
