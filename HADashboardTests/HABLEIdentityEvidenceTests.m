@@ -46,6 +46,50 @@
 @interface HABLEIdentityEvidenceTests : XCTestCase
 @end
 @implementation HABLEIdentityEvidenceTests
+- (NSDictionary *)stableIdentifierFields {
+    NSData *json=[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:55"}} options:0 error:nil];
+    NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:json path:@"s/1234/c/5678"];
+    NSDictionary *first=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:@{} session:@"one" atTime:1];
+    return [HABLEIdentityEvidence mergeFingerprintReads:reads previous:first session:@"two" atTime:2];
+}
+- (void)testPeerOnlyIdentifierFingerprintCreatesOneSharedSyntheticIdentity {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;NSDictionary *fields=[self stableIdentifierFields];
+    HABLEIdentityResolver *a=[HABLEIdentityResolver new],*b=[HABLEIdentityResolver new];
+    [a loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];[b loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:02"];
+    [a setValue:[NSMutableSet setWithObject:@"02:00:00:00:00:02"] forKey:@"proxySources"];[b setValue:[NSMutableSet setWithObject:@"02:00:00:00:00:01"] forKey:@"proxySources"];
+    NSDictionary *oa=@{@"identifier":@"a",@"local_address":@"02:11:22:33:44:55",@"name":@"Unit",@"last_seen":@(now),@"gatt_fingerprints":fields};
+    NSMutableDictionary *ob=[oa mutableCopy];ob[@"identifier"]=@"b";ob[@"local_address"]=@"02:22:33:44:55:66";
+    [a recordObservation:oa identifier:@"a"];[b recordObservation:ob identifier:@"b"];
+    XCTAssertNil([a automaticMatchForObservation:oa]);
+    [a observeInventory:@{@"schema":@1,@"source":@"02:00:00:00:00:02",@"time":@(now),@"observations":[b localInventoryAtTime:now]} source:@"02:00:00:00:00:02"];
+    [b observeInventory:@{@"schema":@1,@"source":@"02:00:00:00:00:01",@"time":@(now),@"observations":[a localInventoryAtTime:now]} source:@"02:00:00:00:00:01"];
+    NSDictionary *ma=[a automaticMatchForObservation:oa],*mb=[b automaticMatchForObservation:ob];
+    XCTAssertEqualObjects(ma[@"identity_kind"],@"observed_shared");XCTAssertEqualObjects(ma[@"address"],mb[@"address"]);XCTAssertNotEqualObjects(ma[@"address"],@"00:11:22:33:44:55");
+    NSMutableDictionary *binding=[ma mutableCopy];binding[@"schema"]=@2;binding[@"proof_id"]=@"verified-peer-proof";
+    HABLEIdentityResolver *fresh=[HABLEIdentityResolver new];[fresh loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:03"];
+    [fresh loadCatalog:@{@"schema":@2,@"bindings":@{ma[@"address"]:binding}}];
+    NSMutableDictionary *oneRead=[oa mutableCopy];NSMutableDictionary *singleFields=NSMutableDictionary.dictionary;
+    for(NSString *path in fields){NSMutableDictionary *value=[fields[path] mutableCopy];value[@"sessions"]=@1;value[@"stable_across_sessions"]=@NO;singleFields[path]=value;}
+    oneRead[@"gatt_fingerprints"]=singleFields;
+    XCTAssertEqualObjects(([fresh automaticMatchForObservation:oneRead][@"address"]),ma[@"address"]);
+    NSMutableDictionary *twin=[ob mutableCopy];twin[@"local_address"]=@"02:33:44:55:66:77";twin[@"identifier"]=@"twin";[b recordObservation:twin identifier:@"twin"];
+    [a observeInventory:@{@"schema":@1,@"source":@"02:00:00:00:00:02",@"time":@(now),@"observations":[b localInventoryAtTime:now]} source:@"02:00:00:00:00:02"];
+    XCTAssertNil([a automaticMatchForObservation:oa]);XCTAssertTrue([[a evidenceForIdentifier:@"a"] containsString:@"Ambiguous"]);
+}
+- (void)testConflictingStrongIdentifiersCannotBeOutvotedByAnotherMatchingField {
+    NSDictionary *fields=[self stableIdentifierFields];NSString *path=fields.allKeys.firstObject;
+    NSMutableDictionary *a=[fields mutableCopy],*b=[fields mutableCopy];NSMutableDictionary *changed=[fields[path] mutableCopy];changed[@"sha256"]=[@"b" stringByPaddingToLength:64 withString:@"b" startingAtIndex:0];
+    a[@"s/1234/c/5678/json/device/othermac"]=fields[path];b[@"s/1234/c/5678/json/device/othermac"]=changed;
+    XCTAssertTrue([HABLEIdentityEvidence identifierFingerprints:a conflictWith:b]);
+}
+- (void)testContextAddressesAndSingleSessionValuesAreNotIdentifierProof {
+    NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:[NSJSONSerialization dataWithJSONObject:@{@"wifi":@{@"bssid":@"00:11:22:33:44:55"},@"device":@{@"uuid":@"00000000-0000-0000-0000-000000000000"}} options:0 error:nil] path:@"attribute"];
+    NSDictionary *first=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:@{} session:@"one" atTime:1];
+    NSDictionary *stable=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:first session:@"two" atTime:2];
+    for(NSString *path in stable)XCTAssertFalse([HABLEIdentityEvidence isIdentifierFingerprint:stable[path] path:path]);
+    NSDictionary *identifiers=[self stableIdentifierFields];NSString *path=identifiers.allKeys.firstObject;NSMutableDictionary *single=[identifiers[path] mutableCopy];single[@"sessions"]=@1;
+    XCTAssertFalse([HABLEIdentityEvidence isIdentifierFingerprint:single path:path]);
+}
 - (void)testUnregisteredPeerInventoryIsSharedButNotPromotedToVerifiedIdentity {
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;
     HABLEIdentityResolver *sender=[HABLEIdentityResolver new];[sender loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];

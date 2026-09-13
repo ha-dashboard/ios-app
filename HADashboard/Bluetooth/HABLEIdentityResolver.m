@@ -20,6 +20,10 @@ static NSString *HABLEHash(NSString *value) {
     NSData *data = [value dataUsingEncoding:NSUTF8StringEncoding]; uint8_t bytes[32]; CC_SHA256(data.bytes,(CC_LONG)data.length,bytes);
     NSMutableString *hash = NSMutableString.string; for (NSUInteger i=0;i<32;i++) [hash appendFormat:@"%02x",bytes[i]]; return hash;
 }
+static NSString *HABLESharedFingerprintAddress(NSString *identity) {
+    NSData *hash=HABLEHexData(HABLEHash(identity));const uint8_t *bytes=hash.bytes;uint64_t address=(bytes[0]&0xfc)|2;
+    for(NSUInteger i=1;i<6;i++)address=(address<<8)|bytes[i];return HABLEAddressString(address);
+}
 static NSString *HABLEString(id value) { return [value isKindOfClass:NSString.class] ? value : @""; }
 static BOOL HABLEUnitIdentifier(NSString *value) {
     if (value.length < 8 || value.length > 128) return NO;
@@ -59,6 +63,8 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 @property (nonatomic) BOOL inventoryPublishing;
 @property (nonatomic) NSUInteger inventoryCursor;
 @property (nonatomic) BOOL inventoryPartial;
+@property (nonatomic) NSTimeInterval lastInventoryPublish;
+@property (nonatomic) NSInteger inventoryPublishError;
 @property (nonatomic, strong) NSMutableDictionary *discoveryMatchers;
 @property (nonatomic, strong) NSMutableSet *proxySources;
 @property (nonatomic, strong) NSMutableSet *writesInFlight;
@@ -140,11 +146,14 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     NSMutableSet *covered=NSMutableSet.set;
     for(NSDictionary *record in known)if([record[@"address"] length])[covered addObject:record[@"address"]];
     NSMutableSet *observed=[NSMutableSet setWithArray:self.remoteInfo.allKeys];
-    for(NSString *address in self.catalog)if([self.catalog[address][@"identity_kind"] isEqual:@"observed_native"])[observed addObject:address];
+    for(NSString *address in self.catalog)if([@[@"observed_native",@"observed_shared"] containsObject:self.catalog[address][@"identity_kind"]])[observed addObject:address];
     for(NSString *address in observed) {
         if([covered containsObject:address])continue;
         NSDictionary *remote=self.remoteInfo[address],*shared=self.catalog[address];
         NSDictionary *anchor=remote[@"native_anchor"] ?: shared[@"native_anchor"];
+        if([shared[@"identity_kind"] isEqual:@"observed_shared"]) {
+            NSMutableDictionary *row=[shared mutableCopy];row[@"label"]=HABLEString(shared[@"name"]).length ? shared[@"name"] : address;[known addObject:row];continue;
+        }
         if(!anchor)continue;
         NSString *name=HABLEString(remote[@"name"]);if(!name.length)name=HABLEString(shared[@"name"]);
         [known addObject:@{@"identity_kind":@"observed_native",@"device_id":[@"bluetooth:" stringByAppendingString:address],@"address":address,@"addresses":@[address],@"identifiers":@[],@"domains":@[],@"name":name,@"label":name.length ? name : address,@"native_anchor":anchor}];
@@ -154,13 +163,24 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 - (BOOL)validBinding:(NSDictionary *)binding {
     uint64_t address;
     if (![binding isKindOfClass:NSDictionary.class] || ![binding[@"profile"] isKindOfClass:NSDictionary.class] || ![binding[@"lineage"] isKindOfClass:NSArray.class] || [binding[@"lineage"] count]>32 || ![binding[@"schema"] isEqual:@2] || !HABLEParseAddress(HABLEString(binding[@"address"]),&address) || ![binding[@"proof_id"] isKindOfClass:NSString.class]) return NO;
-    if (![@[@"embedded_address",@"serial",@"named_identifier",@"packet_sequence",@"confirmed"] containsObject:binding[@"method"]]) return NO;
+    if (![@[@"embedded_address",@"serial",@"named_identifier",@"packet_sequence",@"confirmed",@"gatt_fingerprint"] containsObject:binding[@"method"]]) return NO;
+    if([binding[@"method"] isEqual:@"gatt_fingerprint"]) {
+        if(binding[@"fingerprint_profile"] && (![binding[@"fingerprint_profile"] isKindOfClass:NSDictionary.class] || [binding[@"fingerprint_profile"] count]>32))return NO;
+        NSDictionary *witness=binding[@"fingerprint_witness"];if(![witness isKindOfClass:NSDictionary.class])return NO;NSString *path=HABLEString(witness[@"path"]),*hash=HABLEString(witness[@"sha256"]);id sources=binding[@"supporting_sources"];
+        if(![witness isKindOfClass:NSDictionary.class] || path.length>512 || hash.length!=64 || !HABLEHexData(hash) || ![HABLEIdentityEvidence isIdentifierFingerprint:witness path:path] || ![sources isKindOfClass:NSArray.class] || [sources count]>32 || [sources count]<2)return NO;
+        NSMutableSet *unique=NSMutableSet.set;for(id source in sources){if(![source isKindOfClass:NSString.class] || ![source length] || [source length]>128)return NO;[unique addObject:source];}if(unique.count<2)return NO;
+    }
+    if([binding[@"identity_kind"] isEqual:@"observed_shared"]) {
+        if(![binding[@"method"] isEqual:@"gatt_fingerprint"])return NO;
+        NSDictionary *w=binding[@"fingerprint_witness"];NSString *identity=[@"gatt:" stringByAppendingString:HABLEHash([NSString stringWithFormat:@"%@|%@",w[@"path"],w[@"sha256"]])];
+        return [binding[@"device_id"] isEqual:identity] && [binding[@"address"] isEqual:HABLESharedFingerprintAddress(identity)];
+    }
     if([binding[@"identity_kind"] isEqual:@"observed_native"]) {
         NSDictionary *anchor=binding[@"native_anchor"];
         if(![anchor isKindOfClass:NSDictionary.class] || ![anchor[@"address"] isEqual:binding[@"address"]] || ![binding[@"device_id"] isEqual:[@"bluetooth:" stringByAppendingString:binding[@"address"]]])return NO;
         NSString *source=HABLEString(anchor[@"source"]);
         if(!source.length || [source isEqual:self.sourceAddress] || [self.proxySources containsObject:source] || !HABLEHexData(anchor[@"raw"]).length)return NO;
-        return [@[@"embedded_address",@"packet_sequence",@"confirmed"] containsObject:binding[@"method"]];
+        return [@[@"embedded_address",@"packet_sequence",@"confirmed",@"gatt_fingerprint"] containsObject:binding[@"method"]];
     }
     for (NSDictionary *record in self.registryDevices) if ([record[@"device_id"] isEqual:binding[@"device_id"]]) {
         if ([binding[@"method"] isEqual:@"serial"] && ![record[@"serial_number"] isEqual:binding[@"unit_identifier"]]) return NO;
@@ -234,7 +254,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         if(![key isKindOfClass:NSString.class] || [key length]>512 || ![value isKindOfClass:NSDictionary.class])continue;
         NSString *hash=HABLEString(value[@"sha256"]);
         if(hash.length!=64 || !HABLEHexData(hash) || ![value[@"length"] isKindOfClass:NSNumber.class] || [value[@"length"] unsignedIntegerValue]>1024 || ![value[@"length"] unsignedIntegerValue])continue;
-        result[key]=@{@"sha256":hash.lowercaseString,@"length":value[@"length"],@"kind":[@[@"opaque",@"json_scalar"] containsObject:value[@"kind"]] ? value[@"kind"] : @"unknown",@"stable_across_sessions":@([value[@"stable_across_sessions"] isKindOfClass:NSNumber.class] && [value[@"stable_across_sessions"] boolValue] && [value[@"sessions"] isKindOfClass:NSNumber.class] && [value[@"sessions"] unsignedIntegerValue]>=2 && [value[@"varying"] isKindOfClass:NSNumber.class] && ![value[@"varying"] boolValue]),@"varying":@(![value[@"varying"] isKindOfClass:NSNumber.class] || [value[@"varying"] boolValue]),@"sessions":@([value[@"sessions"] isKindOfClass:NSNumber.class] ? MIN(255,[value[@"sessions"] unsignedIntegerValue]) : 0)};
+        result[key]=@{@"sha256":hash.lowercaseString,@"length":value[@"length"],@"format":[@[@"mac",@"uuid"] containsObject:value[@"format"]] ? value[@"format"] : @"scalar",@"kind":[@[@"opaque",@"json_scalar"] containsObject:value[@"kind"]] ? value[@"kind"] : @"unknown",@"stable_across_sessions":@([value[@"stable_across_sessions"] isKindOfClass:NSNumber.class] && [value[@"stable_across_sessions"] boolValue] && [value[@"sessions"] isKindOfClass:NSNumber.class] && [value[@"sessions"] unsignedIntegerValue]>=2 && [value[@"varying"] isKindOfClass:NSNumber.class] && ![value[@"varying"] boolValue]),@"varying":@(![value[@"varying"] isKindOfClass:NSNumber.class] || [value[@"varying"] boolValue]),@"sessions":@([value[@"sessions"] isKindOfClass:NSNumber.class] ? MIN(255,[value[@"sessions"] unsignedIntegerValue]) : 0)};
     }
     return result;
 }
@@ -292,6 +312,14 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     }
     return result;
 }
+- (NSDictionary *)inventoryDiagnostics {
+    NSUInteger sources=0,observations=0;NSTimeInterval now=NSDate.date.timeIntervalSince1970;
+    for(NSString *source in self.peerInventories)if([self.proxySources containsObject:source]) {
+        NSUInteger count=0;for(NSDictionary *row in [self.peerInventories[source] allValues])if(now-[row[@"last_seen"] doubleValue]<=120)count++;
+        if(count){sources++;observations+=count;}
+    }
+    return @{@"peer_sources":@(sources),@"peer_observations":@(observations),@"last_publish":@(self.lastInventoryPublish),@"publish_error":@(self.inventoryPublishError),@"partial_batch":@(self.inventoryPartial)};
+}
 - (void)maintainInventory {
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;
     for(NSString *source in self.peerInventories.allKeys) {
@@ -305,7 +333,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     NSDictionary *value=@{@"schema":@1,@"source":self.sourceAddress ?: @"",@"time":@(now),@"observations":[self localInventoryAtTime:now]};
     if(self.inventoryPartial)self.nextInventoryPublish=now+3;
     __weak typeof(self) weakSelf=self;
-    [self.connection sendCommand:@{@"type":@"frontend/set_system_data",@"key":[self inventoryKey:self.sourceAddress],@"value":value} completion:^(id response,NSError *error){HABLEIdentityResolver *self=weakSelf;if(!self || generation!=self.generation)return;self.inventoryPublishing=NO;if(error)self.nextInventoryPublish=NSDate.date.timeIntervalSince1970+60;}];
+    [self.connection sendCommand:@{@"type":@"frontend/set_system_data",@"key":[self inventoryKey:self.sourceAddress],@"value":value} completion:^(id response,NSError *error){HABLEIdentityResolver *self=weakSelf;if(!self || generation!=self.generation)return;self.inventoryPublishing=NO;self.inventoryPublishError=error ? error.code : 0;if(error)self.nextInventoryPublish=NSDate.date.timeIntervalSince1970+60;else self.lastInventoryPublish=NSDate.date.timeIntervalSince1970;}];
 }
 - (NSString *)peerKey:(NSString *)source { return [@"ha_dashboard.ble_observations.v2." stringByAppendingString:source]; }
 - (void)observePeer:(id)value source:(NSString *)source {
@@ -445,6 +473,10 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 }
 - (BOOL)proof:(NSDictionary *)proof matches:(NSDictionary *)observation {
     NSString *method=proof[@"method"];
+    if([method isEqual:@"gatt_fingerprint"]) {
+        NSDictionary *w=proof[@"fingerprint_witness"],*value=observation[@"gatt_fingerprints"][w[@"path"]];
+        return ![HABLEIdentityEvidence identifierFingerprints:observation[@"gatt_fingerprints"] conflictWith:proof[@"fingerprint_profile"]] && value && ![value[@"varying"] boolValue] && [value[@"sessions"] unsignedIntegerValue]>=1 && [value[@"sha256"] isEqual:w[@"sha256"]] && [value[@"format"] isEqual:w[@"format"]] && [value[@"length"] isEqual:w[@"length"]];
+    }
     if([method isEqual:@"embedded_address"] && [proof[@"identity_kind"] isEqual:@"observed_native"])return [HABLEIdentityEvidence observation:observation containsAddress:proof[@"address"]] && HABLEProfilesCompatible(HABLEProfile(observation),proof[@"profile"]) && [HABLEIdentityEvidence tokens:[HABLEIdentityEvidence tokensForObservation:observation] corroborateAddress:proof[@"address"] withTokens:[HABLEIdentityEvidence tokensForRawAdvertisement:HABLEHexData(proof[@"native_anchor"][@"raw"])]];
     if([method isEqual:@"embedded_address"])return [HABLEIdentityEvidence observation:observation containsAddress:proof[@"address"]];
     if([method isEqual:@"serial"])return [observation[@"serial_number"] isEqual:proof[@"unit_identifier"]];
@@ -470,7 +502,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         if(named && [HABLEString(remote[@"name"]) caseInsensitiveCompare:named]==NSOrderedSame && payload && compatible && fabs(now-[remote[@"time"] doubleValue])<=120 && ![self.proxySources containsObject:remote[@"source"]]){method=@"named_identifier";unit=named;score+=160;[reasons addObject:@"Unit identifier and current payload agree with an independent scanner"];}
         if([self validBinding:shared] && [self proof:shared matches:observation]){method=shared[@"method"];unit=shared[@"unit_identifier"];score+=180;[reasons addObject:@"Verified generic HA association matches"];}
         NSDictionary *saved=self.localBindings[identifier];
-        if([saved[@"address"] isEqual:address] && [self validBinding:saved] && HABLEProfilesCompatible(profile,saved[@"profile"])){method=saved[@"method"];unit=saved[@"unit_identifier"];lineage=saved[@"lineage"] ?: @[];score+=180;[reasons addObject:@"Previously verified binding for this Apple peripheral"];}
+        if([saved[@"address"] isEqual:address] && [self validBinding:saved] && HABLEProfilesCompatible(profile,saved[@"profile"]) && (![saved[@"method"] isEqual:@"gatt_fingerprint"] || [self proof:saved matches:observation])){method=saved[@"method"];unit=saved[@"unit_identifier"];lineage=saved[@"lineage"] ?: @[];score+=180;[reasons addObject:@"Previously verified binding for this Apple peripheral"];}
         NSDictionary *correlation=identifier.length && compatible ? [self.evidence correlationForIdentifier:identifier address:address now:now] : nil;
         if([correlation[@"distinct_packets"] unsignedIntegerValue]) [reasons addObject:[NSString stringWithFormat:@"Learning: %lu / 12 distinct payload changes agree",(unsigned long)[correlation[@"distinct_packets"] unsignedIntegerValue]]];
         if(!method && [correlation[@"distinct_packets"] unsignedIntegerValue]>=12 && ![correlation[@"qualified"] boolValue]) {
@@ -483,16 +515,59 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         BOOL competingLocal=[correlation[@"qualified"] boolValue] && [self.evidence hasCompetingLocalIdentifier:identifier address:address now:now];
         if(competingLocal && !method)[reasons addObject:@"Ambiguous: another local peripheral has matching observations"];
         if([correlation[@"qualified"] boolValue] && !competingLocal){method=method ?: @"packet_sequence";unit=unit ?: named;score+=120;[reasons addObject:[NSString stringWithFormat:@"%lu distinct payloads agree in time",(unsigned long)[correlation[@"distinct_packets"] unsignedIntegerValue]]];}
+        if([method isEqual:@"gatt_fingerprint"]) {
+            NSDictionary *proof=[saved[@"address"] isEqual:address] && [saved[@"method"] isEqual:@"gatt_fingerprint"] ? saved : shared;
+            if([self validBinding:proof]){candidate[@"fingerprint_witness"]=proof[@"fingerprint_witness"];if(proof[@"fingerprint_profile"])candidate[@"fingerprint_profile"]=proof[@"fingerprint_profile"];candidate[@"supporting_sources"]=proof[@"supporting_sources"];}
+        }
         candidate[@"automatic_match"]=@(address.length && method!=nil);candidate[@"score"]=@(score);candidate[@"method"]=method ?: @"";candidate[@"unit_identifier"]=unit ?: @"";candidate[@"profile"]=profile;candidate[@"lineage"]=lineage;candidate[@"local_identifier"]=identifier ?: @"";
         candidate[@"reference_sources"]=correlation[@"sources"] ?: (remote[@"source"] ? @[remote[@"source"]] : @[]);
         candidate[@"evidence"]=reasons.count ? [reasons componentsJoinedByString:@" · "] : @"Identity unresolved";[result addObject:candidate];
     }
     return [result sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a,NSDictionary *b){return [b[@"score"] compare:a[@"score"]];}];
 }
+- (BOOL)fingerprintWitnessIsAmbiguous:(NSDictionary *)w observation:(NSDictionary *)observation {
+    if(![w isKindOfClass:NSDictionary.class] || ![w[@"path"] isKindOfClass:NSString.class] || ![w[@"sha256"] isKindOfClass:NSString.class])return YES;
+    NSString *path=w[@"path"],*hash=w[@"sha256"],*identifier=observation[@"identifier"];NSTimeInterval now=NSDate.date.timeIntervalSince1970;
+    for(NSString *other in self.localObservations)if(![other isEqual:identifier]) {
+        NSDictionary *o=self.localObservations[other];if(now-[o[@"last_seen"] doubleValue]<=120 && [o[@"gatt_fingerprints"][path][@"sha256"] isEqual:hash])return YES;
+    }
+    NSMutableSet *references=NSMutableSet.set;
+    for(NSString *source in self.peerInventories) {
+        if(![self.proxySources containsObject:source])continue;NSUInteger matches=0;
+        for(NSDictionary *o in [self.peerInventories[source] allValues])if(now-[o[@"last_seen"] doubleValue]<=120 && [o[@"fingerprints"][path][@"sha256"] isEqual:hash]) {
+            matches++;if(o[@"address"])[references addObject:o[@"address"]];
+        }
+        if(matches>1)return YES;
+    }
+    return references.count>1;
+}
+- (NSDictionary *)sharedFingerprintMatchForObservation:(NSDictionary *)observation {
+    if(![observation[@"identifier"] length])return nil;
+    NSDictionary *values=[self sanitizedFingerprints:observation[@"gatt_fingerprints"]];
+    for(NSString *path in [values.allKeys sortedArrayUsingSelector:@selector(compare:)]) {
+        NSDictionary *value=values[path];if(![HABLEIdentityEvidence isIdentifierFingerprint:value path:path])continue;
+        NSMutableDictionary *w=[value mutableCopy];w[@"path"]=path;if([self fingerprintWitnessIsAmbiguous:w observation:observation]){self.lastEvidence[observation[@"identifier"]]=@"Ambiguous: the identifier-shaped field is not unique among observed devices";continue;}
+        NSMutableSet *sources=[NSMutableSet setWithObject:self.sourceAddress ?: @""];NSDictionary *reference=nil;
+        for(NSDictionary *row in [self peerObservationsForObservation:observation]) {
+            NSDictionary *other=row[@"fingerprints"][path];
+            if([HABLEIdentityEvidence identifierFingerprints:values conflictWith:row[@"fingerprints"]]){self.lastEvidence[observation[@"identifier"]]=@"Conflicting stable identifier fields across proxies";continue;}
+            if([HABLEIdentityEvidence isIdentifierFingerprint:other path:path] && [value[@"sha256"] isEqual:other[@"sha256"]] && [value[@"format"] isEqual:other[@"format"]]) {
+                [sources addObject:row[@"source"]];if(row[@"address"] && [self validBinding:self.catalog[row[@"address"]]])reference=self.catalog[row[@"address"]];
+            }
+        }
+        if(sources.count<2 || [sources containsObject:@""])continue;
+        NSString *identity=[@"gatt:" stringByAppendingString:HABLEHash([NSString stringWithFormat:@"%@|%@",path,value[@"sha256"]])];
+        NSMutableDictionary *match=reference ? [reference mutableCopy] : [@{@"identity_kind":@"observed_shared",@"device_id":identity,@"address":HABLESharedFingerprintAddress(identity),@"name":HABLEString(observation[@"name"]),@"label":HABLEString(observation[@"name"]),@"identifiers":@[],@"domains":@[]} mutableCopy];
+        match[@"profile"]=HABLEProfile(observation);match[@"method"]=@"gatt_fingerprint";match[@"fingerprint_witness"]=w;match[@"fingerprint_profile"]=values;match[@"supporting_sources"]=[sources.allObjects sortedArrayUsingSelector:@selector(compare:)];match[@"lineage"]=match[@"supporting_sources"];match[@"reference_sources"]=match[@"supporting_sources"];match[@"automatic_match"]=@YES;match[@"local_identifier"]=observation[@"identifier"] ?: @"";match[@"unit_identifier"]=value[@"sha256"];match[@"score"]=@240;match[@"evidence"]=[NSString stringWithFormat:@"Stable identifier-shaped GATT field agrees across %lu proxies",(unsigned long)sources.count];return match;
+    }
+    return nil;
+}
 - (NSDictionary *)automaticMatchForObservation:(NSDictionary *)observation {
     NSDictionary *match=nil;NSArray *candidates=[self candidatesForObservation:observation];
     if([observation[@"identifier"] length] && (self.lastEvidence.count<256 || self.lastEvidence[observation[@"identifier"]]))self.lastEvidence[observation[@"identifier"]]=candidates.firstObject[@"evidence"] ?: @"No known candidate yet";
     for(NSDictionary *candidate in candidates)if([candidate[@"automatic_match"] boolValue]){if(match){if([observation[@"identifier"] length])self.lastEvidence[observation[@"identifier"]]=@"Ambiguous: multiple known devices satisfy the identity evidence";return nil;}match=candidate;}
+    if(!match)match=[self sharedFingerprintMatchForObservation:observation];
+    if(match && [match[@"method"] isEqual:@"gatt_fingerprint"] && [self fingerprintWitnessIsAmbiguous:match[@"fingerprint_witness"] observation:observation]){if([observation[@"identifier"] length])self.lastEvidence[observation[@"identifier"]]=@"Ambiguous: this identifier fingerprint is shared by multiple devices";return nil;}
     if(!match) {
         NSUInteger peers=[self peerObservationsForObservation:observation].count;
         if(peers && [observation[@"identifier"] length])self.lastEvidence[observation[@"identifier"]]=[NSString stringWithFormat:@"%@ · %lu peer observations available; identity not yet verified",self.lastEvidence[observation[@"identifier"]] ?: @"Identity unresolved",(unsigned long)peers];

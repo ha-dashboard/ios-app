@@ -14,6 +14,7 @@
 - (void)rememberConfirmedAddress:(NSString *)address observation:(NSDictionary *)observation;
 - (void)maintainSynchronization;
 - (NSArray<NSDictionary *> *)peerObservationsForObservation:(NSDictionary *)observation;
+- (NSDictionary *)inventoryDiagnostics;
 - (NSString *)evidenceForIdentifier:(NSString *)identifier;
 - (void)cancel;
 @end

@@ -3,6 +3,8 @@
 /// Brand-independent, bounded correlation of actual observed BLE payloads.
 @interface HABLEIdentityEvidence : NSObject
 + (NSDictionary *)fingerprintsForValue:(NSData *)data path:(NSString *)path;
++ (BOOL)isIdentifierFingerprint:(NSDictionary *)fingerprint path:(NSString *)path;
++ (BOOL)identifierFingerprints:(NSDictionary *)a conflictWith:(NSDictionary *)b;
 + (NSDictionary *)mergeFingerprintReads:(NSDictionary *)reads previous:(NSDictionary *)previous session:(NSString *)session atTime:(NSTimeInterval)time;
 + (NSArray<NSString *> *)tokensForObservation:(NSDictionary *)observation;
 + (NSArray<NSString *> *)tokensForRawAdvertisement:(NSData *)raw;

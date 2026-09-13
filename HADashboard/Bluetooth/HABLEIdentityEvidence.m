@@ -50,11 +50,34 @@ static NSString *HABLELittleEndianUUID(const uint8_t *bytes, NSUInteger length) 
         } else if([value isKindOfClass:NSArray.class] && depth<4) {
             for(NSUInteger i=0;i<MIN(16,[value count]) && queue.count<64;i++)[queue addObject:@{@"value":value[i],@"path":[key stringByAppendingFormat:@"/%lu",(unsigned long)i],@"depth":@(depth+1)}];
         } else if(([value isKindOfClass:NSString.class] && [value length]) || [value isKindOfClass:NSNumber.class]) {
-            NSData *encoded=[NSJSONSerialization dataWithJSONObject:@[value] options:0 error:nil];
-            result[key]=fingerprint(encoded,@"json_scalar");
+            NSString *format=@"scalar";id normalized=value;
+            if([value isKindOfClass:NSString.class]) {
+                uint64_t address;NSUUID *uuid=[[NSUUID alloc] initWithUUIDString:value];
+                if(HABLEParseAddress(value,&address)){format=@"mac";normalized=HABLEAddressString(address);}
+                else if(uuid && ![uuid.UUIDString isEqual:@"00000000-0000-0000-0000-000000000000"]){format=@"uuid";normalized=uuid.UUIDString;}
+            }
+            NSData *encoded=[NSJSONSerialization dataWithJSONObject:@[normalized] options:0 error:nil];
+            NSMutableDictionary *entry=[fingerprint(encoded,@"json_scalar") mutableCopy];entry[@"format"]=format;result[key]=entry;
         }
     }
     return result;
+}
++ (BOOL)isIdentifierFingerprint:(NSDictionary *)value path:(NSString *)path {
+    if(![value isKindOfClass:NSDictionary.class] || ![value[@"stable_across_sessions"] isKindOfClass:NSNumber.class] || ![value[@"varying"] isKindOfClass:NSNumber.class] || ![value[@"sessions"] isKindOfClass:NSNumber.class] || ![value[@"stable_across_sessions"] boolValue] || [value[@"varying"] boolValue] || [value[@"sessions"] unsignedIntegerValue]<2 || ![@[@"mac",@"uuid"] containsObject:value[@"format"]])return NO;
+    NSUInteger expected=[value[@"format"] isEqual:@"mac"] ? 21 : 40;
+    if(![value[@"length"] isKindOfClass:NSNumber.class] || [value[@"length"] unsignedIntegerValue]!=expected)return NO;
+    NSRange json=[path rangeOfString:@"/json/"];if(json.location==NSNotFound)return NO;
+    NSString *fields=[[path substringFromIndex:json.location+json.length] lowercaseString];
+    for(NSString *part in [fields componentsSeparatedByString:@"/"]) {
+        NSString *key=[[part componentsSeparatedByCharactersInSet:[[NSCharacterSet alphanumericCharacterSet] invertedSet]] componentsJoinedByString:@""];
+        if([@[@"bssid",@"ssid",@"gateway",@"router",@"server",@"client",@"peer",@"remote",@"model",@"firmware",@"version",@"service",@"serviceuuid",@"serviceid",@"networkid",@"groupid",@"request",@"requestid",@"session",@"sessionid",@"nonce"] containsObject:key])return NO;
+        for(NSString *context in @[@"bssid",@"gateway",@"router",@"server",@"client",@"peer",@"remote",@"model",@"firmware",@"version",@"service",@"vendor",@"manufacturer",@"product",@"networkid",@"request",@"session",@"nonce",@"token",@"secret",@"password",@"household",@"account",@"group"])if([key rangeOfString:context].location!=NSNotFound)return NO;
+    }
+    return YES;
+}
++ (BOOL)identifierFingerprints:(NSDictionary *)a conflictWith:(NSDictionary *)b {
+    for(NSString *path in a)if([self isIdentifierFingerprint:a[path] path:path] && [self isIdentifierFingerprint:b[path] path:path] && ![a[path][@"sha256"] isEqual:b[path][@"sha256"]])return YES;
+    return NO;
 }
 + (NSDictionary *)mergeFingerprintReads:(NSDictionary *)reads previous:(NSDictionary *)previous session:(NSString *)session atTime:(NSTimeInterval)time {
     NSMutableDictionary *result=[previous mutableCopy] ?: NSMutableDictionary.dictionary;
