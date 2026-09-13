@@ -164,7 +164,7 @@ static NSString *HABLELittleEndianUUID(const uint8_t *bytes, NSUInteger length) 
 }
 - (NSArray *)recentLocalEventsForIdentifier:(NSString *)identifier now:(NSTimeInterval)now {
     NSMutableArray *result = [NSMutableArray array];
-    for (NSDictionary *event in self.locals[identifier]) if ([event[@"last_seen"] doubleValue] >= now - 60) [result addObject:event];
+    for (NSDictionary *event in self.locals[identifier]) if ([event[@"last_seen"] doubleValue] >= now - HABLEEvidenceWindow) [result addObject:event];
     return result;
 }
 - (void)removeIdentifier:(NSString *)identifier { [self.locals removeObjectForKey:identifier]; }

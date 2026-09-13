@@ -93,6 +93,13 @@
     }
     XCTAssertTrue(([[engine correlationForIdentifier:@"one" address:@"00:11:22:33:44:55" now:NSDate.date.timeIntervalSince1970][@"qualified"] boolValue]));
 }
+- (void)testPeerBackfillPreservesOriginalObservationTimes {
+    HABLEIdentityEvidence *producer=[HABLEIdentityEvidence new],*consumer=[HABLEIdentityEvidence new];NSTimeInterval start=NSDate.date.timeIntervalSince1970-800;
+    for(NSUInteger i=0;i<16;i++) {NSDictionary *o=[self observation:100+i at:start+i*50];[producer recordLocal:o identifier:@"bound" atTime:start+i*50];[consumer recordLocal:o identifier:@"new" atTime:start+i*50+.3];}
+    NSArray *events=[producer recentLocalEventsForIdentifier:@"bound" now:NSDate.date.timeIntervalSince1970];XCTAssertEqual(events.count,16u);
+    for(NSDictionary *event in events)[consumer recordRemoteTokens:event[@"tokens"] address:@"00:11:22:33:44:55" source:@"peer" atTime:[event[@"time"] doubleValue] lastSeen:[event[@"last_seen"] doubleValue]];
+    XCTAssertTrue(([[consumer correlationForIdentifier:@"new" address:@"00:11:22:33:44:55" now:NSDate.date.timeIntervalSince1970][@"qualified"] boolValue]));
+}
 - (void)testShortPayloadSequencesAreGenericEvidence {
     HABLEIdentityEvidence *engine=[HABLEIdentityEvidence new];[self fill:engine local:@"one" address:@"00:11:22:33:44:55" offset:0];
     XCTAssertTrue(([[engine correlationForIdentifier:@"one" address:@"00:11:22:33:44:55" now:NSDate.date.timeIntervalSince1970][@"qualified"] boolValue]));
