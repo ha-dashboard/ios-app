@@ -154,6 +154,29 @@
     [[resolver valueForKey:@"remoteInfo"] setObject:remote forKey:@"AA:BB:CC:DD:EE:01"];
     XCTAssertNil([resolver automaticMatchForObservation:o]);
 }
+- (void)testCompletePayloadExtensionRequiresEveryReferenceByteAndChannel {
+    NSArray *reference=[HABLEIdentityEvidence tokensForObservation:@{@"manufacturer_data":@"AQIDBAUGBwg="}];
+    NSArray *extended=[HABLEIdentityEvidence tokensForObservation:@{@"manufacturer_data":@"AQIDBAUGBwgJCg=="}];
+    NSArray *conflict=[HABLEIdentityEvidence tokensForObservation:@{@"manufacturer_data":@"AQIDBAUGBwkJCg=="}];
+    XCTAssertTrue([HABLEIdentityEvidence tokens:extended extendCompleteTokens:reference]);
+    XCTAssertFalse([HABLEIdentityEvidence tokens:reference extendCompleteTokens:extended]);
+    XCTAssertFalse([HABLEIdentityEvidence tokens:conflict extendCompleteTokens:reference]);
+    NSArray *extra=[extended arrayByAddingObjectsFromArray:[HABLEIdentityEvidence tokensForObservation:@{@"service_data":@{@"1234":@"AQIDBA=="}}]];
+    XCTAssertFalse([HABLEIdentityEvidence tokens:extra extendCompleteTokens:reference]);
+}
+- (void)testProvisionalMatchingAllowsCompleteNativePayloadExtension {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;HABLEIdentityResolver *resolver=[HABLEIdentityResolver new];
+    [resolver loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    [self recordPassiveUnit:@"Unit1234" identifier:@"a" address:@"AA:BB:CC:DD:EE:01" resolver:resolver atTime:now-40];
+    NSDictionary *o=nil;
+    for(NSUInteger i=0;i<4;i++) {
+        o=@{@"identifier":@"a",@"name":@"Unit1234",@"last_seen":@(now-30+i*10),@"service_uuids":@[@"1234"],@"manufacturer_data":@"AQIDBAUGBwgJCg=="};
+        [resolver recordObservation:o identifier:@"a"];
+    }
+    XCTAssertEqualObjects([resolver automaticMatchForObservation:o][@"method"],@"passive_signature");
+    NSMutableDictionary *twin=[o mutableCopy];twin[@"identifier"]=@"b";twin[@"manufacturer_data"]=@"AQIDBAUGBwgLCg==";[resolver recordObservation:twin identifier:@"b"];
+    XCTAssertNil([resolver automaticMatchForObservation:o]);
+}
 - (NSDictionary *)stableIdentifierFields {
     NSData *json=[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:55"}} options:0 error:nil];
     NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:json path:@"s/1234/c/5678"];

@@ -128,6 +128,28 @@ static NSString *HABLELittleEndianUUID(const uint8_t *bytes, NSUInteger length) 
     }
     return tokens;
 }
+// Compare complete reference fields, never an arbitrary common prefix.
+// Used only for reversible passive associations, not verified identity proof.
++ (BOOL)tokens:(NSArray *)local extendCompleteTokens:(NSArray *)remote {
+    if(!local.count || local.count!=remote.count)return NO;
+    NSDictionary *(^parts)(NSString *)=^NSDictionary *(NSString *token) {
+        if(![token isKindOfClass:NSString.class])return nil;
+        NSRange separator=[token rangeOfString:@":" options:NSBackwardsSearch];if(separator.location==NSNotFound)return nil;
+        NSString *prefix=[token substringToIndex:separator.location];NSRange lengthSeparator=[prefix rangeOfString:@":" options:NSBackwardsSearch];if(lengthSeparator.location==NSNotFound)return nil;
+        NSData *bytes=[[NSData alloc] initWithBase64EncodedString:[token substringFromIndex:separator.location+1] options:0];
+        return bytes.length ? @{@"channel":[prefix substringToIndex:lengthSeparator.location+1],@"bytes":bytes} : nil;
+    };
+    NSMutableSet *used=NSMutableSet.set;
+    for(NSString *token in remote) {
+        NSDictionary *reference=parts(token);if(!reference)return NO;NSUInteger matches=0;NSString *selected=nil;
+        for(NSString *candidate in local) {
+            NSDictionary *value=parts(candidate);NSData *a=value[@"bytes"],*b=reference[@"bytes"];
+            if([value[@"channel"] isEqual:reference[@"channel"]] && a.length>=b.length && [[a subdataWithRange:NSMakeRange(0,b.length)] isEqual:b]){matches++;selected=candidate;}
+        }
+        if(matches!=1 || [used containsObject:selected])return NO;[used addObject:selected];
+    }
+    return used.count==local.count;
+}
  + (BOOL)tokens:(NSArray *)local agreeWith:(NSArray *)remote {
     // Length describes a value, not its channel. Otherwise a conflicting
     // shorter/longer value disappears when another channel happens to agree.
