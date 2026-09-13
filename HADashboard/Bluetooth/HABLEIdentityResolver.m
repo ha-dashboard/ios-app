@@ -212,6 +212,7 @@ static NSString *HABLEFullUUID(NSString *value) {
 - (NSArray *)candidatesForObservation:(NSDictionary *)observation {
     NSMutableArray *result = [NSMutableArray array];
     NSData *manufacturer = [[NSData alloc] initWithBase64EncodedString:observation[@"manufacturer_data"] ?: @"" options:0];
+    if (!manufacturer.length) manufacturer = [[NSData alloc] initWithBase64EncodedString:observation[@"identity_manufacturer_data"] ?: @"" options:0];
     NSDictionary *services = observation[@"service_data"] ?: @{};
     for (NSDictionary *known in self.knownDevices) {
         NSInteger score = 0; NSMutableArray *evidence = [NSMutableArray array];
@@ -246,11 +247,11 @@ static NSString *HABLEFullUUID(NSString *value) {
         NSData *bluePayload = HABLEHexData(advertisement[@"manufacturer_data"][@"305"]);
         if (address.length && blueID.length && name.length && [name caseInsensitiveCompare:blueID] == NSOrderedSame &&
             [advertisement[@"name"] isKindOfClass:[NSString class]] && [advertisement[@"name"] caseInsensitiveCompare:blueID] == NSOrderedSame &&
-            manufacturer.length == 13 && bluePayload.length == 11) {
+            manufacturer.length >= 2 && bluePayload.length == 11) {
             const uint8_t *bytes = manufacturer.bytes;
             if (bytes[0] == 0x31 && bytes[1] == 0x01) { verified = YES; score += 150; [evidence addObject:@"Blue Connect ID and vendor match an independent scanner"]; }
         }
-        if (address.length && blueID.length && name.length && [name caseInsensitiveCompare:blueID] == NSOrderedSame && manufacturer.length == 13 && known[@"shared_identity"]) {
+        if (address.length && blueID.length && name.length && [name caseInsensitiveCompare:blueID] == NSOrderedSame && manufacturer.length >= 2 && known[@"shared_identity"]) {
             const uint8_t *bytes = manufacturer.bytes;
             if (bytes[0] == 0x31 && bytes[1] == 0x01) { verified = YES; score += 150; [evidence addObject:@"Verified Blue Connect association stored in HA"]; }
         }
@@ -272,5 +273,13 @@ static NSString *HABLEFullUUID(NSString *value) {
         match = candidate;
     }
     return match;
+}
+- (BOOL)hasKnownIdentityForObservation:(NSDictionary *)observation {
+    NSString *name = observation[@"name"], *serial = observation[@"serial_number"];
+    for (NSDictionary *record in self.registryDevices) {
+        if (name.length && [record[@"blue_connect_identifier"] length] && [name caseInsensitiveCompare:record[@"blue_connect_identifier"]] == NSOrderedSame) return YES;
+        if (serial.length >= 4 && [serial isEqual:record[@"serial_number"]]) return YES;
+    }
+    return NO;
 }
 @end

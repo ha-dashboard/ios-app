@@ -5,6 +5,7 @@
 #import "HABLEAPIServer.h"
 #import "HAAPIClient.h"
 #import "HABLEIdentityResolver.h"
+#import <CoreBluetooth/CoreBluetooth.h>
 
 @interface HABLEIdentityResolver (IdentityTestAccess)
 - (void)loadRegistry:(NSArray *)devices entries:(NSArray *)entries excludingSource:(NSString *)source;
@@ -50,8 +51,23 @@ static NSUInteger HABLERejectedRequestCount;
 - (void)updateAutomaticRegistrationWithIntegrationEnabled:(BOOL)enabled connected:(BOOL)connected context:(NSString *)context;
 - (void)registerWithHomeAssistantAutomatically:(BOOL)automatic;
 - (void)matchIdentifier:(NSString *)identifier;
+- (void)updateIdentityResolution;
+- (void)flushIdentityAdvertisements;
+- (void)centralManager:(CBCentralManager *)central didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:(NSDictionary *)advertisement RSSI:(NSNumber *)RSSI;
 - (void)deviceRequest:(NSDictionary *)fields connection:(HABLEAPIConnection *)connection;
 - (void)bleServer:(HABLEAPIServer *)server receivedType:(NSUInteger)type data:(NSData *)data connection:(HABLEAPIConnection *)connection;
+@end
+
+@interface HABLEDiscoveryPolicyProxy : HABLEProxyManager
+@end
+@implementation HABLEDiscoveryPolicyProxy
+- (void)updateIdentityResolution {} // The test controls when HA evidence arrives.
+@end
+@interface HABLEObservedPeripheral : NSObject
+@property (nonatomic, strong) NSUUID *identifier;
+@property (nonatomic, copy) NSString *name;
+@end
+@implementation HABLEObservedPeripheral
 @end
 
 @interface HABLERegistrationPolicyProxy : HABLEProxyManager
@@ -76,8 +92,13 @@ static NSUInteger HABLERejectedRequestCount;
 @property (nonatomic) NSUInteger responseType;
 @property (nonatomic, strong) NSData *responseData;
 @property (nonatomic, strong) HABLEAPIConnection *recipient;
+@property (nonatomic, strong) NSMutableArray<NSData *> *capturedAdvertisements;
 @end
 @implementation HABLECapturingServer
+- (BOOL)broadcastAdvertisement:(NSData *)data {
+    if (!self.capturedAdvertisements) self.capturedAdvertisements = [NSMutableArray array];
+    [self.capturedAdvertisements addObject:[data copy]]; return YES;
+}
 - (void)sendType:(NSUInteger)type data:(NSData *)data to:(HABLEAPIConnection *)connection {
     self.responseType = type; self.responseData = data; self.recipient = connection;
 }
@@ -86,6 +107,62 @@ static NSUInteger HABLERejectedRequestCount;
 @interface HABLEProxyTests : XCTestCase
 @end
 @implementation HABLEProxyTests
+- (void)testManufacturerOnlyCallbackWaitsForTheDeviceIdentifier {
+    HABLEDiscoveryPolicyProxy *proxy = [[HABLEDiscoveryPolicyProxy alloc] init];
+    HABLECapturingServer *server = [[HABLECapturingServer alloc] initWithName:@"test" address:@"02:00:00:00:00:01" key:[NSMutableData dataWithLength:32]];
+    HABLEIdentityResolver *resolver = [self poolIdentityResolver]; [resolver loadSharedValue:[self sharedPoolBinding] forRecord:resolver.knownDevices.firstObject];
+    [proxy setValue:server forKey:@"server"]; [proxy setValue:resolver forKey:@"identityResolver"]; [proxy setValue:@YES forKey:@"running"]; [proxy setValue:@YES forKey:@"identitiesReady"];
+    HABLEObservedPeripheral *peripheral = [self poolPeripheral]; peripheral.name = nil;
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:@{CBAdvertisementDataManufacturerDataKey:[self poolRadioAdvertisement][CBAdvertisementDataManufacturerDataKey]} RSSI:@-60];
+    XCTAssertEqual(server.capturedAdvertisements.count, 0u);
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:[self poolRadioAdvertisement] RSSI:@-60];
+    XCTAssertEqual(server.capturedAdvertisements.count, 2u);
+    for (NSData *packet in server.capturedAdvertisements) XCTAssertEqual(HABLEInteger(HABLEDecode(packet), 1), 0x001122334455ULL);
+}
+- (HABLEObservedPeripheral *)poolPeripheral {
+    HABLEObservedPeripheral *peripheral = [[HABLEObservedPeripheral alloc] init];
+    peripheral.identifier = [[NSUUID alloc] initWithUUIDString:@"00000000-0000-0000-0000-000000000001"]; peripheral.name = @"B201ABCDEF"; return peripheral;
+}
+- (NSDictionary *)poolRadioAdvertisement {
+    return @{CBAdvertisementDataLocalNameKey:@"B201ABCDEF", CBAdvertisementDataManufacturerDataKey:[[NSData alloc] initWithBase64EncodedString:[self poolObservation][@"manufacturer_data"] options:0]};
+}
+- (void)testSlowIdentityImportNeverFlushesASyntheticAddress {
+    HABLEDiscoveryPolicyProxy *proxy = [[HABLEDiscoveryPolicyProxy alloc] init];
+    HABLECapturingServer *server = [[HABLECapturingServer alloc] initWithName:@"test" address:@"02:00:00:00:00:01" key:[NSMutableData dataWithLength:32]];
+    HABLEIdentityResolver *resolver = [self poolIdentityResolver]; [resolver loadSharedValue:[self sharedPoolBinding] forRecord:resolver.knownDevices.firstObject];
+    [proxy setValue:server forKey:@"server"]; [proxy setValue:resolver forKey:@"identityResolver"]; [proxy setValue:@YES forKey:@"running"];
+    HABLEObservedPeripheral *peripheral = [self poolPeripheral];
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:[self poolRadioAdvertisement] RSSI:@-60];
+    NSMutableArray *queue = [proxy valueForKey:@"pendingIdentityAdvertisements"];
+    NSMutableDictionary *delayed = [queue.firstObject mutableCopy]; delayed[@"queued_at"] = @(CFAbsoluteTimeGetCurrent() - 15); queue[0] = delayed;
+    [proxy flushIdentityAdvertisements]; XCTAssertEqual(server.capturedAdvertisements.count, 0u, @"A slow HA login must not release an alias after ten seconds");
+    [proxy setValue:@YES forKey:@"identitiesReady"]; [proxy matchIdentifier:peripheral.identifier.UUIDString]; [proxy flushIdentityAdvertisements];
+    XCTAssertEqual(server.capturedAdvertisements.count, 1u);
+    XCTAssertEqual(HABLEInteger(HABLEDecode(server.capturedAdvertisements.firstObject), 1), 0x001122334455ULL);
+}
+- (void)testPartialAdvertisementsWaitForVendorEvidenceAndPreserveTheMatch {
+    HABLEDiscoveryPolicyProxy *proxy = [[HABLEDiscoveryPolicyProxy alloc] init];
+    HABLECapturingServer *server = [[HABLECapturingServer alloc] initWithName:@"test" address:@"02:00:00:00:00:01" key:[NSMutableData dataWithLength:32]];
+    HABLEIdentityResolver *resolver = [self poolIdentityResolver]; [resolver loadSharedValue:[self sharedPoolBinding] forRecord:resolver.knownDevices.firstObject];
+    [proxy setValue:server forKey:@"server"]; [proxy setValue:resolver forKey:@"identityResolver"]; [proxy setValue:@YES forKey:@"running"]; [proxy setValue:@YES forKey:@"identitiesReady"];
+    HABLEObservedPeripheral *peripheral = [self poolPeripheral]; NSDictionary *nameOnly = @{CBAdvertisementDataLocalNameKey:@"B201ABCDEF"};
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:nameOnly RSSI:@-60];
+    XCTAssertEqual(server.capturedAdvertisements.count, 0u);
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:[self poolRadioAdvertisement] RSSI:@-60];
+    XCTAssertEqual(server.capturedAdvertisements.count, 2u, @"New identity evidence must bypass the retry delay and flush in order");
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:nameOnly RSSI:@-60];
+    XCTAssertEqual(server.capturedAdvertisements.count, 3u);
+    for (NSData *packet in server.capturedAdvertisements) XCTAssertEqual(HABLEInteger(HABLEDecode(packet), 1), 0x001122334455ULL);
+}
+- (void)testKnownUnresolvedDeviceDoesNotGenerateAnotherDiscovery {
+    HABLEDiscoveryPolicyProxy *proxy = [[HABLEDiscoveryPolicyProxy alloc] init];
+    HABLECapturingServer *server = [[HABLECapturingServer alloc] initWithName:@"test" address:@"02:00:00:00:00:01" key:[NSMutableData dataWithLength:32]];
+    [proxy setValue:server forKey:@"server"]; [proxy setValue:[self poolIdentityResolver] forKey:@"identityResolver"]; [proxy setValue:@YES forKey:@"running"]; [proxy setValue:@YES forKey:@"identitiesReady"];
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)[self poolPeripheral] advertisementData:[self poolRadioAdvertisement] RSSI:@-60];
+    [proxy flushIdentityAdvertisements]; XCTAssertEqual(server.capturedAdvertisements.count, 0u);
+    NSMutableArray *queue = [proxy valueForKey:@"pendingIdentityAdvertisements"]; NSMutableDictionary *old = [queue.firstObject mutableCopy]; old[@"queued_at"] = @(CFAbsoluteTimeGetCurrent() - 31); queue[0] = old;
+    [proxy flushIdentityAdvertisements]; XCTAssertEqual(server.capturedAdvertisements.count, 0u); XCTAssertEqual([[proxy valueForKey:@"identityPacketsDropped"] unsignedIntegerValue], 1u);
+}
 - (NSDictionary *)sharedPoolBinding {
     return @{@"schema":@1, @"profile":@"blue_connect-v1", @"device_id":@"pool", @"identifier":@"B201ABCDEF", @"address":@"00:11:22:33:44:55", @"manufacturer_id":@305, @"evidence_kind":@"independent_scanner"};
 }

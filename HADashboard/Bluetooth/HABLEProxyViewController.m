@@ -66,7 +66,7 @@
         else { cell.textLabel.text = @"Additional service UUIDs"; cell.detailTextLabel.text = [NSString stringWithFormat:@"%lu manually added", (unsigned long)manager.additionalScanServiceUUIDs.count]; }
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     }
-    else { NSDictionary *device = self.devices[path.row]; cell.textLabel.text = device[@"ha_name"] ?: device[@"name"]; cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@ dBm\n%@", device[@"address"], device[@"rssi"], [device[@"identity"] isEqual:@"local_alias"] ? @"Local alias" : [device[@"identity"] isEqual:@"switchbot_advertised_mac"] ? @"Address published by SwitchBot" : [device[@"identity"] isEqual:@"ha_matched_mac"] ? @"Matched with Home Assistant" : @"Associated hardware address"]; cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator; }
+    else { NSDictionary *device = self.devices[path.row]; cell.textLabel.text = device[@"ha_name"] ?: device[@"name"]; cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@ dBm\n%@", device[@"address"], device[@"rssi"], [device[@"identity_pending"] boolValue] ? @"Waiting for HA identity" : [device[@"identity"] isEqual:@"local_alias"] ? @"Local alias" : [device[@"identity"] isEqual:@"switchbot_advertised_mac"] ? @"Address published by SwitchBot" : [device[@"identity"] isEqual:@"ha_matched_mac"] ? @"Matched with Home Assistant" : @"Associated hardware address"]; cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator; }
     return cell;
 }
 - (void)toggled:(UISwitch *)toggle { [HABLEProxyManager sharedManager].enabled = toggle.on; }

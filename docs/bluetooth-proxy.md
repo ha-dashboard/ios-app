@@ -53,7 +53,11 @@ registry. Conflicting records are not overwritten automatically. In-memory
 matches are scoped to the current HA connection and refresh every five minutes.
 HA backups include these non-secret associations; resetting one proxy does not
 delete associations used by other proxies. Supported Blue Connect advertisements are briefly
-buffered during the initial import to avoid premature alias discoveries.
+buffered during the initial import to avoid premature alias discoveries. Known
+but unresolved identities remain pending instead of being forwarded under a
+local alias. The buffer holds at most 256 packets and discards packets older
+than 30 seconds. Missing vendor fields in a later Core Bluetooth callback do
+not erase previously observed identity evidence or fabricate wire payloads.
 
 Tap a nearby device to inspect matching evidence and known Bluetooth devices. The matching view
 compares registry information and advertisements received by other scanners.
