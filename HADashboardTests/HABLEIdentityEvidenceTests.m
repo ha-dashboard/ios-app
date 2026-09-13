@@ -104,6 +104,33 @@
     HABLEIdentityEvidence *engine=[HABLEIdentityEvidence new];[self fill:engine local:@"one" address:@"00:11:22:33:44:55" offset:0];
     XCTAssertTrue(([[engine correlationForIdentifier:@"one" address:@"00:11:22:33:44:55" now:NSDate.date.timeIntervalSince1970][@"qualified"] boolValue]));
 }
+- (void)testRecurringSameLengthPacketFamiliesDoNotDiluteCorroboratedChanges {
+    HABLEIdentityEvidence *engine=[HABLEIdentityEvidence new];NSTimeInterval start=NSDate.date.timeIntervalSince1970-80;
+    for(NSUInteger i=0;i<12;i++) {
+        uint8_t bytes[]={0xa1,(uint8_t)i,0x32,0x45,0x56};
+        NSDictionary *o=@{@"manufacturer_data":[[NSData dataWithBytes:bytes length:5] base64EncodedStringWithOptions:0]};
+        [engine recordLocal:o identifier:@"local" atTime:start+i*6];
+        [engine recordRemoteTokens:[HABLEIdentityEvidence tokensForObservation:o] address:@"00:11:22:33:44:55" source:@"native" atTime:start+i*6+.2];
+        uint8_t auxiliary[]={0xb2,0x11,0x22,0x33,0x44};
+        [engine recordLocal:@{@"manufacturer_data":[[NSData dataWithBytes:auxiliary length:5] base64EncodedStringWithOptions:0]} identifier:@"local" atTime:start+i*6+1];
+    }
+    XCTAssertTrue(([[engine correlationForIdentifier:@"local" address:@"00:11:22:33:44:55" now:NSDate.date.timeIntervalSince1970][@"qualified"] boolValue]));
+}
+- (void)testLearnedPacketFamiliesStillRejectContradictoryComparablePayloads {
+    HABLEIdentityEvidence *engine=[HABLEIdentityEvidence new];NSTimeInterval start=NSDate.date.timeIntervalSince1970-80;
+    for(NSUInteger i=0;i<12;i++) {
+        uint8_t bytes[]={0xa1,(uint8_t)i,0x32,0x45,0x56};
+        NSDictionary *o=@{@"manufacturer_data":[[NSData dataWithBytes:bytes length:5] base64EncodedStringWithOptions:0]};
+        [engine recordLocal:o identifier:@"local" atTime:start+i*6];
+        [engine recordRemoteTokens:[HABLEIdentityEvidence tokensForObservation:o] address:@"00:11:22:33:44:55" source:@"native" atTime:start+i*6+.2];
+        uint8_t auxiliary[]={0xb2,0x11,0x22,0x33,0x44};
+        [engine recordLocal:@{@"manufacturer_data":[[NSData dataWithBytes:auxiliary length:5] base64EncodedStringWithOptions:0]} identifier:@"local" atTime:start+i*6+1];
+        uint8_t contradictory[]={0xb2,0x99,0x88,0x77,0x66};
+        NSDictionary *other=@{@"manufacturer_data":[[NSData dataWithBytes:contradictory length:5] base64EncodedStringWithOptions:0]};
+        [engine recordRemoteTokens:[HABLEIdentityEvidence tokensForObservation:other] address:@"00:11:22:33:44:55" source:@"native" atTime:start+i*6+1.2];
+    }
+    XCTAssertFalse(([[engine correlationForIdentifier:@"local" address:@"00:11:22:33:44:55" now:NSDate.date.timeIntervalSince1970][@"qualified"] boolValue]));
+}
 - (void)testDifferentReadingsDoNotMatch {
     HABLEIdentityEvidence *engine=[HABLEIdentityEvidence new];[self fill:engine local:@"one" address:@"00:11:22:33:44:55" offset:1000];
     XCTAssertFalse(([[engine correlationForIdentifier:@"one" address:@"00:11:22:33:44:55" now:NSDate.date.timeIntervalSince1970][@"qualified"] boolValue]));

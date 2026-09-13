@@ -130,7 +130,38 @@ static NSString *HABLELittleEndianUUID(const uint8_t *bytes, NSUInteger length) 
     [self append:tokens key:address to:self.remotes source:source atTime:lastSeen];
 }
 - (NSDictionary *)correlationForIdentifier:(NSString *)identifier address:(NSString *)address now:(NSTimeInterval)now {
-    NSArray *local=self.locals[identifier],*remote=self.remotes[address];NSMutableSet *channels=NSMutableSet.set;
+    NSArray *local=self.locals[identifier],*remote=self.remotes[address];
+    // Learn recurring same-length packet families from their leading byte.
+    // No byte value has a predefined meaning. Require a small, recurrent
+    // alphabet; changing measurement bytes must not create one channel/state.
+    NSMutableDictionary *prefixCounts=NSMutableDictionary.dictionary;
+    for (NSDictionary *event in local) {
+        if ([event[@"last_seen"] doubleValue]<now-HABLEEvidenceWindow)continue;
+        NSString *token=event[@"token"];NSRange colon=[token rangeOfString:@":" options:NSBackwardsSearch];
+        NSData *bytes=[[NSData alloc] initWithBase64EncodedString:[token substringFromIndex:colon.location+1] options:0];
+        if(bytes.length<4)continue;
+        NSString *channel=event[@"channel"];NSMutableDictionary *counts=prefixCounts[channel];
+        if(!counts){counts=NSMutableDictionary.dictionary;prefixCounts[channel]=counts;}
+        NSNumber *prefix=@(((const uint8_t *)bytes.bytes)[0]);counts[prefix]=@([counts[prefix] unsignedIntegerValue]+1);
+    }
+    NSMutableSet *partitioned=NSMutableSet.set;
+    for(NSString *channel in prefixCounts) {
+        NSDictionary *counts=prefixCounts[channel];if(counts.count<2 || counts.count>4)continue;
+        BOOL recurrent=YES;for(NSNumber *count in counts.allValues)if(count.unsignedIntegerValue<3)recurrent=NO;
+        if(recurrent)[partitioned addObject:channel];
+    }
+    NSMutableArray *(^partition)(NSArray *)=^NSMutableArray *(NSArray *events) {
+        NSMutableArray *result=NSMutableArray.array;
+        for(NSDictionary *event in events) {
+            if(![partitioned containsObject:event[@"channel"]]){[result addObject:event];continue;}
+            NSString *token=event[@"token"];NSRange colon=[token rangeOfString:@":" options:NSBackwardsSearch];
+            NSData *bytes=[[NSData alloc] initWithBase64EncodedString:[token substringFromIndex:colon.location+1] options:0];
+            if(!bytes.length)continue;
+            NSMutableDictionary *copy=[event mutableCopy];copy[@"channel"]=[NSString stringWithFormat:@"%@/prefix:%u",event[@"channel"],((const uint8_t *)bytes.bytes)[0]];[result addObject:copy];
+        }return result;
+    };
+    if(partitioned.count){local=partition(local);remote=partition(remote);}
+    NSMutableSet *channels=NSMutableSet.set;
     for(NSDictionary *event in local)if([event[@"last_seen"] doubleValue]>=now-HABLEEvidenceWindow)[channels addObject:event[@"channel"]];
     NSDictionary *best=@{@"qualified":@NO,@"distinct_packets":@0,@"matched_events":@0,@"compared_events":@0,@"span":@0,@"median_skew":@0,@"sources":@[]};
     BOOL qualified=NO,contradiction=NO;
