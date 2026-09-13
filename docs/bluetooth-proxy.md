@@ -39,6 +39,13 @@ registry and shared-state changes, and periodically refreshes. A manual refresh
 is optional. Known identities, standard identification fields and relevant live
 peer observations are imported without user-managed synchronization.
 
+The initial import reads HA registry IDs, Bluetooth addresses, registered unit
+identifiers, friendly names, model and serial metadata, plus the installed
+integrations' discovery manifests. A registry update triggers another import;
+reconnection and a five-minute fallback refresh cover missed updates. Shared
+associations and peer evidence have their own live subscriptions. A friendly
+name is used for display after identification, not substituted for an identity.
+
 The resolver considers:
 
 - Standard GATT serial/system identifiers and registered HA unit identifiers.
@@ -54,12 +61,27 @@ not increase confidence. HA's accumulated manufacturer dictionaries are never
 treated as individual packets; independent raw advertisements or authenticated
 peer observations supply the timing evidence.
 
+Correlation compares opaque payload bytes in channels grouped by AD type and
+payload length, preserving separate histories when one device alternates packet
+layouts. Qualification requires at least 90% agreement, changes in six or more
+five-second buckets spanning at least thirty seconds, median observation skew
+no greater than three seconds, and evidence seen within the last two minutes.
+Contradictory comparable channels or competing local/remote candidates reject
+the match. These thresholds are conservative evidence checks, not a guarantee
+that arbitrary indistinguishable transmitters can be identified.
+
 Generic associations are stored in HA's shared system store. Local Apple UUID
 bindings remain scoped to the configured HA account. Peer observations are
 shared only for active learning requests and relevant profiles, using bounded
 batches. Origin lineage prevents a derived proxy from validating its ancestor.
 Previously verified bindings survive restarts, and the earlier stored-association
 format is migrated as data rather than through device-specific parsing rules.
+
+Each receiving Apple device must establish its own local peripheral-to-HA
+binding. Importing a shared catalog entry alone does not equate an unfamiliar
+Apple UUID with that physical unit. A receiver can compare its observations
+with a verified peer's history automatically; the peer preserves original
+observation times instead of making old packets appear new when republished.
 
 Unambiguous standard identity or corroborated evidence can establish a binding.
 Indistinguishable candidates remain pending. Public Bluetooth APIs cannot prove
@@ -173,7 +195,8 @@ For a shared-identity acceptance check, launching with
 resolver. It still requires an existing verified HA association; the flag does
 not supply or override any address. Normal launches compare live observations.
 
-Use it only with the controlled peripheral from `scripts/ble-test-peripheral.m`.
+Use the GATT test driver only with the controlled peripheral from
+`scripts/ble-test-peripheral.m`.
 The driver checks its service UUID and marker before sending a test write.
 Live discovery avoids selecting an old alias after a reference device rotates
 its Bluetooth address. A known fixed address can alternatively be supplied with
@@ -195,7 +218,36 @@ delivery, and real GATT operations as separate acceptance results. The local
 device observations. Validate its timestamp when collecting it; a stale file
 does not prove a running app.
 
-Current identity and activation validation (build 178):
+Generic identity validation (builds 181–183):
+
+- 82 signed focused regression tests pass on build 183, including changing
+  payloads, alternating advertisement layouts, ambiguous devices, stale evidence,
+  peer lineage, original observation timestamps, and startup advertisement bursts.
+- Catalyst learned the configured SensorPush HT1 address from twelve distinct
+  independently observed payload changes over approximately ten minutes. No
+  SensorPush-specific parser, identifier table or manual import was used.
+- A build 182 Catalyst restart with live scanner comparison disabled restored
+  that binding from the local Apple UUID and automatically imported HA catalog.
+  This proves restart restoration; it does not alone prove a new peer can learn it.
+- Build 183 corrected a main-thread overload found on the Mini 5: advertisement
+  callbacks no longer repeatedly classify every buffered packet against the
+  registry. Fresh Mini 5 diagnostics now advance while scanning and synchronizing.
+- Build 183 Mini 5 independently learned the same SensorPush address with native
+  scanner comparison disabled. HA carried its learning requests and the verified
+  peers' timestamped observation history automatically. Twelve changes qualified
+  the binding without a manual import or address assignment.
+- A subsequent encrypted wire capture received eight matching SensorPush
+  advertisements from Mini 5, three from iPhone 16, and six from iPad Pro; every
+  captured address equalled the existing HA address. Catalyst received four
+  more after returning to the foreground. Mini 5 restored its binding immediately
+  after restarting in normal comparison mode. Two pre-existing SensorPush
+  discovery prompts remained, including the unreachable Mini 4's old alias.
+- Fleet validation is partial: Mini 4 was unavailable, iPad 4 refused SSH, the
+  second iPad Pro installed but was locked, and iPhone 11 launched and connected
+  to HA but retained stale BLE diagnostics. Older results below describe their
+  specific builds and are not acceptance of the generic replacement.
+
+Earlier identity and activation validation (build 178, before the generic resolver):
 
 - 74 signed regression tests passed, including delayed HA startup, partial
   advertisements, conflicting identifiers, persisted associations and opt-out.
