@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 @interface HABLEProxyRegistration : NSObject
++ (BOOL)isSetupURLAllowed:(NSURL *)URL;
 @property (nonatomic, readonly) BOOL registering;
 @property (nonatomic, readonly) NSString *status;
 @property (nonatomic, readonly) NSString *entryID;

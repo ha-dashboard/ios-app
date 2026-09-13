@@ -19,6 +19,11 @@ is useful. Proxy traffic is encrypted with Noise NNpsk0; setup sends the key via
 the configured HA HTTP/HTTPS connection, so use HTTPS or a trusted local network.
 There is no developer relay. Leaving the iOS app or locking it pauses the proxy.
 
+Automatic setup refuses non-local HTTP endpoints. The next App Store submission
+must review export-compliance classification for the bundled cryptography; the
+previous blanket exemption flag is omitted so App Store Connect presents its
+[encryption questionnaire](https://developer.apple.com/documentation/bundleresources/information-property-list/itsappusesnonexemptencryption).
+
 ## Device identity
 
 Apple supplies local peripheral UUIDs instead of Bluetooth MAC addresses. The
@@ -122,8 +127,9 @@ the writes and reply notification. Controlled physical tests on the Mini 4 and
 Mini 5 then verified reads, writes, notifications, readback and cached-handle
 reconnects. The Mini 4 also passed three immediate reconnects after dropping the
 network transport with a BLE connection allocated. Native transport checks
-passed 10 tests; an isolated signed Catalyst regression run passed 45 existing
-auth, registration and streaming tests. Broader device and failure-path
+passed 10 tests; an isolated signed Catalyst regression run passed 50 tests,
+including existing auth, registration and streaming checks plus BLE setup,
+framing and reset checks. Broader device and failure-path
 acceptance remains in progress; no App Store release is implied by these results.
 
 Reference implementations and API documentation:

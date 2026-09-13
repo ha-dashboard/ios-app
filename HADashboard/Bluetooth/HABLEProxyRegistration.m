@@ -1,6 +1,23 @@
 #import "HABLEProxyRegistration.h"
 #import "HAAPIClient.h"
 #import "HAAuthManager.h"
+#import <arpa/inet.h>
+
+static BOOL HABLESetupURLIsProtected(NSURL *URL) {
+    if (!URL.host.length) return NO;
+    if ([URL.scheme.lowercaseString isEqual:@"https"]) return YES;
+    if (![URL.scheme.lowercaseString isEqual:@"http"]) return NO;
+    NSString *host = [URL.host.lowercaseString stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"[]"]];
+    if ([host isEqual:@"localhost"] || [host hasSuffix:@".local"]) return YES;
+    struct in_addr ipv4;
+    if (inet_pton(AF_INET, host.UTF8String, &ipv4) == 1) {
+        uint32_t value = ntohl(ipv4.s_addr);
+        return (value & 0xff000000) == 0x0a000000 || (value & 0xfff00000) == 0xac100000 || (value & 0xffff0000) == 0xc0a80000 || (value & 0xff000000) == 0x7f000000 || (value & 0xffff0000) == 0xa9fe0000;
+    }
+    struct in6_addr ipv6;
+    if (inet_pton(AF_INET6, host.UTF8String, &ipv6) == 1) return IN6_IS_ADDR_LOOPBACK(&ipv6) || (ipv6.s6_addr[0] & 0xfe) == 0xfc || (ipv6.s6_addr[0] == 0xfe && (ipv6.s6_addr[1] & 0xc0) == 0x80);
+    return NO;
+}
 
 @interface HABLEProxyRegistration ()
 @property (nonatomic, assign, readwrite) BOOL registering;
@@ -16,11 +33,13 @@
 @property (nonatomic, copy) void (^completion)(BOOL);
 @end
 @implementation HABLEProxyRegistration
++ (BOOL)isSetupURLAllowed:(NSURL *)URL { return HABLESetupURLIsProtected(URL); }
 - (instancetype)init { if ((self = [super init])) _status = @"Not registered by this app"; return self; }
-- (void)cancel { self.generation++; [self.api cancelAllRequests]; self.api = nil; self.key = nil; self.completion = nil; self.registering = NO; }
+- (void)cancel { self.generation++; [self.api cancelAllRequests]; self.api = nil; self.key = nil; self.completion = nil; if (self.registering) self.status = @"Setup paused"; self.registering = NO; }
 - (void)registerHost:(NSString *)host key:(NSString *)key completion:(void (^)(BOOL))completion {
     [self cancel]; HAAuthManager *auth = [HAAuthManager sharedManager];
     if (!host.length || !key.length || !auth.isConfigured) { self.status = @"Enable the proxy and connect to Home Assistant first"; completion(NO); return; }
+    if (!HABLESetupURLIsProtected([NSURL URLWithString:auth.serverURL])) { self.status = @"Use HTTPS or a private local HA address for encrypted proxy setup"; completion(NO); return; }
     self.host = host; self.key = key; self.server = auth.serverURL; self.revision = auth.authenticationRevision; self.steps = 0;
     self.completion = completion; self.registering = YES; self.status = @"Adding the encrypted proxy to Home Assistant";
     self.api = [[HAAPIClient alloc] initWithBaseURL:[NSURL URLWithString:self.server] token:auth.accessToken requestTimeoutInterval:20 resourceTimeoutInterval:30];

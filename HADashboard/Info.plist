@@ -20,8 +20,6 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -39,7 +37,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Allow HA Dashboard to stream live video to RTSP clients while Local Camera Stream is enabled.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Discover Home Assistant servers and host explicitly enabled camera and microphone streams for RTSP clients that connect to this device.</string>
+	<string>Discover Home Assistant servers and host camera, microphone, or Bluetooth proxy connections you enable.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Allow HA Dashboard to include live audio in Local Camera Streams you enable.</string>
 	<key>UIAppFonts</key>

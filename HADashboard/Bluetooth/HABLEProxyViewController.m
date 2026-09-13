@@ -38,8 +38,8 @@
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return section == 0 ? 2 : section == 1 ? 3 : self.devices.count; }
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section { return @[@"Bluetooth Proxy", @"Home Assistant setup", @"Nearby devices"][section]; }
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-    if (section == 0) return @"Share nearby Bluetooth LE devices with Home Assistant while HA Dashboard is open. The connection is encrypted. Locking the screen or leaving the app pauses the proxy. This prototype uses Apple's public Bluetooth APIs.";
-    if (section == 1) return @"Add an ESPHome integration in Home Assistant using this address and port 6053, then enter the encryption key. Home Assistant must be able to reach this device on the local network.";
+    if (section == 0) return @"Share nearby Bluetooth LE devices with Home Assistant while HA Dashboard is open. The connection is encrypted. Locking the screen or leaving the iOS app pauses the proxy. Uses Apple's public Bluetooth APIs.";
+    if (section == 1) return @"Tap Add to Home Assistant while connected as an administrator, or add ESPHome manually using this address, port 6053 and the encryption key. HA must reach this device on the local network. Setup uses your configured HA connection; use HTTPS or a trusted local network.";
     return @"Addresses published in supported SwitchBot advertisements are recognised automatically. Other devices use local aliases because Apple does not expose their hardware addresses. Tap a device to associate a verified address. Aliases do not match other proxies and cannot decrypt address-dependent sensor messages. Refresh to update this device list.";
 }
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
@@ -68,7 +68,9 @@
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 60 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ if ([UIPasteboard generalPasteboard].changeCount == change) [UIPasteboard generalPasteboard].items = @[]; });
             }
         }
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:key ? @"Encryption key copied" : @"Key unavailable" message:key ? @"Paste it into the ESPHome integration's encryption key field. The clipboard copy expires after one minute." : @"Unlock this device and try again." preferredStyle:UIAlertControllerStyleAlert];
+        NSString *copyMessage = @"Paste it into the ESPHome integration's encryption key field. Clear the clipboard after setup; this iOS version can only expire it while the app can run.";
+        if (@available(iOS 10.0, *)) copyMessage = @"Paste it into the ESPHome integration's encryption key field. The clipboard copy expires after one minute.";
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:key ? @"Encryption key copied" : @"Key unavailable" message:key ? copyMessage : @"Unlock this device and try again." preferredStyle:UIAlertControllerStyleAlert];
         [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]]; [self presentViewController:alert animated:YES completion:nil];
     } else if (path.section == 1 && path.row == 2) {
         [manager registerWithHomeAssistant];
