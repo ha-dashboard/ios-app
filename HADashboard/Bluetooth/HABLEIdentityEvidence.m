@@ -129,11 +129,28 @@ static NSString *HABLELittleEndianUUID(const uint8_t *bytes, NSUInteger length) 
     return tokens;
 }
  + (BOOL)tokens:(NSArray *)local agreeWith:(NSArray *)remote {
+    // Length describes a value, not its channel. Otherwise a conflicting
+    // shorter/longer value disappears when another channel happens to agree.
+    NSMutableDictionary *left=NSMutableDictionary.dictionary,*right=NSMutableDictionary.dictionary;
+    for(NSUInteger side=0;side<2;side++) {
+        NSMutableDictionary *channels=side ? right : left;
+        for(id token in (side ? remote : local)) {
+            if(![token isKindOfClass:NSString.class])return NO;
+            NSRange valueSeparator=[token rangeOfString:@":" options:NSBackwardsSearch];
+            if(valueSeparator.location==NSNotFound)return NO;
+            NSString *prefix=[token substringToIndex:valueSeparator.location];
+            NSRange lengthSeparator=[prefix rangeOfString:@":" options:NSBackwardsSearch];
+            if(lengthSeparator.location==NSNotFound)return NO;
+            NSString *channel=[prefix substringToIndex:lengthSeparator.location+1];
+            NSMutableSet *values=channels[channel];if(!values){values=NSMutableSet.set;channels[channel]=values;}
+            [values addObject:token];
+        }
+    }
     BOOL common=NO;
-    for (NSString *token in local) {
-        NSString *channel=[token substringToIndex:[token rangeOfString:@":" options:NSBackwardsSearch].location+1];BOOL comparable=NO,equal=NO;
-        for (NSString *other in remote) if ([other hasPrefix:channel]) { comparable=YES;if([other isEqual:token])equal=YES; }
-        if(comparable && !equal)return NO;if(equal)common=YES;
+    for(NSString *channel in left) {
+        if(!right[channel])continue;
+        if(![left[channel] isEqual:right[channel]])return NO;
+        common=YES;
     }
     return common;
 }

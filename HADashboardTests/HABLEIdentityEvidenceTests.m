@@ -83,6 +83,24 @@
     [resolver observeAdvertisements:@[replay]];
     XCTAssertNil(inventory[replay[@"address"]]);XCTAssertNotNil(inventory[newDevice[@"address"]]);
 }
+- (void)testPayloadAgreementRejectsDifferentLengthContradictions {
+    NSDictionary *a=@{@"manufacturer_data":@"AQIDBA==",@"service_data":@{@"1234":@"BQYHCA=="}};
+    NSDictionary *b=@{@"manufacturer_data":@"AQIDBA==",@"service_data":@{@"1234":@"BQYHCQk="}};
+    NSArray *left=[HABLEIdentityEvidence tokensForObservation:a],*right=[HABLEIdentityEvidence tokensForObservation:b];
+    XCTAssertFalse([HABLEIdentityEvidence tokens:left agreeWith:right]);
+    XCTAssertFalse([HABLEIdentityEvidence tokens:right agreeWith:left]);
+    XCTAssertTrue([HABLEIdentityEvidence tokens:left agreeWith:left]);
+    // A genuinely absent scan-response channel is different from a conflict.
+    NSArray *partial=[HABLEIdentityEvidence tokensForObservation:@{@"manufacturer_data":@"AQIDBA=="}];
+    XCTAssertTrue([HABLEIdentityEvidence tokens:left agreeWith:partial]);
+    XCTAssertTrue([HABLEIdentityEvidence tokens:partial agreeWith:left]);
+}
+- (void)testExtraContradictoryValueCannotHideBehindMatchingValue {
+    NSArray *a=[HABLEIdentityEvidence tokensForObservation:@{@"manufacturer_data":@"AQIDBA=="}];
+    NSArray *b=[a arrayByAddingObjectsFromArray:[HABLEIdentityEvidence tokensForObservation:@{@"manufacturer_data":@"AQIDBAU="}]];
+    XCTAssertFalse([HABLEIdentityEvidence tokens:a agreeWith:b]);
+    XCTAssertFalse([HABLEIdentityEvidence tokens:b agreeWith:a]);
+}
 - (NSDictionary *)stableIdentifierFields {
     NSData *json=[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:55"}} options:0 error:nil];
     NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:json path:@"s/1234/c/5678"];
