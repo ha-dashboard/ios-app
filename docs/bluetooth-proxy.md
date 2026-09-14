@@ -59,6 +59,14 @@ connectable devices enter the bounded automatic probe queue even without an
 integration matcher or external reference; discovery waits, connection-slot
 limits, per-device retry limits and read-only operation restrictions still apply.
 
+Compatible independently created synthetic GATT identities are reconciled into
+a deterministic canonical view. A common eligible identifier connects the proofs;
+conflicting stable identifiers or manufacturer/model context reject the complete
+connected group. One configured HA address takes precedence; multiple configured
+addresses remain ambiguous. Original catalog proofs are retained, and cached
+unions cannot override later contradictory evidence. This reconciliation currently
+covers synthetic GATT roots, not native/provisional identity migration.
+
 The shared proof retains all collected identifier fields. A later proxy can match
 an available secondary field without changing the canonical address originally
 chosen from another field. Matching remains subject to conflicts and competing

@@ -354,6 +354,77 @@
         XCTAssertTrue([[r inventoryDiagnostics][@"peer_observations_disabled"] boolValue]);
     } @finally {if(previous)[defaults setObject:previous forKey:@"HABLEIdentityIgnorePeerObservations"];else[defaults removeObjectForKey:@"HABLEIdentityIgnorePeerObservations"];}
 }
+- (void)testIndependentFingerprintRootsPoolFieldsAndChooseOneCanonicalAddress {
+    NSData *data=[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:55",@"uuid":@"11111111-1111-4111-8111-111111111111"}} options:0 error:nil];
+    NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:data path:@"s/1234/c/5678"],*once=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:@{} session:@"one" atTime:1],*fields=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:once session:@"two" atTime:2];
+    NSString *mac=@"s/1234/c/5678/json/device/mac",*uuid=@"s/1234/c/5678/json/device/uuid";
+    NSMutableArray *bindings=NSMutableArray.array;
+    for(NSUInteger i=0;i<2;i++) {
+        HABLEIdentityResolver *r=[HABLEIdentityResolver new];[r loadRegistry:@[] entries:@[] excludingSource:i ? @"02:00:00:00:00:02" : @"02:00:00:00:00:01"];
+        NSMutableDictionary *profile=[fields mutableCopy];if(i) {
+            profile[mac]=once[mac];NSMutableDictionary *extra=[fields[uuid] mutableCopy];extra[@"sha256"]=[@"a" stringByPaddingToLength:64 withString:@"a" startingAtIndex:0];profile[@"s/1234/c/5678/json/device/z_id"]=extra;
+        }
+        NSDictionary *o=@{@"identifier":@"local",@"name":@"Unit",@"last_seen":@(NSDate.date.timeIntervalSince1970),@"gatt_fingerprints":profile};[r recordObservation:o identifier:@"local"];
+        NSMutableDictionary *binding=[[r automaticMatchForObservation:o] mutableCopy];binding[@"schema"]=@2;binding[@"proof_id"]=[NSString stringWithFormat:@"root-%lu",(unsigned long)i];[bindings addObject:binding];
+    }
+    XCTAssertNotEqualObjects(bindings[0][@"address"],bindings[1][@"address"]);
+    NSDictionary *catalog=@{@"schema":@2,@"bindings":@{bindings[0][@"address"]:bindings[0],bindings[1][@"address"]:bindings[1]}};
+    NSString *canonical=[@[bindings[0][@"address"],bindings[1][@"address"]] sortedArrayUsingSelector:@selector(compare:)].firstObject;
+    for(NSString *path in @[mac,uuid]) {
+        HABLEIdentityResolver *r=[HABLEIdentityResolver new];[r loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:03"];[r loadCatalog:catalog];
+        XCTAssertEqual(r.knownDevices.count,1u);
+        NSDictionary *o=@{@"identifier":@"reader",@"name":@"Unit",@"last_seen":@(NSDate.date.timeIntervalSince1970),@"gatt_fingerprints":@{path:once[path]}};[r recordObservation:o identifier:@"reader"];
+        XCTAssertEqualObjects([r automaticMatchForObservation:o][@"address"],canonical);
+    }
+    HABLEIdentityResolver *registered=[HABLEIdentityResolver new];
+    [registered loadRegistry:@[@{@"id":@"configured",@"name":@"Configured unit",@"connections":@[@[@"bluetooth",bindings[1][@"address"]]]}] entries:@[] excludingSource:@"02:00:00:00:00:03"];[registered loadCatalog:catalog];
+    NSDictionary *o=@{@"identifier":@"reader",@"name":@"Unit",@"last_seen":@(NSDate.date.timeIntervalSince1970),@"gatt_fingerprints":fields};[registered recordObservation:o identifier:@"reader"];
+    XCTAssertEqualObjects([registered automaticMatchForObservation:o][@"address"],bindings[1][@"address"]);
+    HABLEIdentityResolver *firstConfigured=[HABLEIdentityResolver new];
+    [firstConfigured loadRegistry:@[@{@"id":@"configured-first",@"connections":@[@[@"bluetooth",bindings[0][@"address"]]]}] entries:@[] excludingSource:@"02:00:00:00:00:04"];[firstConfigured loadCatalog:catalog];
+    NSString *extraPath=@"s/1234/c/5678/json/device/z_id";NSDictionary *exclusive=@{@"identifier":@"exclusive-reader",@"name":@"Unit",@"last_seen":@(NSDate.date.timeIntervalSince1970),@"gatt_fingerprints":@{extraPath:bindings[1][@"fingerprint_profile"][extraPath]}};
+    [firstConfigured recordObservation:exclusive identifier:@"exclusive-reader"];NSMutableDictionary *cached=[[firstConfigured automaticMatchForObservation:exclusive] mutableCopy];
+    XCTAssertEqualObjects(cached[@"address"],bindings[0][@"address"]);XCTAssertNotNil(cached[@"canonical_origin_proof"]);
+    cached[@"schema"]=@2;cached[@"proof_id"]=bindings[0][@"proof_id"];[firstConfigured valueForKey:@"localBindings"][@"exclusive-reader"]=cached;
+    [firstConfigured loadCatalog:@{@"schema":@2,@"bindings":@{bindings[1][@"address"]:bindings[1]}}];
+    XCTAssertEqualObjects([firstConfigured valueForKey:@"pendingPublications"][bindings[0][@"address"]],bindings[0],@"Repair the original proof, not a derived union");
+    NSMutableDictionary *changed=[bindings[1] mutableCopy],*changedFields=[changed[@"fingerprint_profile"] mutableCopy],*changedMAC=[fields[mac] mutableCopy];
+    changedMAC[@"sha256"]=[@"b" stringByPaddingToLength:64 withString:@"b" startingAtIndex:0];changedFields[mac]=changedMAC;changed[@"fingerprint_profile"]=changedFields;
+    [firstConfigured loadCatalog:@{@"schema":@2,@"bindings":@{bindings[0][@"address"]:bindings[0],changed[@"address"]:changed}}];
+    XCTAssertEqualObjects([firstConfigured automaticMatchForObservation:exclusive][@"address"],bindings[1][@"address"],@"A cached union cannot override new contradictory evidence");
+    HABLEIdentityResolver *twoConfigured=[HABLEIdentityResolver new];
+    [twoConfigured loadRegistry:@[@{@"id":@"one",@"connections":@[@[@"bluetooth",bindings[0][@"address"]]]},@{@"id":@"two",@"connections":@[@[@"bluetooth",bindings[1][@"address"]]]}] entries:@[] excludingSource:@"02:00:00:00:00:03"];
+    [twoConfigured loadCatalog:catalog];[twoConfigured recordObservation:o identifier:@"reader"];
+    XCTAssertEqual(twoConfigured.knownDevices.count,2u);XCTAssertNil([twoConfigured automaticMatchForObservation:o]);
+
+}
+- (void)testFingerprintReconciliationRejectsContradictoryTransitiveBridge {
+    NSArray *values=@[@{@"a_id":@"11111111-1111-4111-8111-111111111111",@"b_id":@"44444444-4444-4444-8444-444444444444"},@{@"b_id":@"44444444-4444-4444-8444-444444444444",@"c_id":@"55555555-5555-4555-8555-555555555555"},@{@"a_id":@"33333333-3333-4333-8333-333333333333",@"c_id":@"55555555-5555-4555-8555-555555555555"}];
+    NSMutableDictionary *bindings=NSMutableDictionary.dictionary;NSMutableArray *observations=NSMutableArray.array;
+    for(NSUInteger i=0;i<values.count;i++) {
+        NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:[NSJSONSerialization dataWithJSONObject:@{@"device":values[i]} options:0 error:nil] path:@"s/1234/c/5678"];
+        NSDictionary *fields=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:[HABLEIdentityEvidence mergeFingerprintReads:reads previous:@{} session:@"one" atTime:1] session:@"two" atTime:2];
+        HABLEIdentityResolver *r=[HABLEIdentityResolver new];[r loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+        NSDictionary *o=@{@"identifier":@"unit",@"name":@"Unit",@"last_seen":@(NSDate.date.timeIntervalSince1970),@"gatt_fingerprints":fields};[observations addObject:o];[r recordObservation:o identifier:@"unit"];
+        NSMutableDictionary *proof=[[r automaticMatchForObservation:o] mutableCopy];proof[@"schema"]=@2;proof[@"proof_id"]=[NSString stringWithFormat:@"proof-%lu",(unsigned long)i];bindings[proof[@"address"]]=proof;
+    }
+    HABLEIdentityResolver *r=[HABLEIdentityResolver new];[r loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:09"];[r loadCatalog:@{@"schema":@2,@"bindings":bindings}];
+    XCTAssertEqual(r.knownDevices.count,3u);[r recordObservation:observations[1] identifier:@"unit"];
+    XCTAssertNil([r automaticMatchForObservation:observations[1]],@"An intermediate proof cannot hide disagreement between endpoints");
+}
+- (void)testOfflineCatalogConflictCannotReuseAnExistingFingerprintAddress {
+    NSMutableArray *observations=NSMutableArray.array;NSArray *ids=@[@"11111111-1111-4111-8111-111111111111",@"22222222-2222-4222-8222-222222222222"];
+    for(NSString *identity in ids) {
+        NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:55",@"z_uuid":identity}} options:0 error:nil] path:@"s/1234/c/5678"];
+        NSDictionary *fields=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:[HABLEIdentityEvidence mergeFingerprintReads:reads previous:@{} session:@"one" atTime:1] session:@"two" atTime:2];
+        [observations addObject:@{@"identifier":identity,@"name":@"Unit",@"last_seen":@(NSDate.date.timeIntervalSince1970),@"gatt_fingerprints":fields}];
+    }
+    HABLEIdentityResolver *a=[HABLEIdentityResolver new];[a loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];[a recordObservation:observations[0] identifier:ids[0]];
+    NSMutableDictionary *proof=[[a automaticMatchForObservation:observations[0]] mutableCopy];proof[@"schema"]=@2;proof[@"proof_id"]=@"existing-catalog-proof";
+    HABLEIdentityResolver *b=[HABLEIdentityResolver new];[b loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:02"];[b loadCatalog:@{@"schema":@2,@"bindings":@{proof[@"address"]:proof}}];[b recordObservation:observations[1] identifier:ids[1]];
+    NSDictionary *match=[b automaticMatchForObservation:observations[1]];
+    XCTAssertNotNil(match);XCTAssertNotEqualObjects(match[@"address"],proof[@"address"]);XCTAssertTrue([match[@"fingerprint_witness"][@"path"] hasSuffix:@"/z_uuid"]);
+}
 - (NSDictionary *)stableIdentifierFields {
     NSData *json=[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:55"}} options:0 error:nil];
     NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:json path:@"s/1234/c/5678"];
