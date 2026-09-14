@@ -267,7 +267,7 @@ gets the app killed by the system watchdog (observed as a CPU-resource kill
 on an iPad 4 running a pre-226 build at 90% average). Measured on build 226
 in a busy radio room: dashboard alone used about 15% on an iPad 4 and about
 20% on an iPad 2, while the BLE proxy added roughly 40 points on the iPad 4 before optimization (about 22 points after the 231-235 work: identical-payload fast path, 5s housekeeping, budgeted native ingestion)
-(54-63% combined). Keep legacy wall units comfortably below the limit; if a
+(54-63% combined). A later clean 218-second window on build 235 under rotation load measured 53%, back above the watchdog line at only ~13 forwarded advertisements per second, so the saving is load-dependent rather than guaranteed. Keep legacy wall units comfortably below the limit; if a
 unit runs hot, prefer fewer live camera streams and revisit proxy duty
 before assuming a crash is a bug.
 
@@ -322,10 +322,18 @@ shares 9-10 addresses pairwise, while the office iPad shares none with the
 home cluster, confirming separate radio spaces by identity overlap rather
 than by assertion.
 
-The iPhone 11 had build 226 installed and launched, but its proxy never
-listened, so it is not included. The iPad 4, iPad Pro and (later) office
-iPad 3 were unreachable during parts of this window; those devices are not
-included in this common-window result. Identical coverage across the full
+Later the same day: simultaneous sixty-second captures across six proxies
+(Mac/Mini 4/Mini 5 on 226, iPad 4 on 235, iPhone 11 and iPad Pro on 226)
+completed with zero errors (51/48/61/17/29/47 addresses). The S36 rotation
+had converged fleet-wide on FA:17:6B:59:66:F6 (five of six proxies; Mini 4
+stayed silent on both old and new addresses and correctly held its pending
+alias), the old E1:A1 address was emitted nowhere, and a fifteen-alias sweep
+found zero stale-alias leaks. iPad 4 on 235 forwards identically to the 226
+fleet for its room. Office iPad 3 was off-network and is not included.
+
+In that earlier window the iPhone 11 proxy never listened, so it was not included there; it joined the later six-proxy capture above, as did the iPad 4 and iPad Pro. The office
+iPad 3 was unreachable during parts of the earlier window and off-network for the later one; it is
+included in neither common-window result. Identical coverage across the full
 fleet is unverified.
 
 Standalone cold-server acceptance (same date): a fresh Home Assistant
