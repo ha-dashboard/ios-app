@@ -331,6 +331,16 @@ alias), the old E1:A1 address was emitted nowhere, and a fifteen-alias sweep
 found zero stale-alias leaks. iPad 4 on 235 forwards identically to the 226
 fleet for its room. Office iPad 3 was off-network and is not included.
 
+Rollout follow-up (same day): 235 is now running on every reachable proxy
+(Mini 4, Mini 5, iPad 4, iPhone 11, iPad Pro; Mac on 237 from the same
+source; iPad 2 dashboard-only). A repeat sixty-second six-proxy capture on
+the rolled-out builds completed with zero errors and the same capability:
+S14 across Mac/both Minis/Pro, AZW canonical on five of six, home-cluster
+agreement on LG/Samsung/HT1/HT.w, rotated S36 on four proxies with the old
+address emitted nowhere. Mini 4's only divergent packets used its live
+held-pending local alias for the same fringe unit, which is correct
+ambiguity-holding rather than a stale leak.
+
 In that earlier window the iPhone 11 proxy never listened, so it was not included there; it joined the later six-proxy capture above, as did the iPad 4 and iPad Pro. The office
 iPad 3 was unreachable during parts of the earlier window and off-network for the later one; it is
 included in neither common-window result. Identical coverage across the full
