@@ -269,7 +269,7 @@ in a busy radio room: dashboard alone used about 15% on an iPad 4 and about
 20% on an iPad 2, while the BLE proxy added roughly 40 points on the iPad 4
 (54-63% combined). Keep legacy wall units comfortably below the limit; if a
 unit runs hot, prefer fewer live camera streams and revisit proxy duty
-before assuming a crash is a bug.'
+before assuming a crash is a bug.
 
 
 - BLE advertisements visible to Core Bluetooth, preserving callback order.
