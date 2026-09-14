@@ -608,6 +608,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     NSDictionary *identity = [session.identityValues copy];
     if (!message || hasPartialReads) {
         NSString *identifier = session.peripheral.identifier.UUIDString;
+        if(!message)[self.observations[identifier] removeObjectForKey:@"identification_error"];
         [self.observations[identifier] addEntriesFromDictionary:identity];
         if (self.identityMetadata.count < 256 || self.identityMetadata[identifier]) {
             self.identityMetadata[identifier] = identity;
@@ -845,10 +846,14 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     session.preparingConnection = YES;
     [session.operations addObject:@{@"type":@70, @"fields":@{}}]; [self pump:session];
 }
-- (void)centralManager:(CBCentralManager *)central didFailToConnectPeripheral:(CBPeripheral *)peripheral error:(NSError *)error { [self centralManager:central didDisconnectPeripheral:peripheral error:error]; }
+- (void)centralManager:(CBCentralManager *)central didFailToConnectPeripheral:(CBPeripheral *)peripheral error:(NSError *)error {
+    HABLEPeripheralSession *session=[self sessionFor:peripheral];
+    if(session.identityCompletion)[self finishIdentity:session error:[NSString stringWithFormat:@"Connection failed before identification began%@",error ? [NSString stringWithFormat:@": %@ (%@ %ld)",error.localizedDescription,error.domain,(long)error.code] : @"."]];
+    [self centralManager:central didDisconnectPeripheral:peripheral error:error];
+}
 - (void)centralManager:(CBCentralManager *)central didDisconnectPeripheral:(CBPeripheral *)peripheral error:(NSError *)error {
     HABLEPeripheralSession *session = [self sessionFor:peripheral]; if (!session) return;
-    if (session.identityCompletion) [self finishIdentity:session error:@"The device disconnected before identification completed."];
+    if (session.identityCompletion) [self finishIdentity:session error:[NSString stringWithFormat:@"The device disconnected before identification completed%@",error ? [NSString stringWithFormat:@": %@ (%@ %ld)",error.localizedDescription,error.domain,(long)error.code] : @"."]];
     [self connectionResponse:session connected:NO error:error ? 8 : 0]; [self.sessions removeObjectForKey:session.address]; [self slotsChanged];
 }
 - (void)gattError:(NSNumber *)address handle:(NSUInteger)handle error:(NSUInteger)error connection:(HABLEAPIConnection *)connection {
