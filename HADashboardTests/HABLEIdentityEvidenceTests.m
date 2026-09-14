@@ -95,6 +95,8 @@
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;
     HABLEIdentityResolver *resolver=[HABLEIdentityResolver new];
     [resolver loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    [resolver setValue:@100000 forKey:@"ingestBurstCap"];
+    [resolver setValue:@100000 forKey:@"ingestBudget"];
     for(NSUInteger i=0;i<256;i++) {
         NSString *address=[NSString stringWithFormat:@"10:11:22:33:44:%02lX",(unsigned long)i];
         [resolver observeAdvertisements:@[@{@"address":address,@"source":@"20:00:00:00:00:01",@"time":@(now-300+i),@"name":@"Unit",@"raw":@"05ff01020304"}]];

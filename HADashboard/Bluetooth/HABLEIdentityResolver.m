@@ -128,6 +128,12 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 @property (nonatomic, strong) NSMutableSet *potentialKnownIdentifiers;
 @property (nonatomic, strong) NSMutableDictionary *localBindings;
 @property (nonatomic, strong) NSMutableDictionary *catalog;
+@property (nonatomic, assign) double ingestBudget;
+@property (nonatomic, assign) NSTimeInterval lastIngestRefill;
+@property (nonatomic, assign) NSUInteger ingestOffset;
+@property (nonatomic, assign) NSUInteger inboundDropped;
+@property (nonatomic, assign) double ingestBurstCap;
+@property (nonatomic, assign) double ingestSustainedRate;
 @property (nonatomic, strong) NSMutableDictionary *peerValues;
 @property (nonatomic, strong) NSMutableDictionary *peerInventories;
 @property (nonatomic) NSTimeInterval nextInventoryPublish;
@@ -174,7 +180,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     if ((self=[super init])) {
         _knownDevices=@[]; _registryDevices=@[]; _status=@"Waiting for automatic synchronization"; _evidence=[HABLEIdentityEvidence new];
         _remoteInfo=NSMutableDictionary.dictionary; _localObservations=NSMutableDictionary.dictionary; _peerPassiveContinuity=NSMutableDictionary.dictionary; _canonicalCatalogDirty=YES; _lastEvidence=NSMutableDictionary.dictionary; _potentialKnownIdentifiers=NSMutableSet.set; _localBindings=NSMutableDictionary.dictionary;
-        _catalog=NSMutableDictionary.dictionary; _discoveryMatchers=NSMutableDictionary.dictionary; _peerValues=NSMutableDictionary.dictionary; _peerInventories=NSMutableDictionary.dictionary; _proxySources=NSMutableSet.set; _writesInFlight=NSMutableSet.set; _pendingPublications=NSMutableDictionary.dictionary; _legacyReads=NSMutableSet.set; _subscriptions=NSMutableArray.array;
+        _catalog=NSMutableDictionary.dictionary; _ingestBudget=120; _ingestBurstCap=120; _ingestSustainedRate=30; _lastIngestRefill=NSDate.date.timeIntervalSince1970; _discoveryMatchers=NSMutableDictionary.dictionary; _peerValues=NSMutableDictionary.dictionary; _peerInventories=NSMutableDictionary.dictionary; _proxySources=NSMutableSet.set; _writesInFlight=NSMutableSet.set; _pendingPublications=NSMutableDictionary.dictionary; _legacyReads=NSMutableSet.set; _subscriptions=NSMutableArray.array;
     } return self;
 }
 - (void)dealloc { [self cancel]; }
@@ -413,7 +419,15 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 }
 - (void)observeAdvertisements:(NSArray *)advertisements {
     BOOL inventoryChanged=NO;
-    for (NSDictionary *ad in advertisements) {
+    NSTimeInterval ingestedAt = NSDate.date.timeIntervalSince1970;
+    self.ingestBudget = MIN(self.ingestBurstCap, MAX(0, self.ingestBudget + (ingestedAt - self.lastIngestRefill) * self.ingestSustainedRate));
+    self.lastIngestRefill = ingestedAt;
+    NSUInteger allowance = (NSUInteger)MIN(self.ingestBudget, (double)advertisements.count);
+    NSUInteger processed = 0;
+    for (NSUInteger i = 0; i < advertisements.count; i++) {
+        if (processed >= allowance) { self.inboundDropped += (advertisements.count - i); break; }
+        NSDictionary *ad = advertisements[(self.ingestOffset + i) % advertisements.count];
+        processed++;
         NSString *address=HABLEString(ad[@"address"]).uppercaseString,*source=HABLEString(ad[@"source"]).uppercaseString;uint64_t numeric;
         if (!HABLEParseAddress(address,&numeric) || !source.length || [self.proxySources containsObject:source] || [source isEqual:self.sourceAddress]) continue;
         // Retired-subscription deliveries and old snapshots cannot regress
@@ -437,6 +451,8 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         // A merged manufacturer-data dictionary is metadata, not a packet trace.
         if (tokens.count && [ad[@"time"] isKindOfClass:NSNumber.class]) [self.evidence recordRemoteTokens:tokens address:address source:source atTime:[ad[@"time"] doubleValue]];
     }
+    self.ingestOffset += processed;
+    self.ingestBudget = MAX(0, self.ingestBudget - (double)processed);
     if(inventoryChanged)[self rebuildKnownDevices];
 }
 - (NSString *)inventoryKey:(NSString *)source { return [@"ha_dashboard.ble_inventory.v1." stringByAppendingString:source]; }
@@ -534,7 +550,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         NSUInteger count=0;for(NSDictionary *row in [self.peerInventories[source] allValues])if(now-[row[@"last_seen"] doubleValue]<=120)count++;
         if(count){sources++;observations+=count;}
     }
-    return @{@"peer_observations_disabled":@(HABLEIgnorePeerObservations()),@"peer_sources":@(sources),@"peer_observations":@(observations),@"last_publish":@(self.lastInventoryPublish),@"publish_error":@(self.inventoryPublishError),@"partial_batch":@(self.inventoryPartial),@"native_snapshot_received_at":@(self.lastNativeSnapshot),@"native_diagnostics_at":@(self.lastNativeDiagnostics),@"native_diagnostics_error":@(self.nativeDiagnosticsError),@"native_diagnostics_observations":@(self.nativeDiagnosticsObservations)};
+    return @{@"peer_observations_disabled":@(HABLEIgnorePeerObservations()),@"peer_sources":@(sources),@"peer_observations":@(observations),@"last_publish":@(self.lastInventoryPublish),@"publish_error":@(self.inventoryPublishError),@"inbound_dropped":@(self.inboundDropped),@"partial_batch":@(self.inventoryPartial),@"native_snapshot_received_at":@(self.lastNativeSnapshot),@"native_diagnostics_at":@(self.lastNativeDiagnostics),@"native_diagnostics_error":@(self.nativeDiagnosticsError),@"native_diagnostics_observations":@(self.nativeDiagnosticsObservations)};
 }
 - (void)maintainInventory {
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;
@@ -562,7 +578,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     self.peerValues[source]=@{@"learning_until":@(learning),@"requested_profiles":requested};
     self.peerLearningUntil=MAX(self.peerLearningUntil,learning);
     if (![value[@"records"] isKindOfClass:NSArray.class])return;
-    NSUInteger count=0;
+    NSUInteger count=0;BOOL peerChanged=NO;
     for(NSDictionary *record in value[@"records"]) {
         if(++count>128)break; if(![record isKindOfClass:NSDictionary.class] || ![record[@"address"] isKindOfClass:NSString.class] || ![record[@"time"] isKindOfClass:NSNumber.class])continue; NSDictionary *proof=self.catalog[record[@"address"]];
         if(!proof || ![proof[@"proof_id"] isEqual:record[@"proof_id"]] || ![record[@"lineage"] isKindOfClass:NSArray.class] || [record[@"lineage"] containsObject:self.sourceAddress])continue;
@@ -575,10 +591,12 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         }
         if(!valid)continue;
         NSString *address=record[@"address"];
+        NSDictionary *previousPeer=self.remoteInfo[address];
         self.remoteInfo[address]=@{@"name":HABLEString(proof[@"profile"][@"name"]),@"profile":proof[@"profile"] ?: @{},@"source":source,@"lineage":record[@"lineage"],@"tokens":record[@"tokens"],@"time":record[@"time"]};
+        if(!previousPeer || previousPeer[@"profile"] != proof[@"profile"])peerChanged=YES;
         [self.evidence recordRemoteTokens:record[@"tokens"] address:address source:source atTime:[record[@"time"] doubleValue] lastSeen:[(record[@"last_seen"] ?: record[@"time"]) doubleValue]];
     }
-    [self rebuildKnownDevices];
+    if(peerChanged)[self rebuildKnownDevices];
 }
 - (void)loadDiscoveryMatchers:(void (^)(void))completion {
     NSMutableSet *domains=NSMutableSet.set;for(NSDictionary *record in self.registryDevices)for(NSString *domain in record[@"domains"])if(domains.count<128)[domains addObject:domain];

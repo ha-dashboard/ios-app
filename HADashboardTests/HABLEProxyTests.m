@@ -11,6 +11,14 @@
 @interface HABLEIdentityResolver (IdentityTestAccess)
 - (void)loadRegistry:(NSArray *)devices entries:(NSArray *)entries excludingSource:(NSString *)source;
 - (void)observeAdvertisements:(NSArray *)advertisements;
+- (void)observePeer:(id)value source:(NSString *)source;
+- (void)rebuildKnownDevices;
+@end
+@interface HABLERebuildCountingResolver : HABLEIdentityResolver
+@property NSUInteger rebuilds;
+@end
+@implementation HABLERebuildCountingResolver
+- (void)rebuildKnownDevices { self.rebuilds++; [super rebuildKnownDevices]; }
 @end
 
 @interface HAAPIClient (RetryTestAccess)
@@ -712,6 +720,65 @@ static NSDictionary *HABLEFieldsExceptRssi(NSData *packet) {
     XCTAssertEqual(server.capturedAdvertisements.count, 4u, @"Grace expiry releases the held queue plus the current packet");
     uint64_t address = HABLEInteger(HABLEDecode(server.capturedAdvertisements.lastObject), 1);
     for (NSData *data in server.capturedAdvertisements) XCTAssertEqual(HABLEInteger(HABLEDecode(data), 1), address);
+}
+static NSArray *HABLEIngestRows(NSUInteger count, NSTimeInterval now) {
+    NSMutableArray *rows = NSMutableArray.array;
+    for (NSUInteger i = 0; i < count; i++) rows[i] = @{@"address":[NSString stringWithFormat:@"02:00:00:00:%02X:%02X", (unsigned)(i >> 8), (unsigned)(i & 255)], @"source":@"native-src", @"time":@(now), @"raw":@"020106"};
+    return rows;
+}
+- (void)testNativeIngestBurstIsBoundedAndCounted {
+    HABLEIdentityResolver *resolver = [HABLEIdentityResolver new];
+    NSTimeInterval now = NSDate.date.timeIntervalSince1970;
+    [resolver observeAdvertisements:HABLEIngestRows(300, now)];
+    XCTAssertEqual([[resolver valueForKey:@"remoteInfo"] count], 120u);
+    XCTAssertEqualObjects([resolver valueForKey:@"inboundDropped"], @180);
+    XCTAssertEqualObjects([resolver inventoryDiagnostics][@"inbound_dropped"], @180);
+}
+- (void)testNativeIngestRefillsOverTime {
+    HABLEIdentityResolver *resolver = [HABLEIdentityResolver new];
+    NSTimeInterval now = NSDate.date.timeIntervalSince1970;
+    [resolver observeAdvertisements:HABLEIngestRows(300, now)];
+    [resolver setValue:@(now - 10) forKey:@"lastIngestRefill"];
+    NSMutableArray *more = NSMutableArray.array;
+    for (NSUInteger i = 300; i < 600; i++) [more addObject:@{@"address":[NSString stringWithFormat:@"02:00:00:01:%02X:%02X", (unsigned)(i >> 8), (unsigned)(i & 255)], @"source":@"native-src", @"time":@(now), @"raw":@"020106"}];
+    [resolver observeAdvertisements:more];
+    XCTAssertEqual([[resolver valueForKey:@"remoteInfo"] count], 240u);
+    XCTAssertEqualObjects([resolver valueForKey:@"inboundDropped"], @360);
+}
+- (void)testNativeIngestRotatesAcrossBatches {
+    HABLEIdentityResolver *resolver = [HABLEIdentityResolver new];
+    NSTimeInterval now = NSDate.date.timeIntervalSince1970;
+    NSArray *rows = HABLEIngestRows(300, now);
+    [resolver observeAdvertisements:rows];
+    [resolver setValue:@120 forKey:@"ingestBudget"];
+    [resolver setValue:@(now) forKey:@"lastIngestRefill"];
+    [resolver observeAdvertisements:rows];
+    NSDictionary *remote = [resolver valueForKey:@"remoteInfo"];
+    XCTAssertNotNil(remote[@"02:00:00:00:00:00"]);
+    XCTAssertNotNil(remote[@"02:00:00:00:00:78"]);
+    XCTAssertNotNil(remote[@"02:00:00:00:00:EF"]);
+    XCTAssertNil(remote[@"02:00:00:00:00:FA"]);
+    XCTAssertEqual(remote.count, 240u);
+}
+- (void)testPeerRestatementSkipsKnownDeviceRebuild {
+    HABLERebuildCountingResolver *resolver = [HABLERebuildCountingResolver new];
+    [resolver setValue:@"test-self" forKey:@"sourceAddress"];
+    NSString *address = @"02:11:22:33:44:55";
+    NSDictionary *proof = @{@"address":address, @"device_id":[@"bluetooth:" stringByAppendingString:address], @"identity_kind":@"observed_native", @"method":@"packet_sequence", @"native_anchor":@{@"address":address, @"source":@"native-src", @"raw":@"020106"}, @"profile":@{@"name":@"Meter"}, @"lineage":@[], @"schema":@2, @"proof_id":@"p1"};
+    [resolver setValue:[@{address:proof} mutableCopy] forKey:@"catalog"];
+    NSTimeInterval now = NSDate.date.timeIntervalSince1970;
+    NSDictionary *record = @{@"address":address, @"proof_id":@"p1", @"lineage":@[], @"tokens":@[@"m:AAAAAA=="], @"time":@(now), @"last_seen":@(now)};
+    NSDictionary *value = @{@"schema":@2, @"source":@"peer-src", @"time":@(now), @"records":@[record]};
+    [resolver observePeer:value source:@"peer-src"];
+    XCTAssertEqual(resolver.rebuilds, 1u);
+    XCTAssertNotNil([resolver valueForKey:@"remoteInfo"][address]);
+    [resolver observePeer:value source:@"peer-src"];
+    XCTAssertEqual(resolver.rebuilds, 1u, @"An unchanged restatement must not rebuild");
+    NSMutableDictionary *replacement = [proof mutableCopy];
+    replacement[@"profile"] = @{@"name":@"Meter"};
+    [resolver setValue:[@{address:replacement} mutableCopy] forKey:@"catalog"];
+    [resolver observePeer:value source:@"peer-src"];
+    XCTAssertEqual(resolver.rebuilds, 2u, @"A swapped catalog proof must rebuild once");
 }
 - (void)testActiveConnectionSlotForcesTheSlowPath {
     HABLEFastPathCountingProxy *proxy = [HABLEFastPathCountingProxy new];
