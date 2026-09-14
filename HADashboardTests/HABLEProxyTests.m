@@ -658,7 +658,7 @@ static NSDictionary *HABLEFieldsExceptRssi(NSData *packet) {
     XCTAssertEqual(resolver.classifications, 1u);
     XCTAssertNotEqualObjects(HABLEFieldsExceptRssi(server.capturedAdvertisements[0]), HABLEFieldsExceptRssi(server.capturedAdvertisements[1]));
 }
-- (void)testIdenticalRepeatForwardCoalescesWithinTwoSeconds {
+- (void)testIdenticalRepeatForwardCoalescesWithinOneSecond {
     HABLEFastPathCountingProxy *proxy = [HABLEFastPathCountingProxy new];
     [proxy setValue:@YES forKey:@"running"]; [proxy setValue:@YES forKey:@"identitiesReady"];
     HABLECountingResolver *resolver = [HABLECountingResolver new];
@@ -675,7 +675,7 @@ static NSDictionary *HABLEFieldsExceptRssi(NSData *packet) {
     XCTAssertEqual(server.capturedAdvertisements.count, 2u, @"Grace expiry releases the held queue plus the current packet");
     [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-56];
     XCTAssertEqual(proxy.fastHits, 1u);
-    XCTAssertEqual(server.capturedAdvertisements.count, 2u, @"Identical payload within two seconds must not re-encrypt or retransmit");
+    XCTAssertEqual(server.capturedAdvertisements.count, 2u, @"Identical payload within one second must not re-encrypt or retransmit");
     XCTAssertEqualObjects([proxy valueForKey:@"throttledAdvertisements"], @1);
     XCTAssertEqualObjects([proxy valueForKey:@"observations"][identifier][@"rssi"], @-56);
     [proxy valueForKey:@"fastLastForwardAt"][identifier] = @(NSDate.date.timeIntervalSince1970 - 3);

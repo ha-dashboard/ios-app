@@ -169,7 +169,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 
 // Identical-payload repeats forward at most once per device per interval.
 // Changed payloads, identity transitions and held-queue releases always forward immediately.
-static const NSTimeInterval HABLEForwardCoalesceInterval = 2.0;
+static const NSTimeInterval HABLEForwardCoalesceInterval = 1.0;
 static BOOL HABLECBUUIDsEqual(NSArray<CBUUID *> *a, NSArray<CBUUID *> *b) {
     if (a.count != b.count) return NO;
     for (NSUInteger i = 0; i < a.count; i++) if (![a[i].data isEqualToData:b[i].data]) return NO;
