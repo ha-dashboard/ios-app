@@ -272,6 +272,40 @@
     ad[@"name"]=@"Renamed1234";[r observeAdvertisements:@[ad]];XCTAssertEqual(r.rebuilds,baseline+1);XCTAssertEqualObjects(r.knownDevices.firstObject[@"name"],@"Renamed1234");
     ad[@"address"]=@"AA:BB:CC:DD:EE:02";[r observeAdvertisements:@[ad]];XCTAssertEqual(r.knownDevices.count,2u);
 }
+- (void)testPeerOnlyPassiveDevicesConvergeWithoutGattOrNativeScanner {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;NSMutableArray *resolvers=NSMutableArray.array,*observations=NSMutableArray.array;NSArray *sources=@[@"02:00:00:00:00:01",@"02:00:00:00:00:02"];
+    for(NSUInteger i=0;i<2;i++) {
+        HABLEIdentityResolver *r=[HABLEIdentityResolver new];[r loadRegistry:@[] entries:@[] excludingSource:sources[i]];[r setValue:[NSMutableSet setWithObject:sources[1-i]] forKey:@"proxySources"];
+        NSMutableDictionary *o=[@{@"identifier":sources[i],@"local_address":sources[i],@"name":@"Display Model43",@"manufacturer_data":@"AQIDBAUGBwg=",@"service_uuids":@[],@"connectable":@NO} mutableCopy];
+        for(NSUInteger j=0;j<4;j++){o[@"last_seen"]=@(now-30+j*10);[r recordObservation:o identifier:sources[i]];}
+        [observations addObject:o];[resolvers addObject:r];XCTAssertNil([r automaticMatchForObservation:o]);
+    }
+    for(NSUInteger i=0;i<2;i++)[resolvers[i] observeInventory:@{@"schema":@1,@"source":sources[1-i],@"time":@(now),@"observations":[resolvers[1-i] localInventoryAtTime:now]} source:sources[1-i]];
+    NSDictionary *a=[resolvers[0] automaticMatchForObservation:observations[0]],*b=[resolvers[1] automaticMatchForObservation:observations[1]];
+    XCTAssertEqualObjects(a[@"method"],@"peer_passive_signature");XCTAssertEqualObjects(a[@"address"],b[@"address"]);
+    [resolvers[0] rememberAutomaticMatch:a];XCTAssertEqual([[resolvers[0] valueForKey:@"localBindings"] count],0u);
+    NSMutableDictionary *twin=[observations[0] mutableCopy];twin[@"identifier"]=@"twin";[resolvers[0] recordObservation:twin identifier:@"twin"];
+    XCTAssertNil([resolvers[0] automaticMatchForObservation:observations[0]]);
+    [resolvers[0] removeIdentifier:@"twin"];
+    NSMutableDictionary *changed=[observations[0] mutableCopy];changed[@"manufacturer_data"]=@"AQIDBAUGBwk=";[resolvers[0] recordObservation:changed identifier:sources[0]];
+    XCTAssertNil([resolvers[0] automaticMatchForObservation:changed]);
+}
+- (void)testPeerPassiveRejectsStaleTwinsAndConflictingIdentifiers {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;NSString *a=@"02:00:00:00:00:01",*b=@"02:00:00:00:00:02",*c=@"02:00:00:00:00:03";
+    HABLEIdentityResolver *r=[HABLEIdentityResolver new];[r loadRegistry:@[] entries:@[] excludingSource:a];[r setValue:[NSMutableSet setWithArray:@[b,c]] forKey:@"proxySources"];
+    NSMutableDictionary *o=[@{@"identifier":@"local",@"local_address":@"02:11:22:33:44:55",@"name":@"Display Model43",@"manufacturer_data":@"AQIDBAUGBwg=",@"service_uuids":@[]} mutableCopy];
+    for(NSUInteger i=0;i<4;i++){o[@"last_seen"]=@(now-30+i*10);[r recordObservation:o identifier:@"local"];}
+    NSMutableDictionary *row=[[[r localInventoryAtTime:now] firstObject] mutableCopy];row[@"local_address"]=@"02:22:33:44:55:66";row[@"last_seen"]=@(now-121);
+    [r observeInventory:@{@"schema":@1,@"source":b,@"time":@(now),@"observations":@[row]} source:b];XCTAssertNil([r automaticMatchForObservation:o]);
+    row[@"last_seen"]=@(now);[r observeInventory:@{@"schema":@1,@"source":b,@"time":@(now),@"observations":@[row]} source:b];XCTAssertNotNil([r automaticMatchForObservation:o]);
+    NSMutableDictionary *twin=[row mutableCopy];twin[@"local_address"]=@"02:33:44:55:66:77";
+    [r observeInventory:@{@"schema":@1,@"source":b,@"time":@(now),@"observations":@[row,twin]} source:b];XCTAssertNil([r automaticMatchForObservation:o]);
+    [[r valueForKey:@"peerInventories"] removeAllObjects];row[@"fingerprints"]=[self stableIdentifierFields];
+    NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:66"}} options:0 error:nil] path:@"s/1234/c/5678"];
+    twin[@"fingerprints"]=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:[HABLEIdentityEvidence mergeFingerprintReads:reads previous:@{} session:@"one" atTime:1] session:@"two" atTime:2];
+    [r observeInventory:@{@"schema":@1,@"source":b,@"time":@(now),@"observations":@[row]} source:b];[r observeInventory:@{@"schema":@1,@"source":c,@"time":@(now),@"observations":@[twin]} source:c];
+    XCTAssertNil([r automaticMatchForObservation:o]);XCTAssertTrue([[r evidenceForIdentifier:@"local"] containsString:@"conflicting identifier"]);
+}
 - (NSDictionary *)stableIdentifierFields {
     NSData *json=[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:55"}} options:0 error:nil];
     NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:json path:@"s/1234/c/5678"];

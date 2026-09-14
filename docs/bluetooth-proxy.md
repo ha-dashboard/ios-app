@@ -113,6 +113,16 @@ native reference must be no older than two minutes. If Apple supplies an extende
 payload, every byte of the complete shorter native field must agree; arbitrary
 common prefixes, missing channels and contradictory fields do not qualify.
 
+When no native identity is available, a separate peer-only provisional path
+compares the complete name, service list and payload against fresh original
+observations from another registered app proxy. It requires sustained local
+reception and rejects twins or conflicting identifier fields across the matching
+observations. Its deterministic synthetic address lets non-connectable devices
+converge without a GATT probe. Existing verified or native references are not
+replaced by this path. These associations are not persisted as verified proof;
+changes to payload signatures and peer availability still require lifecycle
+validation before claiming durable identity continuity.
+
 Provisional associations are explicitly described as such in their evidence.
 They are re-evaluated during scanning and are never persisted or published as
 verified proof. Competing local devices or native addresses with the same

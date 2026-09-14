@@ -754,11 +754,40 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     }
     return nil;
 }
+- (NSDictionary *)peerPassiveMatchForObservation:(NSDictionary *)observation {
+    NSString *identifier=observation[@"identifier"];if(!identifier.length)return nil;
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;NSDictionary *local=self.localObservations[identifier];
+    NSString *signature=HABLEPassiveSignature(HABLEProfile(observation),[HABLEIdentityEvidence tokensForObservation:observation]);
+    if(!signature || !HABLEPassiveReady(local,@"last_seen",now) || ![signature isEqual:local[@"passive_signature"]])return nil;
+    // Do not invent a competing address for an already observed native identity.
+    for(NSDictionary *remote in self.remoteInfo.allValues)if(remote[@"native_anchor"] && [signature isEqual:remote[@"passive_signature"]])return nil;
+    for(NSString *other in self.localObservations)if(![other isEqual:identifier] && now-[self.localObservations[other][@"last_seen"] doubleValue]<=120 && [signature isEqual:HABLEPassiveSignature(HABLEProfile(self.localObservations[other]),[HABLEIdentityEvidence tokensForObservation:self.localObservations[other]])]) {
+        self.lastEvidence[identifier]=@"Ambiguous: multiple local devices share the complete peer signature";return nil;
+    }
+    NSMutableSet *sources=[NSMutableSet setWithObject:self.sourceAddress ?: @""];NSMutableArray *profiles=[NSMutableArray arrayWithObject:observation[@"gatt_fingerprints"] ?: @{}];
+    for(NSString *source in self.peerInventories) {
+        if(![self.proxySources containsObject:source] || [source isEqual:self.sourceAddress])continue;NSUInteger count=0;
+        for(NSDictionary *row in [self.peerInventories[source] allValues]) {
+            if(now-[row[@"last_seen"] doubleValue]>120 || ![signature isEqual:HABLEPassiveSignature(row[@"profile"],row[@"tokens"])])continue;
+            if(++count>1){self.lastEvidence[identifier]=@"Ambiguous: a peer sees multiple devices with this signature";return nil;}
+            // Existing verified roots need their identifier proof, not a new
+            // passive address. Never turn a peer's canonical claim into truth.
+            if(row[@"address"])return nil;
+            NSDictionary *fields=row[@"fingerprints"] ?: @{};
+            for(NSDictionary *other in profiles)if([HABLEIdentityEvidence identifierFingerprints:fields conflictWith:other]){self.lastEvidence[identifier]=@"Ambiguous: identical advertisements have conflicting identifier fields";return nil;}
+            [profiles addObject:fields];[sources addObject:source];
+        }
+    }
+    if(sources.count<2 || [sources containsObject:@""])return nil;
+    NSString *identity=[@"peer-passive:" stringByAppendingString:signature];
+    return @{@"identity_kind":@"observed_shared",@"device_id":identity,@"address":HABLESharedFingerprintAddress(identity),@"name":HABLEString(observation[@"name"]),@"label":HABLEString(observation[@"name"]),@"method":@"peer_passive_signature",@"automatic_match":@YES,@"local_identifier":identifier,@"passive_signature":signature,@"profile":HABLEProfile(observation),@"supporting_sources":sources.allObjects,@"score":@60,@"evidence":@"Provisional: sustained local reception and a fresh peer agree on the complete name, services and payload; not a verified hardware identity"};
+}
 - (NSDictionary *)automaticMatchForObservation:(NSDictionary *)observation {
     NSDictionary *match=nil;NSArray *candidates=[self candidatesForObservation:observation];
     if([observation[@"identifier"] length] && (self.lastEvidence.count<256 || self.lastEvidence[observation[@"identifier"]]))self.lastEvidence[observation[@"identifier"]]=candidates.firstObject[@"evidence"] ?: @"No known candidate yet";
     for(NSDictionary *candidate in candidates)if([candidate[@"automatic_match"] boolValue]){if(match){if([observation[@"identifier"] length])self.lastEvidence[observation[@"identifier"]]=@"Ambiguous: multiple known devices satisfy the identity evidence";return nil;}match=candidate;}
     if(!match)match=[self sharedFingerprintMatchForObservation:observation];
+    if(!match)match=[self peerPassiveMatchForObservation:observation];
     if(match && [match[@"method"] isEqual:@"gatt_fingerprint"] && [self fingerprintWitnessIsAmbiguous:match[@"fingerprint_match_witness"] ?: match[@"fingerprint_witness"] observation:observation]){if([observation[@"identifier"] length])self.lastEvidence[observation[@"identifier"]]=@"Ambiguous: this identifier fingerprint is shared by multiple devices";return nil;}
     if(!match) {
         NSUInteger peers=[self peerObservationsForObservation:observation].count;
@@ -821,7 +850,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     return known;
 }
 - (void)rememberAutomaticMatch:(NSDictionary *)match {
-    if([match[@"method"] isEqual:@"passive_signature"])return;
+    if([@[@"passive_signature",@"peer_passive_signature"] containsObject:match[@"method"]])return;
     if(![match[@"automatic_match"] boolValue] || ![self sourceIsCurrent])return;
     NSString *address=match[@"address"],*identifier=match[@"local_identifier"];if(!address.length || !identifier.length)return;
     NSMutableDictionary *binding=[match mutableCopy];binding[@"schema"]=@2;
