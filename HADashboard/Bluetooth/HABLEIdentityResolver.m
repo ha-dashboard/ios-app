@@ -293,6 +293,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 }
 - (void)saveLocalBindings { if(self.scope.length) [NSUserDefaults.standardUserDefaults setObject:@{@"scope":self.scope,@"bindings":self.localBindings} forKey:HABLELocalBindingsKey]; }
 - (void)observeAdvertisements:(NSArray *)advertisements {
+    BOOL inventoryChanged=NO;
     for (NSDictionary *ad in advertisements) {
         NSString *address=HABLEString(ad[@"address"]).uppercaseString,*source=HABLEString(ad[@"source"]).uppercaseString;uint64_t numeric;
         if (!HABLEParseAddress(address,&numeric) || !source.length || [self.proxySources containsObject:source] || [source isEqual:self.sourceAddress]) continue;
@@ -301,7 +302,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         if(self.remoteInfo[address] && [ad[@"time"] doubleValue]<[self.remoteInfo[address][@"time"] doubleValue])continue;
         if(self.remoteInfo.count>=256 && !self.remoteInfo[address]) {
             NSString *oldest=HABLEEvictionKey(self.remoteInfo,@"time",[ad[@"time"] doubleValue]);
-            if(!oldest)continue;[self.remoteInfo removeObjectForKey:oldest];
+            if(!oldest)continue;[self.remoteInfo removeObjectForKey:oldest];inventoryChanged=YES;
         }
         NSData *raw=HABLEHexData(ad[@"raw"]); NSArray *tokens=[HABLEIdentityEvidence tokensForRawAdvertisement:raw];
         NSMutableDictionary *info=[ad mutableCopy];info[@"tokens"]=tokens;
@@ -310,13 +311,14 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         NSDictionary *anchor=HABLEHexData(ad[@"raw"]).length ? @{@"address":address,@"source":source,@"raw":ad[@"raw"]} : self.remoteInfo[address][@"native_anchor"];
         if(anchor)info[@"native_anchor"]=anchor;
         NSDictionary *previous=self.remoteInfo[address];
+        if(!previous || ![HABLEString(previous[@"name"]) isEqual:HABLEString(info[@"name"])] || (!previous[@"native_anchor"] && anchor))inventoryChanged=YES;
         if(![previous[@"source"] isEqual:source])previous=nil;
         HABLETrackPassiveSignature(info,previous,HABLEPassiveSignature(info[@"profile"],tokens),[ad[@"time"] doubleValue],[previous[@"time"] doubleValue]);
         self.remoteInfo[address]=info;
         // A merged manufacturer-data dictionary is metadata, not a packet trace.
         if (tokens.count && [ad[@"time"] isKindOfClass:NSNumber.class]) [self.evidence recordRemoteTokens:tokens address:address source:source atTime:[ad[@"time"] doubleValue]];
     }
-    [self rebuildKnownDevices];
+    if(inventoryChanged)[self rebuildKnownDevices];
 }
 - (NSString *)inventoryKey:(NSString *)source { return [@"ha_dashboard.ble_inventory.v1." stringByAppendingString:source]; }
 - (NSArray *)sanitizedInventoryTokens:(id)value {
@@ -649,6 +651,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     NSDictionary *profile=HABLEProfile(observation);NSArray *tokens=[HABLEIdentityEvidence tokensForObservation:observation];
     for(NSDictionary *known in self.knownDevices) {
         NSString *address=known[@"address"];NSDictionary *remote=self.remoteInfo[address],*shared=self.catalog[address];NSMutableDictionary *candidate=[known mutableCopy];NSMutableArray *reasons=NSMutableArray.array;
+        if(remote[@"native_anchor"])candidate[@"native_anchor"]=remote[@"native_anchor"];
         NSInteger score=0;NSString *method=nil,*unit=nil;NSArray *lineage=remote[@"lineage"] ?: @[];
         BOOL embedded=address.length && [HABLEIdentityEvidence observation:observation containsAddress:address];
         if(embedded){score+=60;[reasons addObject:@"Known HA address appears in the observed payload"];}

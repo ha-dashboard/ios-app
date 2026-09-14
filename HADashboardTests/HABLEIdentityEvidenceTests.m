@@ -9,6 +9,7 @@
 - (void)observeAdvertisements:(NSArray *)advertisements;
 - (void)loadCatalog:(id)value;
 - (void)refreshNativeAdvertisements;
+- (void)rebuildKnownDevices;
 - (void)refreshNativeScannerDiagnostics;
 - (HAAPIClient *)nativeDiagnosticsAPIClient;
 - (void)observePeer:(id)value source:(NSString *)source;
@@ -58,6 +59,12 @@
 - (HAConnectionManager *)connection { return (HAConnectionManager *)self.fakeConnection; }
 - (BOOL)sourceIsCurrent { return self.currentScope; }
 - (HAAPIClient *)nativeDiagnosticsAPIClient {return (HAAPIClient *)self.fakeDiagnostics;}
+@end
+@interface HABLEInventoryCountingResolver : HABLEIdentityResolver
+@property NSUInteger rebuilds;
+@end
+@implementation HABLEInventoryCountingResolver
+- (void)rebuildKnownDevices {self.rebuilds++;[super rebuildKnownDevices];}
 @end
 @interface HABLEIdentityEvidenceTests : XCTestCase
 @end
@@ -252,6 +259,18 @@
     XCTAssertEqual([[resolver valueForKey:@"remoteInfo"] count],0u);
     [resolver setValue:@0 forKey:@"nextNativeDiagnostics"];[resolver refreshNativeScannerDiagnostics];HAAPIResponseBlock old=resolver.fakeDiagnostics.pending;[resolver cancel];old(envelope,nil);
     XCTAssertEqual([[resolver valueForKey:@"remoteInfo"] count],0u);
+}
+- (void)testPacketUpdatesKeepFreshAnchorsWithoutRebuildingTheDeviceList {
+    HABLEInventoryCountingResolver *r=[HABLEInventoryCountingResolver new];[r loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;
+    NSMutableDictionary *ad=[@{@"address":@"AA:BB:CC:DD:EE:01",@"source":@"20:00:00:00:00:01",@"name":@"Unit1234",@"time":@(now-10),@"raw":@"09ff0102030405060708"} mutableCopy];
+    [r observeAdvertisements:@[ad]];NSUInteger baseline=r.rebuilds;
+    for(NSUInteger i=0;i<100;i++){ad[@"time"]=@(now-10+i*.1);ad[@"raw"]=[NSString stringWithFormat:@"09ff01020304050607%02lx",(unsigned long)i];[r observeAdvertisements:@[ad]];}
+    XCTAssertEqual(r.rebuilds,baseline);
+    NSDictionary *candidate=[r candidatesForObservation:@{@"identifier":@"unit",@"name":@"Unit1234",@"last_seen":@(now)}].firstObject;
+    XCTAssertEqualObjects(candidate[@"native_anchor"][@"raw"],ad[@"raw"]);
+    ad[@"name"]=@"Renamed1234";[r observeAdvertisements:@[ad]];XCTAssertEqual(r.rebuilds,baseline+1);XCTAssertEqualObjects(r.knownDevices.firstObject[@"name"],@"Renamed1234");
+    ad[@"address"]=@"AA:BB:CC:DD:EE:02";[r observeAdvertisements:@[ad]];XCTAssertEqual(r.knownDevices.count,2u);
 }
 - (NSDictionary *)stableIdentifierFields {
     NSData *json=[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:55"}} options:0 error:nil];
