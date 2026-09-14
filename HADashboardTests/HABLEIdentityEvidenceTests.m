@@ -370,6 +370,40 @@
         XCTAssertTrue([[r inventoryDiagnostics][@"peer_observations_disabled"] boolValue]);
     } @finally {if(previous)[defaults setObject:previous forKey:@"HABLEIdentityIgnorePeerObservations"];else[defaults removeObjectForKey:@"HABLEIdentityIgnorePeerObservations"];}
 }
+- (void)testConfiguredLocalAliasBecomesSharedGattIdentityWithoutChangingItsAddress {
+    NSData *data=[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:55",@"uuid":@"11111111-1111-4111-8111-111111111111"}} options:0 error:nil];
+    NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:data path:@"s/1234/c/5678"],*once=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:@{} session:@"one" atTime:1],*fields=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:once session:@"two" atTime:2];
+    NSString *localAddress=@"02:11:22:33:44:55";
+    NSArray *devices=@[@{@"id":@"configured-local",@"name_by_user":@"Existing sensor",@"connections":@[@[@"bluetooth",localAddress]]}];
+    NSDictionary *o=@{@"identifier":@"first-apple-uuid",@"local_address":localAddress,@"name":@"Unit",@"last_seen":@(NSDate.date.timeIntervalSince1970),@"gatt_fingerprints":fields};
+    HABLEIdentityResolver *first=[HABLEIdentityResolver new];[first loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];[first recordObservation:o identifier:o[@"identifier"]];
+    NSMutableDictionary *synthetic=[[first automaticMatchForObservation:o] mutableCopy];synthetic[@"schema"]=@2;synthetic[@"proof_id"]=@"earlier-synthetic";
+    [first loadRegistry:devices entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    [first loadCatalog:@{@"schema":@2,@"bindings":@{synthetic[@"address"]:synthetic}}];
+    NSMutableDictionary *preserved=[[first automaticMatchForObservation:o] mutableCopy];
+    XCTAssertEqualObjects(preserved[@"address"],localAddress);XCTAssertEqualObjects(preserved[@"device_id"],@"configured-local");XCTAssertEqualObjects(preserved[@"method"],@"gatt_fingerprint");
+    preserved[@"schema"]=@2;preserved[@"proof_id"]=@"preserved-local";
+    HABLEIdentityResolver *joining=[HABLEIdentityResolver new];[joining loadRegistry:devices entries:@[] excludingSource:@"02:00:00:00:00:02"];
+    [joining loadCatalog:@{@"schema":@2,@"bindings":@{synthetic[@"address"]:synthetic,localAddress:preserved}}];
+    XCTAssertEqual(joining.knownDevices.count,1u,@"The configured local alias and compatible synthetic root form one canonical identity");
+    NSString *uuidPath=@"s/1234/c/5678/json/device/uuid";
+    NSDictionary *other=@{@"identifier":@"different-apple-uuid",@"local_address":@"02:66:77:88:99:AA",@"name":@"Unit",@"last_seen":@(NSDate.date.timeIntervalSince1970),@"gatt_fingerprints":@{uuidPath:once[uuidPath]}};
+    [joining recordObservation:other identifier:other[@"identifier"]];
+    XCTAssertEqualObjects([joining automaticMatchForObservation:other][@"address"],localAddress,@"A joining proxy can use a fresh secondary witness and retain the original HA device");
+    [first loadRegistry:[devices arrayByAddingObject:@{@"id":@"duplicate-configured",@"connections":@[@[@"bluetooth",localAddress]]}] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    XCTAssertNil([first automaticMatchForObservation:o],@"Conflicting HA device ownership must not be silently selected");
+}
+- (void)testProvisionalNativeMatchCannotReplaceAnAlreadyConfiguredLocalAlias {
+    HABLEIdentityResolver *resolver=[HABLEIdentityResolver new];NSString *local=@"02:11:22:33:44:55";
+    [resolver loadRegistry:@[@{@"id":@"existing-local",@"connections":@[@[@"bluetooth",local]]}] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;NSDictionary *o=nil;
+    for(NSUInteger i=0;i<4;i++)o=[self recordPassiveUnit:@"Unit1234" identifier:@"a" address:@"AA:BB:CC:DD:EE:01" resolver:resolver atTime:now-30+i*10];
+    NSMutableDictionary *configured=[o mutableCopy];configured[@"local_address"]=local;
+    [resolver recordObservation:configured identifier:@"a"];
+    XCTAssertNil([resolver automaticMatchForObservation:configured]);
+    XCTAssertTrue([[resolver evidenceForIdentifier:@"a"] containsString:@"Preserving the configured local address"]);
+    XCTAssertEqual([[resolver valueForKey:@"catalog"] count],0u,@"Provisional similarity cannot become a published identity bridge");
+}
 - (void)testIndependentFingerprintRootsPoolFieldsAndChooseOneCanonicalAddress {
     NSData *data=[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:55",@"uuid":@"11111111-1111-4111-8111-111111111111"}} options:0 error:nil];
     NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:data path:@"s/1234/c/5678"],*once=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:@{} session:@"one" atTime:1],*fields=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:once session:@"two" atTime:2];

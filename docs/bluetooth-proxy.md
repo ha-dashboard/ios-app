@@ -59,13 +59,20 @@ connectable devices enter the bounded automatic probe queue even without an
 integration matcher or external reference; discovery waits, connection-slot
 limits, per-device retry limits and read-only operation restrictions still apply.
 
-Compatible independently created synthetic GATT identities are reconciled into
+If HA has already configured a device under this receiver's generated local
+alias, a later GATT proof preserves that address and HA device identity. The
+proof is shared automatically, so a joining proxy with a matching fresh witness
+can reuse it. Provisional similarity cannot replace that configured local address
+or be published as a verified bridge. Multiple HA devices claiming the same local
+address remain ambiguous.
+
+Compatible independently created synthetic and registered GATT identities are reconciled into
 a deterministic canonical view. A common eligible identifier connects the proofs;
 conflicting stable identifiers or manufacturer/model context reject the complete
 connected group. One configured HA address takes precedence; multiple configured
 addresses remain ambiguous. Original catalog proofs are retained, and cached
 unions cannot override later contradictory evidence. This reconciliation currently
-covers synthetic GATT roots, not native/provisional identity migration.
+covers GATT roots and configured local aliases, not native/provisional identity migration.
 
 The shared proof retains all collected identifier fields. A later proxy can match
 an available secondary field without changing the canonical address originally
