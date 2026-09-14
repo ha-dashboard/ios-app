@@ -145,12 +145,42 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 @property (nonatomic, assign) BOOL importingScanServices;
 @property (nonatomic, assign) CFAbsoluteTime scanStartedAt;
 @property (nonatomic, assign) CFAbsoluteTime nextScanImport;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSData *> *fastPacketBodies;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *fastRssiOffsets;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *fastRssiLengths;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSData *> *fastManufacturers;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSArray *> *fastAdvertisedServices;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *fastServiceData;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, id> *fastAutomaticMappings;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *fastManualMappings;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *fastHoldDecisions;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *fastKnownAt;
 - (void)startScanUsingServices:(BOOL)services;
 - (void)updateScanPolicy;
 - (void)cancelScanImport;
 - (void)pump:(HABLEPeripheralSession *)session;
 @end
 
+static BOOL HABLECBUUIDsEqual(NSArray<CBUUID *> *a, NSArray<CBUUID *> *b) {
+    if (a.count != b.count) return NO;
+    for (NSUInteger i = 0; i < a.count; i++) if (![a[i].data isEqualToData:b[i].data]) return NO;
+    return YES;
+}
+static BOOL HABLEServiceDataEqual(NSDictionary *a, NSDictionary *b) {
+    if (a.count != b.count) return NO;
+    for (CBUUID *key in a) {
+        NSData *other = nil;
+        for (CBUUID *candidate in b) if ([candidate.data isEqualToData:key.data]) { other = b[candidate]; break; }
+        if (![other isEqualToData:a[key]]) return NO;
+    }
+    return YES;
+}
+static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
+    uint64_t zigzag = (((uint64_t)rssi) << 1) ^ ((uint64_t)(rssi >> 63));
+    out[0] = (3 << 3) | 0; NSUInteger n = 1; uint64_t v = zigzag;
+    do { uint8_t byte = v & 127; v >>= 7; if (v) byte |= 128; out[n++] = byte; } while (v && n < 3);
+    return v ? 0 : n;
+}
 @implementation HABLEProxyManager
 + (instancetype)sharedManager { static HABLEProxyManager *manager; static dispatch_once_t once; dispatch_once(&once, ^{ manager = [[self alloc] init]; }); return manager; }
 - (instancetype)init {
@@ -163,6 +193,9 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         NSString *suffix = [[_adapterAddress stringByReplacingOccurrencesOfString:@":" withString:@""] lowercaseString];
         _nodeName = [@"ha-dash-" stringByAppendingString:suffix];
         _observations = [NSMutableDictionary dictionary]; _peripherals = [NSMutableDictionary dictionary]; _sessions = [NSMutableDictionary dictionary];
+        _fastPacketBodies = [NSMutableDictionary dictionary]; _fastRssiOffsets = [NSMutableDictionary dictionary]; _fastRssiLengths = [NSMutableDictionary dictionary];
+        _fastManufacturers = [NSMutableDictionary dictionary]; _fastAdvertisedServices = [NSMutableDictionary dictionary]; _fastServiceData = [NSMutableDictionary dictionary];
+        _fastAutomaticMappings = [NSMutableDictionary dictionary]; _fastManualMappings = [NSMutableDictionary dictionary]; _fastHoldDecisions = [NSMutableDictionary dictionary]; _fastKnownAt = [NSMutableDictionary dictionary];
         _identityMetadata = [[[NSUserDefaults standardUserDefaults] dictionaryForKey:@"ha_ble_proxy_identity_metadata"] mutableCopy] ?: [NSMutableDictionary dictionary];
         _mappings = [[defaults dictionaryForKey:HABLEMappingKey] mutableCopy] ?: [NSMutableDictionary dictionary];
         _status = @"Off";
@@ -381,7 +414,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     self.enabled = NO;
     self.lastIdentityProbe=nil;
     self.central.delegate = nil; self.central = nil;
-    [self.observations removeAllObjects]; [self.peripherals removeAllObjects]; [self.mappings removeAllObjects]; [self.handleTables removeAllObjects]; [self.identityMetadata removeAllObjects];
+    [self.observations removeAllObjects]; [self.peripherals removeAllObjects]; [self.mappings removeAllObjects]; [self.handleTables removeAllObjects]; [self.identityMetadata removeAllObjects]; [self clearFastAdvertisementCaches];
     NSDictionary *query = @{(__bridge id)kSecClass:(__bridge id)kSecClassGenericPassword, (__bridge id)kSecAttrService:@"org.hadashboard.ble-proxy", (__bridge id)kSecAttrAccount:@"noise-key"};
     SecItemDelete((__bridge CFDictionaryRef)query);
     for (NSString *key in @[@"ha_ble_proxy_enabled", @"ha_ble_proxy_installation", @"ha_ble_proxy_address_mapping", @"ha_ble_proxy_handle_tables", @"ha_ble_proxy_identity_metadata", @"ha_ble_proxy_auto_register", HABLEScanModeKey, HABLEImportedServicesKey, HABLEAdditionalServicesKey, @"HABLEProxyEnabled", @"HABLEProxyRegister", @"HABLEProxyServiceUUIDs", @"HABLEProxyScanMode", @"ha_ble_identity_bindings_v2", @"ha_ble_peer_continuity_v1"]) [[NSUserDefaults standardUserDefaults] removeObjectForKey:key];
@@ -418,7 +451,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         for (NSString *candidate in self.observations) if (!self.sessions[@([self addressForIdentifier:candidate])] && (!oldest || [self.observations[candidate][@"last_seen"] doubleValue] < [self.observations[oldest][@"last_seen"] doubleValue])) oldest = candidate;
         if (!oldest) return;
         [self.observations removeObjectForKey:oldest]; [self.peripherals removeObjectForKey:oldest];
-        [self.automaticMappings removeObjectForKey:oldest]; [self.identityLabels removeObjectForKey:oldest]; [self.identityCheckTimes removeObjectForKey:oldest]; [self.identityResolver removeIdentifier:oldest];
+        [self.automaticMappings removeObjectForKey:oldest]; [self.identityLabels removeObjectForKey:oldest]; [self.identityCheckTimes removeObjectForKey:oldest]; [self.identityResolver removeIdentifier:oldest]; [self clearFastAdvertisementCacheForIdentifier:oldest];
     }
     NSData *manufacturer = advertisement[CBAdvertisementDataManufacturerDataKey];
     NSData *identityManufacturer = manufacturer.length ? manufacturer : [[NSData alloc] initWithBase64EncodedString:previous[@"identity_manufacturer_data"] ?: previous[@"manufacturer_data"] ?: @"" options:0];
@@ -426,9 +459,13 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     NSString *name = advertisement[CBAdvertisementDataLocalNameKey] ?: peripheral.name ?: @"Unnamed device";
     NSData *previousManufacturer = [[NSData alloc] initWithBase64EncodedString:previous[@"identity_manufacturer_data"] ?: previous[@"manufacturer_data"] ?: @"" options:0];
     if (![previous[@"name"] isEqual:name] || (previousManufacturer.length < 2 && identityManufacturer.length >= 2)) [self.identityCheckTimes removeObjectForKey:identifier];
+    NSTimeInterval repeatEpoch = NSDate.date.timeIntervalSince1970;
+    NSArray *repeatOverflow = advertisement[CBAdvertisementDataOverflowServiceUUIDsKey] ?: @[];
+    NSArray *repeatServices = [(advertisement[CBAdvertisementDataServiceUUIDsKey] ?: @[]) arrayByAddingObjectsFromArray:repeatOverflow];
+    if ([self forwardRepeatedAdvertisementForIdentifier:identifier previous:(NSMutableDictionary *)previous name:name connectable:[advertisement[CBAdvertisementDataIsConnectable] boolValue] manufacturer:manufacturer advertisedServices:repeatServices services:advertisement[CBAdvertisementDataServiceDataKey] rssi:RSSI nowEpoch:repeatEpoch]) return;
     self.peripherals[identifier] = peripheral; self.advertisementCount++;
     NSMutableData *packet = [NSMutableData data]; HABLEPutString(packet, 2, name);
-    int64_t rssi = RSSI.longLongValue; HABLEPutInteger(packet, 3, ((uint64_t)rssi << 1) ^ (uint64_t)(rssi >> 63));
+    int64_t rssi = RSSI.longLongValue; NSUInteger repeatRssiOffset = packet.length; HABLEPutInteger(packet, 3, ((uint64_t)rssi << 1) ^ (uint64_t)(rssi >> 63)); NSUInteger repeatRssiEnd = packet.length;
     NSMutableArray *uuids = [NSMutableArray array];
     NSMutableOrderedSet *advertisedServices = [NSMutableOrderedSet orderedSetWithArray:advertisement[CBAdvertisementDataServiceUUIDsKey] ?: @[]];
     [advertisedServices addObjectsFromArray:advertisement[CBAdvertisementDataOverflowServiceUUIDsKey] ?: @[]];
@@ -454,8 +491,8 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     self.observations[identifier][@"identity_manufacturer_data"] = [identityManufacturer base64EncodedStringWithOptions:0] ?: @"";
     [self updateIdentityResolution];
     [self.identityResolver recordObservation:self.observations[identifier] identifier:identifier];
-    [self matchIdentifier:identifier];
-    BOOL holdIdentity = [self shouldHoldIdentityAdvertisementsForIdentifier:identifier];
+    BOOL holdIdentity = [self matchIdentifier:identifier];
+    [self noteSlowAdvertisementForIdentifier:identifier packet:packet rssiOffset:repeatRssiOffset rssiLength:(repeatRssiEnd - repeatRssiOffset) manufacturer:manufacturer advertisedServices:repeatServices services:advertisement[CBAdvertisementDataServiceDataKey] hold:holdIdentity nowEpoch:repeatEpoch];
     if (!holdIdentity) { [self.observations[identifier] removeObjectForKey:@"identity_pending"]; [self flushIdentityAdvertisementsForIdentifier:identifier]; }
     if (holdIdentity) {
         self.observations[identifier][@"identity_pending"] = @YES;
@@ -477,9 +514,9 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     HABLEPutInteger(encoded, 7, (self.mappings[identifier] || self.automaticMappings[identifier]) ? 0 : 1);
     if ([self.server broadcastAdvertisement:encoded]) self.forwardedCount++;
 }
-- (void)matchIdentifier:(NSString *)identifier {
+- (BOOL)matchIdentifier:(NSString *)identifier {
     NSMutableDictionary *observation = self.observations[identifier];
-    if (!observation) return;
+    if (!observation) return NO;
     if (self.mappings[identifier]) [observation removeObjectForKey:@"identity_pending"];
     CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
     if (self.mappings[identifier]) {
@@ -495,13 +532,13 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         [self.identityResolver rememberConfirmedAddress:self.mappings[identifier] observation:observation];
         NSDictionary *known = self.identityLabels[identifier];
         if (known) { observation[@"ha_name"] = known[@"label"]; observation[@"identity_evidence"] = @"Address matches Home Assistant"; }
-        return;
+        return NO;
     }
     if (self.identitiesReady && now >= [self.identityCheckTimes[identifier] doubleValue]) {
         self.identityCheckTimes[identifier] = @(now + (self.automaticMappings[identifier] ? 10 : 2));
         NSDictionary *match = [self.identityResolver automaticMatchForObservation:observation];
         uint64_t address = 0; BOOL available = match && HABLEParseAddress(match[@"address"], &address);
-        if (self.sessions[@([self addressForIdentifier:identifier])] || (available && self.sessions[@(address)])) return;
+        if (self.sessions[@([self addressForIdentifier:identifier])] || (available && self.sessions[@(address)])) return [self shouldHoldIdentityAdvertisementsForIdentifier:identifier];
         for (NSString *other in self.observations) if (available && ![other isEqual:identifier] &&
             [self addressForIdentifier:other] == address && [[NSDate date] timeIntervalSince1970] - [self.observations[other][@"last_seen"] doubleValue] < 300) available = NO;
         if (available) { self.automaticMappings[identifier] = match; [self.identityResolver rememberAutomaticMatch:match]; }
@@ -510,8 +547,74 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     NSDictionary *match = self.automaticMappings[identifier];
     observation[@"address"] = HABLEAddressString([self addressForIdentifier:identifier]);
     observation[@"identity"] = match ? ([match[@"identity_kind"] isEqual:@"observed_native"] ? @"shared_observed_address" : [match[@"identity_kind"] isEqual:@"observed_shared"] ? @"shared_alias" : @"ha_matched_mac") : @"local_alias";
+    BOOL hold = NO;
     if (match) { [observation removeObjectForKey:@"identity_pending"]; observation[@"ha_name"] = match[@"label"]; observation[@"identity_evidence"] = match[@"evidence"]; }
-    else { [observation removeObjectForKey:@"ha_name"]; observation[@"identity_evidence"] = [self.identityResolver evidenceForIdentifier:identifier]; if ([self shouldHoldIdentityAdvertisementsForIdentifier:identifier]) observation[@"identity_pending"] = @YES; else [observation removeObjectForKey:@"identity_pending"]; }
+    else { [observation removeObjectForKey:@"ha_name"]; observation[@"identity_evidence"] = [self.identityResolver evidenceForIdentifier:identifier]; hold = [self shouldHoldIdentityAdvertisementsForIdentifier:identifier]; if (hold) observation[@"identity_pending"] = @YES; else [observation removeObjectForKey:@"identity_pending"]; }
+    return hold;
+}
+- (void)clearFastAdvertisementCacheForIdentifier:(NSString *)identifier {
+    [self.fastPacketBodies removeObjectForKey:identifier]; [self.fastRssiOffsets removeObjectForKey:identifier]; [self.fastRssiLengths removeObjectForKey:identifier];
+    [self.fastManufacturers removeObjectForKey:identifier]; [self.fastAdvertisedServices removeObjectForKey:identifier]; [self.fastServiceData removeObjectForKey:identifier];
+    [self.fastAutomaticMappings removeObjectForKey:identifier]; [self.fastManualMappings removeObjectForKey:identifier]; [self.fastHoldDecisions removeObjectForKey:identifier]; [self.fastKnownAt removeObjectForKey:identifier];
+}
+- (void)clearFastAdvertisementCaches {
+    [self.fastPacketBodies removeAllObjects]; [self.fastRssiOffsets removeAllObjects]; [self.fastRssiLengths removeAllObjects];
+    [self.fastManufacturers removeAllObjects]; [self.fastAdvertisedServices removeAllObjects]; [self.fastServiceData removeAllObjects];
+    [self.fastAutomaticMappings removeAllObjects]; [self.fastManualMappings removeAllObjects]; [self.fastHoldDecisions removeAllObjects]; [self.fastKnownAt removeAllObjects];
+}
+- (BOOL)forwardRepeatedAdvertisementForIdentifier:(NSString *)identifier previous:(NSMutableDictionary *)previous name:(NSString *)name connectable:(BOOL)connectable manufacturer:(NSData *)manufacturer advertisedServices:(NSArray *)advertisedServices services:(NSDictionary *)services rssi:(NSNumber *)RSSI nowEpoch:(NSTimeInterval)nowEpoch {
+    NSData *cachedBody = self.fastPacketBodies[identifier];
+    if (!cachedBody || !previous || !previous[@"first_seen"]) return NO;
+    if (![previous[@"name"] isEqualToString:name]) return NO;
+    if ([previous[@"connectable"] boolValue] != connectable) return NO;
+    if (![self.fastManufacturers[identifier] isEqualToData:manufacturer ?: (NSData *)[NSData data]]) return NO;
+    if (!HABLECBUUIDsEqual(self.fastAdvertisedServices[identifier], advertisedServices)) return NO;
+    if (!HABLEServiceDataEqual(self.fastServiceData[identifier], services ?: @{})) return NO;
+    if (!(CFAbsoluteTimeGetCurrent() < [self.identityCheckTimes[identifier] doubleValue])) return NO;
+    if (self.sessions.count) return NO;
+    BOOL manual = self.mappings[identifier] != nil;
+    if ([self.fastManualMappings[identifier] boolValue] != manual) return NO;
+    id automaticNow = self.automaticMappings[identifier];
+    id automaticCached = self.fastAutomaticMappings[identifier];
+    if ((automaticNow == nil) != (automaticCached == nil) || (automaticNow && automaticNow != automaticCached)) return NO;
+    BOOL hold;
+    if (manual || automaticNow) hold = NO;
+    else if (nowEpoch - [previous[@"first_seen"] doubleValue] >= 60.0) hold = NO;
+    else if (!self.identitiesReady) hold = YES;
+    else {
+        if (!(nowEpoch - [self.fastKnownAt[identifier] doubleValue] <= 5.0)) return NO;
+        hold = [self.identityResolver hasKnownIdentityForObservation:previous];
+        self.fastKnownAt[identifier] = @(nowEpoch);
+    }
+    if (hold != [self.fastHoldDecisions[identifier] boolValue]) return NO;
+    uint8_t rssiBytes[3]; NSUInteger rssiLength = HABLEEncodeRssiField(RSSI.longLongValue, rssiBytes);
+    NSUInteger rssiOffset = [self.fastRssiOffsets[identifier] unsignedIntegerValue];
+    if (!rssiLength || rssiLength != [self.fastRssiLengths[identifier] unsignedIntegerValue] || rssiOffset + rssiLength > cachedBody.length) return NO;
+    NSMutableData *packet = [cachedBody mutableCopy];
+    [packet replaceBytesInRange:NSMakeRange(rssiOffset, rssiLength) withBytes:rssiBytes];
+    previous[@"last_seen"] = @(nowEpoch); previous[@"rssi"] = RSSI; self.advertisementCount++;
+    [self.identityResolver recordObservation:previous identifier:identifier];
+    if (hold) {
+        if (self.pendingIdentityAdvertisements.count >= 256) { [self.pendingIdentityAdvertisements removeObjectAtIndex:0]; self.identityPacketsDropped++; }
+        [self.pendingIdentityAdvertisements addObject:@{@"identifier":identifier, @"packet":packet, @"queued_at":@(CFAbsoluteTimeGetCurrent())}];
+    } else {
+        [self.observations[identifier] removeObjectForKey:@"identity_pending"];
+        [self flushIdentityAdvertisementsForIdentifier:identifier];
+        [self forwardPacket:packet identifier:identifier];
+    }
+    return YES;
+}
+- (void)noteSlowAdvertisementForIdentifier:(NSString *)identifier packet:(NSData *)packet rssiOffset:(NSUInteger)rssiOffset rssiLength:(NSUInteger)rssiLength manufacturer:(NSData *)manufacturer advertisedServices:(NSArray *)advertisedServices services:(NSDictionary *)services hold:(BOOL)hold nowEpoch:(NSTimeInterval)nowEpoch {
+    self.fastPacketBodies[identifier] = [packet copy];
+    self.fastRssiOffsets[identifier] = @(rssiOffset); self.fastRssiLengths[identifier] = @(rssiLength);
+    self.fastManufacturers[identifier] = manufacturer ?: [NSData data];
+    self.fastAdvertisedServices[identifier] = advertisedServices ?: @[];
+    self.fastServiceData[identifier] = services ?: @{};
+    id automaticNow = self.automaticMappings[identifier];
+    if (automaticNow) self.fastAutomaticMappings[identifier] = automaticNow; else [self.fastAutomaticMappings removeObjectForKey:identifier];
+    self.fastManualMappings[identifier] = @(self.mappings[identifier] != nil);
+    self.fastHoldDecisions[identifier] = @(hold);
+    self.fastKnownAt[identifier] = @(nowEpoch);
 }
 - (void)identityConnectionDidChange:(NSNotification *)note { self.nextIdentityRefresh = 0; }
 - (void)identityConnectionDidDisconnect:(NSNotification *)note {
@@ -526,7 +629,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         [self.identityResolver cancel]; [self.identityImportResolver cancel]; self.identityImportResolver = nil;
         self.identityGeneration++; self.importingIdentities = NO;
         self.identityResolver = [[HABLEIdentityResolver alloc] init]; self.identityScope = scope;
-        [self.automaticMappings removeAllObjects]; [self.identityLabels removeAllObjects]; [self.identityCheckTimes removeAllObjects]; [self.pendingIdentityAdvertisements removeAllObjects];
+        [self.automaticMappings removeAllObjects]; [self.identityLabels removeAllObjects]; [self.identityCheckTimes removeAllObjects]; [self.pendingIdentityAdvertisements removeAllObjects]; [self clearFastAdvertisementCaches];
         self.identitiesReady = NO; self.nextIdentityRefresh = 0;
     }
     if (!self.running) return;

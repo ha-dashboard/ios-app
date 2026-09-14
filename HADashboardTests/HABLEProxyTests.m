@@ -50,7 +50,7 @@ static NSUInteger HABLERejectedRequestCount;
 @interface HABLEProxyManager (ProtocolTestAccess)
 - (void)updateAutomaticRegistrationWithIntegrationEnabled:(BOOL)enabled connected:(BOOL)connected context:(NSString *)context;
 - (void)registerWithHomeAssistantAutomatically:(BOOL)automatic;
-- (void)matchIdentifier:(NSString *)identifier;
+- (BOOL)matchIdentifier:(NSString *)identifier;
 - (void)finishOperation:(id)session error:(NSUInteger)error;
 - (void)discoveryPartDone:(id)session;
 - (NSTimeInterval)identityProbeIntervalForObservation:(NSDictionary *)observation;
@@ -60,6 +60,7 @@ static NSUInteger HABLERejectedRequestCount;
 - (void)updateIdentityResolution;
 - (void)flushIdentityAdvertisements;
 - (void)centralManager:(CBCentralManager *)central didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:(NSDictionary *)advertisement RSSI:(NSNumber *)RSSI;
+- (BOOL)forwardRepeatedAdvertisementForIdentifier:(NSString *)identifier previous:(NSMutableDictionary *)previous name:(NSString *)name connectable:(BOOL)connectable manufacturer:(NSData *)manufacturer advertisedServices:(NSArray *)advertisedServices services:(NSDictionary *)services rssi:(NSNumber *)RSSI nowEpoch:(NSTimeInterval)nowEpoch;
 - (void)deviceRequest:(NSDictionary *)fields connection:(HABLEAPIConnection *)connection;
 - (void)bleServer:(HABLEAPIServer *)server receivedType:(NSUInteger)type data:(NSData *)data connection:(HABLEAPIConnection *)connection;
 @end
@@ -141,6 +142,21 @@ static NSUInteger HABLERejectedRequestCount;
 }
 @end
 
+@interface HABLEFastPathCountingProxy : HABLEDiscoveryPolicyProxy
+@property NSUInteger fastHits;
+@end
+@implementation HABLEFastPathCountingProxy
+- (BOOL)forwardRepeatedAdvertisementForIdentifier:(NSString *)identifier previous:(NSMutableDictionary *)previous name:(NSString *)name connectable:(BOOL)connectable manufacturer:(NSData *)manufacturer advertisedServices:(NSArray *)advertisedServices services:(NSDictionary *)services rssi:(NSNumber *)RSSI nowEpoch:(NSTimeInterval)nowEpoch {
+    BOOL hit = [super forwardRepeatedAdvertisementForIdentifier:identifier previous:previous name:name connectable:connectable manufacturer:manufacturer advertisedServices:advertisedServices services:services rssi:RSSI nowEpoch:nowEpoch];
+    if (hit) self.fastHits++;
+    return hit;
+}
+@end
+static NSDictionary *HABLEFieldsExceptRssi(NSData *packet) {
+    NSMutableDictionary *fields = [HABLEDecode(packet) mutableCopy];
+    [fields removeObjectForKey:@3];
+    return fields;
+}
 @interface HABLEProxyTests : XCTestCase
 @end
 @implementation HABLEProxyTests
@@ -570,5 +586,152 @@ static NSUInteger HABLERejectedRequestCount;
     XCTAssertFalse(manager.running);
     XCTAssertFalse([first isEqualToString:[manager encryptionKey]], @"Reset must revoke the old proxy key");
     [manager reset];
+}
+
+- (void)testIdenticalRepeatAdvertisementSkipsRegistryMatchingWithEqualBytes {
+    HABLEFastPathCountingProxy *proxy = [HABLEFastPathCountingProxy new];
+    [proxy setValue:@YES forKey:@"running"]; [proxy setValue:@YES forKey:@"identitiesReady"];
+    HABLECountingResolver *resolver = [HABLECountingResolver new];
+    [proxy setValue:resolver forKey:@"identityResolver"];
+    HABLECapturingServer *server = [[HABLECapturingServer alloc] initWithName:@"test" address:@"02:00:00:00:00:01" key:[NSMutableData dataWithLength:32]];
+    [proxy setValue:server forKey:@"server"];
+    HABLEObservedPeripheral *peripheral = [HABLEObservedPeripheral new]; peripheral.identifier = NSUUID.UUID; peripheral.name = @"Unit";
+    uint8_t bytes[] = {0x34, 0x12, 9, 8, 7};
+    NSDictionary *ad = @{CBAdvertisementDataLocalNameKey:@"Unit", CBAdvertisementDataManufacturerDataKey:[NSData dataWithBytes:bytes length:sizeof(bytes)]};
+    NSString *identifier = peripheral.identifier.UUIDString;
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-50];
+    XCTAssertEqual(server.capturedAdvertisements.count, 0u);
+    [proxy valueForKey:@"observations"][identifier][@"first_seen"] = @(NSDate.date.timeIntervalSince1970 - 61);
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-55];
+    XCTAssertEqual(server.capturedAdvertisements.count, 2u);
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-60];
+    XCTAssertEqual(server.capturedAdvertisements.count, 3u);
+    XCTAssertEqual(proxy.fastHits, 1u, @"Only the third packet repeats settled state");
+    XCTAssertEqual(resolver.classifications, 1u, @"The repeat must not rescan the registry");
+    NSDictionary *second = HABLEDecode(server.capturedAdvertisements[1]);
+    NSDictionary *third = HABLEDecode(server.capturedAdvertisements[2]);
+    XCTAssertEqual(HABLEInteger(second, 1), HABLEInteger(third, 1));
+    XCTAssertEqual(HABLEInteger(second, 7), HABLEInteger(third, 7));
+    XCTAssertEqual(HABLEInteger(second, 3), 109u, @"zigzag(-55)");
+    XCTAssertEqual(HABLEInteger(third, 3), 119u, @"zigzag(-60)");
+    XCTAssertEqualObjects(HABLEFieldsExceptRssi(server.capturedAdvertisements[1]), HABLEFieldsExceptRssi(server.capturedAdvertisements[2]));
+}
+- (void)testChangedManufacturerPayloadTakesTheSlowPath {
+    HABLEFastPathCountingProxy *proxy = [HABLEFastPathCountingProxy new];
+    [proxy setValue:@YES forKey:@"running"]; [proxy setValue:@YES forKey:@"identitiesReady"];
+    HABLECountingResolver *resolver = [HABLECountingResolver new];
+    [proxy setValue:resolver forKey:@"identityResolver"];
+    HABLECapturingServer *server = [[HABLECapturingServer alloc] initWithName:@"test" address:@"02:00:00:00:00:01" key:[NSMutableData dataWithLength:32]];
+    [proxy setValue:server forKey:@"server"];
+    HABLEObservedPeripheral *peripheral = [HABLEObservedPeripheral new]; peripheral.identifier = NSUUID.UUID; peripheral.name = @"Unit";
+    NSString *identifier = peripheral.identifier.UUIDString;
+    uint8_t first[] = {0x34, 0x12, 1};
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:@{CBAdvertisementDataLocalNameKey:@"Unit", CBAdvertisementDataManufacturerDataKey:[NSData dataWithBytes:first length:sizeof(first)]} RSSI:@-50];
+    [proxy valueForKey:@"observations"][identifier][@"first_seen"] = @(NSDate.date.timeIntervalSince1970 - 61);
+    uint8_t second[] = {0x34, 0x12, 2};
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:@{CBAdvertisementDataLocalNameKey:@"Unit", CBAdvertisementDataManufacturerDataKey:[NSData dataWithBytes:second length:sizeof(second)]} RSSI:@-55];
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:@{CBAdvertisementDataLocalNameKey:@"Unit", CBAdvertisementDataManufacturerDataKey:[NSData dataWithBytes:second length:sizeof(second)]} RSSI:@-60];
+    XCTAssertEqual(server.capturedAdvertisements.count, 3u);
+    XCTAssertEqual(proxy.fastHits, 1u);
+    XCTAssertEqual(resolver.classifications, 1u);
+    XCTAssertNotEqualObjects(HABLEFieldsExceptRssi(server.capturedAdvertisements[0]), HABLEFieldsExceptRssi(server.capturedAdvertisements[1]));
+    XCTAssertEqualObjects(HABLEFieldsExceptRssi(server.capturedAdvertisements[1]), HABLEFieldsExceptRssi(server.capturedAdvertisements[2]));
+}
+- (void)testRssiVarintWideningFallsBackWithoutLosingAccuracy {
+    HABLEFastPathCountingProxy *proxy = [HABLEFastPathCountingProxy new];
+    [proxy setValue:@YES forKey:@"running"]; [proxy setValue:@YES forKey:@"identitiesReady"];
+    [proxy setValue:[HABLECountingResolver new] forKey:@"identityResolver"];
+    HABLECapturingServer *server = [[HABLECapturingServer alloc] initWithName:@"test" address:@"02:00:00:00:00:01" key:[NSMutableData dataWithLength:32]];
+    [proxy setValue:server forKey:@"server"];
+    HABLEObservedPeripheral *peripheral = [HABLEObservedPeripheral new]; peripheral.identifier = NSUUID.UUID; peripheral.name = @"Unit";
+    NSString *identifier = peripheral.identifier.UUIDString;
+    uint8_t bytes[] = {0x34, 0x12, 1};
+    NSDictionary *ad = @{CBAdvertisementDataLocalNameKey:@"Unit", CBAdvertisementDataManufacturerDataKey:[NSData dataWithBytes:bytes length:sizeof(bytes)]};
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-50];
+    [proxy valueForKey:@"observations"][identifier][@"first_seen"] = @(NSDate.date.timeIntervalSince1970 - 61);
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-60];
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-70];
+    XCTAssertEqual(server.capturedAdvertisements.count, 3u);
+    XCTAssertEqual(proxy.fastHits, 0u, @"-60 (one varint byte) to -70 (two bytes) must rebuild");
+    XCTAssertEqual(HABLEInteger(HABLEDecode(server.capturedAdvertisements[1]), 3), 119u);
+    XCTAssertEqual(HABLEInteger(HABLEDecode(server.capturedAdvertisements[2]), 3), 139u);
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-71];
+    XCTAssertEqual(server.capturedAdvertisements.count, 4u);
+    XCTAssertEqual(proxy.fastHits, 1u, @"Same varint width resumes the fast path");
+    XCTAssertEqual(HABLEInteger(HABLEDecode(server.capturedAdvertisements[3]), 3), 141u, @"zigzag(-71)");
+}
+- (void)testManualMappingChangeEmitsNewAddressThenResumesFastPath {
+    HABLEFastPathCountingProxy *proxy = [HABLEFastPathCountingProxy new];
+    [proxy setValue:@YES forKey:@"running"]; [proxy setValue:@YES forKey:@"identitiesReady"];
+    HABLECountingResolver *resolver = [HABLECountingResolver new];
+    [proxy setValue:resolver forKey:@"identityResolver"];
+    HABLECapturingServer *server = [[HABLECapturingServer alloc] initWithName:@"test" address:@"02:00:00:00:00:01" key:[NSMutableData dataWithLength:32]];
+    [proxy setValue:server forKey:@"server"];
+    HABLEObservedPeripheral *peripheral = [HABLEObservedPeripheral new]; peripheral.identifier = NSUUID.UUID; peripheral.name = @"Unit";
+    NSString *identifier = peripheral.identifier.UUIDString;
+    uint8_t bytes[] = {0x34, 0x12, 1};
+    NSDictionary *ad = @{CBAdvertisementDataLocalNameKey:@"Unit", CBAdvertisementDataManufacturerDataKey:[NSData dataWithBytes:bytes length:sizeof(bytes)]};
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-50];
+    [proxy valueForKey:@"observations"][identifier][@"first_seen"] = @(NSDate.date.timeIntervalSince1970 - 61);
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-60];
+    uint64_t aliasAddress = HABLEInteger(HABLEDecode(server.capturedAdvertisements.lastObject), 1);
+    [proxy valueForKey:@"mappings"][identifier] = @"00:11:22:33:44:55";
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-70];
+    XCTAssertEqual(proxy.fastHits, 0u, @"A mapping change must leave the fast path");
+    XCTAssertEqual(HABLEInteger(HABLEDecode(server.capturedAdvertisements.lastObject), 1), 0x001122334455u);
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-71];
+    XCTAssertEqual(proxy.fastHits, 1u);
+    XCTAssertEqual(HABLEInteger(HABLEDecode(server.capturedAdvertisements.lastObject), 1), 0x001122334455u);
+    XCTAssertNotEqual(HABLEInteger(HABLEDecode(server.capturedAdvertisements.lastObject), 1), aliasAddress);
+    XCTAssertEqual(resolver.classifications, 1u);
+}
+- (void)testHeldPacketsQueueCachedBytesAndReleaseTogether {
+    HABLEFastPathCountingProxy *proxy = [HABLEFastPathCountingProxy new];
+    [proxy setValue:@YES forKey:@"running"]; [proxy setValue:@YES forKey:@"identitiesReady"];
+    HABLECountingResolver *resolver = [HABLECountingResolver new];
+    [proxy setValue:resolver forKey:@"identityResolver"];
+    HABLECapturingServer *server = [[HABLECapturingServer alloc] initWithName:@"test" address:@"02:00:00:00:00:01" key:[NSMutableData dataWithLength:32]];
+    [proxy setValue:server forKey:@"server"];
+    HABLEObservedPeripheral *peripheral = [HABLEObservedPeripheral new]; peripheral.identifier = NSUUID.UUID; peripheral.name = @"Unit";
+    NSString *identifier = peripheral.identifier.UUIDString;
+    uint8_t bytes[] = {0x34, 0x12, 1};
+    NSDictionary *ad = @{CBAdvertisementDataLocalNameKey:@"Unit", CBAdvertisementDataManufacturerDataKey:[NSData dataWithBytes:bytes length:sizeof(bytes)]};
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-50];
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-60];
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-61];
+    XCTAssertEqual(server.capturedAdvertisements.count, 0u);
+    XCTAssertEqual([[proxy valueForKey:@"pendingIdentityAdvertisements"] count], 3u);
+    XCTAssertEqual(proxy.fastHits, 2u);
+    XCTAssertEqual(resolver.classifications, 3u, @"Held repeats re-verify at most on the five-second budget");
+    [proxy valueForKey:@"observations"][identifier][@"first_seen"] = @(NSDate.date.timeIntervalSince1970 - 61);
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-71];
+    XCTAssertEqual(server.capturedAdvertisements.count, 4u, @"Grace expiry releases the held queue plus the current packet");
+    uint64_t address = HABLEInteger(HABLEDecode(server.capturedAdvertisements.lastObject), 1);
+    for (NSData *data in server.capturedAdvertisements) XCTAssertEqual(HABLEInteger(HABLEDecode(data), 1), address);
+}
+- (void)testActiveConnectionSlotForcesTheSlowPath {
+    HABLEFastPathCountingProxy *proxy = [HABLEFastPathCountingProxy new];
+    [proxy setValue:@YES forKey:@"running"]; [proxy setValue:@YES forKey:@"identitiesReady"];
+    [proxy setValue:[HABLECountingResolver new] forKey:@"identityResolver"];
+    HABLECapturingServer *server = [[HABLECapturingServer alloc] initWithName:@"test" address:@"02:00:00:00:00:01" key:[NSMutableData dataWithLength:32]];
+    [proxy setValue:server forKey:@"server"];
+    HABLEObservedPeripheral *peripheral = [HABLEObservedPeripheral new]; peripheral.identifier = NSUUID.UUID; peripheral.name = @"Unit";
+    NSString *identifier = peripheral.identifier.UUIDString;
+    uint8_t bytes[] = {0x34, 0x12, 1};
+    NSDictionary *ad = @{CBAdvertisementDataLocalNameKey:@"Unit", CBAdvertisementDataManufacturerDataKey:[NSData dataWithBytes:bytes length:sizeof(bytes)]};
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-50];
+    [proxy valueForKey:@"observations"][identifier][@"first_seen"] = @(NSDate.date.timeIntervalSince1970 - 61);
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-55];
+    XCTAssertEqual(proxy.fastHits, 0u);
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-60];
+    XCTAssertEqual(proxy.fastHits, 1u);
+    [proxy valueForKey:@"sessions"][@1] = [NSObject new];
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-61];
+    XCTAssertEqual(proxy.fastHits, 1u, @"Any live connection slot must disable the fast path");
+    XCTAssertEqual(server.capturedAdvertisements.count, 4u);
+    [[proxy valueForKey:@"sessions"] removeAllObjects];
+    [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-62];
+    XCTAssertEqual(proxy.fastHits, 2u);
+    XCTAssertEqual(HABLEInteger(HABLEDecode(server.capturedAdvertisements.lastObject), 3), 123u, @"zigzag(-62)");
 }
 @end
