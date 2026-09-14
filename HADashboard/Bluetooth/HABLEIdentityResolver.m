@@ -517,6 +517,17 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     }
     return result;
 }
+- (BOOL)hasFingerprintProbeReferenceForObservation:(NSDictionary *)observation {
+    NSDictionary *profile=HABLEProfile(observation);NSString *name=HABLEString(profile[@"name"]);
+    for(NSDictionary *proof in self.catalog.allValues) {
+        if(![proof[@"method"] isEqual:@"gatt_fingerprint"] || ![self validBinding:proof])continue;
+        BOOL sameName=name.length && ![name isEqual:@"Unnamed device"] && [name caseInsensitiveCompare:HABLEString(proof[@"profile"][@"name"])]==NSOrderedSame;
+        if(sameName || HABLEProfilesCompatible(profile,proof[@"profile"]))return YES;
+    }
+    for(NSDictionary *row in [self peerObservationsForObservation:observation])for(NSString *path in row[@"fingerprints"])
+        if([HABLEIdentityEvidence isIdentifierFingerprint:row[@"fingerprints"][path] path:path])return YES;
+    return NO; // A scheduling hint only; never sufficient to select an address.
+}
 - (NSDictionary *)inventoryDiagnostics {
     NSUInteger sources=0,observations=0;NSTimeInterval now=NSDate.date.timeIntervalSince1970;
     for(NSString *source in self.peerInventories)if([self.proxySources containsObject:source]) {

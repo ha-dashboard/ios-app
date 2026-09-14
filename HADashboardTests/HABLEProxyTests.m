@@ -83,9 +83,15 @@ static NSUInteger HABLERejectedRequestCount;
 
 @interface HABLEFailingProbeProxy : HABLEProxyManager
 @property NSUInteger inspections;
+@property NSString *inspectedIdentifier;
 @end
 @implementation HABLEFailingProbeProxy
-- (void)inspectIdentifier:(NSString *)identifier completion:(void (^)(NSDictionary *,NSError *))completion {self.inspections++;completion(nil,[NSError errorWithDomain:@"test" code:1 userInfo:nil]);}
+- (void)inspectIdentifier:(NSString *)identifier completion:(void (^)(NSDictionary *,NSError *))completion {self.inspections++;self.inspectedIdentifier=identifier;completion(nil,[NSError errorWithDomain:@"test" code:1 userInfo:nil]);}
+@end
+@interface HABLEProbeHintResolver : HABLEIdentityResolver
+@end
+@implementation HABLEProbeHintResolver
+- (BOOL)hasFingerprintProbeReferenceForObservation:(NSDictionary *)observation {return [observation[@"reference_available"] boolValue];}
 @end
 @interface HABLERegistrationPolicyProxy : HABLEProxyManager
 @property NSUInteger registrationAttempts;
@@ -203,6 +209,16 @@ static NSUInteger HABLERejectedRequestCount;
     [proxy probePendingIdentity];XCTAssertEqual(proxy.inspections,1u,@"Discovery without a reference must still respect the cooldown");
     [proxy setValue:@0 forKey:@"nextIdentityProbeAt"];[proxy valueForKey:@"identityProbeTimes"][@"unregistered-unit"]=@(now-4000);observation[@"connectable"]=@NO;
     [proxy probePendingIdentity];XCTAssertEqual(proxy.inspections,1u);
+}
+- (void)testProbeQueuePrioritizesSharedFingerprintReferencesWithinExistingBudgets {
+    HABLEFailingProbeProxy *proxy=[HABLEFailingProbeProxy new];[proxy setValue:@YES forKey:@"identitiesReady"];[proxy setValue:[HABLEProbeHintResolver new] forKey:@"identityResolver"];
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;NSMutableDictionary *rows=[proxy valueForKey:@"observations"];
+    for(NSString *identifier in @[@"strong-unknown",@"weak-reference"])rows[identifier]=[@{@"identifier":identifier,@"connectable":@YES,@"first_seen":@(now-120),@"last_seen":@(now),@"rssi":[identifier isEqual:@"weak-reference"] ? @-96 : @-40,@"reference_available":@([identifier isEqual:@"weak-reference"])} mutableCopy];
+    [proxy probePendingIdentity];XCTAssertEqualObjects(proxy.inspectedIdentifier,@"weak-reference");
+    [proxy probePendingIdentity];XCTAssertEqual(proxy.inspections,1u,@"A reference does not bypass the global cooldown");
+    [proxy setValue:@0 forKey:@"nextIdentityProbeAt"];[proxy probePendingIdentity];
+    XCTAssertEqualObjects(proxy.inspectedIdentifier,@"strong-unknown",@"Cooling-down references must not starve unknown standalone devices");
+    XCTAssertEqual([[proxy valueForKey:@"automaticMappings"] count],0u,@"Probe scheduling is not an identity match");
 }
 - (void)testSingleProxyForwardsStableAliasAfterBoundedLearningWithoutAReference {
     HABLEObservedPeripheral *peripheral=[HABLEObservedPeripheral new];peripheral.identifier=NSUUID.UUID;peripheral.name=@"Unit1234";

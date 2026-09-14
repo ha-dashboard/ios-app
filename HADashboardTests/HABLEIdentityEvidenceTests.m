@@ -386,6 +386,10 @@
     HABLEIdentityResolver *joining=[HABLEIdentityResolver new];[joining loadRegistry:devices entries:@[] excludingSource:@"02:00:00:00:00:02"];
     [joining loadCatalog:@{@"schema":@2,@"bindings":@{synthetic[@"address"]:synthetic,localAddress:preserved}}];
     XCTAssertEqual(joining.knownDevices.count,1u,@"The configured local alias and compatible synthetic root form one canonical identity");
+    NSDictionary *unread=@{@"identifier":@"unread",@"name":@"Unit",@"last_seen":@(NSDate.date.timeIntervalSince1970)};
+    XCTAssertTrue([joining hasFingerprintProbeReferenceForObservation:unread]);
+    [joining recordObservation:unread identifier:@"unread"];XCTAssertNil([joining automaticMatchForObservation:unread],@"A same-name catalog probe hint is not identity proof");
+    XCTAssertFalse([joining hasFingerprintProbeReferenceForObservation:@{@"name":@"Unrelated"}]);
     NSString *uuidPath=@"s/1234/c/5678/json/device/uuid";
     NSDictionary *other=@{@"identifier":@"different-apple-uuid",@"local_address":@"02:66:77:88:99:AA",@"name":@"Unit",@"last_seen":@(NSDate.date.timeIntervalSince1970),@"gatt_fingerprints":@{uuidPath:once[uuidPath]}};
     [joining recordObservation:other identifier:other[@"identifier"]];

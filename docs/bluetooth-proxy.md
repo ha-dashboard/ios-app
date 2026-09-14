@@ -58,6 +58,12 @@ secondary identifier. No second proxy or registered HA device is required. Unres
 connectable devices enter the bounded automatic probe queue even without an
 integration matcher or external reference; discovery waits, connection-slot
 limits, per-device retry limits and read-only operation restrictions still apply.
+The probe queue first completes pending repeat reads, then prioritizes devices
+whose name or profile has an eligible fingerprint reference in the shared
+catalog or fresh peer inventory, then uses signal strength. This is only a
+scheduling hint: it cannot select an identity or bypass connection and retry
+budgets. Unknown standalone devices remain eligible when references are absent
+or cooling down.
 
 If HA has already configured a device under this receiver's generated local
 alias, a later GATT proof preserves that address and HA device identity. The
