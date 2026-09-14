@@ -119,12 +119,13 @@ observations from another registered app proxy. It requires sustained local
 reception and rejects twins or conflicting identifier fields across the matching
 observations. Its deterministic synthetic address lets non-connectable devices
 converge without a GATT probe. Existing verified or native references are not
-replaced by this path. These associations are not persisted as verified proof. During the same resolver
-lifetime, an unchanged signature on the same local peripheral retains its address
-through temporary peer loss. Conflicts, stronger identities, changed signatures,
+replaced by this path. These associations are not persisted as verified proof. An unchanged signature on the same local peripheral retains its address
+through temporary peer loss and app restart. A minimal local record stores only
+the signature and historical sources, bound to the HA account and receiver scope.
+Fresh matching data is required after reload; no saved address override is trusted. Conflicts, stronger identities, changed signatures,
 removed observations and changed HA/source scope invalidate that continuity.
-Restart persistence and payload-change handling still require lifecycle validation
-before claiming durable identity continuity.
+Payload-change handling and merging independently created roots still require
+lifecycle validation before claiming complete identity continuity.
 
 Provisional associations are explicitly described as such in their evidence.
 They are re-evaluated during scanning and are never persisted or published as

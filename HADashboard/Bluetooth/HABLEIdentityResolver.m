@@ -10,6 +10,14 @@
 
 static NSString *const HABLECatalogKey = @"ha_dashboard.ble_identity.v2";
 static NSString *const HABLELocalBindingsKey = @"ha_ble_identity_bindings_v2";
+static NSString *const HABLEPeerContinuityKey = @"ha_ble_peer_continuity_v1";
+static BOOL HABLEIgnorePeerObservations(void) {
+#if DEBUG
+    return [NSUserDefaults.standardUserDefaults boolForKey:@"HABLEIdentityIgnorePeerObservations"];
+#else
+    return NO;
+#endif
+}
 static NSData *HABLEHexData(id value) {
     if (![value isKindOfClass:NSString.class] || [value length] % 2 || [value length] > 8192) return nil;
     if ([value rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdefABCDEF"] invertedSet]].location != NSNotFound) return nil;
@@ -280,6 +288,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     [self rebuildKnownDevices];
 }
 - (void)loadLocalBindings {
+    [self loadPeerPassiveContinuity];
     NSDictionary *saved=[NSUserDefaults.standardUserDefaults dictionaryForKey:HABLELocalBindingsKey];
     [self.localBindings removeAllObjects];
     if (![saved[@"scope"] isEqual:self.scope] || ![saved[@"bindings"] isKindOfClass:NSDictionary.class]) return;
@@ -293,6 +302,39 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     }
 }
 - (void)saveLocalBindings { if(self.scope.length) [NSUserDefaults.standardUserDefaults setObject:@{@"scope":self.scope,@"bindings":self.localBindings} forKey:HABLELocalBindingsKey]; }
+- (NSString *)peerContinuityContext {
+    return HABLEHash([NSString stringWithFormat:@"%@|%@|%@",self.sourceServer ?: @"",self.scope ?: @"",self.sourceAddress ?: @""]);
+}
+- (void)savePeerPassiveContinuity {
+    if(!self.scope.length || ![self sourceIsCurrent])return;
+    NSMutableDictionary *entries=NSMutableDictionary.dictionary;
+    for(NSString *identifier in self.peerPassiveContinuity) {
+        NSDictionary *match=self.peerPassiveContinuity[identifier];
+        if(![match[@"continuity_context"] isEqual:[self peerContinuityContext]])continue;
+        entries[identifier]=@{@"signature":match[@"passive_signature"],@"sources":match[@"supporting_sources"]};
+    }
+    [NSUserDefaults.standardUserDefaults setObject:@{@"schema":@1,@"context":[self peerContinuityContext],@"entries":entries} forKey:HABLEPeerContinuityKey];
+}
+- (void)loadPeerPassiveContinuity {
+    [self.peerPassiveContinuity removeAllObjects];
+    NSDictionary *saved=[NSUserDefaults.standardUserDefaults dictionaryForKey:HABLEPeerContinuityKey];
+    if(![saved[@"schema"] isEqual:@1] || ![saved[@"context"] isEqual:[self peerContinuityContext]] || ![saved[@"entries"] isKindOfClass:NSDictionary.class])return;
+    for(id identifier in saved[@"entries"]) {
+        if(self.peerPassiveContinuity.count>=256)break;
+        if(![identifier isKindOfClass:NSString.class] || ![identifier length] || [identifier length]>128)continue;
+        id row=saved[@"entries"][identifier];if(![row isKindOfClass:NSDictionary.class])continue;
+        NSString *signature=HABLEString(row[@"signature"]);id sources=row[@"sources"];
+        if(signature.length!=64 || !HABLEHexData(signature) || ![sources isKindOfClass:NSArray.class] || [sources count]<2 || [sources count]>32)continue;
+        NSMutableSet *unique=NSMutableSet.set;BOOL valid=YES;
+        for(id source in sources){uint64_t address;if(![source isKindOfClass:NSString.class] || !HABLEParseAddress(source,&address)){valid=NO;break;}[unique addObject:source];}
+        if(!valid || unique.count!=[sources count] || ![unique containsObject:self.sourceAddress])continue;
+        self.peerPassiveContinuity[identifier]=@{@"continuity_context":[self peerContinuityContext],@"passive_signature":signature,@"supporting_sources":[unique.allObjects sortedArrayUsingSelector:@selector(compare:)]};
+    }
+}
+- (void)forgetPeerPassiveContinuity:(NSString *)identifier {
+    if(!self.peerPassiveContinuity[identifier])return;
+    [self.peerPassiveContinuity removeObjectForKey:identifier];[self savePeerPassiveContinuity];
+}
 - (void)observeAdvertisements:(NSArray *)advertisements {
     BOOL inventoryChanged=NO;
     for (NSDictionary *ad in advertisements) {
@@ -368,6 +410,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     return result;
 }
 - (void)observeInventory:(id)value source:(NSString *)source {
+    if(HABLEIgnorePeerObservations())return;
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;
     if(![self.proxySources containsObject:source] || [source isEqual:self.sourceAddress] || ![value isKindOfClass:NSDictionary.class] || ![value[@"schema"] isEqual:@1] || ![value[@"source"] isEqual:source] || ![value[@"time"] isKindOfClass:NSNumber.class] || ![value[@"observations"] isKindOfClass:NSArray.class] || [value[@"observations"] count]>256)return;
     double time=[value[@"time"] doubleValue];if(!isfinite(time) || time<now-90 || time>now+5)return;
@@ -404,7 +447,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
         NSUInteger count=0;for(NSDictionary *row in [self.peerInventories[source] allValues])if(now-[row[@"last_seen"] doubleValue]<=120)count++;
         if(count){sources++;observations+=count;}
     }
-    return @{@"peer_sources":@(sources),@"peer_observations":@(observations),@"last_publish":@(self.lastInventoryPublish),@"publish_error":@(self.inventoryPublishError),@"partial_batch":@(self.inventoryPartial),@"native_snapshot_received_at":@(self.lastNativeSnapshot),@"native_diagnostics_at":@(self.lastNativeDiagnostics),@"native_diagnostics_error":@(self.nativeDiagnosticsError),@"native_diagnostics_observations":@(self.nativeDiagnosticsObservations)};
+    return @{@"peer_observations_disabled":@(HABLEIgnorePeerObservations()),@"peer_sources":@(sources),@"peer_observations":@(observations),@"last_publish":@(self.lastInventoryPublish),@"publish_error":@(self.inventoryPublishError),@"partial_batch":@(self.inventoryPartial),@"native_snapshot_received_at":@(self.lastNativeSnapshot),@"native_diagnostics_at":@(self.lastNativeDiagnostics),@"native_diagnostics_error":@(self.nativeDiagnosticsError),@"native_diagnostics_observations":@(self.nativeDiagnosticsObservations)};
 }
 - (void)maintainInventory {
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;
@@ -423,6 +466,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
 }
 - (NSString *)peerKey:(NSString *)source { return [@"ha_dashboard.ble_observations.v2." stringByAppendingString:source]; }
 - (void)observePeer:(id)value source:(NSString *)source {
+    if(HABLEIgnorePeerObservations())return;
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;
     if (![value isKindOfClass:NSDictionary.class] || ![value[@"time"] isKindOfClass:NSNumber.class] || ![value[@"schema"] isEqual:@2] || ![value[@"source"] isEqual:source] || [source isEqual:self.sourceAddress]) return;
     NSTimeInterval at=[value[@"time"] doubleValue]; if(at<now-30 || at>now+5)return;
@@ -612,7 +656,7 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     self.localObservations[identifier]=record;[self.evidence recordLocal:observation identifier:identifier atTime:[observation[@"last_seen"] doubleValue]];
 }
 - (NSString *)evidenceForIdentifier:(NSString *)identifier { return self.lastEvidence[identifier] ?: @"Waiting for sufficient identity evidence"; }
-- (void)removeIdentifier:(NSString *)identifier { [self.peerPassiveContinuity removeObjectForKey:identifier]; [self.potentialKnownIdentifiers removeObject:identifier]; [self.lastEvidence removeObjectForKey:identifier]; [self.localObservations removeObjectForKey:identifier];[self.evidence removeIdentifier:identifier]; }
+- (void)removeIdentifier:(NSString *)identifier { [self forgetPeerPassiveContinuity:identifier]; [self.potentialKnownIdentifiers removeObject:identifier]; [self.lastEvidence removeObjectForKey:identifier]; [self.localObservations removeObjectForKey:identifier];[self.evidence removeIdentifier:identifier]; }
 - (NSString *)registeredIdentifierForName:(NSString *)name record:(NSDictionary *)record {
     if(!HABLEUnitIdentifier(name))return nil;
     for(NSArray *pair in record[@"identifiers"])if([name caseInsensitiveCompare:pair[1]]==NSOrderedSame)return pair[1];
@@ -759,47 +803,49 @@ static BOOL HABLEProfilesCompatible(NSDictionary *a, NSDictionary *b) {
     NSString *identifier=observation[@"identifier"];if(!identifier.length)return nil;
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;NSDictionary *local=self.localObservations[identifier];
     NSString *signature=HABLEPassiveSignature(HABLEProfile(observation),[HABLEIdentityEvidence tokensForObservation:observation]);
-    NSString *context=[NSString stringWithFormat:@"%@|%@|%@",self.sourceServer ?: @"",self.scope ?: @"",self.sourceAddress ?: @""];
+    NSString *context=[self peerContinuityContext];
     NSDictionary *remembered=self.peerPassiveContinuity[identifier];
-    if(remembered && (![remembered[@"continuity_context"] isEqual:context] || ![remembered[@"passive_signature"] isEqual:signature])){[self.peerPassiveContinuity removeObjectForKey:identifier];remembered=nil;}
+    if(remembered && (![remembered[@"continuity_context"] isEqual:context] || ![remembered[@"passive_signature"] isEqual:signature])){[self forgetPeerPassiveContinuity:identifier];remembered=nil;}
     if(!signature || ![signature isEqual:local[@"passive_signature"]] || now-[local[@"last_seen"] doubleValue]>20 || (!remembered && !HABLEPassiveReady(local,@"last_seen",now)))return nil;
     // Do not invent a competing address for an already observed native identity.
-    for(NSDictionary *remote in self.remoteInfo.allValues)if(remote[@"native_anchor"] && [signature isEqual:remote[@"passive_signature"]]){[self.peerPassiveContinuity removeObjectForKey:identifier];return nil;}
+    for(NSDictionary *remote in self.remoteInfo.allValues)if(remote[@"native_anchor"] && [signature isEqual:remote[@"passive_signature"]]){[self forgetPeerPassiveContinuity:identifier];return nil;}
     for(NSString *other in self.localObservations)if(![other isEqual:identifier] && now-[self.localObservations[other][@"last_seen"] doubleValue]<=120 && [signature isEqual:HABLEPassiveSignature(HABLEProfile(self.localObservations[other]),[HABLEIdentityEvidence tokensForObservation:self.localObservations[other]])]) {
-        [self.peerPassiveContinuity removeObjectForKey:identifier];self.lastEvidence[identifier]=@"Ambiguous: multiple local devices share the complete peer signature";return nil;
+        [self forgetPeerPassiveContinuity:identifier];self.lastEvidence[identifier]=@"Ambiguous: multiple local devices share the complete peer signature";return nil;
     }
     NSMutableSet *sources=[NSMutableSet setWithObject:self.sourceAddress ?: @""];NSMutableArray *profiles=[NSMutableArray arrayWithObject:observation[@"gatt_fingerprints"] ?: @{}];
     for(NSString *source in self.peerInventories) {
         if(![self.proxySources containsObject:source] || [source isEqual:self.sourceAddress])continue;NSUInteger count=0;
         for(NSDictionary *row in [self.peerInventories[source] allValues]) {
             if(now-[row[@"last_seen"] doubleValue]>120 || ![signature isEqual:HABLEPassiveSignature(row[@"profile"],row[@"tokens"])])continue;
-            if(++count>1){[self.peerPassiveContinuity removeObjectForKey:identifier];self.lastEvidence[identifier]=@"Ambiguous: a peer sees multiple devices with this signature";return nil;}
+            if(++count>1){[self forgetPeerPassiveContinuity:identifier];self.lastEvidence[identifier]=@"Ambiguous: a peer sees multiple devices with this signature";return nil;}
             // Existing verified roots need their identifier proof, not a new
             // passive address. Never turn a peer's canonical claim into truth.
-            if(row[@"address"]){[self.peerPassiveContinuity removeObjectForKey:identifier];return nil;}
+            if(row[@"address"]){[self forgetPeerPassiveContinuity:identifier];return nil;}
             NSDictionary *fields=row[@"fingerprints"] ?: @{};
-            for(NSDictionary *other in profiles)if([HABLEIdentityEvidence identifierFingerprints:fields conflictWith:other]){[self.peerPassiveContinuity removeObjectForKey:identifier];self.lastEvidence[identifier]=@"Ambiguous: identical advertisements have conflicting identifier fields";return nil;}
+            for(NSDictionary *other in profiles)if([HABLEIdentityEvidence identifierFingerprints:fields conflictWith:other]){[self forgetPeerPassiveContinuity:identifier];self.lastEvidence[identifier]=@"Ambiguous: identical advertisements have conflicting identifier fields";return nil;}
             [profiles addObject:fields];[sources addObject:source];
         }
     }
     if([sources containsObject:@""])return nil;
-    if(sources.count<2) {
+    BOOL peerUnavailable=sources.count<2;
+    if(peerUnavailable) {
         if(!remembered)return nil;
-        NSMutableDictionary *continued=[remembered mutableCopy];
-        continued[@"evidence"]=@"Provisional: retaining the same local peripheral and unchanged signature while its peer is unavailable";
-        return continued;
+        [sources addObjectsFromArray:remembered[@"supporting_sources"]];
     }
     NSString *identity=[@"peer-passive:" stringByAppendingString:signature];
-    NSDictionary *match=@{@"continuity_context":context,@"identity_kind":@"observed_shared",@"device_id":identity,@"address":HABLESharedFingerprintAddress(identity),@"name":HABLEString(observation[@"name"]),@"label":HABLEString(observation[@"name"]),@"method":@"peer_passive_signature",@"automatic_match":@YES,@"local_identifier":identifier,@"passive_signature":signature,@"profile":HABLEProfile(observation),@"supporting_sources":sources.allObjects,@"score":@60,@"evidence":@"Provisional: sustained local reception and a fresh peer agree on the complete name, services and payload; not a verified hardware identity"};
-    if(self.peerPassiveContinuity.count<256 || self.peerPassiveContinuity[identifier])self.peerPassiveContinuity[identifier]=match;
+    NSDictionary *match=@{@"continuity_context":context,@"identity_kind":@"observed_shared",@"device_id":identity,@"address":HABLESharedFingerprintAddress(identity),@"name":HABLEString(observation[@"name"]),@"label":HABLEString(observation[@"name"]),@"method":@"peer_passive_signature",@"automatic_match":@YES,@"local_identifier":identifier,@"passive_signature":signature,@"profile":HABLEProfile(observation),@"supporting_sources":[sources.allObjects sortedArrayUsingSelector:@selector(compare:)],@"score":@60,@"evidence":peerUnavailable ? @"Provisional: retaining the same local peripheral and unchanged signature while its peer is unavailable" : @"Provisional: sustained local reception and a fresh peer agree on the complete name, services and payload; not a verified hardware identity"};
+    if(self.peerPassiveContinuity.count<256 || self.peerPassiveContinuity[identifier]) {
+        BOOL changed=![remembered[@"passive_signature"] isEqual:signature] || ![remembered[@"supporting_sources"] isEqual:match[@"supporting_sources"]];
+        self.peerPassiveContinuity[identifier]=match;if(changed)[self savePeerPassiveContinuity];
+    }
     return match;
 }
 - (NSDictionary *)automaticMatchForObservation:(NSDictionary *)observation {
     NSDictionary *match=nil;NSArray *candidates=[self candidatesForObservation:observation];
     if([observation[@"identifier"] length] && (self.lastEvidence.count<256 || self.lastEvidence[observation[@"identifier"]]))self.lastEvidence[observation[@"identifier"]]=candidates.firstObject[@"evidence"] ?: @"No known candidate yet";
-    for(NSDictionary *candidate in candidates)if([candidate[@"automatic_match"] boolValue]){if(match){[self.peerPassiveContinuity removeObjectForKey:observation[@"identifier"] ?: @""];if([observation[@"identifier"] length])self.lastEvidence[observation[@"identifier"]]=@"Ambiguous: multiple known devices satisfy the identity evidence";return nil;}match=candidate;}
+    for(NSDictionary *candidate in candidates)if([candidate[@"automatic_match"] boolValue]){if(match){[self forgetPeerPassiveContinuity:observation[@"identifier"] ?: @""];if([observation[@"identifier"] length])self.lastEvidence[observation[@"identifier"]]=@"Ambiguous: multiple known devices satisfy the identity evidence";return nil;}match=candidate;}
     if(!match)match=[self sharedFingerprintMatchForObservation:observation];
-    if(match)[self.peerPassiveContinuity removeObjectForKey:observation[@"identifier"] ?: @""];
+    if(match)[self forgetPeerPassiveContinuity:observation[@"identifier"] ?: @""];
     if(!match)match=[self peerPassiveMatchForObservation:observation];
     if(match && [match[@"method"] isEqual:@"gatt_fingerprint"] && [self fingerprintWitnessIsAmbiguous:match[@"fingerprint_match_witness"] ?: match[@"fingerprint_witness"] observation:observation]){if([observation[@"identifier"] length])self.lastEvidence[observation[@"identifier"]]=@"Ambiguous: this identifier fingerprint is shared by multiple devices";return nil;}
     if(!match) {

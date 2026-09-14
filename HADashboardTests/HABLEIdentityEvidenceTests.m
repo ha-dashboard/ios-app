@@ -10,6 +10,7 @@
 - (void)loadCatalog:(id)value;
 - (void)refreshNativeAdvertisements;
 - (void)rebuildKnownDevices;
+- (void)loadLocalBindings;
 - (void)refreshNativeScannerDiagnostics;
 - (HAAPIClient *)nativeDiagnosticsAPIClient;
 - (void)observePeer:(id)value source:(NSString *)source;
@@ -316,6 +317,42 @@
     twin[@"fingerprints"]=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:[HABLEIdentityEvidence mergeFingerprintReads:reads previous:@{} session:@"one" atTime:1] session:@"two" atTime:2];
     [r observeInventory:@{@"schema":@1,@"source":b,@"time":@(now),@"observations":@[row]} source:b];[r observeInventory:@{@"schema":@1,@"source":c,@"time":@(now),@"observations":@[twin]} source:c];
     XCTAssertNil([r automaticMatchForObservation:o]);XCTAssertTrue([[r evidenceForIdentifier:@"local"] containsString:@"conflicting identifier"]);
+}
+- (void)testPeerContinuityReloadRequiresScopePeripheralAndFreshMatchingData {
+    NSUserDefaults *defaults=NSUserDefaults.standardUserDefaults;id saved=[defaults objectForKey:@"ha_ble_peer_continuity_v1"];
+    @try {
+        NSString *source=@"02:00:00:00:00:01",*peer=@"02:00:00:00:00:02";NSTimeInterval now=NSDate.date.timeIntervalSince1970;
+        HABLETransportTestResolver *(^receiver)(NSString *)=^HABLETransportTestResolver *(NSString *scope){
+            HABLETransportTestResolver *r=[HABLETransportTestResolver new];r.fakeConnection=[HABLEFakeIdentityConnection new];r.currentScope=YES;
+            [r loadRegistry:@[] entries:@[] excludingSource:source];[r setValue:@"http://continuity.invalid" forKey:@"sourceServer"];[r setValue:scope forKey:@"scope"];return r;
+        };
+        HABLETransportTestResolver *first=receiver(@"account-a");[first setValue:[NSMutableSet setWithObject:peer] forKey:@"proxySources"];
+        NSMutableDictionary *o=[@{@"identifier":@"apple-peripheral",@"local_address":@"02:11:22:33:44:55",@"name":@"Display Model43",@"manufacturer_data":@"AQIDBAUGBwg=",@"service_uuids":@[]} mutableCopy];
+        for(NSUInteger i=0;i<4;i++){o[@"last_seen"]=@(now-30+i*10);[first recordObservation:o identifier:o[@"identifier"]];}
+        NSMutableDictionary *row=[[[first localInventoryAtTime:now] firstObject] mutableCopy];row[@"local_address"]=@"02:22:33:44:55:66";
+        [first observeInventory:@{@"schema":@1,@"source":peer,@"time":@(now),@"observations":@[row]} source:peer];NSDictionary *match=[first automaticMatchForObservation:o];XCTAssertNotNil(match);
+        NSDictionary *stored=[defaults dictionaryForKey:@"ha_ble_peer_continuity_v1"];XCTAssertNotNil(stored[@"entries"][@"apple-peripheral"]);XCTAssertNil(stored[@"entries"][@"apple-peripheral"][@"address"]);
+        HABLETransportTestResolver *restarted=receiver(@"account-a");[restarted loadLocalBindings];[restarted recordObservation:o identifier:o[@"identifier"]];
+        XCTAssertEqualObjects([restarted automaticMatchForObservation:o][@"address"],match[@"address"]);XCTAssertEqual([[restarted valueForKey:@"localBindings"] count],0u);
+        HABLETransportTestResolver *other=receiver(@"account-b");[other loadLocalBindings];[other recordObservation:o identifier:o[@"identifier"]];XCTAssertNil([other automaticMatchForObservation:o]);
+        HABLETransportTestResolver *newPeripheral=receiver(@"account-a");[newPeripheral loadLocalBindings];NSMutableDictionary *changed=[o mutableCopy];changed[@"identifier"]=@"different-apple-peripheral";
+        for(NSUInteger i=0;i<4;i++){changed[@"last_seen"]=@(now-30+i*10);[newPeripheral recordObservation:changed identifier:changed[@"identifier"]];}
+        XCTAssertNil([newPeripheral automaticMatchForObservation:changed]);
+        changed=[o mutableCopy];changed[@"manufacturer_data"]=@"AQIDBAUGBwk=";[restarted recordObservation:changed identifier:changed[@"identifier"]];XCTAssertNil([restarted automaticMatchForObservation:changed]);
+        XCTAssertNil([defaults dictionaryForKey:@"ha_ble_peer_continuity_v1"][@"entries"][@"apple-peripheral"]);
+    } @finally {if(saved)[defaults setObject:saved forKey:@"ha_ble_peer_continuity_v1"];else[defaults removeObjectForKey:@"ha_ble_peer_continuity_v1"];}
+}
+- (void)testPeerInputIsolationForRestartValidation {
+    NSUserDefaults *defaults=NSUserDefaults.standardUserDefaults;id previous=[defaults objectForKey:@"HABLEIdentityIgnorePeerObservations"];
+    @try {
+        [defaults setBool:YES forKey:@"HABLEIdentityIgnorePeerObservations"];
+        HABLEIdentityResolver *r=[HABLEIdentityResolver new];[r loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+        [r setValue:[NSMutableSet setWithObject:@"02:00:00:00:00:02"] forKey:@"proxySources"];
+        NSDictionary *row=@{@"local_address":@"02:11:22:33:44:55",@"last_seen":@(NSDate.date.timeIntervalSince1970),@"profile":@{@"name":@"Display Model43",@"services":@[]},@"tokens":@[],@"fingerprints":@{}};
+        [r observeInventory:@{@"schema":@1,@"source":@"02:00:00:00:00:02",@"time":@(NSDate.date.timeIntervalSince1970),@"observations":@[row]} source:@"02:00:00:00:00:02"];
+        XCTAssertEqual([[r valueForKey:@"peerInventories"] count],0u);
+        XCTAssertTrue([[r inventoryDiagnostics][@"peer_observations_disabled"] boolValue]);
+    } @finally {if(previous)[defaults setObject:previous forKey:@"HABLEIdentityIgnorePeerObservations"];else[defaults removeObjectForKey:@"HABLEIdentityIgnorePeerObservations"];}
 }
 - (NSDictionary *)stableIdentifierFields {
     NSData *json=[NSJSONSerialization dataWithJSONObject:@{@"device":@{@"mac":@"00:11:22:33:44:55"}} options:0 error:nil];
