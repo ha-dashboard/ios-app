@@ -339,7 +339,11 @@ S14 across Mac/both Minis/Pro, AZW canonical on five of six, home-cluster
 agreement on LG/Samsung/HT1/HT.w, rotated S36 on four proxies with the old
 address emitted nowhere. Mini 4's only divergent packets used its live
 held-pending local alias for the same fringe unit, which is correct
-ambiguity-holding rather than a stale leak.
+ambiguity-holding rather than a stale leak. Follow-up evidence closed the
+anchoring question: the rotating unit is connectable but no proxy has ever
+completed a GATT read on it (recent fleet probes show fringe timeout and
+could-not-start failures), so hold-pending is the correct terminal state and
+per-rotation HA addresses are the expected privacy cost.
 
 In that earlier window the iPhone 11 proxy never listened, so it was not included there; it joined the later six-proxy capture above, as did the iPad 4 and iPad Pro. The office
 iPad 3 was unreachable during parts of the earlier window and off-network for the later one; it is
