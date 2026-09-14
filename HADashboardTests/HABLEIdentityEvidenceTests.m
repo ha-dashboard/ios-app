@@ -259,12 +259,18 @@
     NSDictionary *first=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:@{} session:@"one" atTime:1];
     return [HABLEIdentityEvidence mergeFingerprintReads:reads previous:first session:@"two" atTime:2];
 }
+- (NSDictionary *)standardContextReadsForManufacturer:(NSString *)manufacturer model:(NSString *)model {
+    NSString *prefix=@"s/0000180a-0000-1000-8000-00805f9b34fb#0/";NSMutableDictionary *reads=NSMutableDictionary.dictionary;
+    [reads addEntriesFromDictionary:[HABLEIdentityEvidence fingerprintsForValue:[manufacturer dataUsingEncoding:NSUTF8StringEncoding] path:[prefix stringByAppendingString:@"00002a29-0000-1000-8000-00805f9b34fb#0"]]];
+    [reads addEntriesFromDictionary:[HABLEIdentityEvidence fingerprintsForValue:[model dataUsingEncoding:NSUTF8StringEncoding] path:[prefix stringByAppendingString:@"00002a24-0000-1000-8000-00805f9b34fb#0"]]];
+    return reads;
+}
 - (void)testStandardIdentifiersCreateSingleProxyIdentitiesButModelStringsDoNot {
     NSString *service=@"s/0000180a-0000-1000-8000-00805f9b34fb#0/";
     NSString *serial=[service stringByAppendingString:@"00002a25-0000-1000-8000-00805f9b34fb#0"],*system=[service stringByAppendingString:@"00002a23-0000-1000-8000-00805f9b34fb#0"],*model=[service stringByAppendingString:@"00002a24-0000-1000-8000-00805f9b34fb#0"];
     NSArray *paths=@[serial,system,model];NSData *data=[@"SN123456" dataUsingEncoding:NSUTF8StringEncoding];
     for(NSUInteger i=0;i<paths.count;i++) {
-        NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:data path:paths[i]];
+        NSMutableDictionary *reads=[[HABLEIdentityEvidence fingerprintsForValue:data path:paths[i]] mutableCopy];if(i==0)[reads addEntriesFromDictionary:[self standardContextReadsForManufacturer:@"Example Manufacturer" model:@"Model-A"]];
         NSDictionary *first=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:@{} session:@"first" atTime:1];XCTAssertFalse([HABLEIdentityEvidence isIdentifierFingerprint:first[paths[i]] path:paths[i]]);
         NSDictionary *fields=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:first session:@"second" atTime:2];
         HABLEIdentityResolver *resolver=[HABLEIdentityResolver new];[resolver loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];
@@ -279,17 +285,42 @@
     NSDictionary *forged=@{@"format":@"gatt_serial",@"length":@8,@"sessions":@2,@"stable_across_sessions":@YES,@"varying":@NO};
     XCTAssertFalse([HABLEIdentityEvidence isIdentifierFingerprint:forged path:wrongService]);
 }
+- (void)testSerialNumbersAreScopedByManufacturerAndModel {
+    NSString *path=@"s/0000180a-0000-1000-8000-00805f9b34fb#0/00002a25-0000-1000-8000-00805f9b34fb#0";
+    HABLEIdentityResolver *r=[HABLEIdentityResolver new];[r loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];NSMutableArray *observations=NSMutableArray.array,*addresses=NSMutableArray.array;
+    for(NSUInteger i=0;i<3;i++) {
+        NSMutableDictionary *reads=[[HABLEIdentityEvidence fingerprintsForValue:[@"SN123456" dataUsingEncoding:NSUTF8StringEncoding] path:path] mutableCopy];
+        [reads addEntriesFromDictionary:[self standardContextReadsForManufacturer:i==1 ? @"Other Manufacturer" : @"Example Manufacturer" model:i==2 ? @"Model-B" : @"Model-A"]];
+        NSDictionary *once=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:@{} session:@"one" atTime:1],*fields=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:once session:@"two" atTime:2];
+        NSString *identifier=[NSString stringWithFormat:@"device-%lu",(unsigned long)i];NSDictionary *o=@{@"identifier":identifier,@"name":@"Unit",@"last_seen":@(NSDate.date.timeIntervalSince1970),@"gatt_fingerprints":fields};[observations addObject:o];[r recordObservation:o identifier:identifier];
+    }
+    for(NSDictionary *o in observations){NSDictionary *match=[r automaticMatchForObservation:o];XCTAssertNotNil(match);if(match)[addresses addObject:match[@"address"]];}
+    XCTAssertEqual([NSSet setWithArray:addresses].count,3u);
+    NSDictionary *good=[r automaticMatchForObservation:observations[0]];
+    for(NSDictionary *corruption in @[@{@"sessions":NSNull.null},@{@"length":@0},@{@"varying":NSNull.null}]) {
+        NSMutableDictionary *bad=[good mutableCopy];bad[@"schema"]=@2;bad[@"proof_id"]=@"invalid-context";
+        NSMutableDictionary *profile=[bad[@"fingerprint_profile"] mutableCopy];
+        NSString *manufacturer=[path stringByReplacingOccurrencesOfString:@"00002a25" withString:@"00002a29"];
+        NSMutableDictionary *value=[profile[manufacturer] mutableCopy];[value addEntriesFromDictionary:corruption];profile[manufacturer]=value;bad[@"fingerprint_profile"]=profile;
+        HABLEIdentityResolver *receiver=[HABLEIdentityResolver new];[receiver loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:09"];
+        [receiver loadCatalog:@{@"schema":@2,@"bindings":@{bad[@"address"]:bad}}];XCTAssertEqual(receiver.knownDevices.count,0u);
+    }
+
+    HABLEIdentityResolver *missing=[HABLEIdentityResolver new];[missing loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:02"];
+    NSMutableDictionary *o=[observations[0] mutableCopy];o[@"gatt_fingerprints"]=@{path:o[@"gatt_fingerprints"][path]};
+    XCTAssertNil([missing automaticMatchForObservation:o]);
+}
 - (void)testJoiningProxyCanUseASecondaryVerifiedIdentifierWithoutChangingCanonicalAddress {
     NSString *serial=@"s/0000180a-0000-1000-8000-00805f9b34fb#0/00002a25-0000-1000-8000-00805f9b34fb#0",*system=@"s/0000180a-0000-1000-8000-00805f9b34fb#0/00002a23-0000-1000-8000-00805f9b34fb#0";
     NSMutableDictionary *reads=NSMutableDictionary.dictionary;NSData *data=[@"SN123456" dataUsingEncoding:NSUTF8StringEncoding];
-    for(NSString *path in @[serial,system])[reads addEntriesFromDictionary:[HABLEIdentityEvidence fingerprintsForValue:data path:path]];
+    for(NSString *path in @[serial,system])[reads addEntriesFromDictionary:[HABLEIdentityEvidence fingerprintsForValue:data path:path]];[reads addEntriesFromDictionary:[self standardContextReadsForManufacturer:@"Example Manufacturer" model:@"Model-A"]];
     NSDictionary *once=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:@{} session:@"one" atTime:1],*twice=[HABLEIdentityEvidence mergeFingerprintReads:reads previous:once session:@"two" atTime:2];
     HABLEIdentityResolver *a=[HABLEIdentityResolver new];[a loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];
     NSDictionary *o=@{@"identifier":@"a",@"name":@"Unit",@"last_seen":@(NSDate.date.timeIntervalSince1970),@"gatt_fingerprints":twice};[a recordObservation:o identifier:@"a"];
     NSDictionary *initial=[a automaticMatchForObservation:o];XCTAssertEqualObjects(initial[@"fingerprint_witness"][@"path"],system);
     NSMutableDictionary *binding=[initial mutableCopy];binding[@"schema"]=@2;binding[@"proof_id"]=@"multi-field-proof";
     HABLEIdentityResolver *b=[HABLEIdentityResolver new];[b loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:02"];[b loadCatalog:@{@"schema":@2,@"bindings":@{binding[@"address"]:binding}}];
-    NSMutableDictionary *joined=[o mutableCopy];joined[@"identifier"]=@"b";joined[@"gatt_fingerprints"]=@{serial:once[serial]};[b recordObservation:joined identifier:@"b"];
+    NSMutableDictionary *joined=[o mutableCopy];joined[@"identifier"]=@"b";NSMutableDictionary *partial=[once mutableCopy];[partial removeObjectForKey:system];joined[@"gatt_fingerprints"]=partial;[b recordObservation:joined identifier:@"b"];
     NSDictionary *match=[b automaticMatchForObservation:joined];XCTAssertEqualObjects(match[@"address"],initial[@"address"]);XCTAssertEqualObjects(match[@"fingerprint_witness"][@"path"],system);XCTAssertEqualObjects(match[@"fingerprint_match_witness"][@"path"],serial);
     NSMutableDictionary *twin=[joined mutableCopy];twin[@"identifier"]=@"twin";[b recordObservation:twin identifier:@"twin"];
     XCTAssertNil([b automaticMatchForObservation:joined]);

@@ -57,6 +57,8 @@ static NSString *HABLEStandardIdentifierFormat(NSString *path) {
     if(![uuids[0] isEqual:HABLECanonicalUUID(@"180A")])return nil;
     if([uuids[1] isEqual:HABLECanonicalUUID(@"2A25")])return @"gatt_serial";
     if([uuids[1] isEqual:HABLECanonicalUUID(@"2A23")])return @"gatt_system_id";
+    if([uuids[1] isEqual:HABLECanonicalUUID(@"2A29")])return @"gatt_manufacturer";
+    if([uuids[1] isEqual:HABLECanonicalUUID(@"2A24")])return @"gatt_model";
     return nil;
 }
 @implementation HABLEIdentityEvidence
@@ -98,17 +100,17 @@ static NSString *HABLEStandardIdentifierFormat(NSString *path) {
     NSString *standard=HABLEStandardIdentifierFormat(path);
     if(standard) {
         NSData *normalized=data;
-        if([standard isEqual:@"gatt_serial"]) {
+        if(![standard isEqual:@"gatt_system_id"]) {
             NSString *serial=[[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-            if(serial.length<6 || [serial rangeOfCharacterFromSet:NSCharacterSet.controlCharacterSet].location!=NSNotFound || [@[@"unknown",@"default",@"not available",@"serial number",@"serialnumber"] containsObject:serial.lowercaseString])return @{};
+            if(serial.length<([standard isEqual:@"gatt_serial"] ? 6 : 1) || [serial rangeOfCharacterFromSet:NSCharacterSet.controlCharacterSet].location!=NSNotFound || [@[@"unknown",@"default",@"not available",@"serial number",@"serialnumber",@"none",@"n/a",@"null"] containsObject:serial.lowercaseString])return @{};
             BOOL varies=NO;for(NSUInteger i=1;i<serial.length;i++)if([serial characterAtIndex:i]!=[serial characterAtIndex:0])varies=YES;
-            normalized=[serial dataUsingEncoding:NSUTF8StringEncoding];if(!varies || normalized.length>128)return @{};
+            normalized=[serial dataUsingEncoding:NSUTF8StringEncoding];if(([standard isEqual:@"gatt_serial"] && !varies) || normalized.length>128)return @{};
         } else {
             if(data.length!=8)return @{};BOOL allZero=YES,allFF=YES;const uint8_t *bytes=data.bytes;
             for(NSUInteger i=0;i<data.length;i++){allZero=allZero && bytes[i]==0;allFF=allFF && bytes[i]==255;}
             if(allZero || allFF)return @{};
         }
-        NSMutableDictionary *value=[fingerprint(normalized,@"standard_identifier") mutableCopy];value[@"format"]=standard;return @{path:value};
+        NSMutableDictionary *value=[fingerprint(normalized,[@[@"gatt_manufacturer",@"gatt_model"] containsObject:standard] ? @"standard_context" : @"standard_identifier") mutableCopy];value[@"format"]=standard;return @{path:value};
     }
     id object=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
     if(![object isKindOfClass:NSDictionary.class] && ![object isKindOfClass:NSArray.class])return @{path:fingerprint(data,@"opaque")};
