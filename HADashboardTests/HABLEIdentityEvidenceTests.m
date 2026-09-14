@@ -284,9 +284,16 @@
     NSDictionary *a=[resolvers[0] automaticMatchForObservation:observations[0]],*b=[resolvers[1] automaticMatchForObservation:observations[1]];
     XCTAssertEqualObjects(a[@"method"],@"peer_passive_signature");XCTAssertEqualObjects(a[@"address"],b[@"address"]);
     [resolvers[0] rememberAutomaticMatch:a];XCTAssertEqual([[resolvers[0] valueForKey:@"localBindings"] count],0u);
+    // A disappearing observer is not contradictory identity evidence.
+    [[resolvers[0] valueForKey:@"peerInventories"] removeAllObjects];
+    NSDictionary *continued=[resolvers[0] automaticMatchForObservation:observations[0]];
+    XCTAssertEqualObjects(continued[@"address"],a[@"address"]);XCTAssertTrue([continued[@"evidence"] containsString:@"peer is unavailable"]);
+
     NSMutableDictionary *twin=[observations[0] mutableCopy];twin[@"identifier"]=@"twin";[resolvers[0] recordObservation:twin identifier:@"twin"];
     XCTAssertNil([resolvers[0] automaticMatchForObservation:observations[0]]);
     [resolvers[0] removeIdentifier:@"twin"];
+    XCTAssertNil([resolvers[0] automaticMatchForObservation:observations[0]],@"A detected twin invalidates continuity even after it disappears");
+
     NSMutableDictionary *changed=[observations[0] mutableCopy];changed[@"manufacturer_data"]=@"AQIDBAUGBwk=";[resolvers[0] recordObservation:changed identifier:sources[0]];
     XCTAssertNil([resolvers[0] automaticMatchForObservation:changed]);
 }
@@ -298,6 +305,10 @@
     NSMutableDictionary *row=[[[r localInventoryAtTime:now] firstObject] mutableCopy];row[@"local_address"]=@"02:22:33:44:55:66";row[@"last_seen"]=@(now-121);
     [r observeInventory:@{@"schema":@1,@"source":b,@"time":@(now),@"observations":@[row]} source:b];XCTAssertNil([r automaticMatchForObservation:o]);
     row[@"last_seen"]=@(now);[r observeInventory:@{@"schema":@1,@"source":b,@"time":@(now),@"observations":@[row]} source:b];XCTAssertNotNil([r automaticMatchForObservation:o]);
+    [[r valueForKey:@"peerInventories"] removeAllObjects];[r setValue:@"different-account-scope" forKey:@"scope"];
+    XCTAssertNil([r automaticMatchForObservation:o],@"Continuity cannot cross an account scope");
+    [r setValue:nil forKey:@"scope"];[r observeInventory:@{@"schema":@1,@"source":b,@"time":@(now),@"observations":@[row]} source:b];XCTAssertNotNil([r automaticMatchForObservation:o]);
+
     NSMutableDictionary *twin=[row mutableCopy];twin[@"local_address"]=@"02:33:44:55:66:77";
     [r observeInventory:@{@"schema":@1,@"source":b,@"time":@(now),@"observations":@[row,twin]} source:b];XCTAssertNil([r automaticMatchForObservation:o]);
     [[r valueForKey:@"peerInventories"] removeAllObjects];row[@"fingerprints"]=[self stableIdentifierFields];
