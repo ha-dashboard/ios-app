@@ -810,7 +810,9 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
             [self connectionResponse:session connected:NO error:8]; [self.central cancelPeripheralConnection:session.peripheral]; [self.sessions removeObjectForKey:session.address]; [self slotsChanged];
         }
     }
-    if (!(self.tickCount % 4)) {
+    // Heavy periodic work runs every 5s, not every 1s: probe budgets are
+    // 60s/3600s, queue expiry is 30s, and the inner routines gate themselves.
+    if (!(self.tickCount % 20)) {
         [self updateRadio];
         [self updateAutomaticRegistration];
         [self updateIdentityResolution];
@@ -820,7 +822,7 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
         if (self.running) self.status = self.usingServiceFilters && !self.scanServiceUUIDs.count ? @"Import or enter Bluetooth service UUIDs to scan" : [NSString stringWithFormat:@"%@ · %lu client(s) · %lu devices · %lu connections", self.usingServiceFilters ? @"Scanning known services" : @"Scanning", (unsigned long)self.server.authenticatedClients, (unsigned long)self.observations.count, (unsigned long)self.sessions.count];
         [self changed];
     }
-    if (!(self.tickCount % 20)) [self writeDiagnostics];
+    if (!(self.tickCount % 120)) [self writeDiagnostics];
 }
 - (NSTimeInterval)identityProbeIntervalForObservation:(NSDictionary *)observation {
     NSString *identifier=observation[@"identifier"];
