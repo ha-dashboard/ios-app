@@ -719,8 +719,10 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     for(NSString *identifier in self.observations) {
         NSDictionary *observation=self.observations[identifier];
         NSDictionary *mapping=self.automaticMappings[identifier];BOOL provisional=[@[@"passive_signature",@"peer_passive_signature"] containsObject:mapping[@"method"] ?: @""];
-        if(self.mappings[identifier] || (mapping && !provisional) || ![observation[@"connectable"] boolValue] || now-[observation[@"last_seen"] doubleValue]>15 || now-[observation[@"first_seen"] doubleValue]<60 || now-MAX([self.identityProbeTimes[identifier] doubleValue],[observation[@"identification_read_at"] doubleValue])<[self identityProbeIntervalForObservation:observation])continue;
-        [eligible addObject:identifier];references[identifier]=@([self.identityResolver hasFingerprintProbeReferenceForObservation:observation]);
+        if(self.mappings[identifier] || (mapping && !provisional) || ![observation[@"connectable"] boolValue] || now-[observation[@"last_seen"] doubleValue]>60 || now-[observation[@"first_seen"] doubleValue]<60 || now-MAX([self.identityProbeTimes[identifier] doubleValue],[observation[@"identification_read_at"] doubleValue])<[self identityProbeIntervalForObservation:observation])continue;
+        BOOL reference=[self.identityResolver hasFingerprintProbeReferenceForObservation:observation];
+        if(!reference && now-[observation[@"last_seen"] doubleValue]>15)continue;
+        [eligible addObject:identifier];references[identifier]=@(reference);
     }
     NSArray *probeOrder=[eligible sortedArrayUsingComparator:^NSComparisonResult(NSString *a,NSString *b) {
         BOOL verifyA=[self identityProbeIntervalForObservation:self.observations[a]]==60,verifyB=[self identityProbeIntervalForObservation:self.observations[b]]==60;

@@ -64,6 +64,9 @@ catalog or fresh peer inventory, then uses signal strength. This is only a
 scheduling hint: it cannot select an identity or bypass connection and retry
 budgets. Unknown standalone devices remain eligible when references are absent
 or cooling down.
+Referenced devices can be attempted if seen within sixty seconds, accommodating
+sparse reception; unknown devices retain the fifteen-second freshness limit.
+Connection timeouts and probe budgets still bound unsuccessful attempts.
 Connectable provisional matches remain eligible for these probes; verified and
 manually associated devices do not. Diagnostics include the last automatic probe
 time and this process's attempt count, including unsuccessful attempts, so an

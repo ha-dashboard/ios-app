@@ -214,6 +214,7 @@ static NSUInteger HABLERejectedRequestCount;
     HABLEFailingProbeProxy *proxy=[HABLEFailingProbeProxy new];[proxy setValue:@YES forKey:@"identitiesReady"];[proxy setValue:[HABLEProbeHintResolver new] forKey:@"identityResolver"];
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;NSMutableDictionary *rows=[proxy valueForKey:@"observations"];
     for(NSString *identifier in @[@"strong-unknown",@"weak-reference"])rows[identifier]=[@{@"identifier":identifier,@"connectable":@YES,@"first_seen":@(now-120),@"last_seen":@(now),@"rssi":[identifier isEqual:@"weak-reference"] ? @-96 : @-40,@"reference_available":@([identifier isEqual:@"weak-reference"])} mutableCopy];
+    rows[@"weak-reference"][@"last_seen"]=@(now-45);
     [proxy probePendingIdentity];XCTAssertEqualObjects(proxy.inspectedIdentifier,@"weak-reference");
     NSDictionary *diagnostic=[[proxy devices] filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"identifier == %@",@"weak-reference"]].firstObject;
     XCTAssertEqualObjects(diagnostic[@"identity_probe_attempts"],@1);XCTAssertGreaterThan([diagnostic[@"identity_probe_at"] doubleValue],now-1);
@@ -221,6 +222,10 @@ static NSUInteger HABLERejectedRequestCount;
     [proxy setValue:@0 forKey:@"nextIdentityProbeAt"];[proxy probePendingIdentity];
     XCTAssertEqualObjects(proxy.inspectedIdentifier,@"strong-unknown",@"Cooling-down references must not starve unknown standalone devices");
     XCTAssertEqual([[proxy valueForKey:@"automaticMappings"] count],0u,@"Probe scheduling is not an identity match");
+    [proxy valueForKey:@"identityProbeTimes"][@"weak-reference"]=@0;[proxy setValue:@0 forKey:@"nextIdentityProbeAt"];rows[@"weak-reference"][@"last_seen"]=@(now-61);
+    [proxy probePendingIdentity];XCTAssertEqual(proxy.inspections,2u,@"Even a referenced device must have been observed within one minute");
+    rows[@"weak-reference"][@"last_seen"]=@(now-45);rows[@"weak-reference"][@"reference_available"]=@NO;
+    [proxy probePendingIdentity];XCTAssertEqual(proxy.inspections,2u,@"The extended reception window does not apply to unknown devices");
 }
 - (void)testProvisionalMappingsRemainEligibleForBoundedIdentityProbes {
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;
