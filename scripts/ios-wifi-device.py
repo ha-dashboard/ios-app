@@ -9,14 +9,17 @@ import io
 import json
 import plistlib
 import socket
+import sys
+import uuid
 import threading
 import time
 import zipfile
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 
 from pymobiledevice3.lockdown import create_using_tcp
 from pymobiledevice3.pair_records import get_usbmux_pairing_record
+from pymobiledevice3.exceptions import AfcFileNotFoundError
 from pymobiledevice3.services.afc import AfcService
 from pymobiledevice3.services.house_arrest import HouseArrestService
 from pymobiledevice3.services.installation_proxy import InstallationProxyService
@@ -107,14 +110,39 @@ def main():
                         if path.is_file():
                             archive.write(path, str(Path("Payload") / args.app.name /
                                                     path.relative_to(args.app)))
+                # Shared fixed staging names can collide with another device
+                # task. Developer signing must also be declared on newer iOS.
+                package = "/PublicStaging/ha-dashboard-" + str(uuid.uuid4()) + ".ipa"
                 with AfcService(lockdown) as files:
+                    files.service.socket.settimeout(45)
                     files.makedirs("/PublicStaging")
+                    files.set_file_contents(package, payload.getvalue())
                 with InstallationProxyService(lockdown) as installer:
-                    installer.install_from_bytes(payload.getvalue(), cmd="Upgrade")
+                    installer.service.socket.settimeout(45)
+                    installer.service.send_plist({"Command": "Install",
+                                                 "ClientOptions": {"PackageType": "Developer"},
+                                                 "PackagePath": package})
+                    installer._watch_completion(
+                        lambda percent, *_: print(json.dumps({"install_percent": percent}),
+                                                   file=sys.stderr, flush=True))
             with InstallationProxyService(lockdown) as installer:
                 result = installer.lookup({"BundleIDs": [args.bundle], "ReturnAttributes": [
                     "CFBundleIdentifier", "CFBundleVersion", "CFBundleShortVersionString",
                     "CFBundleExecutable", "Path"]})
+            if args.command == "upgrade":
+                installed = result.get(args.bundle, {}).get("CFBundleVersion")
+                if installed != info.get("CFBundleVersion"):
+                    raise RuntimeError("Installed version was not confirmed; run info before retrying")
+                # iOS may already have consumed the package. Cleanup failure
+                # does not undo an independently verified installation.
+                try:
+                    with AfcService(lockdown) as files:
+                        files.service.socket.settimeout(15)
+                        with suppress(AfcFileNotFoundError):
+                            files.rm(package)
+                except Exception as error:
+                    print(json.dumps({"cleanup_error": type(error).__name__,
+                                      "package": package}), file=sys.stderr)
             print(json.dumps(result))
         else:
             print(f"Debugserver: connect://127.0.0.1:{args.port}", flush=True)
