@@ -318,6 +318,13 @@ iPad 3 were unreachable during parts of this window; those devices are not
 included in this common-window result. Identical coverage across the full
 fleet is unverified.
 
+Standalone cold-server acceptance (same date): a fresh Home Assistant
+container with an empty registry, no ESP32 proxy and no native radios
+learned eight SwitchBot devices solely through the iPhone 11 proxy, with
+real hardware addresses and live temperature, humidity and battery values.
+No duplicate devices were created. The phone was returned to the production
+server afterwards.
+
 The previous checkpoint (build 225, same four receivers, 53/56/57/13
 addresses, seven agreeing identities including S36) is superseded by the
 above. The older checkpoints below retain their original build-specific scope.
