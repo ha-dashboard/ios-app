@@ -168,6 +168,22 @@
     o=[self recordPassiveUnit:@"Unit1234" identifier:@"a" address:@"AA:BB:CC:DD:EE:01" resolver:resolver atTime:now];
     XCTAssertNil([resolver automaticMatchForObservation:o]);
 }
+- (void)testQualifiedPassiveSignatureSurvivesBriefReceptionGapButStillRequiresFreshReference {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;HABLEIdentityResolver *resolver=[HABLEIdentityResolver new];
+    [resolver loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];NSDictionary *o=nil;
+    for(NSUInteger i=0;i<4;i++)o=[self recordPassiveUnit:@"Unit1234" identifier:@"a" address:@"AA:BB:CC:DD:EE:01" resolver:resolver atTime:now-90+i*10];
+    o=[self recordPassiveUnit:@"Unit1234" identifier:@"a" address:@"AA:BB:CC:DD:EE:01" resolver:resolver atTime:now];
+    XCTAssertEqualObjects([resolver automaticMatchForObservation:o][@"address"],@"AA:BB:CC:DD:EE:01");
+    NSMutableDictionary *remote=[resolver valueForKey:@"remoteInfo"][@"AA:BB:CC:DD:EE:01"];
+    remote[@"time"]=@(now-121);XCTAssertNil([resolver automaticMatchForObservation:o],@"Prior qualification cannot replace a fresh independent reference");
+    remote[@"time"]=@(now);
+    [self recordPassiveUnit:@"Unit1234" identifier:@"twin" address:@"AA:BB:CC:DD:EE:02" resolver:resolver atTime:now];
+    XCTAssertNil([resolver automaticMatchForObservation:o],@"A same-signature twin still vetoes the provisional match");
+    HABLEIdentityResolver *expired=[HABLEIdentityResolver new];[expired loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    for(NSUInteger i=0;i<4;i++)[self recordPassiveUnit:@"Unit1234" identifier:@"a" address:@"AA:BB:CC:DD:EE:01" resolver:expired atTime:now-180+i*10];
+    o=[self recordPassiveUnit:@"Unit1234" identifier:@"a" address:@"AA:BB:CC:DD:EE:01" resolver:expired atTime:now];
+    XCTAssertNil([expired automaticMatchForObservation:o],@"Long reception gaps require learning again");
+}
 - (void)testPassiveSignatureAcceptsFreshReferenceWithoutCountingSnapshotReplays {
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;HABLEIdentityResolver *resolver=[HABLEIdentityResolver new];
     [resolver loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];

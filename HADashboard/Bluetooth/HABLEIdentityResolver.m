@@ -69,7 +69,11 @@ static NSString *HABLEPassiveSignature(NSDictionary *profile, NSArray *tokens) {
 }
 static void HABLETrackPassiveSignature(NSMutableDictionary *row, NSDictionary *previous, NSString *signature, NSTimeInterval time, NSTimeInterval previousTime) {
     if(!signature || !isfinite(time))return;
-    BOOL continues=[previous[@"passive_signature"] isEqual:signature] && time>=previousTime && time-previousTime<=20;
+    // A qualified unchanged signature can survive a short reception gap. The
+    // caller still requires a fresh local packet and independent reference;
+    // sparse packets must not qualify a new signature in the first place.
+    BOOL qualified=[previous[@"passive_samples"] unsignedIntegerValue]>=3 && previousTime-[previous[@"passive_since"] doubleValue]>=30;
+    BOOL continues=[previous[@"passive_signature"] isEqual:signature] && time>=previousTime && time-previousTime<=(qualified ? 120 : 20);
     row[@"passive_signature"]=signature;
     row[@"passive_since"]=continues ? previous[@"passive_since"] : @(time);
     row[@"passive_samples"]=continues ? @([previous[@"passive_samples"] unsignedIntegerValue]+(time>previousTime ? 1 : 0)) : @1;

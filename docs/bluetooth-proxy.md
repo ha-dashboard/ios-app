@@ -116,8 +116,12 @@ The resolver considers:
 A separate provisional tier can reuse an independent native radio address when
 an identifier-shaped name (letters and digits), canonical service list and
 complete payload fields agree. Local reception must span thirty seconds with
-at least three distinct observation times and no gap over twenty seconds. The
-native reference must be no older than two minutes. If Apple supplies an extended
+at least three distinct observation times and no gap over twenty seconds during
+initial qualification. Once qualified, the unchanged signature can survive a
+reception gap of up to two minutes; a changed signature or longer gap starts
+learning again. A fresh local packet and native reference no older than two
+minutes are still required, and conflicting devices still veto the match.
+If Apple supplies an extended
 payload, every byte of the complete shorter native field must agree; arbitrary
 common prefixes, missing channels and contradictory fields do not qualify.
 

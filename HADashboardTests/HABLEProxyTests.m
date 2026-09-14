@@ -225,6 +225,30 @@ static NSUInteger HABLERejectedRequestCount;
         XCTAssertEqual([[proxy valueForKey:@"pendingIdentityAdvertisements"] count],0u);
     }
 }
+- (void)testSingleProxyAliasesSurvivePayloadChangesWithoutMergingIdenticalTwins {
+    HABLEDiscoveryPolicyProxy *proxy=[HABLEDiscoveryPolicyProxy new];
+    [proxy setValue:@YES forKey:@"running"];[proxy setValue:@YES forKey:@"identitiesReady"];
+    HABLEIdentityResolver *resolver=[HABLEIdentityResolver new];
+    [resolver loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];
+    [proxy setValue:resolver forKey:@"identityResolver"];
+    HABLECapturingServer *server=[[HABLECapturingServer alloc] initWithName:@"test" address:@"02:00:00:00:00:01" key:[NSMutableData dataWithLength:32]];
+    [proxy setValue:server forKey:@"server"];
+    NSMutableArray *peripherals=NSMutableArray.array;NSMutableArray *addresses=NSMutableArray.array;
+    for(NSUInteger unit=0;unit<2;unit++) {
+        HABLEObservedPeripheral *peripheral=[HABLEObservedPeripheral new];peripheral.identifier=NSUUID.UUID;peripheral.name=@"Unit1234";[peripherals addObject:peripheral];
+        for(NSUInteger sample=0;sample<3;sample++) {
+            uint8_t bytes[]={0x34,0x12,1,2,3,4,5,(uint8_t)sample};
+            NSDictionary *ad=@{CBAdvertisementDataLocalNameKey:@"Unit1234",CBAdvertisementDataManufacturerDataKey:[NSData dataWithBytes:bytes length:sizeof(bytes)]};
+            [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-50];
+            [proxy valueForKey:@"observations"][peripheral.identifier.UUIDString][@"first_seen"]=@(NSDate.date.timeIntervalSince1970-61);
+            [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-50];
+            uint64_t address=HABLEInteger(HABLEDecode(server.capturedAdvertisements.lastObject),1);
+            if(sample==0)[addresses addObject:@(address)];else XCTAssertEqual(address,[addresses[unit] unsignedLongLongValue],@"Changing measurements must not change a standalone local alias");
+        }
+    }
+    XCTAssertNotEqualObjects(addresses[0],addresses[1],@"Identical names and advertisements cannot collapse two peripherals on a sole receiver");
+    XCTAssertEqual([[proxy valueForKey:@"automaticMappings"] count],0u);
+}
 - (void)testDiscoveryBurstDoesNotRescanThePendingRegistryBeforeImport {
     HABLEDiscoveryPolicyProxy *proxy=[HABLEDiscoveryPolicyProxy new];HABLECountingResolver *resolver=[HABLECountingResolver new];
     [proxy setValue:resolver forKey:@"identityResolver"];[proxy setValue:@YES forKey:@"running"];
