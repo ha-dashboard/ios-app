@@ -158,12 +158,17 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 @property (nonatomic, assign) NSUInteger fastAdvertisements;
 @property (nonatomic, assign) NSUInteger slowAdvertisements;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *fastResolvedAddresses;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *fastLastForwardAt;
+@property (nonatomic, assign) NSUInteger throttledAdvertisements;
 - (void)startScanUsingServices:(BOOL)services;
 - (void)updateScanPolicy;
 - (void)cancelScanImport;
 - (void)pump:(HABLEPeripheralSession *)session;
 @end
 
+// Identical-payload repeats forward at most once per device per interval.
+// Changed payloads, identity transitions and held-queue releases always forward immediately.
+static const NSTimeInterval HABLEForwardCoalesceInterval = 1.0;
 static BOOL HABLECBUUIDsEqual(NSArray<CBUUID *> *a, NSArray<CBUUID *> *b) {
     if (a.count != b.count) return NO;
     for (NSUInteger i = 0; i < a.count; i++) if (![a[i].data isEqualToData:b[i].data]) return NO;
@@ -198,7 +203,7 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
         _observations = [NSMutableDictionary dictionary]; _peripherals = [NSMutableDictionary dictionary]; _sessions = [NSMutableDictionary dictionary];
         _fastPacketBodies = [NSMutableDictionary dictionary]; _fastRssiOffsets = [NSMutableDictionary dictionary]; _fastRssiLengths = [NSMutableDictionary dictionary];
         _fastManufacturers = [NSMutableDictionary dictionary]; _fastAdvertisedServices = [NSMutableDictionary dictionary]; _fastServiceData = [NSMutableDictionary dictionary];
-        _fastAutomaticMappings = [NSMutableDictionary dictionary]; _fastManualMappings = [NSMutableDictionary dictionary]; _fastHoldDecisions = [NSMutableDictionary dictionary]; _fastKnownAt = [NSMutableDictionary dictionary]; _fastResolvedAddresses = [NSMutableDictionary dictionary];
+        _fastAutomaticMappings = [NSMutableDictionary dictionary]; _fastManualMappings = [NSMutableDictionary dictionary]; _fastHoldDecisions = [NSMutableDictionary dictionary]; _fastKnownAt = [NSMutableDictionary dictionary]; _fastResolvedAddresses = [NSMutableDictionary dictionary]; _fastLastForwardAt = [NSMutableDictionary dictionary];
         _identityMetadata = [[[NSUserDefaults standardUserDefaults] dictionaryForKey:@"ha_ble_proxy_identity_metadata"] mutableCopy] ?: [NSMutableDictionary dictionary];
         _mappings = [[defaults dictionaryForKey:HABLEMappingKey] mutableCopy] ?: [NSMutableDictionary dictionary];
         _status = @"Off";
@@ -428,7 +433,7 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
     self.registration = [[HABLEProxyRegistration alloc] init]; self.nextRegistrationAttempt = 0;
     self.registeredContext = nil; self.integrationRegistrationWasEnabled = NO;
     [[NSUserDefaults standardUserDefaults] setBool:NO forKey:HABLEEnabledKey];
-    [self.automaticMappings removeAllObjects]; [self.identityLabels removeAllObjects]; [self.identityCheckTimes removeAllObjects]; [self.identityProbeTimes removeAllObjects]; [self.identityProbeAttempts removeAllObjects]; self.nextIdentityProbeAt = 0; self.fastAdvertisements = 0; self.slowAdvertisements = 0; [self clearFastAdvertisementCaches];
+    [self.automaticMappings removeAllObjects]; [self.identityLabels removeAllObjects]; [self.identityCheckTimes removeAllObjects]; [self.identityProbeTimes removeAllObjects]; [self.identityProbeAttempts removeAllObjects]; self.nextIdentityProbeAt = 0; self.fastAdvertisements = 0; self.slowAdvertisements = 0; self.throttledAdvertisements = 0; [self clearFastAdvertisementCaches];
     self.identityResolver = [[HABLEIdentityResolver alloc] init]; self.identityScope = nil; self.identitiesReady = NO; self.identityPacketsDropped = 0;
     self.advertisementCount = self.forwardedCount = self.discoveryCallbacks = self.unknownRSSICount = 0;
     self.gattReads = self.gattWrites = self.gattNotifications = 0;
@@ -502,7 +507,7 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
         self.observations[identifier][@"identity_pending"] = @YES;
         if (self.pendingIdentityAdvertisements.count >= 256) { [self.pendingIdentityAdvertisements removeObjectAtIndex:0]; self.identityPacketsDropped++; }
         [self.pendingIdentityAdvertisements addObject:@{@"identifier":identifier, @"packet":packet, @"queued_at":@(CFAbsoluteTimeGetCurrent())}];
-    } else [self forwardPacket:packet identifier:identifier];
+    } else { [self forwardPacket:packet identifier:identifier]; self.fastLastForwardAt[identifier] = @(repeatEpoch); }
 }
 - (BOOL)shouldHoldIdentityAdvertisementsForIdentifier:(NSString *)identifier {
     if(self.mappings[identifier] || self.automaticMappings[identifier])return NO;
@@ -559,12 +564,12 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
 - (void)clearFastAdvertisementCacheForIdentifier:(NSString *)identifier {
     [self.fastPacketBodies removeObjectForKey:identifier]; [self.fastRssiOffsets removeObjectForKey:identifier]; [self.fastRssiLengths removeObjectForKey:identifier];
     [self.fastManufacturers removeObjectForKey:identifier]; [self.fastAdvertisedServices removeObjectForKey:identifier]; [self.fastServiceData removeObjectForKey:identifier];
-    [self.fastAutomaticMappings removeObjectForKey:identifier]; [self.fastManualMappings removeObjectForKey:identifier]; [self.fastHoldDecisions removeObjectForKey:identifier]; [self.fastKnownAt removeObjectForKey:identifier]; [self.fastResolvedAddresses removeObjectForKey:identifier];
+    [self.fastAutomaticMappings removeObjectForKey:identifier]; [self.fastManualMappings removeObjectForKey:identifier]; [self.fastHoldDecisions removeObjectForKey:identifier]; [self.fastKnownAt removeObjectForKey:identifier]; [self.fastResolvedAddresses removeObjectForKey:identifier]; [self.fastLastForwardAt removeObjectForKey:identifier];
 }
 - (void)clearFastAdvertisementCaches {
     [self.fastPacketBodies removeAllObjects]; [self.fastRssiOffsets removeAllObjects]; [self.fastRssiLengths removeAllObjects];
     [self.fastManufacturers removeAllObjects]; [self.fastAdvertisedServices removeAllObjects]; [self.fastServiceData removeAllObjects];
-    [self.fastAutomaticMappings removeAllObjects]; [self.fastManualMappings removeAllObjects]; [self.fastHoldDecisions removeAllObjects]; [self.fastKnownAt removeAllObjects]; [self.fastResolvedAddresses removeAllObjects];
+    [self.fastAutomaticMappings removeAllObjects]; [self.fastManualMappings removeAllObjects]; [self.fastHoldDecisions removeAllObjects]; [self.fastKnownAt removeAllObjects]; [self.fastResolvedAddresses removeAllObjects]; [self.fastLastForwardAt removeAllObjects];
 }
 - (BOOL)forwardRepeatedAdvertisementForIdentifier:(NSString *)identifier previous:(NSMutableDictionary *)previous name:(NSString *)name connectable:(BOOL)connectable manufacturer:(NSData *)manufacturer advertisedServices:(NSArray *)advertisedServices services:(NSDictionary *)services rssi:(NSNumber *)RSSI nowEpoch:(NSTimeInterval)nowEpoch {
     NSData *cachedBody = self.fastPacketBodies[identifier];
@@ -603,12 +608,19 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
     } else {
         NSNumber *resolved = self.fastResolvedAddresses[identifier];
         if (!resolved) return NO;
+        NSNumber *lastForward = self.fastLastForwardAt[identifier];
+        if (lastForward && nowEpoch - [lastForward doubleValue] < HABLEForwardCoalesceInterval) {
+            self.throttledAdvertisements++;
+            self.fastAdvertisements++;
+            return YES;
+        }
         [self.observations[identifier] removeObjectForKey:@"identity_pending"];
         [self flushIdentityAdvertisementsForIdentifier:identifier];
         NSMutableData *finished = [packet mutableCopy];
         HABLEPutInteger(finished, 1, [resolved unsignedLongLongValue]);
         HABLEPutInteger(finished, 7, (self.mappings[identifier] || self.automaticMappings[identifier]) ? 0 : 1);
         if ([self.server broadcastAdvertisement:finished]) self.forwardedCount++;
+        self.fastLastForwardAt[identifier] = @(nowEpoch);
     }
     self.fastAdvertisements++;
     return YES;
@@ -799,7 +811,7 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
     [self changed]; return YES;
 }
 - (NSDictionary *)diagnostics {
-    return @{@"schema":@1, @"time":@([[NSDate date] timeIntervalSince1970]), @"enabled":@(self.enabled), @"running":@(self.running), @"status":self.status ?: @"", @"node":self.nodeName, @"adapter_alias":self.adapterAddress, @"host":self.host ?: @"", @"port":@6053, @"clients":@(self.server.authenticatedClients), @"advertisements":@(self.advertisementCount), @"forwarded":@(self.forwardedCount), @"active_connections":@(self.sessions.count), @"devices":self.devices, @"backend":@"public_core_bluetooth", @"transport":@"noise_nnpsk0", @"discovery_callbacks":@(self.discoveryCallbacks), @"unknown_rssi_callbacks":@(self.unknownRSSICount), @"central_state":@((NSInteger)self.central.state), @"scanning":@(self.central.isScanning), @"application_state":@((NSInteger)[UIApplication sharedApplication].applicationState), @"app_build":[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"", @"scan_mode":@(self.scanMode), @"using_service_filters":@(self.usingServiceFilters), @"scan_service_uuids":self.scanServiceUUIDs, @"scan_service_status":self.scanServiceStatus ?: @"", @"registration_status":self.registrationStatus ?: @"", @"registration_requested":@([[NSUserDefaults standardUserDefaults] boolForKey:@"ha_ble_proxy_auto_register"]), @"registration_automatic":@([HADeviceIntegrationManager sharedManager].enabled), @"identity_status":self.identityResolver.status ?: @"", @"identity_importing":@(self.importingIdentities),@"peer_inventory":[self.identityResolver inventoryDiagnostics], @"last_identity_probe":self.lastIdentityProbe ?: @{}, @"identity_matches":@(self.automaticMappings.count), @"identity_packets_dropped":@(self.identityPacketsDropped), @"fast_path_packets":@(self.fastAdvertisements), @"slow_path_packets":@(self.slowAdvertisements), @"gatt_reads":@(self.gattReads), @"gatt_writes":@(self.gattWrites), @"gatt_notifications":@(self.gattNotifications)};
+    return @{@"schema":@1, @"time":@([[NSDate date] timeIntervalSince1970]), @"enabled":@(self.enabled), @"running":@(self.running), @"status":self.status ?: @"", @"node":self.nodeName, @"adapter_alias":self.adapterAddress, @"host":self.host ?: @"", @"port":@6053, @"clients":@(self.server.authenticatedClients), @"advertisements":@(self.advertisementCount), @"forwarded":@(self.forwardedCount), @"active_connections":@(self.sessions.count), @"devices":self.devices, @"backend":@"public_core_bluetooth", @"transport":@"noise_nnpsk0", @"discovery_callbacks":@(self.discoveryCallbacks), @"unknown_rssi_callbacks":@(self.unknownRSSICount), @"central_state":@((NSInteger)self.central.state), @"scanning":@(self.central.isScanning), @"application_state":@((NSInteger)[UIApplication sharedApplication].applicationState), @"app_build":[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"", @"scan_mode":@(self.scanMode), @"using_service_filters":@(self.usingServiceFilters), @"scan_service_uuids":self.scanServiceUUIDs, @"scan_service_status":self.scanServiceStatus ?: @"", @"registration_status":self.registrationStatus ?: @"", @"registration_requested":@([[NSUserDefaults standardUserDefaults] boolForKey:@"ha_ble_proxy_auto_register"]), @"registration_automatic":@([HADeviceIntegrationManager sharedManager].enabled), @"identity_status":self.identityResolver.status ?: @"", @"identity_importing":@(self.importingIdentities),@"peer_inventory":[self.identityResolver inventoryDiagnostics], @"last_identity_probe":self.lastIdentityProbe ?: @{}, @"identity_matches":@(self.automaticMappings.count), @"identity_packets_dropped":@(self.identityPacketsDropped), @"fast_path_packets":@(self.fastAdvertisements), @"slow_path_packets":@(self.slowAdvertisements), @"forwarded_throttled":@(self.throttledAdvertisements), @"gatt_reads":@(self.gattReads), @"gatt_writes":@(self.gattWrites), @"gatt_notifications":@(self.gattNotifications)};
 }
 - (void)tick:(NSTimer *)timer {
     self.tickCount++;
