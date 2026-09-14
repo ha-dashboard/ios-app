@@ -21,6 +21,7 @@ static NSString *const HABLEEnabledKey = @"ha_ble_proxy_enabled";
 static NSString *const HABLEMappingKey = @"ha_ble_proxy_address_mapping";
 static NSString *const HABLEScanModeKey = @"ha_ble_proxy_scan_mode";
 static NSString *const HABLEImportedServicesKey = @"ha_ble_proxy_imported_services";
+static NSString *const HABLEUserRemovedKey = @"ha_ble_proxy_user_removed";
 static NSString *const HABLEAdditionalServicesKey = @"ha_ble_proxy_additional_services";
 static const NSUInteger HABLESlots = 3;
 
@@ -425,7 +426,7 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
     [self.observations removeAllObjects]; [self.peripherals removeAllObjects]; [self.mappings removeAllObjects]; [self.handleTables removeAllObjects]; [self.identityMetadata removeAllObjects]; [self clearFastAdvertisementCaches];
     NSDictionary *query = @{(__bridge id)kSecClass:(__bridge id)kSecClassGenericPassword, (__bridge id)kSecAttrService:@"org.hadashboard.ble-proxy", (__bridge id)kSecAttrAccount:@"noise-key"};
     SecItemDelete((__bridge CFDictionaryRef)query);
-    for (NSString *key in @[@"ha_ble_proxy_enabled", @"ha_ble_proxy_installation", @"ha_ble_proxy_address_mapping", @"ha_ble_proxy_handle_tables", @"ha_ble_proxy_identity_metadata", @"ha_ble_proxy_auto_register", HABLEScanModeKey, HABLEImportedServicesKey, HABLEAdditionalServicesKey, @"HABLEProxyEnabled", @"HABLEProxyRegister", @"HABLEProxyServiceUUIDs", @"HABLEProxyScanMode", @"ha_ble_identity_bindings_v2", @"ha_ble_peer_continuity_v1"]) [[NSUserDefaults standardUserDefaults] removeObjectForKey:key];
+    for (NSString *key in @[@"ha_ble_proxy_enabled", @"ha_ble_proxy_installation", @"ha_ble_proxy_address_mapping", @"ha_ble_proxy_handle_tables", @"ha_ble_proxy_identity_metadata", @"ha_ble_proxy_auto_register", HABLEScanModeKey, HABLEImportedServicesKey, HABLEAdditionalServicesKey, @"HABLEProxyEnabled", @"HABLEProxyRegister", @"HABLEProxyServiceUUIDs", @"HABLEProxyScanMode", @"ha_ble_identity_bindings_v2", @"ha_ble_peer_continuity_v1", HABLEUserRemovedKey]) [[NSUserDefaults standardUserDefaults] removeObjectForKey:key];
     self.importedScanServiceUUIDs = @[]; self.additionalScanServiceUUIDs = @[]; self.usingServiceFilters = NO; self.nextScanImport = 0;
     self.scanServiceStatus = @"Services can be imported from Home Assistant";
     self.installationID = [NSUUID UUID].UUIDString; self.adapterAddress = HABLEAddressString(HABLEAlias(self.installationID));
@@ -744,7 +745,21 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
     completion(message && !hasPartialReads ? nil : identity, message ? [NSError errorWithDomain:@"HABLEIdentity" code:3 userInfo:@{NSLocalizedDescriptionKey:message}] : nil);
 }
 - (void)registerWithHomeAssistant {
+    [[NSUserDefaults standardUserDefaults] setBool:NO forKey:HABLEUserRemovedKey];
     [self registerWithHomeAssistantAutomatically:NO];
+}
+- (BOOL)proxyRegistered { return self.registration.registered; }
+- (void)removeFromHomeAssistant {
+    NSString *context = [self registrationContext];
+    __weak typeof(self) weakSelf = self;
+    [self.registration removeProxyHost:self.host nodeName:self.nodeName completion:^(BOOL success) {
+        HABLEProxyManager *self = weakSelf; if (!self) return;
+        if (success) {
+            [[NSUserDefaults standardUserDefaults] setBool:YES forKey:HABLEUserRemovedKey];
+            self.registeredContext = context;
+        }
+        [self changed];
+    }]; [self changed];
 }
 - (NSString *)registrationContext {
     HAAuthManager *auth = [HAAuthManager sharedManager];
@@ -764,6 +779,12 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
     if (enabled != self.integrationRegistrationWasEnabled) {
         self.integrationRegistrationWasEnabled = enabled;
         self.registeredContext = nil; self.nextRegistrationAttempt = 0;
+    }
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:HABLEUserRemovedKey]) {
+        if (self.automaticRegistrationInFlight) {
+            [self.registration cancel]; self.automaticRegistrationInFlight = NO; [self changed];
+        }
+        return;
     }
     if (!enabled && !requested) {
         if (self.automaticRegistrationInFlight) {

@@ -43,7 +43,7 @@
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section { return @[@"Bluetooth Proxy", @"Home Assistant setup", @"Discovery", @"Nearby devices"][section]; }
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == 0) return @"Share nearby Bluetooth LE devices with Home Assistant while HA Dashboard is open. The connection is encrypted. Locking the screen or leaving the iOS app pauses the proxy. Uses Apple's public Bluetooth APIs.";
-    if (section == 1) return @"Register with Home Assistant automatically enables and registers the proxy unless you have switched it off here. Administrator access is required. You can also tap Add to Home Assistant, or add ESPHome manually using this address, port 6053 and the encryption key. HA must reach this device on the local network. Use HTTPS or a trusted local network.";
+    if (section == 1) return @"Register with Home Assistant automatically enables and registers the proxy unless you have switched it off here. Administrator access is required. You can add or remove this proxy here, or add ESPHome manually using this address, port 6053 and the encryption key. HA must reach this device on the local network. Use HTTPS or a trusted local network.";
     if (section == 2) return @"Automatic starts with broad discovery. If no devices are discovered, it imports advertised service UUIDs from HA and tries service filters. Filtered scans can miss devices that do not advertise a known service. Additional UUIDs are combined with HA's services.";
     return @"Identities are learned automatically from Home Assistant, standard identifiers and synchronized observations. Ambiguous devices remain pending. Tap a device to inspect the evidence or confirm an association. Local aliases are not hardware addresses.";
 }
@@ -57,7 +57,7 @@
     } else if (path.section == 0) { cell.textLabel.text = manager.status; cell.detailTextLabel.text = [NSString stringWithFormat:@"%lu advertisements received · %lu forwarded", (unsigned long)manager.advertisementCount, (unsigned long)manager.forwardedCount]; }
     else if (path.section == 1 && path.row == 0) { cell.textLabel.text = manager.host ? [manager.host stringByAppendingString:@":6053"] : @"Proxy is not listening"; cell.detailTextLabel.text = manager.nodeName; }
     else if (path.section == 1 && path.row == 1) { cell.textLabel.text = @"Copy encryption key"; cell.textLabel.textColor = self.view.tintColor; cell.detailTextLabel.text = @"Only share this key with your Home Assistant server."; cell.isAccessibilityElement = YES; cell.accessibilityLabel = @"Copy encryption key"; cell.accessibilityTraits = UIAccessibilityTraitButton; }
-    else if (path.section == 1) { cell.textLabel.text = @"Add to Home Assistant"; cell.detailTextLabel.text = manager.registrationStatus; cell.isAccessibilityElement = YES; cell.accessibilityLabel = @"Add to Home Assistant"; cell.accessibilityTraits = UIAccessibilityTraitButton; }
+    else if (path.section == 1) { BOOL registered = manager.proxyRegistered; cell.textLabel.text = registered ? @"Remove from Home Assistant" : @"Add to Home Assistant"; if (registered) cell.textLabel.textColor = [UIColor redColor]; cell.detailTextLabel.text = manager.registrationStatus; cell.isAccessibilityElement = YES; cell.accessibilityLabel = cell.textLabel.text; cell.accessibilityTraits = UIAccessibilityTraitButton; }
     else if (path.section == 2) {
         if (path.row == 0) {
             cell.textLabel.text = [@"Scan mode: " stringByAppendingString:@[@"Automatic", @"Broad discovery", @"Known services"][manager.scanMode]];
@@ -86,7 +86,14 @@
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:key ? @"Encryption key copied" : @"Key unavailable" message:key ? copyMessage : @"Unlock this device and try again." preferredStyle:UIAlertControllerStyleAlert];
         [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]]; [self presentViewController:alert animated:YES completion:nil];
     } else if (path.section == 1 && path.row == 2) {
-        [manager registerWithHomeAssistant];
+        if (manager.proxyRegistered) {
+            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Remove from Home Assistant" message:@"Home Assistant will no longer connect to this proxy and its ESPHome entry is deleted. The proxy keeps running locally; add it again any time." preferredStyle:UIAlertControllerStyleAlert];
+            [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+            [alert addAction:[UIAlertAction actionWithTitle:@"Remove" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) { [[HABLEProxyManager sharedManager] removeFromHomeAssistant]; }]];
+            [self presentViewController:alert animated:YES completion:nil];
+        } else {
+            [manager registerWithHomeAssistant];
+        }
     } else if (path.section == 2 && path.row == 0) {
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Discovery mode" message:@"Automatic adapts when broad scanning returns no discoveries." preferredStyle:UIAlertControllerStyleAlert];
         NSArray *names = @[@"Automatic", @"Broad discovery", @"Known services"];

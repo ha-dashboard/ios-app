@@ -26,6 +26,15 @@
 @end
 @interface HABLEProxyRegistration (PermissionTestAccess)
 + (BOOL)isAdministratorInfo:(id)value;
+- (void)finish:(BOOL)success status:(NSString *)status;
+- (void)finishRemoval:(BOOL)success status:(NSString *)status;
+@end
+@interface HABLEImmediateRemovalRegistration : HABLEProxyRegistration
+@property (copy) NSString *removedHost;
+@property (copy) NSString *removedNode;
+@end
+@implementation HABLEImmediateRemovalRegistration
+- (void)removeProxyHost:(NSString *)host nodeName:(NSString *)nodeName completion:(void (^)(BOOL))completion { self.removedHost = host; self.removedNode = nodeName; completion(YES); }
 @end
 
 static NSUInteger HABLERejectedRequestCount;
@@ -57,6 +66,7 @@ static NSUInteger HABLERejectedRequestCount;
 
 @interface HABLEProxyManager (ProtocolTestAccess)
 - (void)updateAutomaticRegistrationWithIntegrationEnabled:(BOOL)enabled connected:(BOOL)connected context:(NSString *)context;
+- (NSString *)registrationContext;
 - (void)registerWithHomeAssistantAutomatically:(BOOL)automatic;
 - (BOOL)matchIdentifier:(NSString *)identifier;
 - (void)finishOperation:(id)session error:(NSUInteger)error;
@@ -838,5 +848,60 @@ static NSArray *HABLEIngestRows(NSUInteger count, NSTimeInterval now) {
     XCTAssertEqual(proxy.fastHits, 2u);
     XCTAssertEqual(server.capturedAdvertisements.count, 4u, @"A repeat past the coalesce window forwards again");
     XCTAssertEqual(HABLEInteger(HABLEDecode(server.capturedAdvertisements.lastObject), 3), 123u, @"zigzag(-62)");
+}
+- (void)testRemovalEntryMatcherPrefersHostThenTitle {
+    NSArray *entries = @[
+        @{@"entry_id":@"esp32-id",@"domain":@"esphome",@"title":@"Garage",@"data":@{@"host":@"192.168.1.50"}},
+        @{@"entry_id":@"ours-id",@"domain":@"esphome",@"title":@"ha-dash-abc",@"data":@{@"host":@"192.168.0.124"}},
+        @{@"entry_id":@"bt-id",@"domain":@"bluetooth",@"title":@"ha-dash-abc",@"data":@{}}
+    ];
+    XCTAssertEqualObjects([HABLEProxyRegistration entryIDForProxyHost:@"192.168.0.124" nodeName:@"ha-dash-abc" inEntries:entries], @"ours-id");
+    XCTAssertEqualObjects([HABLEProxyRegistration entryIDForProxyHost:@"192.168.0.99" nodeName:@"HA-DASH-ABC" inEntries:entries], @"ours-id", @"Title fallback covers DHCP changes, case-insensitively");
+    XCTAssertEqualObjects([HABLEProxyRegistration entryIDForProxyHost:@"192.168.1.50" nodeName:@"ha-dash-abc" inEntries:entries], @"esp32-id", @"An exact host match wins over the title fallback");
+    XCTAssertNil([HABLEProxyRegistration entryIDForProxyHost:@"192.168.0.99" nodeName:@"other" inEntries:entries]);
+    XCTAssertNil([HABLEProxyRegistration entryIDForProxyHost:@"192.168.0.124" nodeName:@"ha-dash-abc" inEntries:@[]]);
+}
+- (void)testRegistrationFlagFollowsSetupOutcome {
+    HABLEProxyRegistration *registration = [HABLEProxyRegistration new];
+    XCTAssertFalse(registration.registered);
+    [registration finish:YES status:@"Added to Home Assistant"];
+    XCTAssertTrue(registration.registered);
+    [registration finish:NO status:@"Setup stopped: already_gone"];
+    XCTAssertTrue(registration.registered, @"A failed re-run must not clear a completed setup");
+    [registration finishRemoval:YES status:@"Removed from Home Assistant"];
+    XCTAssertFalse(registration.registered);
+    XCTAssertNil(registration.entryID);
+    XCTAssertEqualObjects(registration.status, @"Removed from Home Assistant");
+}
+- (void)testUserRemovalFreezesAutomaticSetupUntilManualAdd {
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    id savedRemoved = [defaults objectForKey:@"ha_ble_proxy_user_removed"];
+    id savedRequested = [defaults objectForKey:@"ha_ble_proxy_auto_register"];
+    [defaults removeObjectForKey:@"ha_ble_proxy_user_removed"];
+    [defaults removeObjectForKey:@"ha_ble_proxy_auto_register"];
+    HABLERegistrationPolicyProxy *proxy = [[HABLERegistrationPolicyProxy alloc] init];
+    [proxy setValue:@YES forKey:@"running"];
+    [defaults setBool:YES forKey:@"ha_ble_proxy_user_removed"];
+    [proxy updateAutomaticRegistrationWithIntegrationEnabled:YES connected:YES context:@"server-one"];
+    XCTAssertEqual(proxy.registrationAttempts, 0u, @"Explicit removal must freeze automatic setup");
+    HABLEProxyManager *manual = [HABLEProxyManager new];
+    [manual registerWithHomeAssistant];
+    XCTAssertFalse([defaults boolForKey:@"ha_ble_proxy_user_removed"], @"Manual Add clears the removal opt-out");
+    if (savedRemoved) [defaults setObject:savedRemoved forKey:@"ha_ble_proxy_user_removed"]; else [defaults removeObjectForKey:@"ha_ble_proxy_user_removed"];
+    if (savedRequested) [defaults setObject:savedRequested forKey:@"ha_ble_proxy_auto_register"]; else [defaults removeObjectForKey:@"ha_ble_proxy_auto_register"];
+}
+- (void)testRemovalCompletionFreezesReregistrationContext {
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    id savedRemoved = [defaults objectForKey:@"ha_ble_proxy_user_removed"];
+    [defaults removeObjectForKey:@"ha_ble_proxy_user_removed"];
+    HABLEProxyManager *manager = [HABLEProxyManager new];
+    HABLEImmediateRemovalRegistration *registration = [HABLEImmediateRemovalRegistration new];
+    [manager setValue:registration forKey:@"registration"];
+    [manager removeFromHomeAssistant];
+    XCTAssertEqualObjects(registration.removedHost, manager.host);
+    XCTAssertEqualObjects(registration.removedNode, manager.nodeName);
+    XCTAssertTrue([defaults boolForKey:@"ha_ble_proxy_user_removed"]);
+    XCTAssertEqualObjects([manager valueForKey:@"registeredContext"], [manager registrationContext]);
+    if (savedRemoved) [defaults setObject:savedRemoved forKey:@"ha_ble_proxy_user_removed"]; else [defaults removeObjectForKey:@"ha_ble_proxy_user_removed"];
 }
 @end

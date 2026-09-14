@@ -18,6 +18,7 @@ typedef NS_ENUM(NSUInteger, HABLEScanMode) {
 @property (nonatomic, readonly) NSUInteger forwardedCount;
 @property (nonatomic, readonly) NSArray<NSDictionary *> *devices;
 @property (nonatomic, readonly) NSString *registrationStatus;
+@property (nonatomic, readonly) BOOL proxyRegistered;
 @property (nonatomic, assign) HABLEScanMode scanMode;
 @property (nonatomic, readonly) BOOL usingServiceFilters;
 @property (nonatomic, readonly) NSArray<NSString *> *scanServiceUUIDs;
@@ -26,6 +27,7 @@ typedef NS_ENUM(NSUInteger, HABLEScanMode) {
 - (BOOL)setAdditionalScanServiceUUIDs:(NSArray<NSString *> *)values error:(NSError **)error;
 - (void)refreshScanServices;
 - (void)registerWithHomeAssistant;
+- (void)removeFromHomeAssistant;
 - (void)refreshIdentityInformation;
 - (NSArray<NSDictionary *> *)identityCandidatesForObservation:(NSDictionary *)observation;
 - (NSString *)encryptionKey;

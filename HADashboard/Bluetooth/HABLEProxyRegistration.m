@@ -23,6 +23,7 @@ static BOOL HABLESetupURLIsProtected(NSURL *URL) {
 
 @interface HABLEProxyRegistration ()
 @property (nonatomic, assign, readwrite) BOOL registering;
+@property (nonatomic, assign, readwrite) BOOL registered;
 @property (nonatomic, copy, readwrite) NSString *status;
 @property (nonatomic, copy, readwrite) NSString *entryID;
 @property (nonatomic, strong) HAAPIClient *api;
@@ -38,6 +39,21 @@ static BOOL HABLESetupURLIsProtected(NSURL *URL) {
 + (BOOL)isAdministratorInfo:(id)value { return [value isKindOfClass:[NSDictionary class]] && [value[@"is_admin"] isKindOfClass:[NSNumber class]] && [value[@"is_admin"] boolValue]; }
 + (BOOL)isSetupURLAllowed:(NSURL *)URL { return HABLESetupURLIsProtected(URL); }
 + (BOOL)isSuccessfulExistingEntryReason:(NSString *)reason { return [reason isEqual:@"already_configured"] || [reason isEqual:@"already_configured_updates"]; }
++ (NSString *)entryIDForProxyHost:(NSString *)host nodeName:(NSString *)nodeName inEntries:(NSArray *)entries {
+    NSString *foundByTitle = nil;
+    for (id entry in entries) {
+        if (![entry isKindOfClass:NSDictionary.class]) continue;
+        if (![[entry objectForKey:@"domain"] isEqual:@"esphome"]) continue;
+        NSString *entryID = [entry objectForKey:@"entry_id"];
+        if (![entryID isKindOfClass:NSString.class] || !entryID.length) continue;
+        id data = [entry objectForKey:@"data"];
+        NSString *entryHost = [data isKindOfClass:NSDictionary.class] ? [data objectForKey:@"host"] : nil;
+        if ([entryHost isKindOfClass:NSString.class] && host.length && [entryHost caseInsensitiveCompare:host] == NSOrderedSame) return entryID;
+        id title = [entry objectForKey:@"title"];
+        if (!foundByTitle && nodeName.length && [title isKindOfClass:NSString.class] && [title caseInsensitiveCompare:nodeName] == NSOrderedSame) foundByTitle = entryID;
+    }
+    return foundByTitle;
+}
 - (instancetype)init { if ((self = [super init])) _status = @"Not registered by this app"; return self; }
 - (void)cancel { self.generation++; [self.api cancelAllRequests]; self.api = nil; self.key = nil; self.completion = nil; if (self.registering) self.status = @"Setup paused"; self.registering = NO; }
 - (void)registerHost:(NSString *)host key:(NSString *)key completion:(void (^)(BOOL))completion {
@@ -60,8 +76,41 @@ static BOOL HABLESetupURLIsProtected(NSURL *URL) {
     }];
 }
 - (void)finish:(BOOL)success status:(NSString *)status {
-    self.status = status; self.registering = NO; self.key = nil;
+    self.status = status; self.registering = NO; self.key = nil; if (success) self.registered = YES;
     HALogI(@"bleproxy", @"HA proxy setup %@: %@", success ? @"completed" : @"stopped", status);
+    void (^completion)(BOOL) = self.completion; self.completion = nil; if (completion) completion(success);
+}
+- (void)removeProxyHost:(NSString *)host nodeName:(NSString *)nodeName completion:(void (^)(BOOL success))completion {
+    [self cancel];
+    HAConnectionManager *connection = [HAConnectionManager sharedManager];
+    if (!connection.connected) { self.status = @"Connect to Home Assistant as an administrator first"; completion(NO); return; }
+    self.completion = completion; self.registering = YES; self.status = @"Checking Home Assistant administrator access";
+    NSUInteger generation = self.generation; __weak typeof(self) weakSelf = self;
+    [connection sendCommand:@{@"type":@"auth/current_user"} completion:^(id user, NSError *error) {
+        HABLEProxyRegistration *self = weakSelf; if (!self || generation != self.generation) return;
+        if (error || ![[self class] isAdministratorInfo:user]) { [self finishRemoval:NO status:@"An HA administrator account is required to remove the proxy"]; return; }
+        HAAuthManager *current = [HAAuthManager sharedManager];
+        self.api = [[HAAPIClient alloc] initWithBaseURL:[NSURL URLWithString:current.serverURL] token:current.accessToken requestTimeoutInterval:20 resourceTimeoutInterval:30];
+        self.status = @"Finding this proxy in Home Assistant";
+        [self.api getJSONAtPath:@"config/config_entries/entry?domain=esphome" completion:^(id entries, NSError *listError) {
+            HABLEProxyRegistration *self = weakSelf; if (!self || generation != self.generation) return;
+            if (listError || ![entries isKindOfClass:NSArray.class]) { [self finishRemoval:NO status:listError.localizedDescription ?: @"Home Assistant entry lookup failed"]; return; }
+            NSString *entryID = [[self class] entryIDForProxyHost:host nodeName:nodeName inEntries:entries];
+            if (!entryID.length) { [self finishRemoval:NO status:@"No matching Home Assistant entry found"]; return; }
+            self.status = @"Removing this proxy from Home Assistant";
+            [self.api deleteJSONAtPath:[@"config/config_entries/entry/" stringByAppendingString:entryID] completion:^(id ignored, NSError *deleteError) {
+                HABLEProxyRegistration *self = weakSelf; if (!self || generation != self.generation) return;
+                (void)ignored;
+                if (deleteError) [self finishRemoval:NO status:deleteError.localizedDescription ?: @"Home Assistant removal failed"];
+                else [self finishRemoval:YES status:@"Removed from Home Assistant"];
+            }];
+        }];
+    }];
+}
+- (void)finishRemoval:(BOOL)success status:(NSString *)status {
+    self.status = status; self.registering = NO; self.api = nil;
+    if (success) { self.registered = NO; self.entryID = nil; }
+    HALogI(@"bleproxy", @"HA proxy removal %@: %@", success ? @"completed" : @"stopped", status);
     void (^completion)(BOOL) = self.completion; self.completion = nil; if (completion) completion(success);
 }
 - (void)post:(NSString *)path body:(NSDictionary *)body {
