@@ -262,6 +262,16 @@ the reference using services imported from HA, without a manual seed.
 
 ## Supported behaviour and limits
 
+On 32-bit legacy iPads, sustained CPU above roughly 50% over three minutes
+gets the app killed by the system watchdog (observed as a CPU-resource kill
+on an iPad 4 running a pre-226 build at 90% average). Measured on build 226
+in a busy radio room: dashboard alone used about 15% on an iPad 4 and about
+20% on an iPad 2, while the BLE proxy added roughly 40 points on the iPad 4
+(54-63% combined). Keep legacy wall units comfortably below the limit; if a
+unit runs hot, prefer fewer live camera streams and revisit proxy duty
+before assuming a crash is a bug.'
+
+
 - BLE advertisements visible to Core Bluetooth, preserving callback order.
 - Up to three active GATT connections, with reads, writes and notifications.
 - ESPHome V3 connection semantics. Core Bluetooth objects are resolved before
