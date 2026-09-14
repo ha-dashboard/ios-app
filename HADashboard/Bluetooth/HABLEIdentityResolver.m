@@ -12,11 +12,9 @@ static NSString *const HABLECatalogKey = @"ha_dashboard.ble_identity.v2";
 static NSString *const HABLELocalBindingsKey = @"ha_ble_identity_bindings_v2";
 static NSString *const HABLEPeerContinuityKey = @"ha_ble_peer_continuity_v1";
 static BOOL HABLEIgnorePeerObservations(void) {
-#if DEBUG
+    // Explicit validation launch option, matching HABLEIdentitySharedOnly.
+    // Device development bundles are optimized with NDEBUG as well.
     return [NSUserDefaults.standardUserDefaults boolForKey:@"HABLEIdentityIgnorePeerObservations"];
-#else
-    return NO;
-#endif
 }
 static NSData *HABLEHexData(id value) {
     if (![value isKindOfClass:NSString.class] || [value length] % 2 || [value length] > 8192) return nil;
