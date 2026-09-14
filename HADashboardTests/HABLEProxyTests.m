@@ -215,10 +215,23 @@ static NSUInteger HABLERejectedRequestCount;
     NSTimeInterval now=NSDate.date.timeIntervalSince1970;NSMutableDictionary *rows=[proxy valueForKey:@"observations"];
     for(NSString *identifier in @[@"strong-unknown",@"weak-reference"])rows[identifier]=[@{@"identifier":identifier,@"connectable":@YES,@"first_seen":@(now-120),@"last_seen":@(now),@"rssi":[identifier isEqual:@"weak-reference"] ? @-96 : @-40,@"reference_available":@([identifier isEqual:@"weak-reference"])} mutableCopy];
     [proxy probePendingIdentity];XCTAssertEqualObjects(proxy.inspectedIdentifier,@"weak-reference");
+    NSDictionary *diagnostic=[[proxy devices] filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"identifier == %@",@"weak-reference"]].firstObject;
+    XCTAssertEqualObjects(diagnostic[@"identity_probe_attempts"],@1);XCTAssertGreaterThan([diagnostic[@"identity_probe_at"] doubleValue],now-1);
     [proxy probePendingIdentity];XCTAssertEqual(proxy.inspections,1u,@"A reference does not bypass the global cooldown");
     [proxy setValue:@0 forKey:@"nextIdentityProbeAt"];[proxy probePendingIdentity];
     XCTAssertEqualObjects(proxy.inspectedIdentifier,@"strong-unknown",@"Cooling-down references must not starve unknown standalone devices");
     XCTAssertEqual([[proxy valueForKey:@"automaticMappings"] count],0u,@"Probe scheduling is not an identity match");
+}
+- (void)testProvisionalMappingsRemainEligibleForBoundedIdentityProbes {
+    NSTimeInterval now=NSDate.date.timeIntervalSince1970;
+    for(NSString *method in @[@"passive_signature",@"peer_passive_signature",@"gatt_fingerprint",@"confirmed"]) {
+        HABLEFailingProbeProxy *proxy=[HABLEFailingProbeProxy new];[proxy setValue:@YES forKey:@"identitiesReady"];
+        [proxy valueForKey:@"observations"][@"unit"]=[@{@"identifier":@"unit",@"connectable":@YES,@"first_seen":@(now-120),@"last_seen":@(now),@"rssi":@-50} mutableCopy];
+        [proxy valueForKey:@"automaticMappings"][@"unit"]=@{@"method":method,@"address":@"02:11:22:33:44:55"};
+        [proxy probePendingIdentity];BOOL provisional=[@[@"passive_signature",@"peer_passive_signature"] containsObject:method];
+        XCTAssertEqual(proxy.inspections,provisional ? 1u : 0u);
+        [proxy setValue:@0 forKey:@"nextIdentityProbeAt"];[proxy probePendingIdentity];XCTAssertEqual(proxy.inspections,provisional ? 1u : 0u,@"Provisional mappings must still obey the per-device retry budget");
+    }
 }
 - (void)testSingleProxyForwardsStableAliasAfterBoundedLearningWithoutAReference {
     HABLEObservedPeripheral *peripheral=[HABLEObservedPeripheral new];peripheral.identifier=NSUUID.UUID;peripheral.name=@"Unit1234";

@@ -64,6 +64,10 @@ catalog or fresh peer inventory, then uses signal strength. This is only a
 scheduling hint: it cannot select an identity or bypass connection and retry
 budgets. Unknown standalone devices remain eligible when references are absent
 or cooling down.
+Connectable provisional matches remain eligible for these probes; verified and
+manually associated devices do not. Diagnostics include the last automatic probe
+time and this process's attempt count, including unsuccessful attempts, so an
+untried device can be distinguished from one that has been attempted.
 
 If HA has already configured a device under this receiver's generated local
 alias, a later GATT proof preserves that address and HA device identity. The

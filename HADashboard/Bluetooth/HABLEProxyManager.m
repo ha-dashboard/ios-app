@@ -566,7 +566,16 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     }
     self.pendingIdentityAdvertisements = waiting;
 }
-- (NSArray *)devices { return [self.observations.allValues sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) { return [b[@"rssi"] compare:a[@"rssi"]]; }]; }
+- (NSArray *)devices {
+    NSMutableArray *rows=NSMutableArray.array;
+    for(NSString *identifier in self.observations) {
+        NSMutableDictionary *row=[self.observations[identifier] mutableCopy];
+        if(self.identityProbeTimes[identifier])row[@"identity_probe_at"]=self.identityProbeTimes[identifier];
+        if(self.identityProbeAttempts[identifier])row[@"identity_probe_attempts"]=self.identityProbeAttempts[identifier];
+        [rows addObject:row];
+    }
+    return [rows sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) { return [b[@"rssi"] compare:a[@"rssi"]]; }];
+}
 - (NSString *)registrationStatus { return self.registration.status; }
 - (void)inspectIdentifier:(NSString *)identifier completion:(void (^)(NSDictionary *, NSError *))completion {
     NSNumber *address = @([self addressForIdentifier:identifier]);
@@ -709,7 +718,8 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     NSMutableDictionary *references=NSMutableDictionary.dictionary;NSMutableArray *eligible=NSMutableArray.array;
     for(NSString *identifier in self.observations) {
         NSDictionary *observation=self.observations[identifier];
-        if(self.mappings[identifier] || self.automaticMappings[identifier] || ![observation[@"connectable"] boolValue] || now-[observation[@"last_seen"] doubleValue]>15 || now-[observation[@"first_seen"] doubleValue]<60 || now-MAX([self.identityProbeTimes[identifier] doubleValue],[observation[@"identification_read_at"] doubleValue])<[self identityProbeIntervalForObservation:observation])continue;
+        NSDictionary *mapping=self.automaticMappings[identifier];BOOL provisional=[@[@"passive_signature",@"peer_passive_signature"] containsObject:mapping[@"method"] ?: @""];
+        if(self.mappings[identifier] || (mapping && !provisional) || ![observation[@"connectable"] boolValue] || now-[observation[@"last_seen"] doubleValue]>15 || now-[observation[@"first_seen"] doubleValue]<60 || now-MAX([self.identityProbeTimes[identifier] doubleValue],[observation[@"identification_read_at"] doubleValue])<[self identityProbeIntervalForObservation:observation])continue;
         [eligible addObject:identifier];references[identifier]=@([self.identityResolver hasFingerprintProbeReferenceForObservation:observation]);
     }
     NSArray *probeOrder=[eligible sortedArrayUsingComparator:^NSComparisonResult(NSString *a,NSString *b) {
