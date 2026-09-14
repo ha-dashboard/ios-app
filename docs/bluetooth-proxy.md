@@ -266,7 +266,7 @@ On 32-bit legacy iPads, sustained CPU above roughly 50% over three minutes
 gets the app killed by the system watchdog (observed as a CPU-resource kill
 on an iPad 4 running a pre-226 build at 90% average). Measured on build 226
 in a busy radio room: dashboard alone used about 15% on an iPad 4 and about
-20% on an iPad 2, while the BLE proxy added roughly 40 points on the iPad 4
+20% on an iPad 2, while the BLE proxy added roughly 40 points on the iPad 4 before optimization (about 22 points after the 231-235 work: identical-payload fast path, 5s housekeeping, budgeted native ingestion)
 (54-63% combined). Keep legacy wall units comfortably below the limit; if a
 unit runs hot, prefer fewer live camera streams and revisit proxy duty
 before assuming a crash is a bug.
