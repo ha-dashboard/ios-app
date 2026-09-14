@@ -617,6 +617,8 @@ static NSDictionary *HABLEFieldsExceptRssi(NSData *packet) {
     XCTAssertEqual(HABLEInteger(second, 3), 109u, @"zigzag(-55)");
     XCTAssertEqual(HABLEInteger(third, 3), 119u, @"zigzag(-60)");
     XCTAssertEqualObjects(HABLEFieldsExceptRssi(server.capturedAdvertisements[1]), HABLEFieldsExceptRssi(server.capturedAdvertisements[2]));
+    XCTAssertEqualObjects([proxy valueForKey:@"observations"][identifier][@"rssi"], @-60);
+    XCTAssertEqualObjects([resolver valueForKey:@"localObservations"][identifier][@"rssi"], @-55, @"Identical repeats must not rewrite the evidence record");
 }
 - (void)testChangedManufacturerPayloadTakesTheSlowPath {
     HABLEFastPathCountingProxy *proxy = [HABLEFastPathCountingProxy new];

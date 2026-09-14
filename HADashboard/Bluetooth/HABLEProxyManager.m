@@ -157,6 +157,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *fastKnownAt;
 @property (nonatomic, assign) NSUInteger fastAdvertisements;
 @property (nonatomic, assign) NSUInteger slowAdvertisements;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *fastResolvedAddresses;
 - (void)startScanUsingServices:(BOOL)services;
 - (void)updateScanPolicy;
 - (void)cancelScanImport;
@@ -197,7 +198,7 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
         _observations = [NSMutableDictionary dictionary]; _peripherals = [NSMutableDictionary dictionary]; _sessions = [NSMutableDictionary dictionary];
         _fastPacketBodies = [NSMutableDictionary dictionary]; _fastRssiOffsets = [NSMutableDictionary dictionary]; _fastRssiLengths = [NSMutableDictionary dictionary];
         _fastManufacturers = [NSMutableDictionary dictionary]; _fastAdvertisedServices = [NSMutableDictionary dictionary]; _fastServiceData = [NSMutableDictionary dictionary];
-        _fastAutomaticMappings = [NSMutableDictionary dictionary]; _fastManualMappings = [NSMutableDictionary dictionary]; _fastHoldDecisions = [NSMutableDictionary dictionary]; _fastKnownAt = [NSMutableDictionary dictionary];
+        _fastAutomaticMappings = [NSMutableDictionary dictionary]; _fastManualMappings = [NSMutableDictionary dictionary]; _fastHoldDecisions = [NSMutableDictionary dictionary]; _fastKnownAt = [NSMutableDictionary dictionary]; _fastResolvedAddresses = [NSMutableDictionary dictionary];
         _identityMetadata = [[[NSUserDefaults standardUserDefaults] dictionaryForKey:@"ha_ble_proxy_identity_metadata"] mutableCopy] ?: [NSMutableDictionary dictionary];
         _mappings = [[defaults dictionaryForKey:HABLEMappingKey] mutableCopy] ?: [NSMutableDictionary dictionary];
         _status = @"Off";
@@ -558,12 +559,12 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
 - (void)clearFastAdvertisementCacheForIdentifier:(NSString *)identifier {
     [self.fastPacketBodies removeObjectForKey:identifier]; [self.fastRssiOffsets removeObjectForKey:identifier]; [self.fastRssiLengths removeObjectForKey:identifier];
     [self.fastManufacturers removeObjectForKey:identifier]; [self.fastAdvertisedServices removeObjectForKey:identifier]; [self.fastServiceData removeObjectForKey:identifier];
-    [self.fastAutomaticMappings removeObjectForKey:identifier]; [self.fastManualMappings removeObjectForKey:identifier]; [self.fastHoldDecisions removeObjectForKey:identifier]; [self.fastKnownAt removeObjectForKey:identifier];
+    [self.fastAutomaticMappings removeObjectForKey:identifier]; [self.fastManualMappings removeObjectForKey:identifier]; [self.fastHoldDecisions removeObjectForKey:identifier]; [self.fastKnownAt removeObjectForKey:identifier]; [self.fastResolvedAddresses removeObjectForKey:identifier];
 }
 - (void)clearFastAdvertisementCaches {
     [self.fastPacketBodies removeAllObjects]; [self.fastRssiOffsets removeAllObjects]; [self.fastRssiLengths removeAllObjects];
     [self.fastManufacturers removeAllObjects]; [self.fastAdvertisedServices removeAllObjects]; [self.fastServiceData removeAllObjects];
-    [self.fastAutomaticMappings removeAllObjects]; [self.fastManualMappings removeAllObjects]; [self.fastHoldDecisions removeAllObjects]; [self.fastKnownAt removeAllObjects];
+    [self.fastAutomaticMappings removeAllObjects]; [self.fastManualMappings removeAllObjects]; [self.fastHoldDecisions removeAllObjects]; [self.fastKnownAt removeAllObjects]; [self.fastResolvedAddresses removeAllObjects];
 }
 - (BOOL)forwardRepeatedAdvertisementForIdentifier:(NSString *)identifier previous:(NSMutableDictionary *)previous name:(NSString *)name connectable:(BOOL)connectable manufacturer:(NSData *)manufacturer advertisedServices:(NSArray *)advertisedServices services:(NSDictionary *)services rssi:(NSNumber *)RSSI nowEpoch:(NSTimeInterval)nowEpoch {
     NSData *cachedBody = self.fastPacketBodies[identifier];
@@ -596,14 +597,18 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
     NSMutableData *packet = [cachedBody mutableCopy];
     [packet replaceBytesInRange:NSMakeRange(rssiOffset, rssiLength) withBytes:rssiBytes];
     previous[@"last_seen"] = @(nowEpoch); previous[@"rssi"] = RSSI; self.advertisementCount++;
-    [self.identityResolver recordObservation:previous identifier:identifier];
     if (hold) {
         if (self.pendingIdentityAdvertisements.count >= 256) { [self.pendingIdentityAdvertisements removeObjectAtIndex:0]; self.identityPacketsDropped++; }
         [self.pendingIdentityAdvertisements addObject:@{@"identifier":identifier, @"packet":packet, @"queued_at":@(CFAbsoluteTimeGetCurrent())}];
     } else {
+        NSNumber *resolved = self.fastResolvedAddresses[identifier];
+        if (!resolved) return NO;
         [self.observations[identifier] removeObjectForKey:@"identity_pending"];
         [self flushIdentityAdvertisementsForIdentifier:identifier];
-        [self forwardPacket:packet identifier:identifier];
+        NSMutableData *finished = [packet mutableCopy];
+        HABLEPutInteger(finished, 1, [resolved unsignedLongLongValue]);
+        HABLEPutInteger(finished, 7, (self.mappings[identifier] || self.automaticMappings[identifier]) ? 0 : 1);
+        if ([self.server broadcastAdvertisement:finished]) self.forwardedCount++;
     }
     self.fastAdvertisements++;
     return YES;
@@ -618,6 +623,7 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
     if (automaticNow) self.fastAutomaticMappings[identifier] = automaticNow; else [self.fastAutomaticMappings removeObjectForKey:identifier];
     self.fastManualMappings[identifier] = @(self.mappings[identifier] != nil);
     self.fastHoldDecisions[identifier] = @(hold);
+    self.fastResolvedAddresses[identifier] = @([self addressForIdentifier:identifier]);
     self.fastKnownAt[identifier] = @(nowEpoch);
 }
 - (void)identityConnectionDidChange:(NSNotification *)note { self.nextIdentityRefresh = 0; }
