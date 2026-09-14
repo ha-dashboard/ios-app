@@ -293,23 +293,34 @@ Remove unwanted ESPHome entries separately in HA.
 
 ## Development and validation
 
-Latest common-window checkpoint: 14 September 2026, build 225 on Mac Catalyst,
-iPad Mini 4, iPad Mini 5 and iPad 3. A simultaneous sixty-second encrypted capture
-received 53, 56, 57 and 13 distinct transmitted addresses respectively. These are
-radio observations, not proven counts of unique physical devices.
+Latest common-window checkpoint: 14 September 2026, build 226 on Mac Catalyst,
+iPad Mini 4, iPad Mini 5 and iPad 3, plus a Mini 4 re-capture after an app
+restart. Simultaneous sixty-second encrypted captures received 45 (Mac),
+54 (Mini 5), 12 (iPad 3) and 47 (Mini 4) distinct transmitted addresses.
+These are radio observations, not proven counts of unique physical devices.
 
-Seven example identities agreed across Mac and both Minis: S14, S36, AZW, LG,
-Samsung 43, HT1 and HT.w. HT1 advertised as `s` but matched its registered HA
-Bluetooth address, demonstrating why display-name searches alone undercount
-matches. S36 also used the same address on the office iPad 3. Fridge appeared
-only on Mac in this window; office AZW still used a local alias and reported
-`CBErrorDomain 10` during identification. No checked old aliases for these
-examples were emitted by the Minis in that capture.
+Six example identities agreed across Mac and both Minis: S14, AZW, LG,
+Samsung 43, HT1 and HT.w. Fridge appeared on Mac and Mini 5. S36 was
+office-only in the common window, but Mini 4 afterwards re-qualified the same
+canonical address from the same held local alias after its restart (63-second
+span over 6 samples), proving cross-restart provisional continuity with no
+manual steps. Office AZW still used its local alias (19 packets); no other
+checked old aliases were emitted by the 226 fleet in these captures.
 
-The iPad Pro and iPhone 16 had build 224 installed without a runtime launch;
-iPhone 11 had build 225 installed but locked before launch. The iPad 4's SSH
-and proxy ports refused connections. Those devices are not included in this
-common-window result. Identical coverage across the full fleet is unverified.
+Room overlap from the same captures: the home cluster (Mac, both Minis)
+shares 9-10 addresses pairwise, while the office iPad shares none with the
+home cluster, confirming separate radio spaces by identity overlap rather
+than by assertion.
+
+The iPhone 11 had build 226 installed and launched, but its proxy never
+listened, so it is not included. The iPad 4, iPad Pro and (later) office
+iPad 3 were unreachable during parts of this window; those devices are not
+included in this common-window result. Identical coverage across the full
+fleet is unverified.
+
+The previous checkpoint (build 225, same four receivers, 53/56/57/13
+addresses, seven agreeing identities including S36) is superseded by the
+above. The older checkpoints below retain their original build-specific scope.
 The older checkpoints below retain their original build-specific scope.
 
 `scripts/deploy.sh` accepts `--ble-proxy`, `--no-ble-proxy`, and
