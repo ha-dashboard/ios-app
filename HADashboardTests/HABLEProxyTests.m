@@ -658,7 +658,7 @@ static NSDictionary *HABLEFieldsExceptRssi(NSData *packet) {
     XCTAssertEqual(resolver.classifications, 1u);
     XCTAssertNotEqualObjects(HABLEFieldsExceptRssi(server.capturedAdvertisements[0]), HABLEFieldsExceptRssi(server.capturedAdvertisements[1]));
 }
-- (void)testIdenticalRepeatForwardCoalescesWithinOneSecond {
+- (void)testIdenticalRepeatForwardCoalescesWithinTwoSeconds {
     HABLEFastPathCountingProxy *proxy = [HABLEFastPathCountingProxy new];
     [proxy setValue:@YES forKey:@"running"]; [proxy setValue:@YES forKey:@"identitiesReady"];
     HABLECountingResolver *resolver = [HABLECountingResolver new];
@@ -675,10 +675,10 @@ static NSDictionary *HABLEFieldsExceptRssi(NSData *packet) {
     XCTAssertEqual(server.capturedAdvertisements.count, 2u, @"Grace expiry releases the held queue plus the current packet");
     [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-56];
     XCTAssertEqual(proxy.fastHits, 1u);
-    XCTAssertEqual(server.capturedAdvertisements.count, 2u, @"Identical payload within one second must not re-encrypt or retransmit");
+    XCTAssertEqual(server.capturedAdvertisements.count, 2u, @"Identical payload within two seconds must not re-encrypt or retransmit");
     XCTAssertEqualObjects([proxy valueForKey:@"throttledAdvertisements"], @1);
     XCTAssertEqualObjects([proxy valueForKey:@"observations"][identifier][@"rssi"], @-56);
-    [proxy valueForKey:@"fastLastForwardAt"][identifier] = @(NSDate.date.timeIntervalSince1970 - 2);
+    [proxy valueForKey:@"fastLastForwardAt"][identifier] = @(NSDate.date.timeIntervalSince1970 - 3);
     [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-57];
     XCTAssertEqual(server.capturedAdvertisements.count, 3u, @"The same payload past the window forwards again");
     XCTAssertEqualObjects(HABLEFieldsExceptRssi(server.capturedAdvertisements[1]), HABLEFieldsExceptRssi(server.capturedAdvertisements[2]));
@@ -843,7 +843,7 @@ static NSArray *HABLEIngestRows(NSUInteger count, NSTimeInterval now) {
     XCTAssertEqual(proxy.fastHits, 1u, @"Any live connection slot must disable the fast path");
     XCTAssertEqual(server.capturedAdvertisements.count, 3u, @"The identical fast repeat coalesces");
     [[proxy valueForKey:@"sessions"] removeAllObjects];
-    [proxy valueForKey:@"fastLastForwardAt"][identifier] = @(NSDate.date.timeIntervalSince1970 - 2);
+    [proxy valueForKey:@"fastLastForwardAt"][identifier] = @(NSDate.date.timeIntervalSince1970 - 3);
     [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-62];
     XCTAssertEqual(proxy.fastHits, 2u);
     XCTAssertEqual(server.capturedAdvertisements.count, 4u, @"A repeat past the coalesce window forwards again");
