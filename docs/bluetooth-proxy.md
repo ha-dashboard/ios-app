@@ -75,6 +75,10 @@ Successful characteristic reads are retained if a later operation fails. Such
 sessions remain explicitly incomplete and retain their error; a failed session
 with no read data cannot add evidence or erase earlier fingerprints. The normal
 independent-session and contradiction checks still apply to partial reads.
+Each probe completes its bounded set of at most sixteen readable characteristics,
+retaining fingerprint data only for values up to 512 bytes. An existing match
+does not terminate that set after the first standard field: later fields may
+provide serial-number context or contradict a cached identity.
 The latest automatic probe also reports whether it is pending, complete, partial
 or failed, with timestamps and the reported error when available.
 
@@ -288,6 +292,25 @@ the local key, address associations, service filters, handle tables and diagnost
 Remove unwanted ESPHome entries separately in HA.
 
 ## Development and validation
+
+Latest common-window checkpoint: 14 September 2026, build 225 on Mac Catalyst,
+iPad Mini 4, iPad Mini 5 and iPad 3. A simultaneous sixty-second encrypted capture
+received 53, 56, 57 and 13 distinct transmitted addresses respectively. These are
+radio observations, not proven counts of unique physical devices.
+
+Seven example identities agreed across Mac and both Minis: S14, S36, AZW, LG,
+Samsung 43, HT1 and HT.w. HT1 advertised as `s` but matched its registered HA
+Bluetooth address, demonstrating why display-name searches alone undercount
+matches. S36 also used the same address on the office iPad 3. Fridge appeared
+only on Mac in this window; office AZW still used a local alias and reported
+`CBErrorDomain 10` during identification. No checked old aliases for these
+examples were emitted by the Minis in that capture.
+
+The iPad Pro and iPhone 16 had build 224 installed without a runtime launch;
+iPhone 11 had build 225 installed but locked before launch. The iPad 4's SSH
+and proxy ports refused connections. Those devices are not included in this
+common-window result. Identical coverage across the full fleet is unverified.
+The older checkpoints below retain their original build-specific scope.
 
 `scripts/deploy.sh` accepts `--ble-proxy`, `--no-ble-proxy`, and
 `--register-ble-proxy`. Add service filters with `--ble-services FCD2,FD3D`.

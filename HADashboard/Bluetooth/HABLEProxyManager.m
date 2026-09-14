@@ -1051,11 +1051,9 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
             NSDictionary *fields=[HABLEIdentityEvidence fingerprintsForValue:value path:path];
             for(NSString *key in fields)if(reads.count<64 || reads[key])reads[key]=fields[key];
         }
-        if(field && self.identitiesReady) {
-            NSMutableDictionary *candidate=[self.observations[peripheral.identifier.UUIDString] mutableCopy] ?: NSMutableDictionary.dictionary;
-            [candidate addEntriesFromDictionary:session.identityValues];
-            if([self.identityResolver automaticMatchForObservation:candidate])[session.operations removeAllObjects];
-        }
+        // Finish the bounded read set before resolving this session. An old
+        // advertisement match cannot establish that the new reads are enough;
+        // later fields may supply serial context or contradict a cached proof.
         self.gattReads++; [self finishOperation:session error:0]; return;
     }
     NSMutableData *data = [NSMutableData data]; HABLEPutInteger(data, 1, session.address.unsignedLongLongValue); HABLEPutInteger(data, 2, handle.unsignedLongLongValue); HABLEPutBytes(data, 3, characteristic.value ?: [NSData data]);

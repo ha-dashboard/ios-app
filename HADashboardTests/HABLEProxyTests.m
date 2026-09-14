@@ -56,6 +56,7 @@ static NSUInteger HABLERejectedRequestCount;
 - (NSTimeInterval)identityProbeIntervalForObservation:(NSDictionary *)observation;
 - (void)probePendingIdentity;
 - (void)finishIdentity:(id)session error:(NSString *)message;
+- (void)peripheral:(CBPeripheral *)peripheral didUpdateValueForCharacteristic:(CBCharacteristic *)characteristic error:(NSError *)error;
 - (void)updateIdentityResolution;
 - (void)flushIdentityAdvertisements;
 - (void)centralManager:(CBCentralManager *)central didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:(NSDictionary *)advertisement RSSI:(NSNumber *)RSSI;
@@ -94,6 +95,11 @@ static NSUInteger HABLERejectedRequestCount;
 @end
 @implementation HABLEProbeHintResolver
 - (BOOL)hasFingerprintProbeReferenceForObservation:(NSDictionary *)observation {return [observation[@"reference_available"] boolValue];}
+@end
+@interface HABLEExistingMatchResolver : HABLEIdentityResolver
+@end
+@implementation HABLEExistingMatchResolver
+- (NSDictionary *)automaticMatchForObservation:(NSDictionary *)observation {return @{@"automatic_match":@YES,@"method":@"passive_signature"};}
 @end
 @interface HABLERegistrationPolicyProxy : HABLEProxyManager
 @property NSUInteger registrationAttempts;
@@ -149,6 +155,20 @@ static NSUInteger HABLERejectedRequestCount;
     XCTAssertNil([session valueForKey:@"pending"]);XCTAssertEqual(manager.pumps,1u);
     XCTAssertEqual([[session valueForKey:@"operations"] count],1u);
     XCTAssertEqualObjects(([session valueForKey:@"identityValues"][@"gatt_read_errors"][@"path"]),@14);
+}
+- (void)testExistingMatchDoesNotDiscardRemainingIdentityReads {
+    HABLEFingerprintPolicyProxy *proxy=[HABLEFingerprintPolicyProxy new];[proxy setValue:@YES forKey:@"identitiesReady"];[proxy setValue:[HABLEExistingMatchResolver new] forKey:@"identityResolver"];
+    HABLEObservedPeripheral *peripheral=[HABLEObservedPeripheral new];peripheral.identifier=NSUUID.UUID;
+    CBMutableCharacteristic *serial=[[CBMutableCharacteristic alloc] initWithType:[CBUUID UUIDWithString:@"2A25"] properties:CBCharacteristicPropertyRead value:[@"Unit123456" dataUsingEncoding:NSUTF8StringEncoding] permissions:CBAttributePermissionsReadable];
+    id session=[NSClassFromString(@"HABLEPeripheralSession") new];[session setValue:peripheral forKey:@"peripheral"];[session setValue:@1 forKey:@"address"];
+    [session setValue:[@{@1:serial} mutableCopy] forKey:@"handles"];[session setValue:@{@"type":@73,@"fields":@{@2:@[@1]}} forKey:@"pending"];
+    [session setValue:[@[@{@"type":@73,@"fields":@{@2:@[@2]}}] mutableCopy] forKey:@"operations"];
+    [session setValue:[@{@1:@"serial_number"} mutableCopy] forKey:@"identityFields"];[session setValue:[@{@1:@"s/180A/c/2A25"} mutableCopy] forKey:@"identityReadPaths"];
+    [session setValue:NSMutableDictionary.dictionary forKey:@"identityValues"];[session setValue:[^(NSDictionary *v,NSError *e){} copy] forKey:@"identityCompletion"];
+    [proxy valueForKey:@"sessions"][@1]=session;
+    [proxy peripheral:(CBPeripheral *)peripheral didUpdateValueForCharacteristic:serial error:nil];
+    XCTAssertEqual([[session valueForKey:@"operations"] count],1u,@"Manufacturer/model context and later contradictions must still be collected");
+    XCTAssertEqualObjects([session valueForKey:@"identityValues"][@"serial_number"],@"Unit123456");XCTAssertEqual(proxy.pumps,1u);
 }
 - (void)testFingerprintVerificationRevisitIsBounded {
     HABLEProxyManager *manager=[HABLEProxyManager new];
