@@ -607,6 +607,8 @@ static NSDictionary *HABLEFieldsExceptRssi(NSData *packet) {
     [proxy centralManager:nil didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:ad RSSI:@-60];
     XCTAssertEqual(server.capturedAdvertisements.count, 3u);
     XCTAssertEqual(proxy.fastHits, 1u, @"Only the third packet repeats settled state");
+    XCTAssertEqualObjects([proxy valueForKey:@"fastAdvertisements"], @1);
+    XCTAssertEqualObjects([proxy valueForKey:@"slowAdvertisements"], @2);
     XCTAssertEqual(resolver.classifications, 1u, @"The repeat must not rescan the registry");
     NSDictionary *second = HABLEDecode(server.capturedAdvertisements[1]);
     NSDictionary *third = HABLEDecode(server.capturedAdvertisements[2]);

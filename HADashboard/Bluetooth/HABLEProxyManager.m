@@ -155,6 +155,8 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *fastManualMappings;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *fastHoldDecisions;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *fastKnownAt;
+@property (nonatomic, assign) NSUInteger fastAdvertisements;
+@property (nonatomic, assign) NSUInteger slowAdvertisements;
 - (void)startScanUsingServices:(BOOL)services;
 - (void)updateScanPolicy;
 - (void)cancelScanImport;
@@ -425,7 +427,7 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
     self.registration = [[HABLEProxyRegistration alloc] init]; self.nextRegistrationAttempt = 0;
     self.registeredContext = nil; self.integrationRegistrationWasEnabled = NO;
     [[NSUserDefaults standardUserDefaults] setBool:NO forKey:HABLEEnabledKey];
-    [self.automaticMappings removeAllObjects]; [self.identityLabels removeAllObjects]; [self.identityCheckTimes removeAllObjects]; [self.identityProbeTimes removeAllObjects]; [self.identityProbeAttempts removeAllObjects]; self.nextIdentityProbeAt = 0;
+    [self.automaticMappings removeAllObjects]; [self.identityLabels removeAllObjects]; [self.identityCheckTimes removeAllObjects]; [self.identityProbeTimes removeAllObjects]; [self.identityProbeAttempts removeAllObjects]; self.nextIdentityProbeAt = 0; self.fastAdvertisements = 0; self.slowAdvertisements = 0; [self clearFastAdvertisementCaches];
     self.identityResolver = [[HABLEIdentityResolver alloc] init]; self.identityScope = nil; self.identitiesReady = NO; self.identityPacketsDropped = 0;
     self.advertisementCount = self.forwardedCount = self.discoveryCallbacks = self.unknownRSSICount = 0;
     self.gattReads = self.gattWrites = self.gattNotifications = 0;
@@ -463,6 +465,7 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
     NSArray *repeatOverflow = advertisement[CBAdvertisementDataOverflowServiceUUIDsKey] ?: @[];
     NSArray *repeatServices = [(advertisement[CBAdvertisementDataServiceUUIDsKey] ?: @[]) arrayByAddingObjectsFromArray:repeatOverflow];
     if ([self forwardRepeatedAdvertisementForIdentifier:identifier previous:(NSMutableDictionary *)previous name:name connectable:[advertisement[CBAdvertisementDataIsConnectable] boolValue] manufacturer:manufacturer advertisedServices:repeatServices services:advertisement[CBAdvertisementDataServiceDataKey] rssi:RSSI nowEpoch:repeatEpoch]) return;
+    self.slowAdvertisements++;
     self.peripherals[identifier] = peripheral; self.advertisementCount++;
     NSMutableData *packet = [NSMutableData data]; HABLEPutString(packet, 2, name);
     int64_t rssi = RSSI.longLongValue; NSUInteger repeatRssiOffset = packet.length; HABLEPutInteger(packet, 3, ((uint64_t)rssi << 1) ^ (uint64_t)(rssi >> 63)); NSUInteger repeatRssiEnd = packet.length;
@@ -602,6 +605,7 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
         [self flushIdentityAdvertisementsForIdentifier:identifier];
         [self forwardPacket:packet identifier:identifier];
     }
+    self.fastAdvertisements++;
     return YES;
 }
 - (void)noteSlowAdvertisementForIdentifier:(NSString *)identifier packet:(NSData *)packet rssiOffset:(NSUInteger)rssiOffset rssiLength:(NSUInteger)rssiLength manufacturer:(NSData *)manufacturer advertisedServices:(NSArray *)advertisedServices services:(NSDictionary *)services hold:(BOOL)hold nowEpoch:(NSTimeInterval)nowEpoch {
@@ -789,7 +793,7 @@ static NSUInteger HABLEEncodeRssiField(int64_t rssi, uint8_t out[3]) {
     [self changed]; return YES;
 }
 - (NSDictionary *)diagnostics {
-    return @{@"schema":@1, @"time":@([[NSDate date] timeIntervalSince1970]), @"enabled":@(self.enabled), @"running":@(self.running), @"status":self.status ?: @"", @"node":self.nodeName, @"adapter_alias":self.adapterAddress, @"host":self.host ?: @"", @"port":@6053, @"clients":@(self.server.authenticatedClients), @"advertisements":@(self.advertisementCount), @"forwarded":@(self.forwardedCount), @"active_connections":@(self.sessions.count), @"devices":self.devices, @"backend":@"public_core_bluetooth", @"transport":@"noise_nnpsk0", @"discovery_callbacks":@(self.discoveryCallbacks), @"unknown_rssi_callbacks":@(self.unknownRSSICount), @"central_state":@((NSInteger)self.central.state), @"scanning":@(self.central.isScanning), @"application_state":@((NSInteger)[UIApplication sharedApplication].applicationState), @"app_build":[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"", @"scan_mode":@(self.scanMode), @"using_service_filters":@(self.usingServiceFilters), @"scan_service_uuids":self.scanServiceUUIDs, @"scan_service_status":self.scanServiceStatus ?: @"", @"registration_status":self.registrationStatus ?: @"", @"registration_requested":@([[NSUserDefaults standardUserDefaults] boolForKey:@"ha_ble_proxy_auto_register"]), @"registration_automatic":@([HADeviceIntegrationManager sharedManager].enabled), @"identity_status":self.identityResolver.status ?: @"", @"identity_importing":@(self.importingIdentities),@"peer_inventory":[self.identityResolver inventoryDiagnostics], @"last_identity_probe":self.lastIdentityProbe ?: @{}, @"identity_matches":@(self.automaticMappings.count), @"identity_packets_dropped":@(self.identityPacketsDropped), @"gatt_reads":@(self.gattReads), @"gatt_writes":@(self.gattWrites), @"gatt_notifications":@(self.gattNotifications)};
+    return @{@"schema":@1, @"time":@([[NSDate date] timeIntervalSince1970]), @"enabled":@(self.enabled), @"running":@(self.running), @"status":self.status ?: @"", @"node":self.nodeName, @"adapter_alias":self.adapterAddress, @"host":self.host ?: @"", @"port":@6053, @"clients":@(self.server.authenticatedClients), @"advertisements":@(self.advertisementCount), @"forwarded":@(self.forwardedCount), @"active_connections":@(self.sessions.count), @"devices":self.devices, @"backend":@"public_core_bluetooth", @"transport":@"noise_nnpsk0", @"discovery_callbacks":@(self.discoveryCallbacks), @"unknown_rssi_callbacks":@(self.unknownRSSICount), @"central_state":@((NSInteger)self.central.state), @"scanning":@(self.central.isScanning), @"application_state":@((NSInteger)[UIApplication sharedApplication].applicationState), @"app_build":[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"", @"scan_mode":@(self.scanMode), @"using_service_filters":@(self.usingServiceFilters), @"scan_service_uuids":self.scanServiceUUIDs, @"scan_service_status":self.scanServiceStatus ?: @"", @"registration_status":self.registrationStatus ?: @"", @"registration_requested":@([[NSUserDefaults standardUserDefaults] boolForKey:@"ha_ble_proxy_auto_register"]), @"registration_automatic":@([HADeviceIntegrationManager sharedManager].enabled), @"identity_status":self.identityResolver.status ?: @"", @"identity_importing":@(self.importingIdentities),@"peer_inventory":[self.identityResolver inventoryDiagnostics], @"last_identity_probe":self.lastIdentityProbe ?: @{}, @"identity_matches":@(self.automaticMappings.count), @"identity_packets_dropped":@(self.identityPacketsDropped), @"fast_path_packets":@(self.fastAdvertisements), @"slow_path_packets":@(self.slowAdvertisements), @"gatt_reads":@(self.gattReads), @"gatt_writes":@(self.gattWrites), @"gatt_notifications":@(self.gattNotifications)};
 }
 - (void)tick:(NSTimer *)timer {
     self.tickCount++;
