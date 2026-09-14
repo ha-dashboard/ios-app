@@ -71,6 +71,12 @@ Connectable provisional matches remain eligible for these probes; verified and
 manually associated devices do not. Diagnostics include the last automatic probe
 time and this process's attempt count, including unsuccessful attempts, so an
 untried device can be distinguished from one that has been attempted.
+Successful characteristic reads are retained if a later operation fails. Such
+sessions remain explicitly incomplete and retain their error; a failed session
+with no read data cannot add evidence or erase earlier fingerprints. The normal
+independent-session and contradiction checks still apply to partial reads.
+The latest automatic probe also reports whether it is pending, complete, partial
+or failed, with timestamps and the reported error when available.
 
 If HA has already configured a device under this receiver's generated local
 alias, a later GATT proof preserves that address and HA device identity. The

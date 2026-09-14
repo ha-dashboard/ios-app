@@ -128,6 +128,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 @property (nonatomic, assign) NSUInteger identityPacketsDropped;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *handleTables;
 @property (nonatomic, assign) NSUInteger gattReads;
+@property (nonatomic, copy) NSDictionary *lastIdentityProbe;
 @property (nonatomic, assign) NSUInteger gattWrites;
 @property (nonatomic, assign) NSUInteger gattNotifications;
 @property (nonatomic, assign) NSUInteger discoveryCallbacks;
@@ -378,6 +379,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
 }
 - (void)reset {
     self.enabled = NO;
+    self.lastIdentityProbe=nil;
     self.central.delegate = nil; self.central = nil;
     [self.observations removeAllObjects]; [self.peripherals removeAllObjects]; [self.mappings removeAllObjects]; [self.handleTables removeAllObjects]; [self.identityMetadata removeAllObjects];
     NSDictionary *query = @{(__bridge id)kSecClass:(__bridge id)kSecClassGenericPassword, (__bridge id)kSecAttrService:@"org.hadashboard.ble-proxy", (__bridge id)kSecAttrAccount:@"noise-key"};
@@ -593,6 +595,9 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     void (^completion)(NSDictionary *, NSError *) = session.identityCompletion;
     session.identityCompletion = nil;
     if (!completion) return;
+    BOOL hasPartialReads=message && [session.identityValues[@"gatt_fingerprint_reads"] count]>0;
+    session.identityValues[@"identification_complete"]=@(!message);
+    if(message)session.identityValues[@"identification_error"]=message;
     session.identityValues[@"identification_read_at"] = @([[NSDate date] timeIntervalSince1970]);
     NSString *peripheralID=session.peripheral.identifier.UUIDString;
     BOOL sameSchema=[self.identityMetadata[peripheralID][@"gatt_fingerprint_schema"] isEqual:@4];
@@ -601,7 +606,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     session.identityValues[@"gatt_fingerprints"]=[HABLEIdentityEvidence mergeFingerprintReads:session.identityValues[@"gatt_fingerprint_reads"] ?: @{} previous:sameSchema ? self.identityMetadata[peripheralID][@"gatt_fingerprints"] : @{} session:session.identityValues[@"gatt_probe_session"] atTime:NSDate.date.timeIntervalSince1970];
     [session.identityValues removeObjectForKey:@"gatt_fingerprint_reads"];
     NSDictionary *identity = [session.identityValues copy];
-    if (!message) {
+    if (!message || hasPartialReads) {
         NSString *identifier = session.peripheral.identifier.UUIDString;
         [self.observations[identifier] addEntriesFromDictionary:identity];
         if (self.identityMetadata.count < 256 || self.identityMetadata[identifier]) {
@@ -610,7 +615,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
         }
     }
     [self.central cancelPeripheralConnection:session.peripheral];
-    completion(message ? nil : identity, message ? [NSError errorWithDomain:@"HABLEIdentity" code:3 userInfo:@{NSLocalizedDescriptionKey:message}] : nil);
+    completion(message && !hasPartialReads ? nil : identity, message ? [NSError errorWithDomain:@"HABLEIdentity" code:3 userInfo:@{NSLocalizedDescriptionKey:message}] : nil);
 }
 - (void)registerWithHomeAssistant {
     [self registerWithHomeAssistantAutomatically:NO];
@@ -680,7 +685,7 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     [self changed]; return YES;
 }
 - (NSDictionary *)diagnostics {
-    return @{@"schema":@1, @"time":@([[NSDate date] timeIntervalSince1970]), @"enabled":@(self.enabled), @"running":@(self.running), @"status":self.status ?: @"", @"node":self.nodeName, @"adapter_alias":self.adapterAddress, @"host":self.host ?: @"", @"port":@6053, @"clients":@(self.server.authenticatedClients), @"advertisements":@(self.advertisementCount), @"forwarded":@(self.forwardedCount), @"active_connections":@(self.sessions.count), @"devices":self.devices, @"backend":@"public_core_bluetooth", @"transport":@"noise_nnpsk0", @"discovery_callbacks":@(self.discoveryCallbacks), @"unknown_rssi_callbacks":@(self.unknownRSSICount), @"central_state":@((NSInteger)self.central.state), @"scanning":@(self.central.isScanning), @"application_state":@((NSInteger)[UIApplication sharedApplication].applicationState), @"app_build":[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"", @"scan_mode":@(self.scanMode), @"using_service_filters":@(self.usingServiceFilters), @"scan_service_uuids":self.scanServiceUUIDs, @"scan_service_status":self.scanServiceStatus ?: @"", @"registration_status":self.registrationStatus ?: @"", @"registration_requested":@([[NSUserDefaults standardUserDefaults] boolForKey:@"ha_ble_proxy_auto_register"]), @"registration_automatic":@([HADeviceIntegrationManager sharedManager].enabled), @"identity_status":self.identityResolver.status ?: @"", @"identity_importing":@(self.importingIdentities),@"peer_inventory":[self.identityResolver inventoryDiagnostics], @"identity_matches":@(self.automaticMappings.count), @"identity_packets_dropped":@(self.identityPacketsDropped), @"gatt_reads":@(self.gattReads), @"gatt_writes":@(self.gattWrites), @"gatt_notifications":@(self.gattNotifications)};
+    return @{@"schema":@1, @"time":@([[NSDate date] timeIntervalSince1970]), @"enabled":@(self.enabled), @"running":@(self.running), @"status":self.status ?: @"", @"node":self.nodeName, @"adapter_alias":self.adapterAddress, @"host":self.host ?: @"", @"port":@6053, @"clients":@(self.server.authenticatedClients), @"advertisements":@(self.advertisementCount), @"forwarded":@(self.forwardedCount), @"active_connections":@(self.sessions.count), @"devices":self.devices, @"backend":@"public_core_bluetooth", @"transport":@"noise_nnpsk0", @"discovery_callbacks":@(self.discoveryCallbacks), @"unknown_rssi_callbacks":@(self.unknownRSSICount), @"central_state":@((NSInteger)self.central.state), @"scanning":@(self.central.isScanning), @"application_state":@((NSInteger)[UIApplication sharedApplication].applicationState), @"app_build":[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"", @"scan_mode":@(self.scanMode), @"using_service_filters":@(self.usingServiceFilters), @"scan_service_uuids":self.scanServiceUUIDs, @"scan_service_status":self.scanServiceStatus ?: @"", @"registration_status":self.registrationStatus ?: @"", @"registration_requested":@([[NSUserDefaults standardUserDefaults] boolForKey:@"ha_ble_proxy_auto_register"]), @"registration_automatic":@([HADeviceIntegrationManager sharedManager].enabled), @"identity_status":self.identityResolver.status ?: @"", @"identity_importing":@(self.importingIdentities),@"peer_inventory":[self.identityResolver inventoryDiagnostics], @"last_identity_probe":self.lastIdentityProbe ?: @{}, @"identity_matches":@(self.automaticMappings.count), @"identity_packets_dropped":@(self.identityPacketsDropped), @"gatt_reads":@(self.gattReads), @"gatt_writes":@(self.gattWrites), @"gatt_notifications":@(self.gattNotifications)};
 }
 - (void)tick:(NSTimer *)timer {
     self.tickCount++;
@@ -733,9 +738,14 @@ static NSString *HABLEAdvertisementUUID(CBUUID *uuid) {
     for (NSString *identifier in probeOrder) {
         self.identityProbeAttempts[identifier]=@(MIN(255,[self.identityProbeAttempts[identifier] unsignedIntegerValue]+1));
         self.identityProbeTimes[identifier] = @(now); self.nextIdentityProbeAt = now + 60;
+        self.lastIdentityProbe=@{@"identifier":identifier,@"started_at":@(now),@"result":@"pending"};
         __weak typeof(self) weakSelf = self;
         [self inspectIdentifier:identifier completion:^(NSDictionary *identity, NSError *error) {
             HABLEProxyManager *self = weakSelf; if (!self) return;
+            if([self.lastIdentityProbe[@"started_at"] doubleValue]==now && [self.lastIdentityProbe[@"identifier"] isEqual:identifier]) {
+                NSMutableDictionary *receipt=[self.lastIdentityProbe mutableCopy];receipt[@"finished_at"]=@(NSDate.date.timeIntervalSince1970);receipt[@"result"]=error ? (identity ? @"partial" : @"failed") : @"complete";
+                if(error)receipt[@"error"]=error.localizedDescription ?: @"Identity probe failed";self.lastIdentityProbe=receipt;
+            }
             [self.identityCheckTimes removeObjectForKey:identifier];
             if (identity) [self matchIdentifier:identifier];
         }];

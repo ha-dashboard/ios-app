@@ -5,6 +5,7 @@
 #import "HABLEAPIServer.h"
 #import "HAAPIClient.h"
 #import "HABLEIdentityResolver.h"
+#import "HABLEIdentityEvidence.h"
 #import <CoreBluetooth/CoreBluetooth.h>
 
 @interface HABLEIdentityResolver (IdentityTestAccess)
@@ -54,6 +55,7 @@ static NSUInteger HABLERejectedRequestCount;
 - (void)discoveryPartDone:(id)session;
 - (NSTimeInterval)identityProbeIntervalForObservation:(NSDictionary *)observation;
 - (void)probePendingIdentity;
+- (void)finishIdentity:(id)session error:(NSString *)message;
 - (void)updateIdentityResolution;
 - (void)flushIdentityAdvertisements;
 - (void)centralManager:(CBCentralManager *)central didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:(NSDictionary *)advertisement RSSI:(NSNumber *)RSSI;
@@ -198,6 +200,30 @@ static NSUInteger HABLERejectedRequestCount;
     }
     if(saved)[NSUserDefaults.standardUserDefaults setObject:saved forKey:@"ha_ble_proxy_handle_tables"];else[NSUserDefaults.standardUserDefaults removeObjectForKey:@"ha_ble_proxy_handle_tables"];
 }
+- (void)testPartialIdentityReadsSurviveALaterSessionFailure {
+    id saved=[NSUserDefaults.standardUserDefaults objectForKey:@"ha_ble_proxy_identity_metadata"];
+    @try {
+        HABLEProxyManager *proxy=[HABLEProxyManager new];HABLEObservedPeripheral *peripheral=[HABLEObservedPeripheral new];peripheral.identifier=NSUUID.UUID;
+        NSString *identifier=peripheral.identifier.UUIDString;[proxy valueForKey:@"observations"][identifier]=NSMutableDictionary.dictionary;
+        NSData *value=[@"{\"device\":{\"mac\":\"00:11:22:33:44:55\"}}" dataUsingEncoding:NSUTF8StringEncoding];
+        NSDictionary *reads=[HABLEIdentityEvidence fingerprintsForValue:value path:@"s/1234/c/5678"];
+        for(NSUInteger i=0;i<2;i++) {
+            id session=[NSClassFromString(@"HABLEPeripheralSession") new];[session setValue:peripheral forKey:@"peripheral"];
+            [session setValue:[@{@"gatt_probe_session":[NSString stringWithFormat:@"partial-%lu",(unsigned long)i],@"gatt_fingerprint_reads":reads} mutableCopy] forKey:@"identityValues"];
+            __block BOOL returned=NO;
+            [session setValue:[^(NSDictionary *identity,NSError *error){returned=YES;XCTAssertNotNil(error);XCTAssertNotNil(identity);XCTAssertEqualObjects(identity[@"identification_complete"],@NO);} copy] forKey:@"identityCompletion"];
+            [proxy finishIdentity:session error:@"A later operation timed out"];XCTAssertTrue(returned);
+        }
+        NSDictionary *fields=[proxy valueForKey:@"observations"][identifier][@"gatt_fingerprints"];
+        NSDictionary *field=fields[@"s/1234/c/5678/json/device/mac"];
+        XCTAssertEqualObjects(field[@"sessions"],@2);XCTAssertTrue([field[@"stable_across_sessions"] boolValue]);
+        id empty=[NSClassFromString(@"HABLEPeripheralSession") new];[empty setValue:peripheral forKey:@"peripheral"];
+        [empty setValue:[@{@"gatt_probe_session":@"empty-failure",@"gatt_fingerprint_reads":@{}} mutableCopy] forKey:@"identityValues"];
+        [empty setValue:[^(NSDictionary *identity,NSError *error){XCTAssertNil(identity);XCTAssertNotNil(error);} copy] forKey:@"identityCompletion"];
+        [proxy finishIdentity:empty error:@"Connection failed before any read"];
+        XCTAssertEqualObjects([proxy valueForKey:@"observations"][identifier][@"gatt_fingerprints"],fields,@"An empty failed session cannot add stability evidence or erase prior reads");
+    } @finally {if(saved)[NSUserDefaults.standardUserDefaults setObject:saved forKey:@"ha_ble_proxy_identity_metadata"];else[NSUserDefaults.standardUserDefaults removeObjectForKey:@"ha_ble_proxy_identity_metadata"];}
+}
 - (void)testStandaloneUnknownConnectableDeviceEntersTheBoundedProbeQueue {
     HABLEFailingProbeProxy *proxy=[HABLEFailingProbeProxy new];[proxy setValue:@YES forKey:@"identitiesReady"];
     HABLEIdentityResolver *resolver=[HABLEIdentityResolver new];[resolver loadRegistry:@[] entries:@[] excludingSource:@"02:00:00:00:00:01"];[proxy setValue:resolver forKey:@"identityResolver"];
@@ -216,6 +242,8 @@ static NSUInteger HABLERejectedRequestCount;
     for(NSString *identifier in @[@"strong-unknown",@"weak-reference"])rows[identifier]=[@{@"identifier":identifier,@"connectable":@YES,@"first_seen":@(now-120),@"last_seen":@(now),@"rssi":[identifier isEqual:@"weak-reference"] ? @-96 : @-40,@"reference_available":@([identifier isEqual:@"weak-reference"])} mutableCopy];
     rows[@"weak-reference"][@"last_seen"]=@(now-45);
     [proxy probePendingIdentity];XCTAssertEqualObjects(proxy.inspectedIdentifier,@"weak-reference");
+    XCTAssertEqualObjects([proxy valueForKey:@"lastIdentityProbe"][@"result"],@"failed");
+    XCTAssertNotNil([proxy valueForKey:@"lastIdentityProbe"][@"error"]);
     NSDictionary *diagnostic=[[proxy devices] filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"identifier == %@",@"weak-reference"]].firstObject;
     XCTAssertEqualObjects(diagnostic[@"identity_probe_attempts"],@1);XCTAssertGreaterThan([diagnostic[@"identity_probe_at"] doubleValue],now-1);
     [proxy probePendingIdentity];XCTAssertEqual(proxy.inspections,1u,@"A reference does not bypass the global cooldown");
