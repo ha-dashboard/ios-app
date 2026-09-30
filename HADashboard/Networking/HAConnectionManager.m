@@ -45,6 +45,8 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 @property (nonatomic, strong) NSDictionary<NSString *, NSString *> *areaNames;      // area_id -> area name
 @property (nonatomic, strong) NSDictionary<NSString *, NSString *> *entityAreaMap;   // entity_id -> area_id
 @property (nonatomic, strong) NSDictionary<NSString *, NSString *> *deviceAreaMap;   // device_id -> area_id
+@property (nonatomic, strong) NSDictionary<NSString *, NSString *> *deviceNameMap;   // device_id -> name
+@property (nonatomic, strong) NSDictionary<NSString *, NSString *> *entityDeviceMap; // entity_id -> device_id
 @property (nonatomic, copy, readwrite) NSArray<HAFloor *> *floors;
 @property (nonatomic, strong) NSDictionary<NSString *, HAFloor *> *floorByAreaId;   // area_id -> HAFloor
 @property (nonatomic, assign) BOOL areasLoaded;
@@ -684,17 +686,25 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 
 - (void)processDeviceRegistry:(id)result {
     if (![result isKindOfClass:[NSArray class]]) return;
-    NSMutableDictionary *map = [NSMutableDictionary dictionary];
+    NSMutableDictionary *areaMap = [NSMutableDictionary dictionary];
+    NSMutableDictionary *nameMap = [NSMutableDictionary dictionary];
     for (NSDictionary *device in (NSArray *)result) {
         if (![device isKindOfClass:[NSDictionary class]]) continue;
         NSString *deviceId = device[@"id"];
+        if (![deviceId isKindOfClass:[NSString class]] || deviceId.length == 0) continue;
         NSString *areaId = device[@"area_id"];
-        if (deviceId && [areaId isKindOfClass:[NSString class]] && areaId.length > 0) {
-            map[deviceId] = areaId;
+        if ([areaId isKindOfClass:[NSString class]] && areaId.length > 0) {
+            areaMap[deviceId] = areaId;
+        }
+        NSString *name = device[@"name_by_user"] ?: device[@"name"];
+        if ([name isKindOfClass:[NSString class]] && name.length > 0) {
+            nameMap[deviceId] = name;
         }
     }
-    self.deviceAreaMap = [map copy];
-    HALogD(@"conn", @"Loaded %lu device->area mappings", (unsigned long)map.count);
+    self.deviceAreaMap = [areaMap copy];
+    self.deviceNameMap = [nameMap copy];
+    HALogD(@"conn", @"Loaded %lu device->area, %lu device->name mappings",
+           (unsigned long)areaMap.count, (unsigned long)nameMap.count);
 }
 
 - (void)processEntityRegistry:(id)result {
@@ -707,6 +717,7 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     id result = self.rawEntityRegistry;
     if (![result isKindOfClass:[NSArray class]]) return;
     NSMutableDictionary *map = [NSMutableDictionary dictionary];
+    NSMutableDictionary *deviceMap = [NSMutableDictionary dictionary];
     for (NSDictionary *entry in (NSArray *)result) {
         if (![entry isKindOfClass:[NSDictionary class]]) continue;
         NSString *entityId = entry[@"entity_id"];
@@ -753,6 +764,7 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
         // Fall back to device's area
         NSString *deviceId = entry[@"device_id"];
         if ([deviceId isKindOfClass:[NSString class]] && deviceId.length > 0) {
+            deviceMap[entityId] = deviceId;
             NSString *deviceArea = self.deviceAreaMap[deviceId];
             if (deviceArea) {
                 map[entityId] = deviceArea;
@@ -793,7 +805,9 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     }
 
     self.entityAreaMap = [map copy];
-    HALogD(@"conn", @"Built %lu entity->area mappings", (unsigned long)map.count);
+    self.entityDeviceMap = [deviceMap copy];
+    HALogD(@"conn", @"Built %lu entity->area, %lu entity->device mappings",
+           (unsigned long)map.count, (unsigned long)deviceMap.count);
 }
 
 - (void)checkRegistriesComplete {
@@ -920,6 +934,14 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 
 - (NSDictionary<NSString *, NSString *> *)deviceAreaMapping {
     return self.deviceAreaMap ?: @{};
+}
+
+- (NSDictionary<NSString *, NSString *> *)deviceNamesByDeviceId {
+    return self.deviceNameMap ?: @{};
+}
+
+- (NSDictionary<NSString *, NSString *> *)entityDeviceMapping {
+    return self.entityDeviceMap ?: @{};
 }
 
 #pragma mark - Reconnection
