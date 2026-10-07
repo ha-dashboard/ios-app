@@ -8,7 +8,8 @@ The universal developer and Ad Hoc build runs on armv7 and arm64 devices from
 iOS 9.3.3 through current iOS 27 devices, with a Mac Catalyst developer build.
 Starting with 1.2.6, Apple's distribution requirements mean the App Store uses
 a separate arm64 build targeting iOS 15 or later; iOS 9–14 devices remain on
-the last compatible App Store version or can use the universal developer build.
+the last compatible App Store version or can use the universal developer build
+(see [Older devices](#older-devices-ios-933--14x)).
 The optional Local Camera Stream requires iOS 10.3.3 or later.
 
 ## Features
@@ -53,12 +54,26 @@ See the [landing page](https://ha-dashboard.github.io/ios-app/) for screenshots.
 
 ## Getting Started
 
-### Easy path
+### Easy path (iOS 15 and later)
 
 Install from the [App Store](https://apps.apple.com/gb/app/ha-dash/id6759347912).
-The App Store build of HA Dash 1.2.6 requires iOS 15. Older devices can keep the
-last compatible App Store version; developers can continue to build and deploy
-the universal iOS 9-compatible artifact from this repository.
+Since 1.2.6, Apple no longer accepts App Store builds that support iOS versions
+this old, so the App Store version requires iOS 15 or later.
+
+### Older devices (iOS 9.3.3 – 14.x)
+
+These devices **cannot get new App Store updates**. The App Store offers them
+the last compatible version, 1.2.5. Later fixes and features are only available
+from the universal IPA attached to each
+[GitHub release](https://github.com/ha-dashboard/ios-app/releases):
+
+- **Jailbroken devices:** install the IPA with AppSync Unified or a similar tool.
+- **Not jailbroken:** sideload the IPA with a tool such as
+  [Sideloadly](https://sideloadly.io) and your Apple ID. With a free Apple ID
+  the app must be re-signed every 7 days.
+
+When you report a bug, include your device, iOS version and app version
+(Settings → version).
 
 ### For contributors or developers
 
