@@ -64,6 +64,7 @@ static const NSInteger kSnapshotPromotionMaxIndex = 3;
 @property (nonatomic, strong) AVPlayerLayer *hlsPlayerLayer;
 @property (nonatomic, assign) BOOL hlsFailed;
 @property (nonatomic, assign) BOOL hlsRequestInFlight; // prevent duplicate WS requests
+@property (nonatomic, assign) NSUInteger hlsRequestGeneration; // bumped by stopRefresh to drop stale stream responses
 @property (nonatomic, assign) BOOL hlsStatusKVORegistered;  // track KVO registration
 @property (nonatomic, assign) BOOL hlsReadyKVORegistered;   // track KVO registration
 
@@ -1097,9 +1098,16 @@ static HACameraStreamMode currentStreamMode(void) {
     };
     __weak typeof(self) weakSelf = self;
     NSString *expectedEntityId = [self.currentEntityId copy];
+    NSUInteger generation = ++self.hlsRequestGeneration;
     [[HAConnectionManager sharedManager] sendCommand:command completion:^(id result, NSError *error) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf) return;
+        // A dashboard reload can stop this cell and start a newer request while
+        // this one is pending; playing both crashes iOS 10 (issue #10).
+        if (generation != strongSelf.hlsRequestGeneration) {
+            HALogD(@"cam", @"Dropping stale HLS response for %@", expectedEntityId);
+            return;
+        }
         strongSelf.hlsRequestInFlight = NO;
         if (![strongSelf.currentEntityId isEqualToString:expectedEntityId]) return;
 
@@ -1141,6 +1149,10 @@ static HACameraStreamMode currentStreamMode(void) {
 }
 
 - (void)playHLSURL:(NSURL *)url {
+    // Release any existing player and its KVO first — replacing an observed
+    // AVPlayerLayer throws NSInternalInconsistencyException on iOS 10.
+    [self stopHLSPlayer];
+
     // HLS streams from HA include auth token as query param — no additional auth headers needed
     AVPlayerItem *item = [AVPlayerItem playerItemWithURL:url];
     self.hlsPlayer = [AVPlayer playerWithPlayerItem:item];
@@ -1599,6 +1611,7 @@ static HACameraStreamMode currentStreamMode(void) {
     self.lastFrameTime = nil;
     self.reconnectAttempts = 0;
     self.hlsRequestInFlight = NO;
+    self.hlsRequestGeneration++;
     self.recentFrameCount = 0;
     self.frameWindowStart = nil;
 }
