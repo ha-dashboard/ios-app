@@ -44,12 +44,26 @@
 /// Convert a single Lovelace view with registry data for resolving dynamic card names
 /// (e.g. tile cards with "name": {"type": "area"} or "name": {"type": "device"}).
 /// Pass empty dicts when registry data is unavailable.
+/// Equivalent to calling the floor-aware variant below with an empty floorNamesByAreaId.
 + (HADashboardConfig *)dashboardConfigFromView:(HALovelaceView *)view
                                        columns:(NSInteger)columns
                                  entityAreaMap:(NSDictionary<NSString *, NSString *> *)entityAreaMap
                                      areaNames:(NSDictionary<NSString *, NSString *> *)areaNames
                                entityDeviceMap:(NSDictionary<NSString *, NSString *> *)entityDeviceMap
                                    deviceNames:(NSDictionary<NSString *, NSString *> *)deviceNames;
+
+/// Convert a single Lovelace view with full registry data for resolving dynamic
+/// card/row names: tile cards, entities-card rows, and any other path that reads
+/// a "name" expressed as {"type": "area"|"device"|"floor"|"text"} or an array of
+/// such items (see HAEntityNameResolver). Pass empty dicts when registry data is
+/// unavailable.
++ (HADashboardConfig *)dashboardConfigFromView:(HALovelaceView *)view
+                                       columns:(NSInteger)columns
+                                 entityAreaMap:(NSDictionary<NSString *, NSString *> *)entityAreaMap
+                                     areaNames:(NSDictionary<NSString *, NSString *> *)areaNames
+                               entityDeviceMap:(NSDictionary<NSString *, NSString *> *)entityDeviceMap
+                                   deviceNames:(NSDictionary<NSString *, NSString *> *)deviceNames
+                            floorNamesByAreaId:(NSDictionary<NSString *, NSString *> *)floorNamesByAreaId;
 
 /// Extract all entity IDs from a Lovelace card dictionary (recursively handles stacks)
 + (NSArray<NSDictionary *> *)extractEntitiesFromCard:(NSDictionary *)card;
