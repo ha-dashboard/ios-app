@@ -1,4 +1,5 @@
 #import "HAAppDelegate.h"
+#import "HAStrings.h"
 #import "HAAuthManager.h"
 #import "HAProximityWakeController.h"
 #import "HAPerfMonitor.h"
@@ -227,7 +228,7 @@
     indicator.layer.cornerRadius = 15.0;
     indicator.titleLabel.font = [UIFont boldSystemFontOfSize:12.0];
     indicator.contentEdgeInsets = UIEdgeInsetsMake(6, 12, 6, 12);
-    indicator.accessibilityLabel = @"Camera and microphone are live. Tap to stop streaming.";
+    indicator.accessibilityLabel = HALocalizedString(@"accessibility.camera_mic_live", @"VoiceOver accessibility label for the persistent streaming privacy indicator, shown while the local camera stream is actively capturing.");
     [indicator addTarget:self action:@selector(streamPrivacyIndicatorTapped:)
         forControlEvents:UIControlEventTouchUpInside];
     [self.window addSubview:indicator];
