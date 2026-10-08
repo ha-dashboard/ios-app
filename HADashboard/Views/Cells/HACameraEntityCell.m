@@ -1,4 +1,5 @@
 #import "HACameraEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAAuthManager.h"
 #import "HADashboardConfig.h"
@@ -341,7 +342,7 @@ static HACameraStreamMode currentStreamMode(void) {
     if (!entity.isAvailable) {
         [self stopRefresh];
         self.snapshotView.image = nil;
-        self.errorLabel.text = @"Unavailable";
+        self.errorLabel.text = HALocalizedString(@"cell.camera.unavailable", @"Error label in the camera cell, shown when the entity is unavailable.");
         self.errorLabel.hidden = NO;
         return;
     }
@@ -352,11 +353,11 @@ static HACameraStreamMode currentStreamMode(void) {
     // Only show LIVE when we are actually receiving video frames — not just "connected"
     NSString *camState = entity.state;
     if ([camState isEqualToString:@"recording"]) {
-        self.stateBadge.text = @" REC ";
+        self.stateBadge.text = HALocalizedString(@"cell.camera.badge.rec", @"Badge text overlaid on a recording camera cell. Leading/trailing spaces are intentional padding -- keep them. Max ~5 chars.");
         self.stateBadge.backgroundColor = [[UIColor redColor] colorWithAlphaComponent:0.8];
         self.stateBadge.hidden = NO;
     } else if (self.receivingFrames) {
-        self.stateBadge.text = @" LIVE ";
+        self.stateBadge.text = HALocalizedString(@"cell.camera.badge.live", @"Badge text overlaid on a live-streaming camera cell. Leading/trailing spaces are intentional padding -- keep them. Max ~6 chars.");
         self.stateBadge.backgroundColor = [[UIColor colorWithRed:0.2 green:0.8 blue:0.3 alpha:0.8] colorWithAlphaComponent:0.8];
         self.stateBadge.hidden = NO;
     } else {
@@ -866,7 +867,7 @@ static HACameraStreamMode currentStreamMode(void) {
         [[UIColor colorWithRed:0.1 green:0.12 blue:0.15 alpha:1] setFill];
         UIRectFill(CGRectMake(0, 0, w, h));
         NSDictionary *attrs = @{NSFontAttributeName: [UIFont systemFontOfSize:14], NSForegroundColorAttributeName: [UIColor colorWithWhite:0.5 alpha:1]};
-        NSString *label = [NSString stringWithFormat:@"📷 %@", [self.entity friendlyName] ?: @"Camera"];
+        NSString *label = [NSString stringWithFormat:@"📷 %@", [self.entity friendlyName] ?: HALocalizedString(@"cell.camera.fallback_name", @"Fallback camera name drawn onto the demo-mode placeholder image, when the entity has no friendly name.")];
         CGSize sz = [label sizeWithAttributes:attrs];
         [label drawAtPoint:CGPointMake((w - sz.width) / 2, (h - sz.height) / 2) withAttributes:attrs];
         self.snapshotView.image = UIGraphicsGetImageFromCurrentImageContext();
@@ -924,10 +925,10 @@ static HACameraStreamMode currentStreamMode(void) {
                     strongSelf.consecutiveFailures++;
                     BOOL hasExistingImage = (strongSelf.snapshotView.image != nil);
                     if (!hasExistingImage) {
-                        strongSelf.errorLabel.text = @"No signal";
+                        strongSelf.errorLabel.text = HALocalizedString(@"cell.camera.no_signal", @"Error label in the camera cell, shown when a snapshot fetch fails and no image is available.");
                         strongSelf.errorLabel.hidden = NO;
                     } else if (strongSelf.consecutiveFailures >= kMaxConsecutiveFailuresBeforeClear) {
-                        strongSelf.errorLabel.text = @"No signal";
+                        strongSelf.errorLabel.text = HALocalizedString(@"cell.camera.no_signal", @"Error label in the camera cell, shown when a snapshot fetch fails and no image is available.");
                         strongSelf.errorLabel.hidden = NO;
                     }
                 });
@@ -1289,12 +1290,12 @@ static HACameraStreamMode currentStreamMode(void) {
 
 - (void)updateLiveBadge {
     if (self.receivingFrames) {
-        self.stateBadge.text = @" LIVE ";
+        self.stateBadge.text = HALocalizedString(@"cell.camera.badge.live", @"Badge text overlaid on a live-streaming camera cell. Leading/trailing spaces are intentional padding -- keep them. Max ~6 chars.");
         self.stateBadge.backgroundColor = [UIColor colorWithRed:0.2 green:0.8 blue:0.3 alpha:0.8];
         self.stateBadge.hidden = NO;
         [self.contentView bringSubviewToFront:self.stateBadge];
     } else if ([self.entity.state isEqualToString:@"recording"]) {
-        self.stateBadge.text = @" REC ";
+        self.stateBadge.text = HALocalizedString(@"cell.camera.badge.rec", @"Badge text overlaid on a recording camera cell. Leading/trailing spaces are intentional padding -- keep them. Max ~5 chars.");
         self.stateBadge.backgroundColor = [[UIColor redColor] colorWithAlphaComponent:0.8];
         self.stateBadge.hidden = NO;
         [self.contentView bringSubviewToFront:self.stateBadge];

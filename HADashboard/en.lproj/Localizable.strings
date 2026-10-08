@@ -434,3 +434,19 @@
 
 /* Status/error text on the connection form when the password field is empty. */
 "connection.error.missing_password" = "Please enter a password";
+
+
+/* Error label in the camera cell, shown when the entity is unavailable. */
+"cell.camera.unavailable" = "Unavailable";
+
+/* Badge text overlaid on a recording camera cell. Leading/trailing spaces are intentional padding -- keep them. Max ~5 chars. */
+"cell.camera.badge.rec" = " REC ";
+
+/* Badge text overlaid on a live-streaming camera cell. Leading/trailing spaces are intentional padding -- keep them. Max ~6 chars. */
+"cell.camera.badge.live" = " LIVE ";
+
+/* Fallback camera name drawn onto the demo-mode placeholder image, when the entity has no friendly name. */
+"cell.camera.fallback_name" = "Camera";
+
+/* Error label in the camera cell, shown when a snapshot fetch fails and no image is available. */
+"cell.camera.no_signal" = "No signal";
