@@ -230,9 +230,15 @@ jobs:
           PUBLIC_NOTES="docs/releases/v${VERSION}-github.md"
           test -f "$NOTES"
           test -f "$PUBLIC_NOTES"
-          ! grep -Fq 'Status: **Draft' "$NOTES"
-          ! grep -Fq 'Status: **Draft' "$PUBLIC_NOTES"
-          ! grep -Fq -- '- [ ]' "$NOTES"
+          # `! cmd` never trips `set -e`, so fail explicitly
+          if grep -Fq 'Status: **Draft' "$NOTES" "$PUBLIC_NOTES"; then
+            echo "Release notes are still marked Draft" >&2
+            exit 1
+          fi
+          if grep -Fq -- '- [ ]' "$NOTES"; then
+            echo "Release notes have unchecked acceptance items" >&2
+            exit 1
+          fi
 
       - name: Decode ASC API key
         env:
