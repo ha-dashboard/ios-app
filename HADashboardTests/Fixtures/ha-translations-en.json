@@ -15,5 +15,8 @@
   "component.climate.entity_component._.state.off": "Off",
   "component.media_player.entity_component._.state.playing": "Playing",
   "component.media_player.entity_component._.state.paused": "Paused",
-  "component.sensor.entity_component._.state_attributes.battery.name": "Battery"
+  "component.sensor.entity_component._.state_attributes.battery.name": "Battery",
+  "component.light.entity_component._.state_attributes.color_temp_kelvin.name": "Color temperature (Kelvin)",
+  "component.climate.entity_component._.state_attributes.fan_mode.name": "Fan mode",
+  "component.cover.entity_component._.state_attributes.current_tilt_position.name": "Tilt position"
 }

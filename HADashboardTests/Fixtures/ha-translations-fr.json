@@ -15,5 +15,8 @@
   "component.climate.entity_component._.state.off": "Arrêt",
   "component.media_player.entity_component._.state.playing": "Lecture en cours",
   "component.media_player.entity_component._.state.paused": "En pause",
-  "component.sensor.entity_component._.state_attributes.battery.name": "Batterie"
+  "component.sensor.entity_component._.state_attributes.battery.name": "Batterie",
+  "component.light.entity_component._.state_attributes.color_temp_kelvin.name": "Température de couleur (Kelvin)",
+  "component.climate.entity_component._.state_attributes.fan_mode.name": "Mode de ventilation",
+  "component.cover.entity_component._.state_attributes.current_tilt_position.name": "Inclinaison"
 }
