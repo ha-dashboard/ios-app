@@ -282,13 +282,40 @@ For native runtimes (iOS 16+), all commands transparently pass through to `xcrun
 Pixel-perfect visual regression coverage across card types and multiple states in gradient and light themes. Avoid hard-coded suite counts here; query the current test bundle and reference directory when reporting coverage.
 
 ```bash
-scripts/test-snapshots.sh
+scripts/test-snapshots.sh                                            # run all HADashboardTests
+scripts/test-snapshots.sh record                                     # record reference images
+scripts/test-snapshots.sh -only-testing:HADashboardTests/HAActionTests
+scripts/test-snapshots.sh record -only-testing:HADashboardTests/HAClimateSnapshotTests/testThermostatShowCurrentAsPrimary
 ```
 
+Anything after an optional leading `record` is passed through to `xcodebuild test` verbatim
+(repeatable `-only-testing:<id>`, etc). The script picks a simulator itself — prefer `iPad
+(10th generation)` on the pinned runtime below, falling back to any available iPad — and
+reports a pass/fail summary with a non-zero exit code on failure. Override the simulator with
+`SNAPSHOT_SIM_UDID=<udid>`, or `SNAPSHOT_SIM_NAME`/`SNAPSHOT_SIM_OS`.
+
 - `HADashboardTests/HABaseSnapshotTestCase` — shared base with `verifyView:identifier:` (dual-theme) and cell helpers
-- `HADashboardTests/HASnapshotTestHelpers` — 89 factory methods for all entity domains
-- `HADashboardTests/ReferenceImages_64/` — 190 reference images (committed, source of truth)
-- To re-record: set `self.recordMode = YES` in `HABaseSnapshotTestCase.m`, run tests, set back to `NO`
+- `HADashboardTests/HASnapshotTestHelpers` — factory methods for all entity domains
+- `HADashboardTests/ReferenceImages_ios18_64/` — **current** reference images (committed, source
+  of truth), recorded on the pinned simulator (iPad (10th generation), iOS 18.0). This is the
+  default `scripts/test-snapshots.sh` compares and records against.
+- `HADashboardTests/ReferenceImages_64/` — **legacy** reference images recorded on iOS 17.4. Kept
+  for history/rollback, not maintained — don't add to or re-record into this directory.
+- The `_64` suffix on both is `iOSSnapshotTestCase`'s architecture-word-size suffix, appended
+  automatically after whatever directory name `getReferenceImageDirectoryWithDefault:` returns —
+  it is not something to rename by hand.
+- **Pinned runtime for deterministic re-recording:** rendering (font metrics, hinting) differs
+  across simulator OS versions, so references must be recorded and compared on the same runtime.
+  `HABaseSnapshotTestCase.m` and `HAHeadingSnapshotTests.m` read a compile-time
+  `HA_SNAPSHOT_RUNTIME_SUFFIX` define (set via `GCC_PREPROCESSOR_DEFINITIONS` — a runtime
+  environment variable wouldn't reach the simulator-hosted test process) and append it to the
+  reference directory name (e.g. `_ios18` → `ReferenceImages_ios18_64`).
+  `scripts/test-snapshots.sh` defaults `HA_SNAPSHOT_RUNTIME_SUFFIX` to `_ios18`; pass
+  `HA_SNAPSHOT_RUNTIME_SUFFIX=""` to target the legacy iOS 17.4 set instead, or any other suffix
+  to record/compare a different pinned runtime's set without touching either existing one.
+  To record a fresh OS-tagged set on the pinned simulator:
+  `HA_SNAPSHOT_RUNTIME_SUFFIX=_ios18 scripts/test-snapshots.sh record` (or just
+  `scripts/test-snapshots.sh record`, since that's now the default).
 
 ### Visual Parity Screenshots
 

@@ -63,7 +63,16 @@
 #pragma mark - Write with Hash Comparison
 
 - (BOOL)cacheConfig:(NSDictionary *)config forDashboard:(NSString *)dashboardPath {
-    if (!config) return NO;
+    return [self cacheConfig:config forDashboard:dashboardPath completion:nil];
+}
+
+- (BOOL)cacheConfig:(NSDictionary *)config
+       forDashboard:(NSString *)dashboardPath
+         completion:(void (^)(BOOL success))completion {
+    if (!config) {
+        if (completion) completion(NO);
+        return NO;
+    }
 
     // Compute hash of new config
     NSError *error = nil;
@@ -76,6 +85,7 @@
                                                         error:&error];
     if (!jsonData) {
         HALogE(@"cache", @"Failed to serialize dashboard config: %@", error.localizedDescription);
+        if (completion) completion(NO); // Nothing was written
         return YES; // Assume changed if we can't serialize
     }
 
@@ -98,11 +108,13 @@
             if (success) {
                 HALogI(@"cache", @"Cached dashboard config for '%@'", dashboardPath ?: @"default");
             }
+            if (completion) completion(success);
         }];
         [self writeHash:newHash forDashboard:dashboardPath];
         self.cachedHashes[cacheKey] = newHash;
     } else {
         HALogD(@"cache", @"Dashboard config unchanged for '%@', skipping write", dashboardPath ?: @"default");
+        if (completion) completion(NO); // No write performed; nothing to observe completing
     }
 
     return changed;

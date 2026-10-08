@@ -1786,7 +1786,7 @@
         @"sensor.living_room_temperature",
         @"sensor.living_room_humidity"
     ];
-    section.customProperties = @{@"chipStyle": @"badge"};
+    section.customProperties = @{@"chipStyle": @YES};
     return section;
 }
 
@@ -1800,7 +1800,7 @@
         @"binary_sensor.hallway_motion",
         @"binary_sensor.front_door"
     ];
-    section.customProperties = @{@"chipStyle": @"badge"};
+    section.customProperties = @{@"chipStyle": @YES};
     return section;
 }
 

@@ -36,6 +36,7 @@
 #import "HAWeatherEntityCell.h"
 #import "HAGaugeCardCell.h"
 #import "HAAlarmEntityCell.h"
+#import "HALightEntityCell.h"
 #import "HAMediaPlayerEntityCell.h"
 #import "HATileEntityCell.h"
 #import "HACalendarCardCell.h"
@@ -845,6 +846,11 @@ static const CGFloat kRowUnitHeight = 56.0;
         BOOL hasKeypad = ([entity alarmCodeFormat] != nil);
         height = (hasKeypad ? [HAAlarmEntityCell preferredHeightWithKeypad]
                             : [HAAlarmEntityCell preferredHeightWithoutKeypad]) + headingExtra;
+    } else if ([[entity domain] isEqualToString:HAEntityDomainLight]) {
+        // Matches the alarm branch above: domain-based, consistent with how
+        // the other domain fallbacks here are positioned ahead of the later
+        // cardType-specific checks (tile, logbook).
+        height = [HALightEntityCell preferredHeightForEntity:entity configItem:item] + headingExtra;
     } else if ([[entity domain] isEqualToString:HAEntityDomainMediaPlayer]) {
         height = [HAMediaPlayerEntityCell preferredHeight] + headingExtra;
     } else if ([item.cardType isEqualToString:@"tile"]) {

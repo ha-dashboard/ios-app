@@ -465,6 +465,15 @@
     HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:1];
     HAMarkdownCardCell *cell = [[HAMarkdownCardCell alloc] initWithFrame:CGRectMake(0, 0, 320, 120)];
 
+    // Host the cell in a real window with a root view controller. UIKit does
+    // not reliably deliver traitCollectionDidChange: for overrideUserInterfaceStyle
+    // changes to a view that isn't part of a window's hierarchy, and this test
+    // relies on that callback firing to re-resolve the dynamic theme color.
+    UIWindow *window = [[UIWindow alloc] initWithFrame:CGRectMake(0, 0, 320, 120)];
+    window.rootViewController = [[UIViewController alloc] init];
+    [window.rootViewController.view addSubview:cell];
+    [window makeKeyAndVisible];
+
     if (@available(iOS 13.0, *)) {
         cell.overrideUserInterfaceStyle = UIUserInterfaceStyleLight;
     }
@@ -491,6 +500,8 @@
         @"Markdown attributes must be regenerated after an appearance change");
     XCTAssertEqualObjects(darkColor, expectedDarkColor,
         @"Markdown foreground color must match the active dark appearance");
+
+    window.hidden = YES;
 }
 
 - (void)testMarkdownCard_formatsNativeMarkdownSyntax {

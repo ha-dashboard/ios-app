@@ -16,6 +16,15 @@
 /// Returns NO if the config is identical to the cached version (skip re-render).
 - (BOOL)cacheConfig:(NSDictionary *)config forDashboard:(NSString *)dashboardPath;
 
+/// Same as -cacheConfig:forDashboard:, but with a completion hook for callers
+/// (tests, primarily) that need to observe when the underlying disk write —
+/// which happens asynchronously — has actually finished, instead of guessing
+/// at a delay. `success` is NO when nothing was written (unchanged config, or
+/// the config could not be serialized), YES once the write completes.
+- (BOOL)cacheConfig:(NSDictionary *)config
+       forDashboard:(NSString *)dashboardPath
+         completion:(nullable void (^)(BOOL success))completion;
+
 /// Whether there is a cached config file for the given dashboard path.
 - (BOOL)hasCachedConfigForDashboard:(NSString *)dashboardPath;
 

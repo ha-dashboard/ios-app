@@ -13,6 +13,12 @@ static const CGFloat kSubGridUnit = 320.0 / 12.0; // ~26.7pt per sub-grid column
 
 /// Standard cell heights for snapshot tests.
 static const CGFloat kStandardCellHeight = 80.0;
+/// Height for standalone domain cards whose domain isn't given its own case in
+/// HADashboardViewController's per-item height calculation (e.g. light, timer,
+/// script) — matches that method's generic `else { height = 100.0 + headingExtra; }`
+/// fallback. kStandardCellHeight (80pt) is too short for several of these cells'
+/// actual content and clips/overlaps it; use this instead where that's the case.
+static const CGFloat kGenericCardHeight = 100.0;
 static const CGFloat kThermostatHeight = 280.0;
 static const CGFloat kVacuumHeight = 120.0;
 static const CGFloat kEntitiesRowHeight = 36.0;
@@ -49,6 +55,15 @@ static const CGFloat kTileHeight = 80.0;
 /// Temporarily sets the theme, re-lays out the view, verifies the snapshot
 /// with a theme-suffixed identifier, then restores the original theme.
 - (void)verifyView:(UIView *)view identifier:(NSString *)identifier inTheme:(NSInteger)mode;
+
+/// Verify a view snapshot in a specific theme mode, with an explicit per-pixel
+/// and overall tolerance (see FBSnapshotVerifyViewWithPixelOptions). Use this
+/// only for a specific test known to have legitimate, tiny, non-deterministic
+/// rendering noise (e.g. UISwitch knob antialiasing) — never to paper over a
+/// real difference. The default verifyView:identifier:inTheme:gradient: (and
+/// verifyView:identifier:) remain pixel-exact (tolerance 0) for everything else.
+- (void)verifyView:(UIView *)view identifier:(NSString *)identifier inTheme:(NSInteger)mode gradient:(BOOL)gradient
+ perPixelTolerance:(CGFloat)perPixelTolerance overallTolerance:(CGFloat)overallTolerance;
 
 /// Verify a view snapshot in Dark+Gradient and Light themes.
 - (void)verifyView:(UIView *)view identifier:(NSString *)identifier;
