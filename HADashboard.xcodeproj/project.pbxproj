@@ -628,6 +628,7 @@
 		72E657A4292EFB3233C510A3 /* testAutomationTile_default__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 1575137B51EABFAB5CE2DCDA /* testAutomationTile_default__dark_gradient@2x.png */; };
 		737401EBA24D88ED62A63F59 /* haze-day.json in Resources */ = {isa = PBXBuildFile; fileRef = 082F82129FD6F65F0FBF78C1 /* haze-day.json */; };
 		739078C313CA9F70B458A2D5 /* HATileFeatureTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 25A23BBB01EFF935B0E6A107 /* HATileFeatureTests.m */; };
+		E4053085537014126FBD8918 /* HAViewPersistenceTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 678DE4FA9D5366B6F94C3F80 /* HAViewPersistenceTests.m */; };
 		73CF869F5E443899D28A1472 /* testLightOff__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = A557DB1393BD4876B131C987 /* testLightOff__light@2x.png */; };
 		73EAF4740A6A3E2BE2995B17 /* testMediaPlayerButton_showStateTrue__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 28D77039775941E395661E0F /* testMediaPlayerButton_showStateTrue__light@2x.png */; };
 		7405443FBB6F3A072FE07298 /* testThreeColumn_4_4_4_4_4_4_three_column_dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 80C97443D74E586C804A520C /* testThreeColumn_4_4_4_4_4_4_three_column_dark_gradient@2x.png */; };
@@ -1594,6 +1595,7 @@
 		254B41AE2145E680BBECE90E /* testHeadingCellStandalone_12col@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testHeadingCellStandalone_12col@2x.png"; sourceTree = "<group>"; };
 		258F79C5609D3A6EB2835092 /* testSceneDefault_sceneDefault_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testSceneDefault_sceneDefault_gradient@2x.png"; sourceTree = "<group>"; };
 		25A23BBB01EFF935B0E6A107 /* HATileFeatureTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HATileFeatureTests.m; sourceTree = "<group>"; };
+		678DE4FA9D5366B6F94C3F80 /* HAViewPersistenceTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAViewPersistenceTests.m; sourceTree = "<group>"; };
 		2602194C06F6E6194C465DCC /* LOTRoundedRectAnimator.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = LOTRoundedRectAnimator.m; sourceTree = "<group>"; };
 		2614DAAA805D8414CDCE0210 /* HARTSPCredentialManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HARTSPCredentialManager.h; sourceTree = "<group>"; };
 		2614F9A296644EA0F0AF16D4 /* testCounterTile_showStateFalse__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testCounterTile_showStateFalse__dark_gradient@2x.png"; sourceTree = "<group>"; };
@@ -4574,6 +4576,7 @@
 				A7F3570A925EE8CD028FA470 /* HAThermostatPrimaryPolishTests.m */,
 				89C3AEC2DEBB17550A98AECB /* HATileFeatureSnapshotTests.m */,
 				25A23BBB01EFF935B0E6A107 /* HATileFeatureTests.m */,
+				678DE4FA9D5366B6F94C3F80 /* HAViewPersistenceTests.m */,
 				C1BB9C3B8E916A2F22D8696F /* Info.plist */,
 			);
 			path = HADashboardTests;
@@ -6054,6 +6057,7 @@
 				E40479A1395324A6F76BFC39 /* HAThermostatPrimaryPolishTests.m in Sources */,
 				FA0C237F75B417A3E37BBBC1 /* HATileFeatureSnapshotTests.m in Sources */,
 				739078C313CA9F70B458A2D5 /* HATileFeatureTests.m in Sources */,
+				E4053085537014126FBD8918 /* HAViewPersistenceTests.m in Sources */,
 				968CE03782E0520EAD637BA0 /* UIApplication+KeyWindow.h in Sources */,
 				2DC686BB92D529B692F3CE54 /* UIApplication+KeyWindow.m in Sources */,
 				928B333D60D2AF34AC11C934 /* UIImage+Compare.h in Sources */,
