@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		28CC43F17C652CF0F121968B /* HAScreenshotTriggerTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 5FF8F8BBB33554C15CB8B8E3 /* HAScreenshotTriggerTests.m */; };
 		FED6EBA65BB416FBCEF4F774 /* HARegistryLoadingTests.m in Sources */ = {isa = PBXBuildFile; fileRef = C4F7DC357A2DCB7C72EF35CB /* HARegistryLoadingTests.m */; };
 		7E713793F923745BFD9D8C93 /* HACameraHLSTests.m in Sources */ = {isa = PBXBuildFile; fileRef = F30D442A27A89349EF13EF46 /* HACameraHLSTests.m */; };
 		00038949C342C959E2F667B0 /* testTimerSectionPaused_timerSectionPaused_light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = D407B92D07874BD95496B151 /* testTimerSectionPaused_timerSectionPaused_light@2x.png */; };
@@ -1381,6 +1382,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		5FF8F8BBB33554C15CB8B8E3 /* HAScreenshotTriggerTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAScreenshotTriggerTests.m; sourceTree = "<group>"; };
 		C4F7DC357A2DCB7C72EF35CB /* HARegistryLoadingTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HARegistryLoadingTests.m; sourceTree = "<group>"; };
 		F30D442A27A89349EF13EF46 /* HACameraHLSTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HACameraHLSTests.m; sourceTree = "<group>"; };
 		000F4A3D464DFD6E048297AD /* testSwitchTile_nameOverride__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testSwitchTile_nameOverride__dark_gradient@2x.png"; sourceTree = "<group>"; };
@@ -4564,6 +4566,7 @@
 				B515DAD59397BD82D51BE42F /* HALightingSnapshotTests.m */,
 				F30D442A27A89349EF13EF46 /* HACameraHLSTests.m */,
 				C4F7DC357A2DCB7C72EF35CB /* HARegistryLoadingTests.m */,
+				5FF8F8BBB33554C15CB8B8E3 /* HAScreenshotTriggerTests.m */,
 				72FFAE7B08DD2FF900440D81 /* HAMJPEGStreamTests.m */,
 				BF3BB81D6358A1EFC0A7F6C4 /* HAOAuthClientTests.m */,
 				A6391A33D6AC3257EF4FEAD7 /* HARTSPCredentialManagerTests.m */,
@@ -6046,6 +6049,7 @@
 				EFF2D03A1A5B6318EECB0750 /* HALightingSnapshotTests.m in Sources */,
 				7E713793F923745BFD9D8C93 /* HACameraHLSTests.m in Sources */,
 				FED6EBA65BB416FBCEF4F774 /* HARegistryLoadingTests.m in Sources */,
+				28CC43F17C652CF0F121968B /* HAScreenshotTriggerTests.m in Sources */,
 				48421F38085456F0C84F5DC3 /* HAMJPEGStreamTests.m in Sources */,
 				F022C139DA5CD97CAD9B39FF /* HAOAuthClientTests.m in Sources */,
 				C092F7F18948B1D893F54D1B /* HARTSPCredentialManagerTests.m in Sources */,
