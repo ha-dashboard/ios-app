@@ -14,6 +14,13 @@
 /// When visible, contentView is pushed down to make room.
 @property (nonatomic, strong) UILabel *headingLabel;
 
+/// Small, subtle badge shown at the bottom of the card when the item's
+/// generic rendering is standing in for an unmapped custom:* Lovelace card
+/// (HADashboardConfigItem.fallbackCardType). Hidden otherwise, and hidden
+/// entirely when "Show Unsupported Cards" is off (the parser simply doesn't
+/// set fallbackCardType in that case, so this label just never shows).
+@property (nonatomic, strong) UILabel *fallbackBadgeLabel;
+
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem;
 - (void)setupSubviews;
 
