@@ -50,6 +50,13 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 @property (nonatomic, strong) UIView *gradientPreview;
 @property (nonatomic, strong) CAGradientLayer *previewGradientLayer;
 
+// Language (app-chrome override; hidden until a second .lproj ships)
+@property (nonatomic, strong) UILabel *languageSectionHeader;
+@property (nonatomic, strong) UIView *languageSection;
+@property (nonatomic, strong) UISegmentedControl *languageSegment;
+/// Segment index -> language code. Index 0 ("System default") maps to nil.
+@property (nonatomic, strong) NSArray<NSString *> *languageSegmentCodes;
+
 // Kiosk mode
 @property (nonatomic, strong) UIView *kioskSection;
 @property (nonatomic, strong) UISwitch *kioskSwitch;
@@ -317,6 +324,21 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         [self.gradientPreview.bottomAnchor constraintEqualToAnchor:self.gradientOptionsContainer.bottomAnchor],
     ]];
 
+    // ── LANGUAGE section ──────────────────────────────────────────────
+    // Hidden entirely while only one .lproj ships (today: just en.lproj).
+    // New <code>.lproj folders show up automatically -- see
+    // -[HAStrings availableLanguageCodes] -- with no code change required
+    // to surface them here.
+    self.languageSectionHeader = [self createSectionHeaderWithText:HALocalizedString(@"settings.section.language.title", @"All-caps section header in Settings, above the language picker. Hidden while only one language ships.")];
+    [container addSubview:self.languageSectionHeader];
+
+    self.languageSection = [self createLanguageSection];
+    [container addSubview:self.languageSection];
+
+    BOOL showLanguagePicker = [HAStrings availableLanguageCodes].count > 1;
+    self.languageSectionHeader.hidden = !showLanguagePicker;
+    self.languageSection.hidden = !showLanguagePicker;
+
     // ── DISPLAY section ───────────────────────────────────────────────
     self.displaySectionHeader = [self createSectionHeaderWithText:HALocalizedString(@"settings.section.display.title", @"All-caps section header in Settings, above kiosk/demo/display toggles.")];
     [container addSubview:self.displaySectionHeader];
@@ -481,6 +503,8 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         @"connRow":   self.connectionRow,
         @"appHdr":    self.appearanceSectionHeader,
         @"themeStack":self.themeStack,
+        @"langHdr":   self.languageSectionHeader,
+        @"langSec":   self.languageSection,
         @"dispHdr":   self.displaySectionHeader,
         @"kiosk":     self.kioskSection,
         @"proxWake":  self.proximityWakeSection,
@@ -500,7 +524,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     NSDictionary *metrics = @{@"p": @16, @"sh": @32, @"hg": @10, @"fh": @44};
 
     [container addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[proxWake]-p-[demo]-p-[autoReload]-p-[camMute]-p-[liveStream]-p-[clrCache(fh)]-sh-[intHdr]-hg-[intSec]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
+        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[langHdr]-hg-[langSec]-sh-[dispHdr]-hg-[kiosk]-p-[proxWake]-p-[demo]-p-[autoReload]-p-[camMute]-p-[liveStream]-p-[clrCache(fh)]-sh-[intHdr]-hg-[intSec]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
         options:0 metrics:metrics views:views]];
 
     for (NSString *name in views) {
@@ -886,6 +910,67 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     label.textColor = [HATheme secondaryTextColor];
     label.translatesAutoresizingMaskIntoConstraints = NO;
     return label;
+}
+
+- (UIView *)createLanguageSection {
+    UIView *section = [[UIView alloc] init];
+    section.translatesAutoresizingMaskIntoConstraints = NO;
+
+    UILabel *help = [[UILabel alloc] init];
+    help.text = HALocalizedString(@"settings.language.help", @"Help paragraph under the language picker in Settings.");
+    help.font = [UIFont systemFontOfSize:12];
+    help.textColor = [HATheme secondaryTextColor];
+    help.numberOfLines = 0;
+    help.translatesAutoresizingMaskIntoConstraints = NO;
+    [section addSubview:help];
+
+    NSArray<NSString *> *codes = [HAStrings availableLanguageCodes];
+    self.languageSegmentCodes = codes;
+
+    NSMutableArray<NSString *> *items = [NSMutableArray arrayWithObject:
+        HALocalizedString(@"settings.language.system_default", @"Segmented control option, Settings > Language picker. Follows the iOS system language.")];
+    for (NSString *code in codes) {
+        [items addObject:[HAStrings displayNameForLanguageCode:code]];
+    }
+
+    self.languageSegment = [[UISegmentedControl alloc] initWithItems:items];
+    NSString *override = [HAStrings overrideLanguageCode];
+    NSUInteger overrideIndex = override ? [codes indexOfObject:override] : NSNotFound;
+    self.languageSegment.selectedSegmentIndex = (overrideIndex == NSNotFound) ? 0 : (NSInteger)(overrideIndex + 1);
+    [self.languageSegment addTarget:self action:@selector(languageSegmentChanged:) forControlEvents:UIControlEventValueChanged];
+    self.languageSegment.translatesAutoresizingMaskIntoConstraints = NO;
+    [section addSubview:self.languageSegment];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [self.languageSegment.topAnchor constraintEqualToAnchor:section.topAnchor],
+        [self.languageSegment.leadingAnchor constraintEqualToAnchor:section.leadingAnchor],
+        [self.languageSegment.trailingAnchor constraintEqualToAnchor:section.trailingAnchor],
+        [help.topAnchor constraintEqualToAnchor:self.languageSegment.bottomAnchor constant:8],
+        [help.leadingAnchor constraintEqualToAnchor:section.leadingAnchor],
+        [help.trailingAnchor constraintEqualToAnchor:section.trailingAnchor],
+        [help.bottomAnchor constraintEqualToAnchor:section.bottomAnchor],
+    ]];
+
+    return section;
+}
+
+- (void)languageSegmentChanged:(UISegmentedControl *)sender {
+    NSInteger index = sender.selectedSegmentIndex;
+    NSString *newCode = (index == 0) ? nil : self.languageSegmentCodes[(NSUInteger)(index - 1)];
+    [HAStrings setOverrideLanguageCode:newCode];
+
+    // The override takes effect immediately for any screen built from here
+    // on, including this one -- rebuild it in place so the change is
+    // visible without waiting for a relaunch. Other already-presented
+    // screens pick it up next time they're shown.
+    for (UIView *subview in [self.view.subviews copy]) {
+        [subview removeFromSuperview];
+    }
+    [self setupUI];
+
+    [HAToastView showInView:self.view
+        message:HALocalizedString(@"settings.toast.language_changed", @"Toast shown after changing the in-app language override in Settings.")
+        subtitle:nil duration:1.5 tapAction:nil];
 }
 
 - (UIView *)createToggleSection:(NSString *)title helpText:(NSString *)helpText isOn:(BOOL)isOn

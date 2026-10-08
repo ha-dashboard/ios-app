@@ -50,6 +50,18 @@
 /* Segmented control option, gradient preset picker in Settings. Short label. */
 "settings.gradient_preset.custom" = "Custom";
 
+/* All-caps section header in Settings, above the language picker. Hidden while only one language ships. */
+"settings.section.language.title" = "LANGUAGE";
+
+/* Segmented control option, Settings > Language picker. Follows the iOS system language. Short label. */
+"settings.language.system_default" = "System Default";
+
+/* Help paragraph under the language picker in Settings. */
+"settings.language.help" = "Overrides the app's language regardless of the iOS system language. Entity names and states always follow your Home Assistant server's own language.";
+
+/* Toast shown after changing the in-app language override in Settings. */
+"settings.toast.language_changed" = "Language updated";
+
 /* All-caps section header in Settings, above kiosk/demo/display toggles. */
 "settings.section.display.title" = "DISPLAY";
 
