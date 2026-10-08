@@ -183,7 +183,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     // Sun entity toggle (use HA sun.sun instead of system dark mode)
     UISwitch *sunSw = nil;
     self.sunEntityToggleRow = [self createToggleSection:HALocalizedString(@"settings.section.sun_entity.title", @"Toggle row title in Settings > Appearance.")
-        helpText:HALocalizedString(@"settings.section.sun_entity.help", @"Help paragraph under the "Use Sun Entity" toggle in Settings.")
+        helpText:HALocalizedString(@"settings.section.sun_entity.help", @"Help paragraph under the \"Use Sun Entity\" toggle in Settings.")
         isOn:[HATheme forceSunEntity]
         target:self action:@selector(sunEntitySwitchToggled:)
         switchOut:&sunSw];
@@ -324,7 +324,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     // Kiosk mode
     UISwitch *kioskSw = nil;
     self.kioskSection = [self createToggleSection:HALocalizedString(@"settings.section.kiosk_mode.title", @"Toggle row title in Settings > Display.")
-        helpText:HALocalizedString(@"settings.section.kiosk_mode.help", @"Help paragraph under the "Kiosk Mode" toggle in Settings. Two paragraphs, can wrap.")
+        helpText:HALocalizedString(@"settings.section.kiosk_mode.help", @"Help paragraph under the \"Kiosk Mode\" toggle in Settings. Two paragraphs, can wrap.")
         isOn:[[HAAuthManager sharedManager] isKioskMode]
         target:self action:@selector(kioskSwitchToggled:)
         switchOut:&kioskSw];
@@ -335,7 +335,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     BOOL kioskOn = [[HAAuthManager sharedManager] isKioskMode];
     UISwitch *proxWakeSw = nil;
     self.proximityWakeSection = [self createToggleSection:HALocalizedString(@"settings.section.wake_on_touch.title", @"Toggle row title in Settings > Display (sub-setting of Kiosk Mode).")
-        helpText:HALocalizedString(@"settings.section.wake_on_touch.help", @"Help paragraph under the "Wake on Touch" toggle in Settings.")
+        helpText:HALocalizedString(@"settings.section.wake_on_touch.help", @"Help paragraph under the \"Wake on Touch\" toggle in Settings.")
         isOn:[[HAAuthManager sharedManager] proximityWakeEnabled]
         target:self action:@selector(proximityWakeSwitchToggled:)
         switchOut:&proxWakeSw];
@@ -347,7 +347,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     // Demo mode
     UISwitch *demoSw = nil;
     self.demoSection = [self createToggleSection:HALocalizedString(@"settings.section.demo_mode.title", @"Toggle row title in Settings > Display.")
-        helpText:HALocalizedString(@"settings.section.demo_mode.help", @"Help paragraph under the "Demo Mode" toggle in Settings.")
+        helpText:HALocalizedString(@"settings.section.demo_mode.help", @"Help paragraph under the \"Demo Mode\" toggle in Settings.")
         isOn:[[HAAuthManager sharedManager] isDemoMode]
         target:self action:@selector(demoSwitchToggled:)
         switchOut:&demoSw];
@@ -357,7 +357,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     // Auto-reload dashboard
     UISwitch *autoReloadSw = nil;
     self.autoReloadSection = [self createToggleSection:HALocalizedString(@"settings.section.auto_reload.title", @"Toggle row title in Settings > Display.")
-        helpText:HALocalizedString(@"settings.section.auto_reload.help", @"Help paragraph under the "Auto-Reload Dashboard" toggle in Settings.")
+        helpText:HALocalizedString(@"settings.section.auto_reload.help", @"Help paragraph under the \"Auto-Reload Dashboard\" toggle in Settings.")
         isOn:[[HAAuthManager sharedManager] autoReloadDashboard]
         target:self action:@selector(autoReloadSwitchToggled:)
         switchOut:&autoReloadSw];
@@ -367,7 +367,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     // Camera audio mute default
     UISwitch *camMuteSw = nil;
     self.cameraMuteSection = [self createToggleSection:HALocalizedString(@"settings.section.mute_camera_audio.title", @"Toggle row title in Settings > Display.")
-        helpText:HALocalizedString(@"settings.section.mute_camera_audio.help", @"Help paragraph under the "Mute Camera Audio" toggle in Settings.")
+        helpText:HALocalizedString(@"settings.section.mute_camera_audio.help", @"Help paragraph under the \"Mute Camera Audio\" toggle in Settings.")
         isOn:[[HAAuthManager sharedManager] cameraGlobalMute]
         target:self action:@selector(cameraMuteSwitchToggled:)
         switchOut:&camMuteSw];
@@ -409,12 +409,12 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         // Developer section: vertical stack of toggle rows
         UISwitch *blurSw, *perfSw;
         UIView *blurRow = [self createToggleSection:HALocalizedString(@"settings.dev.disable_blur.title", @"Toggle row title in Settings > Developer (hidden section).")
-            helpText:HALocalizedString(@"settings.dev.disable_blur.help", @"Help text under the "Disable Blur" developer toggle in Settings.")
+            helpText:HALocalizedString(@"settings.dev.disable_blur.help", @"Help text under the \"Disable Blur\" developer toggle in Settings.")
             isOn:[HATheme blurDisabled]
             target:self action:@selector(blurDisabledToggled:)
             switchOut:&blurSw];
         UIView *perfRow = [self createToggleSection:HALocalizedString(@"settings.dev.performance_monitor.title", @"Toggle row title in Settings > Developer (hidden section).")
-            helpText:HALocalizedString(@"settings.dev.performance_monitor.help", @"Help text under the "Performance Monitor" developer toggle in Settings.")
+            helpText:HALocalizedString(@"settings.dev.performance_monitor.help", @"Help text under the \"Performance Monitor\" developer toggle in Settings.")
             isOn:[[NSUserDefaults standardUserDefaults] boolForKey:@"HAPerfMonitorEnabled"]
             target:self action:@selector(perfMonitorToggled:)
             switchOut:&perfSw];
@@ -443,7 +443,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         // Verbose logging toggle
         UISwitch *verboseSw;
         UIView *verboseRow = [self createToggleSection:HALocalizedString(@"settings.dev.verbose_logging.title", @"Toggle row title in Settings > Developer (hidden section).")
-            helpText:HALocalizedString(@"settings.dev.verbose_logging.help", @"Help text under the "Verbose Logging" developer toggle in Settings.")
+            helpText:HALocalizedString(@"settings.dev.verbose_logging.help", @"Help text under the \"Verbose Logging\" developer toggle in Settings.")
             isOn:([HALog minLevel] == HALogLevelDebug)
             target:self action:@selector(verboseLoggingToggled:)
             switchOut:&verboseSw];
@@ -824,7 +824,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         self.liveStreamingStatusLabel.text = HALocalizedString(@"settings.live_stream.status.unsupported", @"Local Camera Stream status label in Settings, shown when the feature needs a newer iOS.");
     } else if (manager.streaming && manager.secondaryStreamURL.length) {
         NSString *state = manager.isCapturing
-            ? [NSString stringWithFormat:HALocalizedString(@"format.live_stream.status.live", @"Local Camera Stream status label in Settings, shown while actively capturing and streaming. %1$lu is the authenticated client count, %2$@ is "client" or "clients"."),
+            ? [NSString stringWithFormat:HALocalizedString(@"format.live_stream.status.live", @"Local Camera Stream status label in Settings, shown while actively capturing and streaming. %1$lu is the authenticated client count, %2$@ is \"client\" or \"clients\"."),
                 (unsigned long)manager.streamClientCount, manager.streamClientCount == 1 ? HALocalizedString(@"settings.live_stream.client_singular", @"Singular noun used inline in the live-stream status label ("1 authenticated client").") : HALocalizedString(@"settings.live_stream.client_plural", @"Plural noun used inline in the live-stream status label ("2 authenticated clients").")]
             : HALocalizedString(@"settings.live_stream.status.protected_waiting", @"Local Camera Stream status label in Settings, shown while armed but not yet capturing.");
         self.liveStreamingStatusLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.live_stream.status.dual_camera", @"Local Camera Stream status label in Settings, dual-camera mode. %1$@ is the live/waiting state text, %2$@ is the front stream address, %3$@ is the rear stream address."),
@@ -832,7 +832,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     } else if (manager.streaming) {
         NSString *camera = manager.cameraMode == HAStreamingCameraModeRear ? HALocalizedString(@"settings.live_stream.camera_label.rear", @"Camera label, all-caps, prefixing the rear stream address in Settings.") : HALocalizedString(@"settings.live_stream.camera_label.front", @"Camera label, all-caps, prefixing the front stream address in Settings.");
         NSString *state = manager.isCapturing
-            ? [NSString stringWithFormat:HALocalizedString(@"format.live_stream.status.live", @"Local Camera Stream status label in Settings, shown while actively capturing and streaming. %1$lu is the authenticated client count, %2$@ is "client" or "clients"."),
+            ? [NSString stringWithFormat:HALocalizedString(@"format.live_stream.status.live", @"Local Camera Stream status label in Settings, shown while actively capturing and streaming. %1$lu is the authenticated client count, %2$@ is \"client\" or \"clients\"."),
                 (unsigned long)manager.streamClientCount, manager.streamClientCount == 1 ? HALocalizedString(@"settings.live_stream.client_singular", @"Singular noun used inline in the live-stream status label ("1 authenticated client").") : HALocalizedString(@"settings.live_stream.client_plural", @"Plural noun used inline in the live-stream status label ("2 authenticated clients").")]
             : HALocalizedString(@"settings.live_stream.status.protected_waiting", @"Local Camera Stream status label in Settings, shown while armed but not yet capturing.");
         self.liveStreamingStatusLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.live_stream.status.single_camera", @"Local Camera Stream status label in Settings, single-camera mode. %1$@ is the live/waiting state text, %2$@ is the camera label (FRONT/REAR), %3$@ is the stream address."),
