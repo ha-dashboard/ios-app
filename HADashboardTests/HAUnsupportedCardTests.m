@@ -48,6 +48,13 @@
     return nil;
 }
 
+- (HADashboardConfigItem *)itemWithEntityId:(NSString *)entityId in:(HADashboardConfig *)config {
+    for (HADashboardConfigItem *item in config.items) {
+        if ([item.entityId isEqualToString:entityId]) return item;
+    }
+    return nil;
+}
+
 #pragma mark - Default (toggle ON): unknown / unmapped custom cards get a placeholder
 
 - (void)testUnknownCardType_defaultToggleOn_producesPlaceholderItem {
@@ -170,13 +177,82 @@
 
     HADashboardConfigItem *placeholder = [self firstUnsupportedItemIn:config];
     XCTAssertNotNil(placeholder, @"A conditional card wrapping an unsupported card should still placeholder");
-    // Note: the parser's existing conditional-unwrap path can apply the
-    // conditions array more than once (pre-existing behavior, not specific
-    // to this placeholder) — assert the condition is present rather than an
-    // exact count.
-    XCTAssertGreaterThanOrEqual(placeholder.visibilityConditions.count, conditions.count,
-        @"Placeholder should inherit the conditional card's visibility conditions");
+    XCTAssertEqual(placeholder.visibilityConditions.count, conditions.count,
+        @"Conditions must be applied exactly once, not duplicated");
     XCTAssertEqualObjects(placeholder.visibilityConditions.firstObject, conditions.firstObject);
+}
+
+#pragma mark - Conditional conditions must apply exactly once (regression)
+//
+// _processCard:'s conditional branch used to set item.visibilityConditions =
+// conditions directly on every item from the inner card, and then the public
+// processCard: wrapper (which applies card[@"visibility"], falling back to
+// card[@"conditions"] for a conditional card) appended the same array again
+// via arrayByAddingObjectsFromArray:, doubling it. These use plain supported
+// cards (not the unsupported-card placeholder) so they isolate the
+// conditional-handling bug from the placeholder feature.
+
+- (void)testSingleConditional_appliesConditionsExactlyOnce {
+    NSArray *conditions = @[@{@"condition": @"state", @"entity": @"binary_sensor.door", @"state": @"on"}];
+    HADashboardConfig *config = [self configForCards:@[@{
+        @"type": @"conditional",
+        @"conditions": conditions,
+        @"card": @{@"type": @"entity", @"entity": @"light.kitchen"}
+    }]];
+
+    HADashboardConfigItem *item = [self itemWithEntityId:@"light.kitchen" in:config];
+    XCTAssertNotNil(item);
+    XCTAssertEqual(item.visibilityConditions.count, conditions.count);
+    XCTAssertEqualObjects(item.visibilityConditions.firstObject, conditions.firstObject);
+}
+
+- (void)testNestedConditional_bothConditionSetsPresentExactlyOnce {
+    NSArray *outerConditions = @[@{@"condition": @"state", @"entity": @"binary_sensor.door", @"state": @"on"}];
+    NSArray *innerConditions = @[@{@"condition": @"state", @"entity": @"input_boolean.armed", @"state": @"on"}];
+    HADashboardConfig *config = [self configForCards:@[@{
+        @"type": @"conditional",
+        @"conditions": outerConditions,
+        @"card": @{
+            @"type": @"conditional",
+            @"conditions": innerConditions,
+            @"card": @{@"type": @"entity", @"entity": @"light.kitchen"}
+        }
+    }]];
+
+    HADashboardConfigItem *item = [self itemWithEntityId:@"light.kitchen" in:config];
+    XCTAssertNotNil(item);
+    XCTAssertEqual(item.visibilityConditions.count, outerConditions.count + innerConditions.count,
+        @"Both the outer and inner condition sets must each be present exactly once (AND'd together)");
+
+    NSUInteger outerMatches = 0, innerMatches = 0;
+    for (NSDictionary *cond in item.visibilityConditions) {
+        if ([cond isEqualToDictionary:outerConditions.firstObject]) outerMatches++;
+        if ([cond isEqualToDictionary:innerConditions.firstObject]) innerMatches++;
+    }
+    XCTAssertEqual(outerMatches, (NSUInteger)1, @"Outer condition should appear exactly once");
+    XCTAssertEqual(innerMatches, (NSUInteger)1, @"Inner condition should appear exactly once");
+}
+
+- (void)testConditionalWrappingStack_everyChildHasConditionsExactlyOnce {
+    NSArray *conditions = @[@{@"condition": @"state", @"entity": @"binary_sensor.door", @"state": @"on"}];
+    HADashboardConfig *config = [self configForCards:@[@{
+        @"type": @"conditional",
+        @"conditions": conditions,
+        @"card": @{
+            @"type": @"horizontal-stack",
+            @"cards": @[
+                @{@"type": @"entity", @"entity": @"light.kitchen"},
+                @{@"type": @"entity", @"entity": @"light.hallway"}
+            ]
+        }
+    }]];
+
+    for (NSString *entityId in @[@"light.kitchen", @"light.hallway"]) {
+        HADashboardConfigItem *item = [self itemWithEntityId:entityId in:config];
+        XCTAssertNotNil(item, @"%@ should be present", entityId);
+        XCTAssertEqual(item.visibilityConditions.count, conditions.count,
+            @"%@ should have the stack's wrapping conditions exactly once", entityId);
+    }
 }
 
 #pragma mark - Malformed configs must never crash

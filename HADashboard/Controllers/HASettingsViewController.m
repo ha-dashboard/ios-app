@@ -70,6 +70,10 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 @property (nonatomic, strong) UIView *cameraMuteSection;
 @property (nonatomic, strong) UISwitch *cameraMuteSwitch;
 
+// Show unsupported-card placeholders
+@property (nonatomic, strong) UIView *unsupportedCardsSection;
+@property (nonatomic, strong) UISwitch *unsupportedCardsSwitch;
+
 // Local live camera/audio publisher (opt-in, foreground-only)
 @property (nonatomic, strong) UIView *liveStreamingSection;
 @property (nonatomic, strong) UILabel *liveStreamingStatusLabel;
@@ -374,6 +378,21 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     self.cameraMuteSwitch = camMuteSw;
     [container addSubview:self.cameraMuteSection];
 
+    // Show unsupported cards (placeholder for Lovelace card types HA Dash
+    // can't render). Default ON; kiosk owners can turn it off for a clean
+    // display once they've confirmed which cards are affected.
+    UISwitch *unsupportedCardsSw = nil;
+    self.unsupportedCardsSection = [self createToggleSection:
+        NSLocalizedStringWithDefaultValue(@"settings.unsupportedCards.title", nil, [NSBundle mainBundle],
+            @"Show Unsupported Cards", @"Settings toggle title.")
+        helpText:NSLocalizedStringWithDefaultValue(@"settings.unsupportedCards.footer", nil, [NSBundle mainBundle],
+            @"Shows a placeholder for card types HA Dash can't display yet.", @"Settings toggle footer/help text.")
+        isOn:[HALovelaceParser showUnsupportedCardsEnabled]
+        target:self action:@selector(unsupportedCardsSwitchToggled:)
+        switchOut:&unsupportedCardsSw];
+    self.unsupportedCardsSwitch = unsupportedCardsSw;
+    [container addSubview:self.unsupportedCardsSection];
+
     self.liveStreamingSection = [self createLiveStreamingSection];
     [container addSubview:self.liveStreamingSection];
 
@@ -419,13 +438,6 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
             target:self action:@selector(perfMonitorToggled:)
             switchOut:&perfSw];
 
-        UISwitch *unsupportedCardsSw;
-        UIView *unsupportedCardsRow = [self createToggleSection:@"Show Unsupported Cards"
-            helpText:@"Show a placeholder (with the card type) for Lovelace cards this app can't render, instead of hiding them. Turn off for a clean kiosk display."
-            isOn:[HALovelaceParser showUnsupportedCardsEnabled]
-            target:self action:@selector(showUnsupportedCardsToggled:)
-            switchOut:&unsupportedCardsSw];
-
         // Camera stream mode selector
         UILabel *streamLabel = [[UILabel alloc] init];
         streamLabel.text = @"Camera Stream Mode";
@@ -463,7 +475,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         exportBtn.translatesAutoresizingMaskIntoConstraints = NO;
         [exportBtn addTarget:self action:@selector(exportLogsTapped) forControlEvents:UIControlEventTouchUpInside];
 
-        UIStackView *devStack = [[UIStackView alloc] initWithArrangedSubviews:@[blurRow, perfRow, unsupportedCardsRow, streamRow, verboseRow, exportBtn]];
+        UIStackView *devStack = [[UIStackView alloc] initWithArrangedSubviews:@[blurRow, perfRow, streamRow, verboseRow, exportBtn]];
         devStack.axis = UILayoutConstraintAxisVertical;
         devStack.spacing = 12;
         devStack.translatesAutoresizingMaskIntoConstraints = NO;
@@ -494,6 +506,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         @"demo":      self.demoSection,
         @"autoReload":self.autoReloadSection,
         @"camMute":   self.cameraMuteSection,
+        @"unsupCards":self.unsupportedCardsSection,
         @"liveStream":self.liveStreamingSection,
         @"clrCache":  self.clearCacheButton,
         @"intHdr":    self.integrationSectionHeader,
@@ -507,7 +520,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     NSDictionary *metrics = @{@"p": @16, @"sh": @32, @"hg": @10, @"fh": @44};
 
     [container addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[proxWake]-p-[demo]-p-[autoReload]-p-[camMute]-p-[liveStream]-p-[clrCache(fh)]-sh-[intHdr]-hg-[intSec]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
+        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[proxWake]-p-[demo]-p-[autoReload]-p-[camMute]-p-[unsupCards]-p-[liveStream]-p-[clrCache(fh)]-sh-[intHdr]-hg-[intSec]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
         options:0 metrics:metrics views:views]];
 
     for (NSString *name in views) {
@@ -1340,9 +1353,10 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     }
 }
 
-- (void)showUnsupportedCardsToggled:(UISwitch *)sender {
+- (void)unsupportedCardsSwitchToggled:(UISwitch *)sender {
     [[NSUserDefaults standardUserDefaults] setBool:sender.isOn forKey:HAShowUnsupportedCardsDefaultsKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
+    [[NSNotificationCenter defaultCenter] postNotificationName:HAShowUnsupportedCardsDidChangeNotification object:nil];
 }
 
 - (void)streamModeChanged:(UISegmentedControl *)seg {

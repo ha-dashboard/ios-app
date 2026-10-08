@@ -5,6 +5,7 @@
 #import "HALog.h"
 
 NSString *const HAShowUnsupportedCardsDefaultsKey = @"HAShowUnsupportedCardsEnabled";
+NSString *const HAShowUnsupportedCardsDidChangeNotification = @"HAShowUnsupportedCardsDidChangeNotification";
 NSString *const HAUnsupportedCardType = @"__unsupported__";
 NSString *const HAUnsupportedCardTypeKey = @"unsupportedCardType";
 
@@ -409,22 +410,31 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
     }
 
     if ([visibility isKindOfClass:[NSArray class]] && visibility.count > 0) {
-        for (NSInteger i = startItemCount; i < allItems.count; i++) {
-            HADashboardConfigItem *item = allItems[i];
+        // A card's items normally live in BOTH `allItems` (the flat list) and
+        // `sections[i].items` (the same object references, not copies) — a
+        // composite card's section can also hold items that never reach
+        // `allItems` directly. Walk both, but apply `visibility` to each
+        // distinct item exactly once (identity-based dedup via NSMutableSet,
+        // which is correct here since HADashboardConfigItem doesn't override
+        // isEqual:/hash — it falls back to pointer identity). Applying twice
+        // per item here was the root cause of a conditional card's
+        // conditions getting doubled.
+        NSMutableSet<HADashboardConfigItem *> *touched = [NSMutableSet set];
+        void (^applyOnce)(HADashboardConfigItem *) = ^(HADashboardConfigItem *item) {
+            if (!item || [touched containsObject:item]) return;
+            [touched addObject:item];
             if (item.visibilityConditions) {
                 item.visibilityConditions = [item.visibilityConditions arrayByAddingObjectsFromArray:visibility];
             } else {
                 item.visibilityConditions = visibility;
             }
+        };
+        for (NSInteger i = startItemCount; i < allItems.count; i++) {
+            applyOnce(allItems[i]);
         }
         for (NSInteger i = startSectionCount; i < sections.count; i++) {
-            HADashboardConfigSection *sec = sections[i];
-            for (HADashboardConfigItem *item in sec.items) {
-                if (item.visibilityConditions) {
-                    item.visibilityConditions = [item.visibilityConditions arrayByAddingObjectsFromArray:visibility];
-                } else {
-                    item.visibilityConditions = visibility;
-                }
+            for (HADashboardConfigItem *item in sections[i].items) {
+                applyOnce(item);
             }
         }
     }
@@ -483,11 +493,25 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
         return;
     }
 
-    // Conditional cards: unwrap the inner card and attach conditions.
-    // The inner card is shown only when all conditions are met (checked at display time).
+    // Conditional cards: unwrap the inner card. The inner card is shown only
+    // when all conditions are met (checked at display time).
+    //
+    // This branch does NOT attach `conditions` itself — that would duplicate
+    // the generic "visibility" handling that `processCard:` (the public
+    // wrapper that invoked this method) already applies to every item/section
+    // added between its startItemCount/startSectionCount and the current
+    // count, once it returns from here. (`processCard:` reads card[@"visibility"],
+    // or card[@"conditions"] when card[@"type"] is "conditional" — the exact
+    // card this branch is handling.) Applying them here too previously
+    // doubled every conditional card's conditions array. Letting the wrapper
+    // be the sole applier also makes nesting compose correctly: an inner
+    // conditional's own wrapper call attaches its conditions first, then this
+    // card's wrapper call appends its own on top — each condition set once,
+    // ANDed together — and a conditional wrapping a stack/grid still reaches
+    // every child, since they're all accumulated into the same `allItems`
+    // array before the wrapper runs its pass.
     if ([cardType isEqualToString:@"conditional"]) {
         NSDictionary *innerCard = card[@"card"];
-        NSArray *conditions = card[@"conditions"];
         if ([innerCard isKindOfClass:[NSDictionary class]]) {
             // Process the inner card recursively
             NSMutableArray<HADashboardConfigSection *> *innerSections = [NSMutableArray array];
@@ -502,17 +526,6 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                      allItems:innerItems
                   nameContext:nameContext
                      cardPath:[cardPath stringByAppendingString:@"/conditional"]];
-            // Attach conditions to all resulting items
-            if ([conditions isKindOfClass:[NSArray class]] && conditions.count > 0) {
-                for (HADashboardConfigItem *item in innerItems) {
-                    item.visibilityConditions = conditions;
-                }
-                for (HADashboardConfigSection *sec in innerSections) {
-                    for (HADashboardConfigItem *item in sec.items) {
-                        item.visibilityConditions = conditions;
-                    }
-                }
-            }
             [sections addObjectsFromArray:innerSections];
             [allItems addObjectsFromArray:innerItems];
         }
