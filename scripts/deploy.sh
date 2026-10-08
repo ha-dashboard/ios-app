@@ -970,8 +970,9 @@ case "$TARGET" in
         fi
 
         _MINI4_LAUNCHED=false
+        # `--` stops idevicedebug parsing the app's -HA... launch arguments as its own options
         if command -v idevicedebug >/dev/null 2>&1 &&
-           idevicedebug -n -u "$IPAD_MINI4_UDID" --detach run "$BUNDLE_ID" >/dev/null 2>&1; then
+           idevicedebug -n -u "$IPAD_MINI4_UDID" --detach -- run "$BUNDLE_ID" "${LAUNCH_ARGS[@]}" >/dev/null 2>&1; then
             _MINI4_LAUNCHED=true
         fi
         if [[ "$_MINI4_LAUNCHED" == true ]]; then
