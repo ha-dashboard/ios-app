@@ -340,3 +340,97 @@
 
 /* Toast message shown when developer mode is turned off via the version-tap gesture. */
 "settings.dev.mode_disabled" = "Developer Mode Disabled";
+
+
+/* Section title above discovered-server rows on the connection form. */
+"connection.discovery.title" = "Servers found on your network";
+
+/* Label above the server URL field on the connection form. */
+"connection.server_url.label" = "Server URL";
+
+/* Placeholder (example value) in the server URL field on the connection form. */
+"connection.server_url.placeholder" = "http://192.168.1.100:8123";
+
+/* Hint text under the trusted-network mode on the connection form. Two lines. */
+"connection.trusted.hint" = "No password required.\nYour device is on a trusted network.";
+
+/* Label above the username field on the connection form. */
+"connection.username.label" = "Username";
+
+/* Placeholder in the username field on the connection form. */
+"connection.username.placeholder" = "Home Assistant username";
+
+/* Label above the password field on the connection form, also used as its placeholder. */
+"connection.password.label" = "Password";
+
+/* Hint text under the username/password fields on the connection form. Small text. */
+"connection.login.hint" = "The app will securely obtain and refresh access tokens.";
+
+/* Label above the access token field on the connection form. */
+"connection.token.label" = "Long-Lived Access Token";
+
+/* Placeholder in the access token field on the connection form. */
+"connection.token.placeholder" = "Paste your access token here";
+
+/* Hint text under the access token field on the connection form, describing where to generate one in HA. */
+"connection.token.hint" = "Generate in HA: Settings → People → [User] → Long-Lived Access Tokens";
+
+/* Primary button on the connection form. */
+"action.connect" = "Connect";
+
+/* Segmented control option, connection form auth mode picker, shown only when HA reports a trusted-networks provider. Short label. */
+"connection.auth_mode.trusted_network" = "Trusted Network";
+
+/* Fallback name for a discovered server on the connection form when it has no advertised name. */
+"connection.discovery.fallback_name" = "Home Assistant";
+
+/* Version label next to a discovered server row on the connection form. %1$@ is the version string. */
+"format.discovery.version" = "v%1$@";
+
+/* Status/error text on the connection form when the server URL field is empty. */
+"connection.error.missing_server_url" = "Please enter a server URL";
+
+/* Status text on the connection form while a trusted-network or username/password login is in progress. */
+"connection.status.logging_in" = "Logging in...";
+
+/* Status/error text on the connection form when a login attempt fails. %1$@ is the error description. */
+"format.connection.login_failed" = "Login failed: %1$@";
+
+/* Status/error text on the connection form for an unexpected trusted-network auth response. */
+"connection.error.unexpected_response" = "Unexpected response from server";
+
+/* Action sheet title for picking a trusted-network user on the connection form. */
+"alert.select_user.title" = "Select User";
+
+/* Action sheet message for picking a trusted-network user on the connection form. */
+"alert.select_user.message" = "Choose which user to log in as";
+
+/* Fallback error description on the connection form when a trusted-network login returns no auth code and no error. */
+"connection.error.no_auth_code" = "no auth code";
+
+/* Status text on the connection form while exchanging an auth code for an access token. */
+"connection.status.obtaining_token" = "Obtaining token...";
+
+/* Status/error text on the connection form when token exchange fails. %1$@ is the error description. */
+"format.connection.token_exchange_failed" = "Token exchange failed: %1$@";
+
+/* Fallback error description on the connection form when token exchange returns no access token and no error. */
+"connection.error.no_access_token" = "no access token";
+
+/* Status text on the connection form after a successful connection. */
+"connection.status.connected" = "Connected!";
+
+/* Status/error text on the connection form when the access token field is empty. */
+"connection.error.missing_token" = "Please enter an access token";
+
+/* Status text on the connection form while testing an access token against the server. */
+"connection.status.testing_connection" = "Testing connection...";
+
+/* Status/error text on the connection form when testing an access token connection fails. %1$@ is the error description. */
+"format.connection.connection_failed" = "Connection failed: %1$@";
+
+/* Status/error text on the connection form when the username field is empty. */
+"connection.error.missing_username" = "Please enter a username";
+
+/* Status/error text on the connection form when the password field is empty. */
+"connection.error.missing_password" = "Please enter a password";

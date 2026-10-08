@@ -1,4 +1,5 @@
 #import "HAConnectionFormView.h"
+#import "HAStrings.h"
 #import "HAAuthManager.h"
 #import "HAOAuthClient.h"
 #import "HAAPIClient.h"
@@ -81,7 +82,7 @@ static NSString *const kModeToken   = @"token";
     [self addSubview:self.discoverySection];
 
     UILabel *discoveryTitle = [[UILabel alloc] init];
-    discoveryTitle.text = @"Servers found on your network";
+    discoveryTitle.text = HALocalizedString(@"connection.discovery.title", @"Section title above discovered-server rows on the connection form.");
     discoveryTitle.font = [UIFont systemFontOfSize:12 weight:UIFontWeightMedium];
     discoveryTitle.textColor = [HATheme secondaryTextColor];
     discoveryTitle.translatesAutoresizingMaskIntoConstraints = NO;
@@ -105,14 +106,14 @@ static NSString *const kModeToken   = @"token";
 
     // ── Server URL ─────────────────────────────────────────────────────
     UILabel *urlLabel = [[UILabel alloc] init];
-    urlLabel.text = @"Server URL";
+    urlLabel.text = HALocalizedString(@"connection.server_url.label", @"Label above the server URL field on the connection form.");
     urlLabel.font = [UIFont systemFontOfSize:14];
     urlLabel.textColor = [HATheme secondaryTextColor];
     urlLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:urlLabel];
 
     self.serverURLField = [[UITextField alloc] init];
-    self.serverURLField.placeholder = @"http://192.168.1.100:8123";
+    self.serverURLField.placeholder = HALocalizedString(@"connection.server_url.placeholder", @"Placeholder (example value) in the server URL field on the connection form.");
     self.serverURLField.borderStyle = UITextBorderStyleRoundedRect;
     self.serverURLField.autocapitalizationType = UITextAutocapitalizationTypeNone;
     self.serverURLField.autocorrectionType = UITextAutocorrectionTypeNo;
@@ -123,7 +124,7 @@ static NSString *const kModeToken   = @"token";
     [self addSubview:self.serverURLField];
 
     // ── Auth mode segmented control ────────────────────────────────────
-    self.authModeSegment = [[UISegmentedControl alloc] initWithItems:@[@"Username/Password", @"Access Token"]];
+    self.authModeSegment = [[UISegmentedControl alloc] initWithItems:@[HALocalizedString(@"settings.connection.auth_mode.oauth", @"Segmented control option, connection form auth mode picker. Short label."), HALocalizedString(@"settings.connection.auth_mode.token", @"Segmented control option, connection form auth mode picker. Short label.")]];
     self.authModeSegment.selectedSegmentIndex = 0;
     [self.authModeSegment addTarget:self action:@selector(authModeChanged:) forControlEvents:UIControlEventValueChanged];
     self.authModeSegment.translatesAutoresizingMaskIntoConstraints = NO;
@@ -143,7 +144,7 @@ static NSString *const kModeToken   = @"token";
     [self.authFieldsStack addArrangedSubview:self.trustedContainer];
 
     UILabel *trustedHint = [[UILabel alloc] init];
-    trustedHint.text = @"No password required.\nYour device is on a trusted network.";
+    trustedHint.text = HALocalizedString(@"connection.trusted.hint", @"Hint text under the trusted-network mode on the connection form. Two lines.");
     trustedHint.font = [UIFont systemFontOfSize:13];
     trustedHint.textColor = [HATheme secondaryTextColor];
     trustedHint.textAlignment = NSTextAlignmentCenter;
@@ -164,14 +165,14 @@ static NSString *const kModeToken   = @"token";
     [self.authFieldsStack addArrangedSubview:self.loginContainer];
 
     UILabel *userLabel = [[UILabel alloc] init];
-    userLabel.text = @"Username";
+    userLabel.text = HALocalizedString(@"connection.username.label", @"Label above the username field on the connection form.");
     userLabel.font = [UIFont systemFontOfSize:14];
     userLabel.textColor = [HATheme secondaryTextColor];
     userLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.loginContainer addSubview:userLabel];
 
     self.usernameField = [[UITextField alloc] init];
-    self.usernameField.placeholder = @"Home Assistant username";
+    self.usernameField.placeholder = HALocalizedString(@"connection.username.placeholder", @"Placeholder in the username field on the connection form.");
     self.usernameField.borderStyle = UITextBorderStyleRoundedRect;
     self.usernameField.autocapitalizationType = UITextAutocapitalizationTypeNone;
     self.usernameField.autocorrectionType = UITextAutocorrectionTypeNo;
@@ -181,14 +182,14 @@ static NSString *const kModeToken   = @"token";
     [self.loginContainer addSubview:self.usernameField];
 
     UILabel *passLabel = [[UILabel alloc] init];
-    passLabel.text = @"Password";
+    passLabel.text = HALocalizedString(@"connection.password.label", @"Label above the password field on the connection form, also used as its placeholder.");
     passLabel.font = [UIFont systemFontOfSize:14];
     passLabel.textColor = [HATheme secondaryTextColor];
     passLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.loginContainer addSubview:passLabel];
 
     self.passwordField = [[UITextField alloc] init];
-    self.passwordField.placeholder = @"Password";
+    self.passwordField.placeholder = HALocalizedString(@"connection.password.label", @"Label above the password field on the connection form, also used as its placeholder.");
     self.passwordField.borderStyle = UITextBorderStyleRoundedRect;
     self.passwordField.secureTextEntry = YES;
     self.passwordField.autocapitalizationType = UITextAutocapitalizationTypeNone;
@@ -199,7 +200,7 @@ static NSString *const kModeToken   = @"token";
     [self.loginContainer addSubview:self.passwordField];
 
     UILabel *loginHint = [[UILabel alloc] init];
-    loginHint.text = @"The app will securely obtain and refresh access tokens.";
+    loginHint.text = HALocalizedString(@"connection.login.hint", @"Hint text under the username/password fields on the connection form. Small text.");
     loginHint.font = [UIFont systemFontOfSize:11];
     loginHint.textColor = [HATheme secondaryTextColor];
     loginHint.numberOfLines = 0;
@@ -232,14 +233,14 @@ static NSString *const kModeToken   = @"token";
     [self.authFieldsStack addArrangedSubview:self.tokenContainer];
 
     UILabel *tokenLabel = [[UILabel alloc] init];
-    tokenLabel.text = @"Long-Lived Access Token";
+    tokenLabel.text = HALocalizedString(@"connection.token.label", @"Label above the access token field on the connection form.");
     tokenLabel.font = [UIFont systemFontOfSize:14];
     tokenLabel.textColor = [HATheme secondaryTextColor];
     tokenLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.tokenContainer addSubview:tokenLabel];
 
     self.tokenField = [[UITextField alloc] init];
-    self.tokenField.placeholder = @"Paste your access token here";
+    self.tokenField.placeholder = HALocalizedString(@"connection.token.placeholder", @"Placeholder in the access token field on the connection form.");
     self.tokenField.borderStyle = UITextBorderStyleRoundedRect;
     self.tokenField.secureTextEntry = YES;
     self.tokenField.autocapitalizationType = UITextAutocapitalizationTypeNone;
@@ -250,7 +251,7 @@ static NSString *const kModeToken   = @"token";
     [self.tokenContainer addSubview:self.tokenField];
 
     UILabel *tokenHint = [[UILabel alloc] init];
-    tokenHint.text = @"Generate in HA: Settings \u2192 People \u2192 [User] \u2192 Long-Lived Access Tokens";
+    tokenHint.text = HALocalizedString(@"connection.token.hint", @"Hint text under the access token field on the connection form, describing where to generate one in HA.");
     tokenHint.font = [UIFont systemFontOfSize:11];
     tokenHint.textColor = [HATheme secondaryTextColor];
     tokenHint.numberOfLines = 0;
@@ -273,7 +274,7 @@ static NSString *const kModeToken   = @"token";
 
     // ── Connect button ─────────────────────────────────────────────────
     self.connectButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.connectButton setTitle:@"Connect" forState:UIControlStateNormal];
+    [self.connectButton setTitle:HALocalizedString(@"action.connect", @"Primary button on the connection form.") forState:UIControlStateNormal];
     self.connectButton.titleLabel.font = [UIFont boldSystemFontOfSize:18];
     self.connectButton.backgroundColor = [HATheme accentColor];
     [self.connectButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
@@ -420,15 +421,15 @@ static NSString *const kModeToken   = @"token";
 
     if (self.hasTrustedNetworkProvider) {
         [modes addObject:kModeTrusted];
-        [titles addObject:@"Trusted Network"];
+        [titles addObject:HALocalizedString(@"connection.auth_mode.trusted_network", @"Segmented control option, connection form auth mode picker, shown only when HA reports a trusted-networks provider. Short label.")];
     }
     if (self.hasHomeAssistantProvider) {
         [modes addObject:kModeLogin];
-        [titles addObject:@"Username/Password"];
+        [titles addObject:HALocalizedString(@"settings.connection.auth_mode.oauth", @"Segmented control option, connection form auth mode picker. Short label.")];
     }
     // Access Token is always available
     [modes addObject:kModeToken];
-    [titles addObject:@"Access Token"];
+    [titles addObject:HALocalizedString(@"settings.connection.auth_mode.token", @"Segmented control option, connection form auth mode picker. Short label.")];
 
     self.authModes = [modes copy];
 
@@ -499,7 +500,7 @@ static NSString *const kModeToken   = @"token";
     [row addSubview:icon];
 
     UILabel *nameLabel = [[UILabel alloc] init];
-    nameLabel.text = server.name ?: @"Home Assistant";
+    nameLabel.text = server.name ?: HALocalizedString(@"connection.discovery.fallback_name", @"Fallback name for a discovered server on the connection form when it has no advertised name.");
     nameLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
     nameLabel.textColor = [HATheme primaryTextColor];
     nameLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -507,7 +508,7 @@ static NSString *const kModeToken   = @"token";
     [row addSubview:nameLabel];
 
     UILabel *versionLabel = [[UILabel alloc] init];
-    versionLabel.text = server.version ? [NSString stringWithFormat:@"v%@", server.version] : @"";
+    versionLabel.text = server.version ? [NSString stringWithFormat:HALocalizedString(@"format.discovery.version", @"Version label next to a discovered server row on the connection form. %1$@ is the version string."), server.version] : @"";
     versionLabel.font = [UIFont systemFontOfSize:12];
     versionLabel.textColor = [HATheme secondaryTextColor];
     versionLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -559,7 +560,7 @@ static NSString *const kModeToken   = @"token";
     NSString *urlString = [self.serverURLField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 
     if (urlString.length == 0) {
-        [self showStatus:@"Please enter a server URL" isError:YES];
+        [self showStatus:HALocalizedString(@"connection.error.missing_server_url", @"Status/error text on the connection form when the server URL field is empty.") isError:YES];
         return;
     }
 
@@ -580,7 +581,7 @@ static NSString *const kModeToken   = @"token";
 - (void)connectWithTrustedNetwork:(NSString *)urlString {
     self.connectButton.enabled = NO;
     [self.spinner startAnimating];
-    [self showStatus:@"Logging in..." isError:NO];
+    [self showStatus:HALocalizedString(@"connection.status.logging_in", @"Status text on the connection form while a trusted-network or username/password login is in progress.") isError:NO];
 
     HAOAuthClient *oauth = [[HAOAuthClient alloc] initWithServerURL:urlString];
 
@@ -588,7 +589,7 @@ static NSString *const kModeToken   = @"token";
         if (error) {
             self.connectButton.enabled = YES;
             [self.spinner stopAnimating];
-            [self showStatus:[NSString stringWithFormat:@"Login failed: %@", error.localizedDescription] isError:YES];
+            [self showStatus:[NSString stringWithFormat:HALocalizedString(@"format.connection.login_failed", @"Status/error text on the connection form when a login attempt fails. %1$@ is the error description."), error.localizedDescription] isError:YES];
             return;
         }
 
@@ -606,7 +607,7 @@ static NSString *const kModeToken   = @"token";
 
         self.connectButton.enabled = YES;
         [self.spinner stopAnimating];
-        [self showStatus:@"Unexpected response from server" isError:YES];
+        [self showStatus:HALocalizedString(@"connection.error.unexpected_response", @"Status/error text on the connection form for an unexpected trusted-network auth response.") isError:YES];
     }];
 }
 
@@ -614,22 +615,22 @@ static NSString *const kModeToken   = @"token";
                    flowId:(NSString *)flowId
               oauthClient:(HAOAuthClient *)oauth
                 serverURL:(NSString *)urlString {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Select User"
-                                                                  message:@"Choose which user to log in as"
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:HALocalizedString(@"alert.select_user.title", @"Action sheet title for picking a trusted-network user on the connection form.")
+                                                                  message:HALocalizedString(@"alert.select_user.message", @"Action sheet message for picking a trusted-network user on the connection form.")
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
 
     for (NSString *userId in users) {
         NSString *displayName = users[userId];
         [alert addAction:[UIAlertAction actionWithTitle:displayName style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
             [self.spinner startAnimating];
-            [self showStatus:@"Logging in..." isError:NO];
+            [self showStatus:HALocalizedString(@"connection.status.logging_in", @"Status text on the connection form while a trusted-network or username/password login is in progress.") isError:NO];
 
             [oauth loginWithTrustedNetworkUser:userId flowId:flowId completion:^(NSString *authCode, NSDictionary *usersOrNil, NSString *flowIdOrNil, NSError *error) {
                 if (error || !authCode) {
                     self.connectButton.enabled = YES;
                     [self.spinner stopAnimating];
-                    [self showStatus:[NSString stringWithFormat:@"Login failed: %@",
-                        error.localizedDescription ?: @"no auth code"] isError:YES];
+                    [self showStatus:[NSString stringWithFormat:HALocalizedString(@"format.connection.login_failed", @"Status/error text on the connection form when a login attempt fails. %1$@ is the error description."),
+                        error.localizedDescription ?: HALocalizedString(@"connection.error.no_auth_code", @"Fallback error description on the connection form when a trusted-network login returns no auth code and no error.")] isError:YES];
                     return;
                 }
                 [self exchangeAuthCode:authCode withOAuthClient:oauth serverURL:urlString];
@@ -637,7 +638,7 @@ static NSString *const kModeToken   = @"token";
         }]];
     }
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
         self.connectButton.enabled = YES;
     }]];
 
@@ -665,15 +666,15 @@ static NSString *const kModeToken   = @"token";
 - (void)exchangeAuthCode:(NSString *)authCode
          withOAuthClient:(HAOAuthClient *)oauth
                serverURL:(NSString *)urlString {
-    [self showStatus:@"Obtaining token..." isError:NO];
+    [self showStatus:HALocalizedString(@"connection.status.obtaining_token", @"Status text on the connection form while exchanging an auth code for an access token.") isError:NO];
 
     [oauth exchangeAuthCode:authCode completion:^(NSDictionary *tokenResponse, NSError *tokenError) {
         self.connectButton.enabled = YES;
         [self.spinner stopAnimating];
 
         if (tokenError || !tokenResponse[@"access_token"]) {
-            [self showStatus:[NSString stringWithFormat:@"Token exchange failed: %@",
-                tokenError.localizedDescription ?: @"no access token"] isError:YES];
+            [self showStatus:[NSString stringWithFormat:HALocalizedString(@"format.connection.token_exchange_failed", @"Status/error text on the connection form when token exchange fails. %1$@ is the error description."),
+                tokenError.localizedDescription ?: HALocalizedString(@"connection.error.no_access_token", @"Fallback error description on the connection form when token exchange returns no access token and no error.")] isError:YES];
             return;
         }
 
@@ -686,7 +687,7 @@ static NSString *const kModeToken   = @"token";
                                                accessToken:accessToken
                                               refreshToken:refreshToken
                                                  expiresIn:expiresIn];
-        [self showStatus:@"Connected!" isError:NO];
+        [self showStatus:HALocalizedString(@"connection.status.connected", @"Status text on the connection form after a successful connection.") isError:NO];
         [self.delegate connectionFormDidConnect:self];
     }];
 }
@@ -694,13 +695,13 @@ static NSString *const kModeToken   = @"token";
 - (void)connectWithToken:(NSString *)urlString {
     NSString *token = [self.tokenField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
     if (token.length == 0) {
-        [self showStatus:@"Please enter an access token" isError:YES];
+        [self showStatus:HALocalizedString(@"connection.error.missing_token", @"Status/error text on the connection form when the access token field is empty.") isError:YES];
         return;
     }
 
     self.connectButton.enabled = NO;
     [self.spinner startAnimating];
-    [self showStatus:@"Testing connection..." isError:NO];
+    [self showStatus:HALocalizedString(@"connection.status.testing_connection", @"Status text on the connection form while testing an access token against the server.") isError:NO];
 
     NSURL *baseURL = [NSURL URLWithString:[NSString stringWithFormat:@"%@/api", urlString]];
     HAAPIClient *testClient = [[HAAPIClient alloc] initWithBaseURL:baseURL token:token];
@@ -710,12 +711,12 @@ static NSString *const kModeToken   = @"token";
         [self.spinner stopAnimating];
 
         if (error) {
-            [self showStatus:[NSString stringWithFormat:@"Connection failed: %@", error.localizedDescription] isError:YES];
+            [self showStatus:[NSString stringWithFormat:HALocalizedString(@"format.connection.connection_failed", @"Status/error text on the connection form when testing an access token connection fails. %1$@ is the error description."), error.localizedDescription] isError:YES];
             return;
         }
 
         [[HAAuthManager sharedManager] saveServerURL:urlString token:token];
-        [self showStatus:@"Connected!" isError:NO];
+        [self showStatus:HALocalizedString(@"connection.status.connected", @"Status text on the connection form after a successful connection.") isError:NO];
         [self.delegate connectionFormDidConnect:self];
     }];
 }
@@ -725,17 +726,17 @@ static NSString *const kModeToken   = @"token";
     NSString *password = self.passwordField.text;
 
     if (username.length == 0) {
-        [self showStatus:@"Please enter a username" isError:YES];
+        [self showStatus:HALocalizedString(@"connection.error.missing_username", @"Status/error text on the connection form when the username field is empty.") isError:YES];
         return;
     }
     if (password.length == 0) {
-        [self showStatus:@"Please enter a password" isError:YES];
+        [self showStatus:HALocalizedString(@"connection.error.missing_password", @"Status/error text on the connection form when the password field is empty.") isError:YES];
         return;
     }
 
     self.connectButton.enabled = NO;
     [self.spinner startAnimating];
-    [self showStatus:@"Logging in..." isError:NO];
+    [self showStatus:HALocalizedString(@"connection.status.logging_in", @"Status text on the connection form while a trusted-network or username/password login is in progress.") isError:NO];
 
     HAOAuthClient *oauth = [[HAOAuthClient alloc] initWithServerURL:urlString];
 
@@ -743,7 +744,7 @@ static NSString *const kModeToken   = @"token";
         if (loginError) {
             self.connectButton.enabled = YES;
             [self.spinner stopAnimating];
-            [self showStatus:[NSString stringWithFormat:@"Login failed: %@", loginError.localizedDescription] isError:YES];
+            [self showStatus:[NSString stringWithFormat:HALocalizedString(@"format.connection.login_failed", @"Status/error text on the connection form when a login attempt fails. %1$@ is the error description."), loginError.localizedDescription] isError:YES];
             return;
         }
 
