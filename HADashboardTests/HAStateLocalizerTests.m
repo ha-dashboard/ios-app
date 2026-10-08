@@ -189,6 +189,49 @@
     XCTAssertEqualObjects(([[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"sensor" deviceClass:nil platform:nil translationKey:nil state:@"unknown"]), @"Unknown");
 }
 
+#pragma mark - Empty localizer: person / device_tracker home-away regression
+
+/// `person`/`device_tracker` have no device_class, so they never hit
+/// `legacyBinarySensorDefaults`. Before `+legacyBucketFallbackForDomain:
+/// state:` existed, an empty localizer fell all the way through to
+/// `-humanReadableState:`, turning `not_home` into "Not Home" instead of
+/// the pre-Phase-2 "Away" — a plain fallback regression, not a translation
+/// nuance, since HA's own English string for this is "Away" too.
+- (void)testEmptyLocalizerPersonNotHomeIsAwayNotNotHome {
+    XCTAssertFalse([[HAStateLocalizer sharedLocalizer] hasResources], @"Precondition: localizer must be empty for this test");
+
+    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"person"
+                                                                         deviceClass:nil
+                                                                            platform:nil
+                                                                      translationKey:nil
+                                                                               state:@"not_home"];
+    XCTAssertEqualObjects(result, @"Away");
+    XCTAssertNotEqualObjects(result, @"Not Home", @"Must not silently fall through to the humanReadableState: prettifier");
+}
+
+- (void)testEmptyLocalizerPersonHomeIsHome {
+    XCTAssertEqualObjects(([[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"person" deviceClass:nil platform:nil translationKey:nil state:@"home"]), @"Home");
+}
+
+- (void)testEmptyLocalizerDeviceTrackerHomeAndNotHome {
+    XCTAssertEqualObjects(([[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"device_tracker" deviceClass:nil platform:nil translationKey:nil state:@"home"]), @"Home");
+    XCTAssertEqualObjects(([[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"device_tracker" deviceClass:nil platform:nil translationKey:nil state:@"not_home"]), @"Away");
+}
+
+- (void)testLegacyBucketFallbackNeverShadowsLiveHAData {
+    // Once real HA data exists, it must win over the legacy person/
+    // device_tracker fallback, exactly like the binary_sensor legacy table.
+    NSDictionary *fr = [self loadFixtureNamed:@"ha-translations-fr"];
+    [[HAStateLocalizer sharedLocalizer] test_setResources:fr languageCode:@"fr"];
+
+    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"person"
+                                                                         deviceClass:nil
+                                                                            platform:nil
+                                                                      translationKey:nil
+                                                                               state:@"not_home"];
+    XCTAssertEqualObjects(result, @"Absent", @"Live HA French translation must win over the English legacy fallback");
+}
+
 #pragma mark - Empty localizer: byte-identical to the pre-Phase-2 implementation
 
 /// Captured from HAEntityDisplayHelper.m:100-153 (onStates/offStates)
