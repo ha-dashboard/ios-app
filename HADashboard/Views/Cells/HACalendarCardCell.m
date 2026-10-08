@@ -325,7 +325,7 @@ static UIColor *sDefaultEventColor;
         NSString *year = [fmt stringFromDate:end];
 
         if (startMonth == endMonth) {
-            self.dateRangeLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.calendar.date_range_same_month", @"Date range label in the calendar card header, week view, same month. %1$ld is the start day, %2$ld is the end day, %3$@ is the month abbreviation, %4$@ is the year. Produces e.g. "16 – 22 Feb 2026"."),
+            self.dateRangeLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.calendar.date_range_same_month", @"Date range label in the calendar card header, week view, same month. %1$ld is the start day, %2$ld is the end day, %3$@ is the month abbreviation, %4$@ is the year. Produces e.g. 16 – 22 Feb 2026."),
                                         (long)startDay, (long)endDay, endMonthStr, year];
         } else {
             fmt.dateFormat = @"MMM";
