@@ -13,30 +13,41 @@ set -euo pipefail
 #   3. Format-specifier parity: each key's printf-style specifiers must
 #      match exactly between en and every other language. A mismatch is a
 #      crash, not a cosmetic bug.
-#   4. plutil -lint on every .strings / .stringsdict file.
+#   4. plutil -lint on every .strings / .stringsdict file (macOS only; see
+#      check_translations.py's own plistlib-based validation for the
+#      cross-platform equivalent, used in CI).
 #   5. UTF-8 / no-BOM encoding check.
 #
+# --strict additionally fails on missing keys, empty values, and
+# .stringsdict plural-category gaps -- this is CI's mode
+# (.github/workflows/translations.yml): a language must be merged
+# complete, never partial. See docs/translations.md.
+#
 # Usage:
-#   scripts/check-translations.sh            # run all checks, exit non-zero on failure
-#   scripts/check-translations.sh --pseudo    # also (re)generate HADashboard/en-XA.lproj
+#   scripts/check-translations.sh              # run all checks, exit non-zero on failure
+#   scripts/check-translations.sh --strict      # CI's mode -- also fails on incompleteness
+#   scripts/check-translations.sh --pseudo      # also (re)generate HADashboard/en-XA.lproj
+#   scripts/check-translations.sh --strict --pseudo   # combine freely, any order
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
-PSEUDO=0
-if [[ "${1:-}" == "--pseudo" ]]; then
-    PSEUDO=1
-fi
+PY_ARGS=()
+for arg in "$@"; do
+    case "$arg" in
+        --pseudo) PY_ARGS+=(--pseudo) ;;
+        --strict) PY_ARGS+=(--strict) ;;
+        *)
+            echo "❌ Unknown argument: $arg (expected --pseudo and/or --strict)" >&2
+            exit 1
+            ;;
+    esac
+done
 
 if ! command -v python3 &>/dev/null; then
     echo "❌ python3 not found" >&2
     exit 1
-fi
-
-PY_ARGS=()
-if [[ "$PSEUDO" -eq 1 ]]; then
-    PY_ARGS+=(--pseudo)
 fi
 
 set +e
