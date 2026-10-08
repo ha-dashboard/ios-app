@@ -1,4 +1,5 @@
 #import "HAModeFeatureView.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAEntity+Climate.h"
 #import "HAEntityAttributes.h"
@@ -226,7 +227,7 @@
         [sheet addAction:action];
     }
 
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [sheet addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     // iPad popover anchor
     sheet.popoverPresentationController.sourceView = sender;

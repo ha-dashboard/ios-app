@@ -726,3 +726,9 @@
 
 /* Temperature label fallback in the weather cell, shown when no temperature is available. */
 "cell.weather.no_value" = "—";
+
+/* Status label fallback in the glance-item view, shown when the entity is unavailable. */
+"cell.glance.unavailable" = "Unavailable";
+
+/* Tooltip value label fallback in the graph view, shown when no data point is under the touch/cursor. */
+"cell.graph.tooltip_no_value" = "\u2014";

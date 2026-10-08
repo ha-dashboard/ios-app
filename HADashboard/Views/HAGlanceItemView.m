@@ -1,4 +1,5 @@
 #import "HAGlanceItemView.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HATheme.h"
 #import "HAIconMapper.h"
@@ -137,7 +138,7 @@ static const CGFloat kVerticalPadding = 6.0;
             }
             self.stateLabel.text = displayState;
         } else {
-            self.stateLabel.text = @"Unavailable";
+            self.stateLabel.text = HALocalizedString(@"cell.glance.unavailable", @"Status label fallback in the glance-item view, shown when the entity is unavailable.");
         }
     }
 
