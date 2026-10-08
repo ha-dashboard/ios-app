@@ -1241,15 +1241,16 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
 
     // Status label -- show hvac_action if available, else mode. Append humidity if available.
     // `mode` is the entity's own `state` (climate domain) -- HA-translated
-    // the same way as any other entity state (plan §2.2), so route it
-    // through the shared localizer. `action` is the `hvac_action`
-    // ATTRIBUTE, translated under a different key template
-    // (`…state_attributes.hvac_action.state.{value}`, plan §2.4) that
-    // HAStateLocalizer does not yet expose a lookup for -- left on the
-    // algorithmic fallback, same as HAModeFeatureView's preset/fan modes.
+    // the same way as any other entity state (plan §2.2). `action` is the
+    // `hvac_action` ATTRIBUTE, translated under a different key template
+    // (`…state_attributes.hvac_action.state.{value}`, plan §2.4, verified
+    // live) -- both now route through HAStateLocalizer.
     NSString *statusText;
     if ([action isKindOfClass:[NSString class]] && action.length > 0) {
-        statusText = [HAEntityDisplayHelper humanReadableState:action];
+        statusText = [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate"
+                                                                                 deviceClass:nil
+                                                                                        attr:@"hvac_action"
+                                                                                       value:action];
     } else {
         statusText = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"climate"
                                                                        deviceClass:nil
@@ -1536,7 +1537,7 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
     NSString *currentPreset = entity.attributes[@"preset_mode"];
     if ([presetModes isKindOfClass:[NSArray class]] && presetModes.count > 0) {
         NSString *title = currentPreset
-            ? [NSString stringWithFormat:@"%@ \u25BE", [currentPreset capitalizedString]]
+            ? [NSString stringWithFormat:@"%@ \u25BE", [self localizedClimateAttrValue:currentPreset attr:@"preset_mode"]]
             : HALocalizedString(@"cell.thermostat.preset_label", @"Collapsed preset-mode button in the thermostat gauge cell, shown when no preset is set. Keep the trailing triangle glyph.");
         [self.extraModesStack addArrangedSubview:[self makeExtraModeButton:title tag:100]];
         hasExtras = YES;
@@ -1546,7 +1547,7 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
     NSString *currentFan = entity.attributes[@"fan_mode"];
     if ([fanModes isKindOfClass:[NSArray class]] && fanModes.count > 0) {
         NSString *title = currentFan
-            ? [NSString stringWithFormat:@"%@ \u25BE", [currentFan capitalizedString]]
+            ? [NSString stringWithFormat:@"%@ \u25BE", [self localizedClimateAttrValue:currentFan attr:@"fan_mode"]]
             : HALocalizedString(@"cell.thermostat.fan_label", @"Collapsed fan-mode button in the thermostat gauge cell, shown when no fan mode is set. Keep the trailing triangle glyph.");
         [self.extraModesStack addArrangedSubview:[self makeExtraModeButton:title tag:101]];
         hasExtras = YES;
@@ -1556,12 +1557,25 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
     NSString *currentSwing = entity.attributes[@"swing_mode"];
     if ([swingModes isKindOfClass:[NSArray class]] && swingModes.count > 0) {
         NSString *title = currentSwing
-            ? [NSString stringWithFormat:@"%@ \u25BE", [currentSwing capitalizedString]]
+            ? [NSString stringWithFormat:@"%@ \u25BE", [self localizedClimateAttrValue:currentSwing attr:@"swing_mode"]]
             : HALocalizedString(@"cell.thermostat.swing_label", @"Collapsed swing-mode button in the thermostat gauge cell, shown when no swing mode is set. Keep the trailing triangle glyph.");
         [self.extraModesStack addArrangedSubview:[self makeExtraModeButton:title tag:102]];
         hasExtras = YES;
     }
     self.extraModesStack.hidden = !hasExtras;
+}
+
+/// `preset_mode`/`fan_mode`/`swing_mode` are climate ATTRIBUTE values HA
+/// translates under a different key template than the entity's own state
+/// (docs/plans/i18n-plan.md \u00A72.4, verified live against a real HA
+/// instance for all three) -- routes through HAStateLocalizer's
+/// attribute-value lookup, falling back to the existing algorithmic
+/// capitalizedString prettifier when HA has no live data yet.
+- (NSString *)localizedClimateAttrValue:(NSString *)value attr:(NSString *)attr {
+    return [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate"
+                                                                      deviceClass:nil
+                                                                             attr:attr
+                                                                            value:value];
 }
 
 - (UIButton *)makeExtraModeButton:(NSString *)title tag:(NSInteger)tag {
@@ -1602,9 +1616,10 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
     for (NSString *option in options) {
         BOOL isActive = [option isEqualToString:current];
+        NSString *localizedOption = [self localizedClimateAttrValue:option attr:serviceKey];
         NSString *title = isActive
-            ? [NSString stringWithFormat:@"\u2713 %@", [option capitalizedString]]
-            : [option capitalizedString];
+            ? [NSString stringWithFormat:@"\u2713 %@", localizedOption]
+            : localizedOption;
         UIAlertAction *action = [UIAlertAction actionWithTitle:title
                                                          style:UIAlertActionStyleDefault
                                                        handler:^(UIAlertAction *a) {

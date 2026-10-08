@@ -6,6 +6,7 @@
 #import "HATheme.h"
 #import "HAHaptics.h"
 #import "HAEntityDisplayHelper.h"
+#import "HAStateLocalizer.h"
 #import "HAIconMapper.h"
 #import "UIView+HAUtilities.h"
 
@@ -94,7 +95,8 @@
     // Operation mode
     NSString *opMode = entity.attributes[@"operation_mode"];
     if ([opMode isKindOfClass:[NSString class]]) {
-        [self.modeButton setTitle:[NSString stringWithFormat:@"%@ \u25BE", [opMode capitalizedString]]
+        NSString *localizedMode = [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"water_heater" deviceClass:nil attr:@"operation_mode" value:opMode];
+        [self.modeButton setTitle:[NSString stringWithFormat:@"%@ \u25BE", localizedMode]
                          forState:UIControlStateNormal];
         self.modeButton.hidden = NO;
     } else {
@@ -142,7 +144,8 @@
 
     NSString *current = self.entity.attributes[@"operation_mode"];
     [self presentOptionsWithTitle:nil options:modes current:current sourceView:self.modeButton
-                          handler:^(NSString *selected) {
+                            domain:@"water_heater" attr:@"operation_mode"
+                           handler:^(NSString *selected) {
         [HAHaptics lightImpact];
         [self callService:@"set_operation_mode" inDomain:@"water_heater"
                  withData:@{@"operation_mode": selected}];

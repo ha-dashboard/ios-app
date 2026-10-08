@@ -132,6 +132,7 @@ targets:
         excludes:
           - "**/*.md"
           - "ReferenceImages/**"
+          - "ReferenceImages_*/**"
           - "FailureDiffs/**"
       - path: Vendor/iOSSnapshotTestCase
         type: group

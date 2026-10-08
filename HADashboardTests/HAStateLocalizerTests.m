@@ -348,7 +348,7 @@
     NSMutableDictionary<NSString *, NSString *> *huge = [NSMutableDictionary dictionary];
     NSString *padding = [@"" stringByPaddingToLength:2048 withString:@"x" startingAtIndex:0];
     for (NSInteger i = 0; i < 400; i++) {
-        huge[[NSString stringWithFormat:@"component.sensor.entity_component._.state.filler_%ld", (long)i]] = padding;
+        huge[[NSString stringWithFormat:@"component.switch.entity_component._.state.filler_%ld", (long)i]] = padding;
     }
     NSError *error = nil;
     NSData *data = [NSJSONSerialization dataWithJSONObject:huge options:0 error:&error];
@@ -362,7 +362,13 @@
     // localizer was never populated with this payload (i.e. the cap did its
     // job upstream).
     [[HAStateLocalizer sharedLocalizer] test_setResources:nil languageCode:nil];
-    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"sensor"
+    // "switch" is an enumerated-vocabulary domain (plain on/off and the
+    // like), so the safety-net fallback chain still ends in the
+    // algorithmic prettifier here -- unlike a free-text domain such as
+    // "sensor" (see the "Free-form text must never be algorithmically
+    // prettified" tests below), which would correctly return the raw
+    // state instead.
+    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"switch"
                                                                          deviceClass:nil
                                                                             platform:nil
                                                                       translationKey:nil
@@ -401,6 +407,158 @@
     XCTAssertNil([[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"sensor" attr:@"battery"]);
     XCTAssertNil([[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:nil attr:@"battery"]);
     XCTAssertNil([[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"sensor" attr:nil]);
+}
+
+#pragma mark - Attribute VALUE lookup (plan §2.4, verified live against HA 2026.9.4)
+
+- (void)testLocalizedAttributeValueHitsLiveHAData {
+    NSDictionary *en = [self loadFixtureNamed:@"ha-translations-en"];
+    [[HAStateLocalizer sharedLocalizer] test_setResources:en languageCode:@"en"];
+
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"preset_mode" value:@"away"], @"Away");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"fan_mode" value:@"high"], @"High");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"swing_mode" value:@"vertical"], @"Vertical");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"hvac_action" value:@"heating"], @"Heating");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"humidifier" deviceClass:nil attr:@"mode" value:@"auto"], @"Auto");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"water_heater" deviceClass:nil attr:@"operation_mode" value:@"eco"], @"Eco");
+}
+
+- (void)testLocalizedAttributeValueFollowsLanguage {
+    NSDictionary *fr = [self loadFixtureNamed:@"ha-translations-fr"];
+    [[HAStateLocalizer sharedLocalizer] test_setResources:fr languageCode:@"fr"];
+
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"preset_mode" value:@"away"], @"Absent");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"fan_mode" value:@"high"], @"Élevée");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"hvac_action" value:@"idle"], @"Inactif");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"humidifier" deviceClass:nil attr:@"mode" value:@"away"], @"Absent");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"water_heater" deviceClass:nil attr:@"operation_mode" value:@"off"], @"Arrêt");
+}
+
+- (void)testLocalizedAttributeValueFallsBackToAlgorithmicPrettifierOnMiss {
+    // Empty localizer -- no HA data at all. Must still return something
+    // reasonable (the same algorithmic prettifier the rest of the app
+    // uses), never the raw unprettified value, matching
+    // -localizedStateForDomain:…'s own fallback chain.
+    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"preset_mode" value:@"away"];
+    XCTAssertEqualObjects(result, @"Away"); // humanReadableState("away") == "Away"
+}
+
+- (void)testLocalizedAttributeValueDeviceClassBucketBeatsGenericBucket {
+    // Verified live: HA's `event` domain keys event_type by device_class
+    // ("button"/"doorbell"), not the generic "_" bucket -- confirms the
+    // device_class rung is real and must be checked, same shape as
+    // -localizedStateForDomain:….
+    NSDictionary *fixture = @{
+        @"component.event.entity_component.button.state_attributes.event_type.state.press_start": @"Press start",
+        @"component.event.entity_component._.state_attributes.event_type.state.press_start": @"Generic press start",
+    };
+    [[HAStateLocalizer sharedLocalizer] test_setResources:fixture languageCode:@"en"];
+
+    NSString *withDeviceClass = [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"event" deviceClass:@"button" attr:@"event_type" value:@"press_start"];
+    XCTAssertEqualObjects(withDeviceClass, @"Press start");
+}
+
+- (void)testLocalizedAttributeValueReturnsValueUnchangedWhenNil {
+    XCTAssertNil([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"preset_mode" value:nil]);
+}
+
+#pragma mark - Free-form text must never be algorithmically "prettified"
+#pragma mark (regression: "YouTube" -> "You Tube")
+
+- (void)testGenericSensorFreeTextStateIsNeverPrettified {
+    // Empty localizer -- HA has no translation for a free-text sensor
+    // value (it never would; these aren't a vocabulary). Must come back
+    // byte-identical to what HA itself displays: the raw state.
+    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"sensor"
+                                                                          deviceClass:nil
+                                                                             platform:nil
+                                                                       translationKey:nil
+                                                                                state:@"YouTube"];
+    XCTAssertEqualObjects(result, @"YouTube", @"Free text must never be run through the camelCase/underscore prettifier");
+}
+
+- (void)testSensorFreeTextWithNumbersAndSpacesIsNeverPrettified {
+    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"sensor"
+                                                                          deviceClass:nil
+                                                                             platform:nil
+                                                                       translationKey:nil
+                                                                                state:@"iPhone 15"];
+    XCTAssertEqualObjects(result, @"iPhone 15");
+}
+
+- (void)testSensorFreeTextWithUnderscoresIsNeverPrettified {
+    // Looks exactly like the pattern the prettifier targets (underscore,
+    // mixed case) -- the point is that domain alone decides this, not the
+    // shape of the string.
+    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"sensor"
+                                                                          deviceClass:nil
+                                                                             platform:nil
+                                                                       translationKey:nil
+                                                                                state:@"ABC_def"];
+    XCTAssertEqualObjects(result, @"ABC_def");
+}
+
+- (void)testSensorMixedCaseFreeTextIsNeverPrettified {
+    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"sensor"
+                                                                          deviceClass:@"enum"
+                                                                             platform:nil
+                                                                       translationKey:nil
+                                                                                state:@"myCustomValue"];
+    XCTAssertEqualObjects(result, @"myCustomValue", @"Even a sensor with a device_class stays raw when it's not an HA-served vocabulary");
+}
+
+- (void)testInputSelectOptionIsNeverPrettified {
+    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"input_select"
+                                                                          deviceClass:nil
+                                                                             platform:nil
+                                                                       translationKey:nil
+                                                                                state:@"Movie Night"];
+    XCTAssertEqualObjects(result, @"Movie Night");
+}
+
+- (void)testTextAndInputTextAreNeverPrettified {
+    XCTAssertEqualObjects(
+        [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"text" deviceClass:nil platform:nil translationKey:nil state:@"hello_world"],
+        @"hello_world");
+    XCTAssertEqualObjects(
+        [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"input_text" deviceClass:nil platform:nil translationKey:nil state:@"hello_world"],
+        @"hello_world");
+}
+
+- (void)testSwitchOnIsPrettifiedOffline {
+    // The flip side: `switch` IS an enumerated-vocabulary domain (plain
+    // on/off), so the algorithmic fallback is correct here when HA hasn't
+    // served a translation yet (e.g. offline).
+    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"switch"
+                                                                          deviceClass:nil
+                                                                             platform:nil
+                                                                       translationKey:nil
+                                                                                state:@"on"];
+    XCTAssertEqualObjects(result, @"On");
+}
+
+- (void)testLightOnIsPrettifiedOffline {
+    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"light"
+                                                                          deviceClass:nil
+                                                                             platform:nil
+                                                                       translationKey:nil
+                                                                                state:@"on"];
+    XCTAssertEqualObjects(result, @"On");
+}
+
+- (void)testFreeFormSensorStillUsesLiveHADataWhenAvailable {
+    // The exclusion is only for the FALLBACK rung. A sensor with a genuine
+    // HA-served enum device_class state must still use HA's own data when
+    // it exists -- the live/legacy rungs run before this check regardless
+    // of domain.
+    NSDictionary *fixture = @{@"component.sensor.entity_component.enum.state.active": @"Active"};
+    [[HAStateLocalizer sharedLocalizer] test_setResources:fixture languageCode:@"en"];
+    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"sensor"
+                                                                          deviceClass:@"enum"
+                                                                             platform:nil
+                                                                       translationKey:nil
+                                                                                state:@"active"];
+    XCTAssertEqualObjects(result, @"Active");
 }
 
 #pragma mark - Cold-start language (plan §2.7 cold-start gap)

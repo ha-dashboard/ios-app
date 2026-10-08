@@ -74,4 +74,23 @@
                      sourceView:(UIView *)sourceView
                         handler:(void(^)(NSString *selected))handler;
 
+/// Same as above, but each option's displayed title is resolved through
+/// HAStateLocalizer's attribute-value lookup (docs/plans/i18n-plan.md
+/// §2.4) when `domain`/`attr` are non-nil and HA actually translates that
+/// attribute's values -- falling back to the existing capitalizedString
+/// behavior otherwise. `handler` always receives the RAW, unlocalized
+/// option string (exactly as in the base method), since that's what gets
+/// sent to Home Assistant as the service-call value -- only the on-screen
+/// title changes.
+/// @param domain  The HA domain (e.g. "humidifier"), or nil to use the
+///   plain capitalizedString behavior for every option.
+/// @param attr  The attribute name (e.g. "mode"), or nil.
+- (void)presentOptionsWithTitle:(NSString *)title
+                        options:(NSArray<NSString *> *)options
+                        current:(NSString *)current
+                     sourceView:(UIView *)sourceView
+                         domain:(NSString *)domain
+                           attr:(NSString *)attr
+                        handler:(void(^)(NSString *selected))handler;
+
 @end

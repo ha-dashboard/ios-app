@@ -98,6 +98,36 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable NSString *)localizedAttributeNameForDomain:(NSString *)domain
                                                     attr:(NSString *)attr;
 
+/// Resolves HA's own translation of an ATTRIBUTE's VALUE (not its label,
+/// and not the entity's own state) for `domain`+`attr`+`value`, per
+/// docs/plans/i18n-plan.md §2.4 and verified live against a real HA
+/// instance (2026.9.4) for climate preset_mode/fan_mode/swing_mode/
+/// hvac_action, humidifier mode, and water_heater operation_mode --
+/// confirmed key shape:
+///   `component.{domain}.entity_component.{deviceClass}.state_attributes.{attr}.state.{value}`
+///   `component.{domain}.entity_component._.state_attributes.{attr}.state.{value}` (no-device-class bucket)
+/// (core: `async_translate_state_attr`,
+/// `homeassistant/helpers/translation.py:496-533`.) A device_class-keyed
+/// bucket genuinely exists for some domains (verified live: `event`'s
+/// `event_type` attribute is keyed by device_class `button`/`doorbell`),
+/// so both rungs are checked, same shape as `-localizedStateForDomain:…`.
+///
+/// NOT confirmed served by HA (verified live, same instance): fan's
+/// preset_mode, media_player's source/sound_mode, vacuum's fan_speed --
+/// these are either free-form/integration-specific text or simply not
+/// covered by this category. Callers for those attributes should not use
+/// this method; keep them on the algorithmic prettifier.
+///
+/// Same fallback rungs as `-localizedStateForDomain:…`: device_class rung,
+/// then the `_` bucket rung, then `-[HAEntityDisplayHelper
+/// humanReadableState:]` as the final algorithmic fallback (never raw
+/// `value` unprettified, matching how entity states degrade). Returns
+/// `value` itself unmodified if `value` is nil.
+- (nullable NSString *)localizedAttributeValueForDomain:(NSString *)domain
+                                               deviceClass:(nullable NSString *)deviceClass
+                                                      attr:(NSString *)attr
+                                                     value:(NSString *)value;
+
 #pragma mark - Language resolution (pure functions — no network, no I/O)
 
 /// Normalises a BCP-47-ish code to HA's bare language code: lowercases,

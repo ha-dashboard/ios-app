@@ -1,9 +1,11 @@
 #import "HAHumidifierEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
 #import "HATheme.h"
 #import "HASwitch.h"
+#import "HAStateLocalizer.h"
 
 @interface HAHumidifierEntityCell ()
 @property (nonatomic, strong) UISwitch *toggleSwitch;
@@ -106,7 +108,7 @@
     NSNumber *currentH = [entity humidifierCurrentHumidity];
     NSString *action = HAAttrString(entity.attributes, @"action");
     NSMutableArray *infoParts = [NSMutableArray array];
-    if (currentH) [infoParts addObject:[NSString stringWithFormat:@"Current: %.0f%%", currentH.floatValue]];
+    if (currentH) [infoParts addObject:[NSString stringWithFormat:HALocalizedString(@"cell.humidifier.current_humidity", @"Prefix before the current-humidity percentage in the humidifier cell's info line."), currentH.floatValue]];
     if (action.length > 0) [infoParts addObject:[action capitalizedString]];
     self.currentHumidityLabel.text = infoParts.count > 0 ? [infoParts componentsJoinedByString:@" · "] : nil;
     self.currentHumidityLabel.hidden = (infoParts.count == 0);
@@ -115,7 +117,9 @@
     NSArray *modes = HAAttrArray(entity.attributes, HAAttrAvailableModes);
     NSString *currentMode = HAAttrString(entity.attributes, HAAttrMode);
     if (entity.isOn && modes.count > 0) {
-        NSString *title = currentMode.length > 0 ? [currentMode capitalizedString] : @"Mode";
+        NSString *title = currentMode.length > 0
+            ? [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"humidifier" deviceClass:nil attr:@"mode" value:currentMode]
+            : HALocalizedString(@"cell.humidifier.mode_button", @"Collapsed mode button in the humidifier cell, shown when no mode is set.");
         [self.modeButton setTitle:title forState:UIControlStateNormal];
         self.modeButton.hidden = NO;
     } else {
@@ -141,7 +145,10 @@
     NSArray *modes = HAAttrArray(self.entity.attributes, HAAttrAvailableModes);
     if (modes.count == 0) return;
     NSString *current = HAAttrString(self.entity.attributes, HAAttrMode);
-    [self presentOptionsWithTitle:@"Mode" options:modes current:current sourceView:self.modeButton handler:^(NSString *selected) {
+    [self presentOptionsWithTitle:HALocalizedString(@"cell.humidifier.mode_button", @"Collapsed mode button in the humidifier cell, shown when no mode is set.")
+                           options:modes current:current sourceView:self.modeButton
+                            domain:@"humidifier" attr:@"mode"
+                           handler:^(NSString *selected) {
         [self callService:@"set_mode" inDomain:HAEntityDomainHumidifier withData:@{@"mode": selected}];
     }];
 }

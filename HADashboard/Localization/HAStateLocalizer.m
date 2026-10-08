@@ -51,6 +51,14 @@ static BOOL HAStateLocalizerIsRunningUnderXCTest(void) {
     return [NSString stringWithFormat:@"component.%@.entity_component._.state_attributes.%@.name", domain, attr];
 }
 
++ (NSString *)dottedAttributeValueKeyForDomain:(NSString *)domain
+                                     deviceClass:(NSString *)deviceClass
+                                             attr:(NSString *)attr
+                                            value:(NSString *)value {
+    NSString *bucket = deviceClass.length > 0 ? deviceClass : @"_";
+    return [NSString stringWithFormat:@"component.%@.entity_component.%@.state_attributes.%@.state.%@", domain, bucket, attr, value];
+}
+
 + (NSString *)cacheFilenameForLanguage:(NSString *)languageCode {
     return [NSString stringWithFormat:@"%@%@%@", kHAStateLocalizerCacheFilePrefix, languageCode, kHAStateLocalizerCacheFileSuffix];
 }
@@ -215,10 +223,59 @@ static BOOL HAStateLocalizerIsRunningUnderXCTest(void) {
         if (legacyBucketHit.length > 0) return legacyBucketHit;
     }
 
-    NSString *human = [HAEntityDisplayHelper humanReadableState:state];
-    if (human.length > 0) return human;
+    // No HA translation and no legacy fallback matched. HA's own frontend
+    // (`compute_state_display.ts`) falls back to the RAW state in this
+    // situation — it never runs an English word-splitter over it — and
+    // for good reason: plenty of domains carry genuinely free-form text as
+    // their state (a generic `sensor` with no device_class showing
+    // "YouTube", a `text`/`input_text` value, a `select`/`input_select`
+    // option). Algorithmically "prettifying" free text corrupts it (the
+    // regression this guard exists for: "YouTube" -> "You Tube").
+    //
+    // The one case where a *light* prettifier is still correct and
+    // matches HA's own behaviour reasonably closely offline: domains whose
+    // states are drawn from a known, enumerated, HA-defined vocabulary
+    // (on/off, open/closed, locked/unlocked, home/not_home, playing/idle,
+    // and so on — see +domainHasEnumeratedStateVocabulary) where HA simply
+    // hasn't served (or cached) a translation for this exact value yet.
+    // Even then this is a last resort below the live/legacy rungs above.
+    if ([[self class] domainHasEnumeratedStateVocabulary:domain]) {
+        NSString *human = [HAEntityDisplayHelper humanReadableState:state];
+        if (human.length > 0) return human;
+    }
 
     return state;
+}
+
+/// Domains (docs/plans/i18n-plan.md §2.1's live-measured coverage table)
+/// whose entity states are a fixed, HA-defined vocabulary of words —
+/// never free-form user/integration text — so the algorithmic
+/// capitalize-and-despace prettifier is a reasonable last-resort stand-in
+/// for a missing HA translation. Deliberately EXCLUDES: `sensor` (the
+/// overwhelming majority of sensor states are free text — temperatures,
+/// media titles like "YouTube", custom integration strings; sensor states
+/// HA does translate, e.g. a device_class with a real enum, are still
+/// correctly resolved by the live/legacy rungs above this check, which
+/// run regardless of this allowlist), `text`/`input_text` (always
+/// free-form), `select`/`input_select` (user-defined options), and
+/// `todo`/`number`/`counter`/`input_number` (numeric or free-form, and in
+/// practice routed through -formattedStateForEntity:'s numeric path
+/// before ever reaching here).
++ (BOOL)domainHasEnumeratedStateVocabulary:(NSString *)domain {
+    static NSSet<NSString *> *domains;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        domains = [NSSet setWithArray:@[
+            @"binary_sensor", @"person", @"device_tracker",
+            @"cover", @"lock", @"climate", @"alarm_control_panel",
+            @"media_player", @"vacuum", @"fan", @"switch", @"light",
+            @"siren", @"humidifier", @"water_heater", @"valve",
+            @"lawn_mower", @"update", @"remote", @"automation", @"script",
+            @"input_boolean", @"timer", @"event", @"sun", @"weather",
+            @"calendar", @"button", @"scene",
+        ]];
+    });
+    return domain.length > 0 && [domains containsObject:domain];
 }
 
 - (nullable NSString *)localizedAttributeNameForDomain:(NSString *)domain attr:(NSString *)attr {
@@ -226,6 +283,25 @@ static BOOL HAStateLocalizerIsRunningUnderXCTest(void) {
     NSString *key = [[self class] dottedAttributeNameKeyForDomain:domain attr:attr];
     NSString *hit = self.resources[key];
     return hit.length > 0 ? hit : nil;
+}
+
+- (nullable NSString *)localizedAttributeValueForDomain:(NSString *)domain
+                                               deviceClass:(NSString *)deviceClass
+                                                      attr:(NSString *)attr
+                                                     value:(NSString *)value {
+    if (value == nil) return value;
+    if (domain.length > 0 && attr.length > 0) {
+        if (deviceClass.length > 0) {
+            NSString *deviceClassKey = [[self class] dottedAttributeValueKeyForDomain:domain deviceClass:deviceClass attr:attr value:value];
+            NSString *liveHit = self.resources[deviceClassKey];
+            if (liveHit.length > 0) return liveHit;
+        }
+        NSString *bucketKey = [[self class] dottedAttributeValueKeyForDomain:domain deviceClass:nil attr:attr value:value];
+        NSString *liveBucketHit = self.resources[bucketKey];
+        if (liveBucketHit.length > 0) return liveBucketHit;
+    }
+    NSString *human = [HAEntityDisplayHelper humanReadableState:value];
+    return human.length > 0 ? human : value;
 }
 
 #pragma mark - Cache load (sync, launch-time)

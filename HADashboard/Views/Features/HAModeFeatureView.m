@@ -286,28 +286,38 @@
     // climate-hvac-modes and alarm-modes are the entity's own `state` value
     // (plan §2.2) -- HA translates these the same way as any other entity
     // state (`component.climate.entity_component._.state.heat` = "Heat" /
-    // "Chauffage"), so route them through the shared localizer instead of
-    // the algorithmic English-only prettifier below.
+    // "Chauffage"), so route them through -localizedStateForDomain:….
     //
     // climate-preset-modes and climate-fan-modes are ATTRIBUTE values
-    // (`preset_mode`/`fan_mode`), which HA translates under a different key
-    // template (`…state_attributes.{attr}.state.{value}`, plan §2.4) that
-    // HAStateLocalizer does not yet expose a lookup for -- left on the
-    // algorithmic fallback below; see docs/plans/i18n-plan.md §2.4's
-    // explicit callout of this file as future work.
-    NSString *domain = nil;
+    // (`preset_mode`/`fan_mode`), translated under a different key
+    // template (`…state_attributes.{attr}.state.{value}`, plan §2.4,
+    // verified live) -- route through -localizedAttributeValueForDomain:…,
+    // which already falls back to the algorithmic prettifier internally
+    // when HA has no live data yet, so no separate fallback is needed here.
     if ([self.featureType isEqualToString:@"climate-hvac-modes"]) {
-        domain = @"climate";
-    } else if ([self.featureType isEqualToString:@"alarm-modes"]) {
-        domain = @"alarm_control_panel";
-    }
-    if (domain.length > 0) {
-        NSString *localized = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:domain
+        NSString *localized = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"climate"
                                                                                 deviceClass:nil
                                                                                    platform:nil
                                                                              translationKey:nil
                                                                                       state:mode];
         if (localized.length > 0) return localized;
+    } else if ([self.featureType isEqualToString:@"alarm-modes"]) {
+        NSString *localized = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"alarm_control_panel"
+                                                                                deviceClass:nil
+                                                                                   platform:nil
+                                                                             translationKey:nil
+                                                                                      state:mode];
+        if (localized.length > 0) return localized;
+    } else if ([self.featureType isEqualToString:@"climate-preset-modes"]) {
+        return [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate"
+                                                                           deviceClass:nil
+                                                                                  attr:@"preset_mode"
+                                                                                 value:mode];
+    } else if ([self.featureType isEqualToString:@"climate-fan-modes"]) {
+        return [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate"
+                                                                           deviceClass:nil
+                                                                                  attr:@"fan_mode"
+                                                                                 value:mode];
     }
 
     // "heat_cool" → "Heat/Cool", "armed_home" → "Armed Home"
