@@ -732,3 +732,15 @@
 
 /* Tooltip value label fallback in the graph view, shown when no data point is under the touch/cursor. */
 "cell.graph.tooltip_no_value" = "\u2014";
+
+/* Navigation bar title for the connection settings screen. */
+"settings.connection_nav_title" = "Connection";
+
+/* Navigation bar title for the login screen. */
+"login.nav_title" = "HA Dashboard";
+
+/* Card title on the login screen, above the connection form. */
+"login.card_title" = "Connect to your server";
+
+/* Label next to the demo-mode toggle on the login screen. */
+"login.try_demo_mode" = "Try Demo Mode";
