@@ -13,14 +13,14 @@ name: Translations
 # still show as "action_required" pending a maintainer's manual approval
 # to run at all -- that's the repo's Actions approval setting, unrelated
 # to this workflow's own permissions, and out of scope here.)
+#
+# pull_request deliberately has no `paths` filter: this check is meant to be
+# a required status check, and a path-filtered required check never reports
+# on PRs that don't touch translations, which would block them forever. The
+# job takes seconds, so it runs on every PR.
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'HADashboard/**/*.lproj/**'
-      - 'scripts/check-translations.sh'
-      - 'scripts/check_translations.py'
-      - '.github/workflows/translations.yml'
   push:
     branches: [main]
     paths:
