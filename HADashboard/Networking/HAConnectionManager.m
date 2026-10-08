@@ -144,11 +144,16 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     // Load cached entity states
     // Load any cached HA state translations synchronously, before the first
     // render (docs/plans/i18n-plan.md §2.7). The real HA profile language
-    // isn't known until after connect, but the in-app override or the app
-    // chrome language is a reasonable guess for which cache file to open —
-    // -refreshStateLocalizerLanguage corrects this once connected.
-    NSString *bestGuessLanguage = [HAStrings overrideLanguageCode];
-    if (bestGuessLanguage.length == 0) bestGuessLanguage = [HAStrings activeLanguageCode];
+    // isn't known until after connect (that needs a round trip), but we
+    // persist the server's last-resolved language on every prior connect
+    // (+[HAStateLocalizer lastResolvedLanguageCode]) and prefer that over
+    // the device/app chrome language — a French HA on an English iPad
+    // should show French states immediately offline, not just after the
+    // first post-connect refresh. -refreshStateLocalizerLanguage corrects
+    // this (and updates the persisted value) once connected.
+    NSString *bestGuessLanguage = [HAStateLocalizer coldStartLanguageWithOverride:[HAStrings overrideLanguageCode]
+                                                                  persistedLanguage:[HAStateLocalizer lastResolvedLanguageCode]
+                                                                  appChromeLanguage:[HAStrings activeLanguageCode]];
     [[HAStateLocalizer sharedLocalizer] loadCachedStateForLanguage:bestGuessLanguage];
 
     NSDictionary<NSString *, NSDictionary *> *cachedStates = [[HAEntityStateCache sharedCache] loadCachedStates];

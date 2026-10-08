@@ -101,6 +101,30 @@ NS_ASSUME_NONNULL_BEGIN
                             configLanguage:(nullable NSString *)configLanguage
                          appChromeLanguage:(nullable NSString *)appChromeLanguage;
 
+/// The language code the full resolution chain last landed on (persisted to
+/// NSUserDefaults every time `-refreshForLanguage:connectionManager:` runs,
+/// regardless of whether that call's network fetch succeeds, is debounced,
+/// or fails) -- i.e. our best-known answer to "what language is the
+/// connected HA server actually in", independent of the app's own chrome
+/// language. Nil before the first successful connect of this install.
++ (nullable NSString *)lastResolvedLanguageCode;
+
+/// Pure cold-start language choice (docs/plans/i18n-plan.md §2.7's "cold
+/// start" gap): which cached-translations file to load synchronously at
+/// launch, before HA's own profile language is known (that requires a
+/// round trip once connected -- see `-refreshStateLocalizerLanguage` in
+/// HAConnectionManager). Prefers the server's own last-known language over
+/// the device/app chrome language, so a French HA on an English iPad shows
+/// French states immediately offline instead of waiting for the
+/// post-connect refresh:
+///   1. `overrideLanguageCode` (the in-app Settings override), if non-empty.
+///   2. `persistedLanguage` (`+lastResolvedLanguageCode`), if non-empty.
+///   3. `appChromeLanguage`, else "en".
+/// The chosen value is passed through `+normalizedLanguageCode:`.
++ (NSString *)coldStartLanguageWithOverride:(nullable NSString *)overrideLanguageCode
+                           persistedLanguage:(nullable NSString *)persistedLanguage
+                           appChromeLanguage:(nullable NSString *)appChromeLanguage;
+
 #pragma mark - Test support
 
 /// Test-only seam: injects a flat resources dictionary directly, bypassing
@@ -110,6 +134,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// localizer back to its empty, pre-Phase-2-equivalent state.
 - (void)test_setResources:(nullable NSDictionary<NSString *, NSString *> *)resources
               languageCode:(nullable NSString *)languageCode;
+
+/// Test-only seam: directly sets/clears the persisted "last resolved HA
+/// language" (normally written only by `-refreshForLanguage:connectionManager:`),
+/// so cold-start tests can inject it without a real connection. Pass nil to
+/// clear back to the "never connected" state.
++ (void)test_setLastResolvedLanguageCode:(nullable NSString *)languageCode;
 
 @end
 

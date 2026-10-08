@@ -26,6 +26,7 @@
 
 - (void)tearDown {
     [[HAStateLocalizer sharedLocalizer] test_setResources:nil languageCode:nil];
+    [HAStateLocalizer test_setLastResolvedLanguageCode:nil];
     [super tearDown];
 }
 
@@ -367,6 +368,61 @@
                                                                       translationKey:nil
                                                                                state:@"filler_0"];
     XCTAssertEqualObjects(result, [HAEntityDisplayHelper humanReadableState:@"filler_0"]);
+}
+
+#pragma mark - Cold-start language (plan §2.7 cold-start gap)
+
+- (void)testColdStartPrefersOverrideOverPersistedAndAppChrome {
+    NSString *result = [HAStateLocalizer coldStartLanguageWithOverride:@"fr"
+                                                        persistedLanguage:@"de"
+                                                        appChromeLanguage:@"en"];
+    XCTAssertEqualObjects(result, @"fr");
+}
+
+- (void)testColdStartPrefersPersistedServerLanguageOverAppChrome {
+    // The headline case: a French HA on an English iPad, no override set.
+    // The device/app is "en", but the server was last known to be "fr" --
+    // cold start must pick "fr" so offline/launch-time states render in
+    // French immediately, not English.
+    NSString *result = [HAStateLocalizer coldStartLanguageWithOverride:nil
+                                                        persistedLanguage:@"fr"
+                                                        appChromeLanguage:@"en"];
+    XCTAssertEqualObjects(result, @"fr");
+}
+
+- (void)testColdStartFallsBackToAppChromeWhenNothingPersistedYet {
+    // First launch of this install, or an HA that's never successfully
+    // resolved a language: no persisted value yet.
+    NSString *result = [HAStateLocalizer coldStartLanguageWithOverride:nil
+                                                        persistedLanguage:nil
+                                                        appChromeLanguage:@"fr"];
+    XCTAssertEqualObjects(result, @"fr");
+}
+
+- (void)testColdStartNormalizesPersistedLanguage {
+    NSString *result = [HAStateLocalizer coldStartLanguageWithOverride:nil
+                                                        persistedLanguage:@"fr-CA"
+                                                        appChromeLanguage:@"en"];
+    XCTAssertEqualObjects(result, @"fr");
+}
+
+- (void)testLastResolvedLanguagePersistsAcrossReads {
+    [HAStateLocalizer test_setLastResolvedLanguageCode:nil];
+    XCTAssertNil([HAStateLocalizer lastResolvedLanguageCode], @"Precondition: nothing persisted yet");
+
+    [HAStateLocalizer test_setLastResolvedLanguageCode:@"fr"];
+    XCTAssertEqualObjects([HAStateLocalizer lastResolvedLanguageCode], @"fr");
+
+    // Simulates the actual cold-start read path end to end: once the
+    // server has resolved to "fr", a subsequent launch (no override, app
+    // chrome still "en") must choose "fr".
+    NSString *coldStartChoice = [HAStateLocalizer coldStartLanguageWithOverride:nil
+                                                                persistedLanguage:[HAStateLocalizer lastResolvedLanguageCode]
+                                                                appChromeLanguage:@"en"];
+    XCTAssertEqualObjects(coldStartChoice, @"fr");
+
+    [HAStateLocalizer test_setLastResolvedLanguageCode:nil];
+    XCTAssertNil([HAStateLocalizer lastResolvedLanguageCode], @"Cleanup must actually clear it");
 }
 
 @end

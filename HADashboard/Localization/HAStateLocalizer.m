@@ -7,6 +7,7 @@
 
 static NSString *const kHAStateLocalizerCacheFilePrefix = @"ha-translations-";
 static NSString *const kHAStateLocalizerCacheFileSuffix = @".json";
+static NSString *const kHAStateLocalizerLastResolvedLanguageDefaultsKey = @"ha_last_resolved_language";
 static const unsigned long long kHAStateLocalizerMaxPayloadBytes = 512 * 1024; // 512 KB, per plan §2.7
 static const NSTimeInterval kHAStateLocalizerRefreshDebounceInterval = 24 * 60 * 60; // 24h, per plan §2.7
 
@@ -252,6 +253,14 @@ static BOOL HAStateLocalizerIsRunningUnderXCTest(void) {
 
     NSString *normalized = [[self class] normalizedLanguageCode:languageCode];
 
+    // Persist this as our best-known "what language is the connected HA
+    // server in" regardless of whether the fetch below actually runs
+    // (debounced) or succeeds -- the resolution chain that produced
+    // `languageCode` already ran, so this is still our best answer for the
+    // NEXT cold start (plan §2.7's cold-start gap). See
+    // +coldStartLanguageWithOverride:persistedLanguage:appChromeLanguage:.
+    [[self class] persistLastResolvedLanguageCode:normalized];
+
     // Debounce: don't refetch on every reconnect if the cache we already
     // hold for this exact language is still fresh.
     if ([self.loadedLanguageCode isEqualToString:normalized] && self.lastRefreshDate &&
@@ -387,6 +396,28 @@ static BOOL HAStateLocalizerIsRunningUnderXCTest(void) {
     return [self normalizedLanguageCode:chosen];
 }
 
++ (nullable NSString *)lastResolvedLanguageCode {
+    return [[NSUserDefaults standardUserDefaults] stringForKey:kHAStateLocalizerLastResolvedLanguageDefaultsKey];
+}
+
++ (void)persistLastResolvedLanguageCode:(NSString *)languageCode {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    if (languageCode.length > 0) {
+        [defaults setObject:languageCode forKey:kHAStateLocalizerLastResolvedLanguageDefaultsKey];
+    } else {
+        [defaults removeObjectForKey:kHAStateLocalizerLastResolvedLanguageDefaultsKey];
+    }
+}
+
++ (NSString *)coldStartLanguageWithOverride:(NSString *)overrideLanguageCode
+                           persistedLanguage:(NSString *)persistedLanguage
+                           appChromeLanguage:(NSString *)appChromeLanguage {
+    NSString *chosen = overrideLanguageCode.length > 0 ? overrideLanguageCode : nil;
+    if (!chosen) chosen = persistedLanguage.length > 0 ? persistedLanguage : nil;
+    if (!chosen) chosen = appChromeLanguage.length > 0 ? appChromeLanguage : nil;
+    return [self normalizedLanguageCode:chosen];
+}
+
 #pragma mark - Test support
 
 - (void)test_setResources:(NSDictionary<NSString *, NSString *> *)resources
@@ -395,6 +426,10 @@ static BOOL HAStateLocalizerIsRunningUnderXCTest(void) {
     self.loadedLanguageCode = languageCode;
     self.previousLanguageCode = nil;
     self.lastRefreshDate = resources ? [NSDate date] : nil;
+}
+
++ (void)test_setLastResolvedLanguageCode:(NSString *)languageCode {
+    [self persistLastResolvedLanguageCode:languageCode];
 }
 
 @end
