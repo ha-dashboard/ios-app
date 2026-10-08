@@ -4,6 +4,7 @@
 #import "HATheme.h"
 #import "HAAuthManager.h"
 #import "NSMutableURLRequest+HAHelpers.h"
+#import "HAStateLocalizer.h"
 
 static const CGFloat kAvatarSize = 40.0;
 
@@ -65,10 +66,21 @@ static const CGFloat kAvatarSize = 40.0;
 
     NSString *state = entity.state;
     if ([state isEqualToString:@"home"]) {
-        self.locationLabel.text = @"Home";
+        // "Home"/"Away" come from Home Assistant's own translations now
+        // (docs/plans/i18n-plan.md §2.5), not an app-hardcoded literal —
+        // this is the fix for GitHub issue #19's raw `not_home`.
+        self.locationLabel.text = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"person"
+                                                                                    deviceClass:nil
+                                                                                       platform:entity.platform
+                                                                                 translationKey:nil
+                                                                                          state:state];
         self.locationLabel.textColor = [UIColor colorWithRed:0.2 green:0.7 blue:0.2 alpha:1.0];
     } else if ([state isEqualToString:@"not_home"]) {
-        self.locationLabel.text = @"Away";
+        self.locationLabel.text = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"person"
+                                                                                    deviceClass:nil
+                                                                                       platform:entity.platform
+                                                                                 translationKey:nil
+                                                                                          state:state];
         self.locationLabel.textColor = [HATheme secondaryTextColor];
     } else {
         // Zone name
