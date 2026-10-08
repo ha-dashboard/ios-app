@@ -27,6 +27,12 @@
 /// Returns the extra height needed for the heading area (0 if no heading).
 + (CGFloat)headingHeight;
 
+/// Returns the extra height needed for the fallback-card-type badge (the
+/// label's own line height plus the gap above it) — add this to a cell's
+/// preferred height whenever HADashboardConfigItem.fallbackCardType is set,
+/// so the badge gets breathing room instead of crowding the content above it.
++ (CGFloat)fallbackBadgeExtraHeight;
+
 #pragma mark - Theme Helpers
 
 /// Reset theme-dependent colors for reuse. Base implementation resets

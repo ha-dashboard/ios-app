@@ -9,10 +9,15 @@
 #import "HAConnectionManager.h"
 #import "HAHaptics.h"
 #import "UIView+HAUtilities.h"
-#import "HAStrings.h"
 
 static const CGFloat kHeadingHeight = 28.0;
 static const CGFloat kHeadingGap = 2.0;
+// Fallback-card-type badge: its own line height plus a small gap above it,
+// mirroring kHeadingHeight/kHeadingGap. Kept in sync with the constraints in
+// setupSubviews (constant:4 gap above, constant:-6 from contentView bottom —
+// kFallbackBadgeHeight covers the label's own ~12pt line plus that padding).
+static const CGFloat kFallbackBadgeHeight = 14.0;
+static const CGFloat kFallbackBadgeGap = 4.0;
 
 @interface HABaseEntityCell ()
 @property (nonatomic, assign) BOOL showsHeading;
@@ -202,6 +207,10 @@ static const CGFloat kHeadingGap = 2.0;
 
 + (CGFloat)headingHeight {
     return kHeadingHeight + kHeadingGap;
+}
+
++ (CGFloat)fallbackBadgeExtraHeight {
+    return kFallbackBadgeHeight + kFallbackBadgeGap;
 }
 
 /// Configures the cell background color and opacity.

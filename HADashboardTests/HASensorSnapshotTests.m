@@ -6,6 +6,7 @@
 #import "HAUpdateEntityCell.h"
 #import "HADashboardConfig.h"
 #import "HAEntity.h"
+#import "HABaseEntityCell.h"
 
 @interface HASensorSnapshotTests : HABaseSnapshotTestCase
 @end
@@ -149,8 +150,13 @@
     HADashboardConfigItem *item = [HASnapshotTestHelpers itemWithEntityId:entity.entityId
         cardType:@"custom:mushroom-entity-card" columnSpan:6 headingIcon:nil displayName:nil];
     item.fallbackCardType = @"custom:mushroom-entity-card";
+    // Matches HADashboardViewController.heightForItemAtIndexPath:itemWidth:,
+    // which adds +[HABaseEntityCell fallbackBadgeExtraHeight] to the standard
+    // height whenever fallbackCardType is set, so the badge has breathing
+    // room instead of crowding the "22.8°C" value above it.
+    CGFloat height = kStandardCellHeight + [HABaseEntityCell fallbackBadgeExtraHeight];
     UIView *cell = [self cellForEntity:entity cellClass:[HASensorEntityCell class]
-        size:CGSizeMake(floor(kSubGridUnit * 6), kStandardCellHeight) configItem:item];
+        size:CGSizeMake(floor(kSubGridUnit * 6), height) configItem:item];
     [self verifyView:cell identifier:nil];
 }
 
