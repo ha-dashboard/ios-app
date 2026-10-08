@@ -609,4 +609,64 @@
     XCTAssertEqual(attrs.count, 0u, @"Empty masonry layout should produce no attributes");
 }
 
+#pragma mark - Test 13: Tile Card Object Name Resolution
+
+- (NSDictionary *)dashboardWithTileCard:(NSDictionary *)nameValue entityId:(NSString *)entityId {
+    return @{
+        @"views": @[@{
+            @"title": @"Test",
+            @"cards": @[@{
+                @"type": @"tile",
+                @"entity": entityId,
+                @"name": nameValue
+            }]
+        }]
+    };
+}
+
+- (void)testTileCard_objectName_area_resolvesAreaName {
+    NSDictionary *dict = [self dashboardWithTileCard:@{@"type": @"area"} entityId:@"sensor.bedroom_temp"];
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject
+                                                                  columns:3
+                                                            entityAreaMap:@{@"sensor.bedroom_temp": @"area_bedroom"}
+                                                                areaNames:@{@"area_bedroom": @"Bedroom"}
+                                                          entityDeviceMap:@{}
+                                                              deviceNames:@{}];
+    XCTAssertEqualObjects(config.items.firstObject.displayName, @"Bedroom");
+}
+
+- (void)testTileCard_objectName_device_resolvesDeviceName {
+    NSDictionary *dict = [self dashboardWithTileCard:@{@"type": @"device"} entityId:@"sensor.bedroom_temp"];
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject
+                                                                  columns:3
+                                                            entityAreaMap:@{}
+                                                                areaNames:@{}
+                                                          entityDeviceMap:@{@"sensor.bedroom_temp": @"device_abc"}
+                                                              deviceNames:@{@"device_abc": @"Bedroom Sensor"}];
+    XCTAssertEqualObjects(config.items.firstObject.displayName, @"Bedroom Sensor");
+}
+
+- (void)testTileCard_objectName_unknownType_doesNotCrash {
+    NSDictionary *dict = [self dashboardWithTileCard:@{@"type": @"something_future"} entityId:@"sensor.bedroom_temp"];
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
+    XCTAssertNoThrow({
+        (void)[HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject
+                                               columns:3
+                                         entityAreaMap:@{}
+                                             areaNames:@{}
+                                       entityDeviceMap:@{}
+                                           deviceNames:@{}];
+    });
+}
+
+- (void)testTileCard_objectName_noRegistryData_doesNotCrash {
+    NSDictionary *dict = [self dashboardWithTileCard:@{@"type": @"area"} entityId:@"sensor.bedroom_temp"];
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
+    XCTAssertNoThrow({
+        (void)[HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:3];
+    });
+}
+
 @end

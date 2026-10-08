@@ -98,8 +98,17 @@ extern NSString *const HAConnectionManagerHADidStartNotification;              /
 /// Area names dictionary: area_id -> area name
 @property (nonatomic, strong, readonly) NSDictionary<NSString *, NSString *> *areaNamesByAreaId;
 
+/// Entity area map: entity_id -> area_id
+@property (nonatomic, strong, readonly) NSDictionary<NSString *, NSString *> *entityAreaMap;
+
 /// Device area map: device_id -> area_id
 @property (nonatomic, strong, readonly) NSDictionary<NSString *, NSString *> *deviceAreaMapping;
+
+/// Device name map: device_id -> display name
+@property (nonatomic, strong, readonly) NSDictionary<NSString *, NSString *> *deviceNamesByDeviceId;
+
+/// Entity device map: entity_id -> device_id
+@property (nonatomic, strong, readonly) NSDictionary<NSString *, NSString *> *entityDeviceMapping;
 
 /// Floor registry entries (available after registries load, nil if HA doesn't support floors)
 @property (nonatomic, copy, readonly) NSArray<HAFloor *> *floors;

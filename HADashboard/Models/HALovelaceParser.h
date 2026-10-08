@@ -41,6 +41,16 @@
 /// @param columns Number of grid columns
 + (HADashboardConfig *)dashboardConfigFromView:(HALovelaceView *)view columns:(NSInteger)columns;
 
+/// Convert a single Lovelace view with registry data for resolving dynamic card names
+/// (e.g. tile cards with "name": {"type": "area"} or "name": {"type": "device"}).
+/// Pass empty dicts when registry data is unavailable.
++ (HADashboardConfig *)dashboardConfigFromView:(HALovelaceView *)view
+                                       columns:(NSInteger)columns
+                                 entityAreaMap:(NSDictionary<NSString *, NSString *> *)entityAreaMap
+                                     areaNames:(NSDictionary<NSString *, NSString *> *)areaNames
+                               entityDeviceMap:(NSDictionary<NSString *, NSString *> *)entityDeviceMap
+                                   deviceNames:(NSDictionary<NSString *, NSString *> *)deviceNames;
+
 /// Extract all entity IDs from a Lovelace card dictionary (recursively handles stacks)
 + (NSArray<NSDictionary *> *)extractEntitiesFromCard:(NSDictionary *)card;
 
