@@ -38,22 +38,20 @@ static const CGFloat kHeadingCellHeight = 40.0;
 }
 
 /// Override to point at our source tree ReferenceImages directory.
+///
+/// See the matching override in HABaseSnapshotTestCase.m: set
+/// HA_SNAPSHOT_RUNTIME_SUFFIX to record/compare against an OS-tagged
+/// directory without touching the existing "ReferenceImages_64" set.
 - (NSString *)getReferenceImageDirectoryWithDefault:(NSString *)dir {
-    // Walk from test bundle → PlugIns parent → app → Products → Build → project root
-    NSString *testBundle = [NSBundle bundleForClass:self.class].bundlePath;
-    // testBundle = .../DerivedData/.../HA Dashboard.app/PlugIns/HADashboardTests.xctest
-    NSString *appBundle = [testBundle stringByDeletingLastPathComponent]; // PlugIns
-    appBundle = [appBundle stringByDeletingLastPathComponent]; // HA Dashboard.app
-    NSString *productsDir = [appBundle stringByDeletingLastPathComponent]; // Debug-iphonesimulator
-    NSString *buildDir = [productsDir stringByDeletingLastPathComponent]; // Products
-    buildDir = [buildDir stringByDeletingLastPathComponent]; // Build
-    NSString *derivedData = [buildDir stringByDeletingLastPathComponent]; // HADashboard-xxx
-
-    // Try to find SOURCE_ROOT from the build settings by going up from DerivedData
-    // Simpler: use the known project path from the test file's compile-time __FILE__
     NSString *thisFile = @__FILE__;
     NSString *testDir = [thisFile stringByDeletingLastPathComponent];
-    return [testDir stringByAppendingPathComponent:@"ReferenceImages"];
+#ifdef HA_SNAPSHOT_RUNTIME_SUFFIX
+    NSString *runtimeSuffix = @HA_SNAPSHOT_RUNTIME_SUFFIX;
+#else
+    NSString *runtimeSuffix = @"";
+#endif
+    NSString *folderName = [@"ReferenceImages" stringByAppendingString:runtimeSuffix];
+    return [testDir stringByAppendingPathComponent:folderName];
 }
 
 /// Override to point at our source tree FailureDiffs directory.
