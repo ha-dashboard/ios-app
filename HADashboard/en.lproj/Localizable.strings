@@ -554,3 +554,19 @@
 
 /* Confirm button, dismisses a date/value picker. */
 "action.done" = "Done";
+
+
+/* Button in the scene cell, activates the scene. Max ~10 chars -- fixed-width pill. */
+"cell.scene.activate" = "Activate";
+
+/* Feedback label in the scene cell, briefly shown after activation. Max ~10 chars. */
+"cell.scene.activated" = "Activated";
+
+/* Button in the scene cell, stops a running script. Max ~8 chars -- fixed-width pill. */
+"cell.scene.stop" = "Stop";
+
+/* Button in the scene cell, runs a script entity. Max ~10 chars -- fixed-width pill. */
+"cell.scene.run" = "Run";
+
+/* Button in the scene cell, triggers an automation entity. Max ~10 chars -- fixed-width pill. */
+"cell.scene.trigger" = "Trigger";
