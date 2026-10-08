@@ -631,3 +631,22 @@
 
 /* State badge fallback text in the alarm cell, shown when the state is nil. */
 "cell.alarm.state.unknown" = "Unknown";
+
+
+/* Fallback nav bar button title on pre-iOS 13 devices when the gear glyph can't be rendered. Opens Settings. */
+"dashboard.settings_button_fallback" = "Settings";
+
+/* Connection status bar text, shown at launch and when disconnected with no specific error. */
+"dashboard.status.disconnected" = "Disconnected";
+
+/* Connection status bar text, shown while automatically retrying after a disconnect. */
+"dashboard.status.disconnected_reconnecting" = "Disconnected — reconnecting...";
+
+/* Fallback section title for entities with no area assignment, in the auto-generated dashboard. */
+"dashboard.section.other" = "Other";
+
+/* Fallback dashboard title/name used throughout the title button and dashboard switcher when none is set. */
+"dashboard.default_title" = "Dashboard";
+
+/* Fallback dashboard name in the dashboard-switcher action sheet when a dashboard has no title. */
+"dashboard.untitled_fallback" = "Untitled";
