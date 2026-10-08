@@ -78,6 +78,7 @@ docs/*
 !docs/support.html
 !docs/rosettasim-deployment.md
 !docs/live-camera-streaming-v1.md
+!docs/_config.yml
 !docs/translations.md
 !docs/releases/
 docs/releases/*

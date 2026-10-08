@@ -1,0 +1,7 @@
+# GitHub Pages (Jekyll) settings for the docs/ site.
+# Internal working documents are tracked in docs/ but are not site pages.
+# They can contain Jinja/Liquid syntax ({{ }}, {% %}) from Home Assistant
+# templates, which Jekyll would try to render and fail on.
+exclude:
+  - plans
+  - releases
