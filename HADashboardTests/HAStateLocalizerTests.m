@@ -370,6 +370,39 @@
     XCTAssertEqualObjects(result, [HAEntityDisplayHelper humanReadableState:@"filler_0"]);
 }
 
+#pragma mark - Attribute name lookup (plan §2.4)
+
+- (void)testLocalizedAttributeNameHitsLiveHAData {
+    NSDictionary *en = [self loadFixtureNamed:@"ha-translations-en"];
+    [[HAStateLocalizer sharedLocalizer] test_setResources:en languageCode:@"en"];
+
+    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"sensor" attr:@"battery"];
+    XCTAssertEqualObjects(result, @"Battery");
+}
+
+- (void)testLocalizedAttributeNameFollowsLanguage {
+    NSDictionary *fr = [self loadFixtureNamed:@"ha-translations-fr"];
+    [[HAStateLocalizer sharedLocalizer] test_setResources:fr languageCode:@"fr"];
+
+    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"sensor" attr:@"battery"];
+    XCTAssertEqualObjects(result, @"Batterie");
+}
+
+- (void)testLocalizedAttributeNameReturnsNilOnMiss {
+    // aux_heat is deprecated in HA core and never served -- callers MUST
+    // fall back to an app-owned attr.* key (plan §2.4/§1.4 rule 2); this
+    // method must return nil, not a raw/guessed string, so that fallback
+    // logic at call sites actually triggers.
+    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"climate" attr:@"aux_heat"];
+    XCTAssertNil(result);
+}
+
+- (void)testLocalizedAttributeNameReturnsNilWhenEmpty {
+    XCTAssertNil([[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"sensor" attr:@"battery"]);
+    XCTAssertNil([[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:nil attr:@"battery"]);
+    XCTAssertNil([[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"sensor" attr:nil]);
+}
+
 #pragma mark - Cold-start language (plan §2.7 cold-start gap)
 
 - (void)testColdStartPrefersOverrideOverPersistedAndAppChrome {

@@ -47,6 +47,10 @@ static BOOL HAStateLocalizerIsRunningUnderXCTest(void) {
     return [self dottedKeyForDomain:domain deviceClass:@"_" state:state];
 }
 
++ (NSString *)dottedAttributeNameKeyForDomain:(NSString *)domain attr:(NSString *)attr {
+    return [NSString stringWithFormat:@"component.%@.entity_component._.state_attributes.%@.name", domain, attr];
+}
+
 + (NSString *)cacheFilenameForLanguage:(NSString *)languageCode {
     return [NSString stringWithFormat:@"%@%@%@", kHAStateLocalizerCacheFilePrefix, languageCode, kHAStateLocalizerCacheFileSuffix];
 }
@@ -215,6 +219,13 @@ static BOOL HAStateLocalizerIsRunningUnderXCTest(void) {
     if (human.length > 0) return human;
 
     return state;
+}
+
+- (nullable NSString *)localizedAttributeNameForDomain:(NSString *)domain attr:(NSString *)attr {
+    if (domain.length == 0 || attr.length == 0) return nil;
+    NSString *key = [[self class] dottedAttributeNameKeyForDomain:domain attr:attr];
+    NSString *hit = self.resources[key];
+    return hit.length > 0 ? hit : nil;
 }
 
 #pragma mark - Cache load (sync, launch-time)

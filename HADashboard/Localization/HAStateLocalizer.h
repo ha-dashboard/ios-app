@@ -80,6 +80,24 @@ NS_ASSUME_NONNULL_BEGIN
                         translationKey:(nullable NSString *)translationKey
                                  state:(NSString *)state;
 
+/// Resolves HA's own translation of an ATTRIBUTE's display label (not its
+/// value) for `domain`+`attr`, per docs/plans/i18n-plan.md §2.4:
+/// `component.{domain}.entity_component._.state_attributes.{attr}.name`.
+///
+/// Returns nil on a miss (no live HA data for this key, or no match at
+/// all) rather than any fallback — unlike `-localizedStateForDomain:…`,
+/// there is no sensible raw-string fallback for an attribute's *label*.
+/// Callers should fall back to an app-owned `attr.*` key (plan §1.4 rule
+/// 2), e.g.:
+///   NSString *label = [[HAStateLocalizer sharedLocalizer]
+///       localizedAttributeNameForDomain:@"climate" attr:@"aux_heat"]
+///       ?: HALocalizedString(@"attr.aux_heat.name", @"…");
+/// 11 of the 12 attribute labels probed in plan §2.4 come from HA; only
+/// `aux_heat` (deprecated in HA core) does not, and needs the app-owned
+/// fallback in every caller.
+- (nullable NSString *)localizedAttributeNameForDomain:(NSString *)domain
+                                                    attr:(NSString *)attr;
+
 #pragma mark - Language resolution (pure functions — no network, no I/O)
 
 /// Normalises a BCP-47-ish code to HA's bare language code: lowercases,
