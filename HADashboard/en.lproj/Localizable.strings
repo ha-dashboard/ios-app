@@ -450,3 +450,22 @@
 
 /* Error label in the camera cell, shown when a snapshot fetch fails and no image is available. */
 "cell.camera.no_signal" = "No signal";
+
+/* Entity state text shown when Home Assistant reports an entity as unavailable. Home Assistant does not serve a translation for this over the WebSocket (see docs/plans/i18n-plan.md §2.3), so it stays app-owned. */
+"state.default.unavailable" = "Unavailable";
+
+/* Entity state text shown when Home Assistant reports an entity's state as unknown. Home Assistant does not serve a translation for this over the WebSocket (see docs/plans/i18n-plan.md §2.3), so it stays app-owned. */
+"state.default.unknown" = "Unknown";
+
+
+/* Temperature label in the thermostat gauge cell, shown when no value is available. */
+"cell.thermostat.no_value" = "--";
+
+/* Collapsed preset-mode button in the thermostat gauge cell, shown when no preset is set. Keep the trailing triangle glyph. */
+"cell.thermostat.preset_label" = "Preset ▾";
+
+/* Collapsed fan-mode button in the thermostat gauge cell, shown when no fan mode is set. Keep the trailing triangle glyph. */
+"cell.thermostat.fan_label" = "Fan ▾";
+
+/* Collapsed swing-mode button in the thermostat gauge cell, shown when no swing mode is set. Keep the trailing triangle glyph. */
+"cell.thermostat.swing_label" = "Swing ▾";
