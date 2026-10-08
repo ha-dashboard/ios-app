@@ -44,8 +44,11 @@
 #import "HAPictureGlanceCardCell.h"
 #import "HAMapCardCell.h"
 #import "HALogbookCardCell.h"
+#import "HAUnsupportedCardCell.h"
+#import "HALovelaceParser.h"
 
 static NSString *const kBaseCellId             = @"HABaseEntityCell";
+static NSString *const kUnsupportedCardCellId  = @"HAUnsupportedCardCell";
 static NSString *const kTileCellId            = @"HATileEntityCell";
 static NSString *const kHeadingCellId          = @"HAHeadingCell";
 static NSString *const kEntitiesCardCellId     = @"HAEntitiesCardCell";
@@ -137,6 +140,7 @@ static NSString *const kLogbookCardCellId   = @"HALogbookCardCell";
     [collectionView registerClass:[HAPictureGlanceCardCell class] forCellWithReuseIdentifier:kPictureGlanceCellId];
     [collectionView registerClass:[HAMapCardCell class]           forCellWithReuseIdentifier:kMapCardCellId];
     [collectionView registerClass:[HALogbookCardCell class]       forCellWithReuseIdentifier:kLogbookCardCellId];
+    [collectionView registerClass:[HAUnsupportedCardCell class]   forCellWithReuseIdentifier:kUnsupportedCardCellId];
 }
 
 + (NSString *)reuseIdentifierForEntity:(HAEntity *)entity {
@@ -250,6 +254,11 @@ static NSString *const kLogbookCardCellId   = @"HALogbookCardCell";
 }
 
 + (NSString *)reuseIdentifierForEntity:(HAEntity *)entity cardType:(NSString *)cardType {
+    // Unsupported-card placeholder: never has an entity, routes before
+    // everything else so no domain-based fallback can shadow it.
+    if ([cardType isEqualToString:HAUnsupportedCardType]) {
+        return kUnsupportedCardCellId;
+    }
     // Card-type-aware routing: specific card types override domain-based lookup
     if ([cardType isEqualToString:@"entities"]) {
         return kEntitiesCardCellId;

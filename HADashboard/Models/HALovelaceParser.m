@@ -2,6 +2,11 @@
 #import "HADashboardConfig.h"
 #import "HASafeDict.h"
 #import "HAEntityNameResolver.h"
+#import "HALog.h"
+
+NSString *const HAShowUnsupportedCardsDefaultsKey = @"HAShowUnsupportedCardsEnabled";
+NSString *const HAUnsupportedCardType = @"__unsupported__";
+NSString *const HAUnsupportedCardTypeKey = @"unsupportedCardType";
 
 #pragma mark - HALovelaceView
 
@@ -90,7 +95,40 @@
 
 @implementation HALovelaceParser
 
+// Dedup set of unsupported card "type" strings already logged this dashboard
+// load. Reset at the top of +parseDashboardFromDictionary: (one full HA
+// Lovelace config fetch/restore = one "dashboard load"), so each distinct
+// unsupported type is logged exactly once per load regardless of how many
+// views/cards reference it, instead of spamming the log on every rebuild.
+static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
+
++ (void)_resetUnsupportedCardLogForNewDashboardLoad {
+    @synchronized ([HALovelaceParser class]) {
+        _HAUnsupportedCardLoggedTypes = [NSMutableSet set];
+    }
+}
+
++ (BOOL)_logUnsupportedCardTypeOnce:(NSString *)cardType {
+    @synchronized ([HALovelaceParser class]) {
+        if (!_HAUnsupportedCardLoggedTypes) {
+            _HAUnsupportedCardLoggedTypes = [NSMutableSet set];
+        }
+        if ([_HAUnsupportedCardLoggedTypes containsObject:cardType]) return NO;
+        [_HAUnsupportedCardLoggedTypes addObject:cardType];
+        return YES;
+    }
+}
+
++ (BOOL)showUnsupportedCardsEnabled {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    if ([defaults objectForKey:HAShowUnsupportedCardsDefaultsKey] == nil) {
+        return YES; // default ON — never configured by the user
+    }
+    return [defaults boolForKey:HAShowUnsupportedCardsDefaultsKey];
+}
+
 + (HALovelaceDashboard *)parseDashboardFromDictionary:(NSDictionary *)dict {
+    [self _resetUnsupportedCardLogForNewDashboardLoad];
     if (!dict || ![dict isKindOfClass:[NSDictionary class]]) return nil;
     return [[HALovelaceDashboard alloc] initWithDictionary:dict];
 }
@@ -152,10 +190,13 @@
     NSMutableArray<HADashboardConfigSection *> *sections = [NSMutableArray array];
     NSMutableArray<HADashboardConfigItem *> *allItems = [NSMutableArray array];
 
+    NSString *viewPathForLog = view.path.length > 0 ? view.path : (view.title.length > 0 ? view.title : @"view");
+
     if (view.rawSections.count > 0) {
         // HA 2024+ sections view: each HA section becomes ONE config section (= one column)
         // All cards within an HA section become items within that single config section
-        for (NSDictionary *rawSection in view.rawSections) {
+        for (NSUInteger sectionIdx = 0; sectionIdx < view.rawSections.count; sectionIdx++) {
+            NSDictionary *rawSection = view.rawSections[sectionIdx];
             NSString *haSectionTitle = rawSection[@"title"];
             if (haSectionTitle.length == 0) haSectionTitle = nil;
             // Icon from section-level config (HA 2024.12+)
@@ -165,7 +206,7 @@
             // Look for heading cards to extract section title/icon (fallback)
             for (NSDictionary *card in sectionCards) {
                 if (![card isKindOfClass:[NSDictionary class]]) continue;
-                if ([card[@"type"] isEqualToString:@"heading"]) {
+                if ([HASafeDictStringOrNil(card, @"type") isEqualToString:@"heading"]) {
                     if (!haSectionTitle && [card[@"heading"] isKindOfClass:[NSString class]]) {
                         haSectionTitle = card[@"heading"];
                     }
@@ -178,12 +219,15 @@
             // Collect all items from all cards in this HA section into a single config section
             NSMutableArray<HADashboardConfigSection *> *cardSections = [NSMutableArray array];
             NSMutableArray<HADashboardConfigItem *> *cardItems = [NSMutableArray array];
-            for (NSDictionary *card in sectionCards) {
+            for (NSUInteger cardIdx = 0; cardIdx < sectionCards.count; cardIdx++) {
+                NSDictionary *card = sectionCards[cardIdx];
                 if (![card isKindOfClass:[NSDictionary class]]) continue;
-                if ([card[@"type"] isEqualToString:@"heading"]) continue;
+                if ([HASafeDictStringOrNil(card, @"type") isEqualToString:@"heading"]) continue;
 
                 // Sections view: scale grid_options.columns from HA's section grid to our 12-col sub-grid
                 NSInteger sectionGridMax = (view.maxColumns > 0) ? view.maxColumns : 4;
+                NSString *cardPath = [NSString stringWithFormat:@"%@/section[%lu]/card[%lu]",
+                                       viewPathForLog, (unsigned long)sectionIdx, (unsigned long)cardIdx];
                 [self processCard:card
                      sectionTitle:nil
                       sectionIcon:nil
@@ -192,7 +236,8 @@
                    sectionGridMax:sectionGridMax
                          sections:cardSections
                          allItems:cardItems
-                      nameContext:nameContext];
+                      nameContext:nameContext
+                         cardPath:cardPath];
             }
 
             // Merge all card-level sections into one column section
@@ -275,14 +320,16 @@
         }
     } else {
         // Classic view: one section per card
-        for (NSDictionary *card in view.rawCards) {
+        for (NSUInteger cardIdx = 0; cardIdx < view.rawCards.count; cardIdx++) {
+            NSDictionary *card = view.rawCards[cardIdx];
             if (![card isKindOfClass:[NSDictionary class]]) continue;
-            NSString *cardType = card[@"type"];
+            NSString *cardType = HASafeDictStringOrNil(card, @"type");
             if ([cardType isEqualToString:@"heading"]) continue;
 
             NSString *cardTitle = HASafeDictStringOrNil(card, @"title");
             if (!cardTitle) cardTitle = HASafeDictStringOrNil(card, @"heading");
 
+            NSString *cardPath = [NSString stringWithFormat:@"%@/card[%lu]", viewPathForLog, (unsigned long)cardIdx];
             [self processCard:card
                  sectionTitle:cardTitle
                   sectionIcon:card[@"icon"]
@@ -291,7 +338,8 @@
                sectionGridMax:0
                      sections:sections
                      allItems:allItems
-                  nameContext:nameContext];
+                  nameContext:nameContext
+                     cardPath:cardPath];
         }
     }
 
@@ -338,7 +386,8 @@
      sectionGridMax:(NSInteger)sectionGridMax
            sections:(NSMutableArray<HADashboardConfigSection *> *)sections
            allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems
-        nameContext:(HAEntityNameRegistryContext *)nameContext {
+        nameContext:(HAEntityNameRegistryContext *)nameContext
+           cardPath:(NSString *)cardPath {
 
     NSInteger startSectionCount = sections.count;
     NSInteger startItemCount = allItems.count;
@@ -351,10 +400,11 @@
         sectionGridMax:sectionGridMax
               sections:sections
               allItems:allItems
-           nameContext:nameContext];
+           nameContext:nameContext
+              cardPath:cardPath];
 
     NSArray *visibility = card[@"visibility"];
-    if ([card[@"type"] isEqualToString:@"conditional"] && !visibility) {
+    if ([HASafeDictStringOrNil(card, @"type") isEqualToString:@"conditional"] && !visibility) {
         visibility = card[@"conditions"];
     }
 
@@ -388,9 +438,14 @@
       sectionGridMax:(NSInteger)sectionGridMax
             sections:(NSMutableArray<HADashboardConfigSection *> *)sections
             allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems
-         nameContext:(HAEntityNameRegistryContext *)nameContext {
+         nameContext:(HAEntityNameRegistryContext *)nameContext
+            cardPath:(NSString *)cardPath {
 
-    NSString *cardType = card[@"type"];
+    // card[@"type"] can be anything in a malformed/hand-edited config (a
+    // number, an array, missing entirely); coerce non-strings to nil so
+    // every isEqualToString: check below is safe (messaging nil is a no-op
+    // that returns NO) instead of crashing with "unrecognized selector".
+    NSString *cardType = HASafeDictStringOrNil(card, @"type");
 
     // Heading cards have no entity — skip them here. They are handled by the
     // grid unwrapping logic below which merges heading info into the first
@@ -445,7 +500,8 @@
                sectionGridMax:sectionGridMax
                      sections:innerSections
                      allItems:innerItems
-                  nameContext:nameContext];
+                  nameContext:nameContext
+                     cardPath:[cardPath stringByAppendingString:@"/conditional"]];
             // Attach conditions to all resulting items
             if ([conditions isKindOfClass:[NSArray class]] && conditions.count > 0) {
                 for (HADashboardConfigItem *item in innerItems) {
@@ -496,7 +552,7 @@
             NSString *gridIcon = sectionIcon;
             NSUInteger startIdx = 0;
             if ([first isKindOfClass:[NSDictionary class]] &&
-                [first[@"type"] isEqualToString:@"heading"]) {
+                [HASafeDictStringOrNil(first, @"type") isEqualToString:@"heading"]) {
                 if (!gridTitle && [first[@"heading"] isKindOfClass:[NSString class]]) {
                     gridTitle = first[@"heading"];
                 }
@@ -529,7 +585,7 @@
             if (startIdx < subCards.count) {
                 NSDictionary *firstContent = subCards[startIdx];
                 if ([firstContent isKindOfClass:[NSDictionary class]] &&
-                    [firstContent[@"type"] isEqualToString:@"horizontal-stack"]) {
+                    [HASafeDictStringOrNil(firstContent, @"type") isEqualToString:@"horizontal-stack"]) {
                     firstContentIsHStack = YES;
                 }
             }
@@ -565,7 +621,7 @@
                 for (NSUInteger i = startIdx; i < subCards.count; i++) {
                     NSDictionary *sc = subCards[i];
                     if (![sc isKindOfClass:[NSDictionary class]]) continue;
-                    if ([sc[@"type"] isEqualToString:@"heading"]) continue;
+                    if ([HASafeDictStringOrNil(sc, @"type") isEqualToString:@"heading"]) continue;
                     contentCount++;
                 }
                 if (contentCount > 1) {
@@ -579,7 +635,7 @@
             for (NSUInteger i = startIdx; i < subCards.count; i++) {
                 NSDictionary *subCard = subCards[i];
                 if (![subCard isKindOfClass:[NSDictionary class]]) continue;
-                if ([subCard[@"type"] isEqualToString:@"heading"]) continue;
+                if ([HASafeDictStringOrNil(subCard, @"type") isEqualToString:@"heading"]) continue;
 
                 [self processCard:subCard
                      sectionTitle:emitHeadingAsItem ? nil : gridTitle
@@ -589,7 +645,8 @@
                    sectionGridMax:sectionGridMax
                          sections:sections
                          allItems:allItems
-                      nameContext:nameContext];
+                      nameContext:nameContext
+                         cardPath:[NSString stringWithFormat:@"%@/%@[%lu]", cardPath, cardType, (unsigned long)i]];
                 // Only first sub-card gets the heading title
                 gridTitle = nil;
                 gridIcon = nil;
@@ -689,7 +746,17 @@
 
     // Extract entities from this card
     NSArray<NSDictionary *> *extracted = [self extractEntitiesFromCard:card];
-    if (extracted.count == 0) return;
+    if (extracted.count == 0) {
+        [self _handleUnsupportedCard:card
+                                 path:cardPath
+                         sectionTitle:sectionTitle
+                          sectionIcon:sectionIcon
+                           columnSpan:cardColumnSpan
+                              rowSpan:cardRowSpan
+                             sections:sections
+                             allItems:allItems];
+        return;
+    }
 
     // Collect all entity IDs and name overrides for this card
     NSMutableArray<NSString *> *entityIds = [NSMutableArray arrayWithCapacity:extracted.count];
@@ -929,7 +996,7 @@
                     [orderedRows addObject:@{@"entity": entry}];
                 } else if ([entry isKindOfClass:[NSDictionary class]]) {
                     NSDictionary *dict = (NSDictionary *)entry;
-                    NSString *rowType = dict[@"type"];
+                    NSString *rowType = HASafeDictStringOrNil(dict, @"type");
                     if ([rowType isEqualToString:@"divider"]) {
                         [orderedRows addObject:@{@"row_type": @"divider"}];
                     } else if ([rowType isEqualToString:@"section"]) {
@@ -1295,11 +1362,96 @@
     [sections addObject:section];
 }
 
+#pragma mark - Unsupported Card Placeholder
+
+/// HA built-in card types that are legitimately entity-less by design (a plain
+/// action button, a static image, a webpage embed, HA-managed list cards with
+/// their own internal state). Reaching the drop point with zero entities for
+/// one of these is normal configuration, not an unsupported card — stay silent
+/// exactly like before this feature existed.
++ (NSSet<NSString *> *)_entityOptionalCardTypes {
+    static NSSet<NSString *> *types = nil;
+    if (!types) {
+        types = [NSSet setWithArray:@[@"button", @"picture", @"iframe",
+                                       @"shopping-list", @"todo-list"]];
+    }
+    return types;
+}
+
+/// A grid/stack container with no (or no usable) child cards is an empty
+/// layout wrapper, not an unsupported card type — nothing was dropped, there
+/// was simply nothing there. Don't placeholder it.
++ (BOOL)_isEmptyContainerCard:(NSDictionary *)card type:(NSString *)cardType {
+    if (![cardType isEqualToString:@"grid"] &&
+        ![cardType isEqualToString:@"horizontal-stack"] &&
+        ![cardType isEqualToString:@"vertical-stack"]) {
+        return NO;
+    }
+    NSArray *subCards = card[@"cards"];
+    return ![subCards isKindOfClass:[NSArray class]] || subCards.count == 0;
+}
+
+/// Called when a card's "type" produced zero usable entities and would
+/// otherwise vanish silently (unknown type, unmapped custom:* card, or a
+/// partially-supported custom card built entirely of sub-items this parser
+/// doesn't read, e.g. a mushroom-chips card made only of template/action
+/// chips). Logs the type once per dashboard load and, when the "Show
+/// Unsupported Cards" toggle is enabled, emits a placeholder item so the
+/// layout keeps its slot instead of silently shrinking.
++ (void)_handleUnsupportedCard:(NSDictionary *)card
+                           path:(NSString *)cardPath
+                   sectionTitle:(NSString *)sectionTitle
+                    sectionIcon:(NSString *)sectionIcon
+                     columnSpan:(NSInteger)columnSpan
+                        rowSpan:(NSInteger)rowSpan
+                       sections:(NSMutableArray<HADashboardConfigSection *> *)sections
+                       allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems {
+    NSString *cardType = [card[@"type"] isKindOfClass:[NSString class]] ? card[@"type"] : @"(missing type)";
+
+    // Known, intentionally entity-less built-in cards: not unsupported.
+    if ([[self _entityOptionalCardTypes] containsObject:cardType]) return;
+    // Empty grid/stack container: nothing was actually dropped.
+    if ([self _isEmptyContainerCard:card type:cardType]) return;
+
+    if ([self _logUnsupportedCardTypeOnce:cardType]) {
+        HALogW(@"parser", @"Unsupported card type \"%@\" at %@ — entities card dropped it; showing placeholder if enabled", cardType, cardPath ?: @"?");
+    }
+
+    if (![self showUnsupportedCardsEnabled]) return; // today's silent-skip behaviour
+
+    HADashboardConfigItem *item = [[HADashboardConfigItem alloc] init];
+    item.cardType = HAUnsupportedCardType;
+    item.columnSpan = columnSpan > 0 ? columnSpan : 12;
+    item.rowSpan = rowSpan;
+    item.displayName = sectionTitle;
+
+    NSMutableDictionary *props = [NSMutableDictionary dictionary];
+    props[HAUnsupportedCardTypeKey] = cardType;
+    props[@"unsupportedCardPath"] = cardPath ?: @"";
+    // Support the heading-icon mechanism (CLAUDE.md): when this placeholder is
+    // the first content card inside a grid-with-heading, sectionTitle/sectionIcon
+    // carry the heading text/icon exactly like any other card type does.
+    if (sectionTitle.length > 0 && sectionIcon.length > 0) {
+        props[@"headingIcon"] = sectionIcon;
+    }
+    item.customProperties = [props copy];
+
+    HADashboardConfigSection *section = [[HADashboardConfigSection alloc] init];
+    section.title = sectionTitle;
+    section.cardType = HAUnsupportedCardType;
+    section.icon = sectionIcon;
+    section.entityIds = @[];
+    section.items = @[item];
+
+    [sections addObject:section];
+    [allItems addObject:item];
+}
+
 + (NSArray<NSDictionary *> *)extractEntitiesFromCard:(NSDictionary *)card {
     if (!card || ![card isKindOfClass:[NSDictionary class]]) return @[];
 
     NSMutableArray<NSDictionary *> *results = [NSMutableArray array];
-    NSString *type = card[@"type"];
+    NSString *type = HASafeDictStringOrNil(card, @"type");
 
     // Recursive: horizontal-stack, vertical-stack, grid
     if ([type isEqualToString:@"horizontal-stack"] ||
@@ -1328,7 +1480,7 @@
     if ([entities isKindOfClass:[NSArray class]]) {
         for (id entry in entities) {
             if ([entry isKindOfClass:[NSDictionary class]] &&
-                [entry[@"type"] isEqualToString:@"conditional"]) {
+                [HASafeDictStringOrNil(entry, @"type") isEqualToString:@"conditional"]) {
                 NSDictionary *row = entry[@"row"];
                 if ([row isKindOfClass:[NSDictionary class]]) {
                     [results addObjectsFromArray:[self extractEntitiesFromCard:row]];
@@ -1433,7 +1585,7 @@
         NSDictionary *dict = (NSDictionary *)entry;
 
         // Skip non-entity entries like section headers, dividers, buttons, weblinks
-        NSString *type = dict[@"type"];
+        NSString *type = HASafeDictStringOrNil(dict, @"type");
         if (type && ([type isEqualToString:@"section"] ||
                      [type isEqualToString:@"divider"] ||
                      [type isEqualToString:@"weblink"] ||

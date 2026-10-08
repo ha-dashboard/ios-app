@@ -17,6 +17,7 @@
 #import "HAStreamingManager.h"
 #import "HACameraRegistrationManager.h"
 #import "HARTSPCredentialManager.h"
+#import "HALovelaceParser.h"
 
 
 // NSUserDefaults keys for device integration
@@ -418,6 +419,13 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
             target:self action:@selector(perfMonitorToggled:)
             switchOut:&perfSw];
 
+        UISwitch *unsupportedCardsSw;
+        UIView *unsupportedCardsRow = [self createToggleSection:@"Show Unsupported Cards"
+            helpText:@"Show a placeholder (with the card type) for Lovelace cards this app can't render, instead of hiding them. Turn off for a clean kiosk display."
+            isOn:[HALovelaceParser showUnsupportedCardsEnabled]
+            target:self action:@selector(showUnsupportedCardsToggled:)
+            switchOut:&unsupportedCardsSw];
+
         // Camera stream mode selector
         UILabel *streamLabel = [[UILabel alloc] init];
         streamLabel.text = @"Camera Stream Mode";
@@ -455,7 +463,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         exportBtn.translatesAutoresizingMaskIntoConstraints = NO;
         [exportBtn addTarget:self action:@selector(exportLogsTapped) forControlEvents:UIControlEventTouchUpInside];
 
-        UIStackView *devStack = [[UIStackView alloc] initWithArrangedSubviews:@[blurRow, perfRow, streamRow, verboseRow, exportBtn]];
+        UIStackView *devStack = [[UIStackView alloc] initWithArrangedSubviews:@[blurRow, perfRow, unsupportedCardsRow, streamRow, verboseRow, exportBtn]];
         devStack.axis = UILayoutConstraintAxisVertical;
         devStack.spacing = 12;
         devStack.translatesAutoresizingMaskIntoConstraints = NO;
@@ -1330,6 +1338,11 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     } else {
         [[HAPerfMonitor sharedMonitor] stop];
     }
+}
+
+- (void)showUnsupportedCardsToggled:(UISwitch *)sender {
+    [[NSUserDefaults standardUserDefaults] setBool:sender.isOn forKey:HAShowUnsupportedCardsDefaultsKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
 - (void)streamModeChanged:(UISegmentedControl *)seg {
