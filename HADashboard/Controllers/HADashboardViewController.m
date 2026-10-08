@@ -264,6 +264,9 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     [[NSNotificationCenter defaultCenter] addObserver:self
         selector:@selector(checkScreenshotTrigger)
         name:UIApplicationDidBecomeActiveNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+        selector:@selector(showUnsupportedCardsSettingDidChange:)
+        name:HAShowUnsupportedCardsDidChangeNotification object:nil];
 
     // Catch up immediately in case the trigger file was written while this
     // controller wasn't the one eligible to notice it (e.g. covered by Settings).
@@ -414,6 +417,14 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     [self applyTheme];
     [self.collectionView.collectionViewLayout invalidateLayout];
     [self.collectionView reloadData];
+}
+
+/// The Settings → Display "Show Unsupported Cards" toggle changed. Unlike a
+/// theme change, this adds/removes placeholder items, so a plain reloadData
+/// isn't enough — re-run the existing Lovelace parse against the already-
+/// cached raw card dicts (no network fetch) to pick up the new toggle value.
+- (void)showUnsupportedCardsSettingDidChange:(NSNotification *)notification {
+    [self rebuildDashboard];
 }
 
 // System appearance changes are now handled globally by HAThemeAwareWindow,

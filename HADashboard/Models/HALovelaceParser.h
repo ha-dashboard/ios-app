@@ -2,6 +2,25 @@
 
 @class HADashboardConfig;
 
+/// NSUserDefaults key for the Settings → Display "Show Unsupported Cards" toggle.
+/// The key being absent (never touched by the user) is treated as YES — see
+/// +[HALovelaceParser showUnsupportedCardsEnabled].
+extern NSString *const HAShowUnsupportedCardsDefaultsKey;
+
+/// Posted whenever the "Show Unsupported Cards" setting changes, so a visible
+/// dashboard can rebuild immediately (new/removed placeholder items) without
+/// requiring a relaunch. `object` is nil; no userInfo.
+extern NSString *const HAShowUnsupportedCardsDidChangeNotification;
+
+/// Sentinel Lovelace card "type" stamped on synthesized placeholder items for an
+/// unsupported/unrecognized card, so HAEntityCellFactory can route them to
+/// HAUnsupportedCardCell. Never appears in a real Lovelace config.
+extern NSString *const HAUnsupportedCardType;
+
+/// customProperties key on an unsupported-card placeholder item: the original,
+/// unmodified Lovelace "type" string (e.g. "custom:bubble-card").
+extern NSString *const HAUnsupportedCardTypeKey;
+
 /// Represents a single Lovelace view (tab) in a HA dashboard
 @interface HALovelaceView : NSObject
 @property (nonatomic, copy) NSString *title;
@@ -83,5 +102,11 @@
 
 /// Extract all entity IDs from a Lovelace card dictionary (recursively handles stacks)
 + (NSArray<NSDictionary *> *)extractEntitiesFromCard:(NSDictionary *)card;
+
+/// Whether unsupported/unrecognized cards should produce a visible placeholder
+/// item (YES, default) or be skipped silently like before this feature existed
+/// (NO). Backed by HAShowUnsupportedCardsDefaultsKey; defaults to YES when the
+/// user has never changed the Settings → Display toggle.
++ (BOOL)showUnsupportedCardsEnabled;
 
 @end
