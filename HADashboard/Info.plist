@@ -12,6 +12,10 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
@@ -31,12 +35,16 @@
 	<array>
 		<string>_home-assistant._tcp</string>
 	</array>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Discover Home Assistant servers and host explicitly enabled camera and microphone streams for RTSP clients that connect to this device.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Allow HA Dashboard to stream live video to RTSP clients while Local Camera Stream is enabled.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Discover Home Assistant servers and host explicitly enabled camera and microphone streams for RTSP clients that connect to this device.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Allow HA Dashboard to include live audio in Local Camera Streams you enable.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>materialdesignicons-webfont.ttf</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -54,10 +62,6 @@
 			</array>
 		</dict>
 	</dict>
-	<key>UIAppFonts</key>
-	<array>
-		<string>materialdesignicons-webfont.ttf</string>
-	</array>
 	<key>UIDeviceFamily</key>
 	<array>
 		<integer>1</integer>
