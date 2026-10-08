@@ -44,12 +44,42 @@
 /// Convert a single Lovelace view with registry data for resolving dynamic card names
 /// (e.g. tile cards with "name": {"type": "area"} or "name": {"type": "device"}).
 /// Pass empty dicts when registry data is unavailable.
+/// Equivalent to calling the floor-aware variant below with an empty floorNamesByAreaId.
 + (HADashboardConfig *)dashboardConfigFromView:(HALovelaceView *)view
                                        columns:(NSInteger)columns
                                  entityAreaMap:(NSDictionary<NSString *, NSString *> *)entityAreaMap
                                      areaNames:(NSDictionary<NSString *, NSString *> *)areaNames
                                entityDeviceMap:(NSDictionary<NSString *, NSString *> *)entityDeviceMap
                                    deviceNames:(NSDictionary<NSString *, NSString *> *)deviceNames;
+
+/// Convert a single Lovelace view with full registry data for resolving dynamic
+/// card/row names: tile cards, entities-card rows, and any other path that reads
+/// a "name" expressed as {"type": "area"|"device"|"floor"|"text"} or an array of
+/// such items (see HAEntityNameResolver). Pass empty dicts when registry data is
+/// unavailable. Equivalent to calling the entity-registry-aware variant below
+/// with an empty entityRegistryNames.
++ (HADashboardConfig *)dashboardConfigFromView:(HALovelaceView *)view
+                                       columns:(NSInteger)columns
+                                 entityAreaMap:(NSDictionary<NSString *, NSString *> *)entityAreaMap
+                                     areaNames:(NSDictionary<NSString *, NSString *> *)areaNames
+                               entityDeviceMap:(NSDictionary<NSString *, NSString *> *)entityDeviceMap
+                                   deviceNames:(NSDictionary<NSString *, NSString *> *)deviceNames
+                            floorNamesByAreaId:(NSDictionary<NSString *, NSString *> *)floorNamesByAreaId;
+
+/// Convert a single Lovelace view with the full registry data
+/// HAEntityNameResolver can use, including entityRegistryNames (entity_id ->
+/// the entity's own registry name, before device-prefix stripping) — needed
+/// to resolve an explicit {"type": "entity"} item inside a multi-item name
+/// array, e.g. "name": [{"type": "area"}, {"type": "entity"}]. Pass empty
+/// dicts when registry data is unavailable.
++ (HADashboardConfig *)dashboardConfigFromView:(HALovelaceView *)view
+                                       columns:(NSInteger)columns
+                                 entityAreaMap:(NSDictionary<NSString *, NSString *> *)entityAreaMap
+                                     areaNames:(NSDictionary<NSString *, NSString *> *)areaNames
+                               entityDeviceMap:(NSDictionary<NSString *, NSString *> *)entityDeviceMap
+                                   deviceNames:(NSDictionary<NSString *, NSString *> *)deviceNames
+                            floorNamesByAreaId:(NSDictionary<NSString *, NSString *> *)floorNamesByAreaId
+                           entityRegistryNames:(NSDictionary<NSString *, NSString *> *)entityRegistryNames;
 
 /// Extract all entity IDs from a Lovelace card dictionary (recursively handles stacks)
 + (NSArray<NSDictionary *> *)extractEntitiesFromCard:(NSDictionary *)card;

@@ -669,4 +669,122 @@
     });
 }
 
+- (void)testTileCard_objectName_floor_resolvesFloorName {
+    NSDictionary *dict = [self dashboardWithTileCard:@{@"type": @"floor"} entityId:@"sensor.bedroom_temp"];
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject
+                                                                    columns:3
+                                                              entityAreaMap:@{@"sensor.bedroom_temp": @"area_bedroom"}
+                                                                  areaNames:@{@"area_bedroom": @"Bedroom"}
+                                                            entityDeviceMap:@{}
+                                                                deviceNames:@{}
+                                                         floorNamesByAreaId:@{@"area_bedroom": @"Upstairs"}];
+    XCTAssertEqualObjects(config.items.firstObject.displayName, @"Upstairs");
+}
+
+- (void)testTileCard_objectName_text_returnsLiteralText {
+    NSDictionary *dict = [self dashboardWithTileCard:@{@"type": @"text", @"text": @"Hello"} entityId:@"sensor.bedroom_temp"];
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:3];
+    XCTAssertEqualObjects(config.items.firstObject.displayName, @"Hello");
+}
+
+#pragma mark - Test 14: Entities Card Row Name Resolution
+
+- (NSDictionary *)dashboardWithEntitiesCardRows:(NSArray *)entities {
+    return @{
+        @"views": @[@{
+            @"title": @"Test",
+            @"cards": @[@{
+                @"type": @"entities",
+                @"entities": entities
+            }]
+        }]
+    };
+}
+
+- (void)testEntitiesCardRow_objectName_area_resolvesAreaName {
+    NSDictionary *dict = [self dashboardWithEntitiesCardRows:@[
+        @{@"entity": @"light.bedroom", @"name": @{@"type": @"area"}}
+    ]];
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject
+                                                                    columns:3
+                                                              entityAreaMap:@{@"light.bedroom": @"area_bedroom"}
+                                                                  areaNames:@{@"area_bedroom": @"Bedroom"}
+                                                            entityDeviceMap:@{}
+                                                                deviceNames:@{}];
+    NSDictionary<NSString *, NSString *> *nameOverrides = config.sections.firstObject.nameOverrides;
+    XCTAssertEqualObjects(nameOverrides[@"light.bedroom"], @"Bedroom");
+}
+
+- (void)testEntitiesCardRow_objectName_arrayForm_joinsResolvedParts {
+    NSDictionary *dict = [self dashboardWithEntitiesCardRows:@[
+        @{@"entity": @"light.bedroom", @"name": @[@{@"type": @"area"}, @{@"type": @"device"}]}
+    ]];
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject
+                                                                    columns:3
+                                                              entityAreaMap:@{@"light.bedroom": @"area_bedroom"}
+                                                                  areaNames:@{@"area_bedroom": @"Bedroom"}
+                                                            entityDeviceMap:@{@"light.bedroom": @"device_abc"}
+                                                                deviceNames:@{@"device_abc": @"Lamp"}];
+    NSDictionary<NSString *, NSString *> *nameOverrides = config.sections.firstObject.nameOverrides;
+    XCTAssertEqualObjects(nameOverrides[@"light.bedroom"], @"Bedroom Lamp");
+}
+
+- (void)testEntitiesCardRow_objectName_arrayForm_withTextAndUnresolvedItem_skipsUnresolved {
+    NSDictionary *dict = [self dashboardWithEntitiesCardRows:@[
+        @{@"entity": @"light.bedroom", @"name": @[@{@"type": @"text", @"text": @"Main"},
+                                                    @{@"type": @"area"}]}
+    ]];
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
+    // No area registered for light.bedroom — the area part resolves to nothing
+    // and is dropped, leaving just the text part.
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject
+                                                                    columns:3
+                                                              entityAreaMap:@{}
+                                                                  areaNames:@{}
+                                                            entityDeviceMap:@{}
+                                                                deviceNames:@{}];
+    NSDictionary<NSString *, NSString *> *nameOverrides = config.sections.firstObject.nameOverrides;
+    XCTAssertEqualObjects(nameOverrides[@"light.bedroom"], @"Main");
+}
+
+- (void)testEntitiesCardRow_objectName_unknownType_fallsBackNoCrash {
+    NSDictionary *dict = [self dashboardWithEntitiesCardRows:@[
+        @{@"entity": @"light.bedroom", @"name": @{@"type": @"something_future"}}
+    ]];
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
+    HADashboardConfig *config;
+    XCTAssertNoThrow({
+        config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:3];
+    });
+    // Unresolved — no override stored, caller falls back to the entity's own name.
+    XCTAssertNil(config.sections.firstObject.nameOverrides[@"light.bedroom"]);
+}
+
+- (void)testEntitiesCardRow_objectName_nonsenseValues_doNotCrash {
+    // A number, and an array whose element is itself an array — both nonsense,
+    // neither should resolve to anything or throw.
+    NSDictionary *dict = [self dashboardWithEntitiesCardRows:@[
+        @{@"entity": @"light.a", @"name": @42},
+        @{@"entity": @"light.b", @"name": @[@[@"nested"], @{@"type": @"area"}]}
+    ]];
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
+    HADashboardConfig *config;
+    XCTAssertNoThrow({
+        config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject
+                                                     columns:3
+                                               entityAreaMap:@{@"light.b": @"area_x"}
+                                                   areaNames:@{@"area_x": @"Office"}
+                                             entityDeviceMap:@{}
+                                                 deviceNames:@{}];
+    });
+    XCTAssertNil(config.sections.firstObject.nameOverrides[@"light.a"]);
+    // light.b: nested-array slot resolves to "", area slot resolves — single
+    // non-empty part survives the join.
+    XCTAssertEqualObjects(config.sections.firstObject.nameOverrides[@"light.b"], @"Office");
+}
+
 @end

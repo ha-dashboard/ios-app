@@ -47,6 +47,7 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 @property (nonatomic, strong) NSDictionary<NSString *, NSString *> *deviceAreaMap;   // device_id -> area_id
 @property (nonatomic, strong) NSDictionary<NSString *, NSString *> *deviceNameMap;   // device_id -> name
 @property (nonatomic, strong) NSDictionary<NSString *, NSString *> *entityDeviceMap; // entity_id -> device_id
+@property (nonatomic, strong) NSDictionary<NSString *, NSString *> *entityRegistryNameMap; // entity_id -> registry name (before device-prefix stripping)
 @property (nonatomic, copy, readwrite) NSArray<HAFloor *> *floors;
 @property (nonatomic, strong) NSDictionary<NSString *, HAFloor *> *floorByAreaId;   // area_id -> HAFloor
 @property (nonatomic, assign) BOOL areasLoaded;
@@ -263,6 +264,7 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     self.areaNames = nil;
     self.entityAreaMap = nil;
     self.deviceAreaMap = nil;
+    self.entityRegistryNameMap = nil;
     self.floors = nil;
     self.floorByAreaId = nil;
     self.rawEntityRegistry = nil;
@@ -696,7 +698,11 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
         if ([areaId isKindOfClass:[NSString class]] && areaId.length > 0) {
             areaMap[deviceId] = areaId;
         }
-        NSString *name = device[@"name_by_user"] ?: device[@"name"];
+        // "?:" only short-circuits on nil, not NSNull, so a JSON null name_by_user
+        // (common when the user hasn't renamed the device) must be checked
+        // explicitly or it masks the "name" fallback below.
+        id nameByUser = device[@"name_by_user"];
+        NSString *name = [nameByUser isKindOfClass:[NSString class]] ? nameByUser : device[@"name"];
         if ([name isKindOfClass:[NSString class]] && name.length > 0) {
             nameMap[deviceId] = name;
         }
@@ -718,10 +724,22 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     if (![result isKindOfClass:[NSArray class]]) return;
     NSMutableDictionary *map = [NSMutableDictionary dictionary];
     NSMutableDictionary *deviceMap = [NSMutableDictionary dictionary];
+    NSMutableDictionary *registryNameMap = [NSMutableDictionary dictionary];
     for (NSDictionary *entry in (NSArray *)result) {
         if (![entry isKindOfClass:[NSDictionary class]]) continue;
         NSString *entityId = entry[@"entity_id"];
         if (!entityId) continue;
+
+        // The entity's own registry name (user-set "name", else the
+        // integration-provided "original_name"), before any device-name
+        // prefix is stripped — used by HAEntityNameResolver to compute the
+        // "entity" part of a multi-item entity-name-config. Guard against
+        // JSON null the same way as the device name map below.
+        id registryNameRaw = entry[@"name"];
+        NSString *registryName = [registryNameRaw isKindOfClass:[NSString class]] ? registryNameRaw : entry[@"original_name"];
+        if ([registryName isKindOfClass:[NSString class]] && registryName.length > 0) {
+            registryNameMap[entityId] = registryName;
+        }
 
         // Enrich the entity with registry fields
         HAEntity *entity;
@@ -806,6 +824,7 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 
     self.entityAreaMap = [map copy];
     self.entityDeviceMap = [deviceMap copy];
+    self.entityRegistryNameMap = [registryNameMap copy];
     HALogD(@"conn", @"Built %lu entity->area, %lu entity->device mappings",
            (unsigned long)map.count, (unsigned long)deviceMap.count);
 }
@@ -911,6 +930,18 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     return self.floorByAreaId[areaId];
 }
 
+- (NSDictionary<NSString *, NSString *> *)floorNamesByAreaId {
+    if (self.floorByAreaId.count == 0) return @{};
+    NSMutableDictionary<NSString *, NSString *> *map = [NSMutableDictionary dictionaryWithCapacity:self.floorByAreaId.count];
+    for (NSString *areaId in self.floorByAreaId) {
+        HAFloor *floor = self.floorByAreaId[areaId];
+        if ([floor.name isKindOfClass:[NSString class]] && floor.name.length > 0) {
+            map[areaId] = floor.name;
+        }
+    }
+    return [map copy];
+}
+
 - (NSString *)areaNameForEntityId:(NSString *)entityId {
     NSString *areaId = self.entityAreaMap[entityId];
     if (!areaId) return nil;
@@ -942,6 +973,10 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 
 - (NSDictionary<NSString *, NSString *> *)entityDeviceMapping {
     return self.entityDeviceMap ?: @{};
+}
+
+- (NSDictionary<NSString *, NSString *> *)entityRegistryNamesByEntityId {
+    return self.entityRegistryNameMap ?: @{};
 }
 
 #pragma mark - Reconnection
