@@ -768,3 +768,12 @@
 
 /* Fallback Lovelace view name when the dashboard config does not name a view. %1$lu is the 1-based view number. */
 "format.lovelace.view_fallback_name" = "View %1$lu";
+
+/* Dropdown button placeholder in the mode-feature strip (climate/alarm mode picker) when no mode is currently known. */
+"feature.mode.select_placeholder" = "Select";
+
+/* Lock button in the lock-feature button row. Max ~8 chars. */
+"feature.lock.lock_button" = "Lock";
+
+/* Unlock button in the lock-feature button row. Max ~8 chars. */
+"feature.lock.unlock_button" = "Unlock";
