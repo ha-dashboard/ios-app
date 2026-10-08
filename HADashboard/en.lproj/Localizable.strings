@@ -507,3 +507,9 @@
 
 /* Confirm button in the timer duration picker alert. Short label. */
 "cell.timer.set" = "Set";
+
+/* Volume label in the media player cell, shown when no volume value is available. */
+"cell.media_player.no_value" = "—";
+
+/* Action sheet title for picking a media source in the media player cell. */
+"cell.media_player.source" = "Source";

@@ -1,4 +1,5 @@
 #import "HAMediaPlayerEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HAAuthManager.h"
@@ -368,7 +369,7 @@ static const CGFloat kPadding        = 12.0;
         self.volumeLabel.text = [NSString stringWithFormat:@"%ld%%", (long)pct];
     } else {
         self.volumeSlider.value = 0;
-        self.volumeLabel.text = @"—";
+        self.volumeLabel.text = HALocalizedString(@"cell.media_player.no_value", @"Volume label in the media player cell, shown when no volume value is available.");
     }
     self.volumeSlider.enabled = available;
 
@@ -526,7 +527,7 @@ static const CGFloat kPadding        = 12.0;
     [HAHaptics selectionChanged];
     NSString *current = [self.entity mediaSource];
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Source"
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:HALocalizedString(@"cell.media_player.source", @"Action sheet title for picking a media source in the media player cell.")
                                                                   message:nil
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
     for (NSString *source in sources) {
@@ -539,7 +540,7 @@ static const CGFloat kPadding        = 12.0;
                                                     entityId:self.entity.entityId];
         }]];
     }
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
     alert.popoverPresentationController.sourceView = self.sourceButton;
     alert.popoverPresentationController.sourceRect = self.sourceButton.bounds;
 
