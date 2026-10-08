@@ -8,6 +8,7 @@
 #import "HAHaptics.h"
 #import "HAIconMapper.h"
 #import "HAEntityDisplayHelper.h"
+#import "HAStateLocalizer.h"
 #import "UIView+HAUtilities.h"
 
 static const CGFloat kIconCircleSize = 36.0;
@@ -404,7 +405,9 @@ static const CGFloat kPadding        = 12.0;
     NSArray *sourceList = [entity mediaSourceList];
     NSString *currentSource = [entity mediaSource];
     if (sourceList.count > 0) {
-        NSString *sourceTitle = currentSource.length > 0 ? currentSource : @"Source";
+        NSString *sourceTitle = currentSource.length > 0 ? currentSource
+            : ([[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"media_player" attr:@"source"]
+                ?: HALocalizedString(@"attr.source.name", @"Fallback label on the source-picker button in the media player cell, shown when no source is currently selected. Used only when Home Assistant's own translation for media_player's source attribute is unavailable."));
         [self.sourceButton setTitle:[NSString stringWithFormat:@"%@  \u25BE", sourceTitle] forState:UIControlStateNormal];
         self.sourceButton.hidden = NO;
         self.sourceButton.enabled = available;

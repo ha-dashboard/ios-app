@@ -858,6 +858,9 @@
 /* Action-sheet/button title for a media player's sound mode, used only when Home Assistant's own translation for media_player's sound_mode attribute is unavailable. */
 "attr.sound_mode.name" = "Sound Mode";
 
+/* Fallback label on the source-picker button in the media player cell, shown when no source is currently selected. Used only when Home Assistant's own translation for media_player's source attribute is unavailable. */
+"attr.source.name" = "Source";
+
 /* Button in the lock detail sheet, shown after the first tap on Open as a confirmation step before unlatching. Max ~14 chars -- fixed-width pill. */
 "cell.entity_detail.lock.confirm_open" = "Confirm Open?";
 
