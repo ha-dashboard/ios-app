@@ -485,3 +485,25 @@
 
 /* Text field placeholder in the lock-code entry alert. */
 "cell.lock.enter_code" = "Enter code";
+
+
+/* Button in the timer cell, starts the timer. Max ~8 chars -- fixed-width pill. */
+"cell.timer.start" = "Start";
+
+/* Button in the timer cell, pauses the timer. Max ~8 chars -- fixed-width pill. */
+"cell.timer.pause" = "Pause";
+
+/* Remaining/duration label in the timer cell, shown when no value is available. */
+"cell.timer.no_value" = "--:--:--";
+
+/* Button in the timer cell, force-completes the timer. Max ~8 chars -- fixed-width pill. */
+"cell.timer.finish" = "Finish";
+
+/* Button in the timer cell, opens the duration picker. Max ~8 chars -- fixed-width pill. */
+"cell.timer.change" = "Change";
+
+/* Alert title for the timer duration picker. */
+"cell.timer.set_duration" = "Set Duration";
+
+/* Confirm button in the timer duration picker alert. Short label. */
+"cell.timer.set" = "Set";

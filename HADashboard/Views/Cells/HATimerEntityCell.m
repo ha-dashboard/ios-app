@@ -1,4 +1,5 @@
 #import "HATimerEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -31,7 +32,7 @@
 
     // Start button
     self.startButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.startButton setTitle:@"Start" forState:UIControlStateNormal];
+    [self.startButton setTitle:HALocalizedString(@"cell.timer.start", @"Button in the timer cell, starts the timer. Max ~8 chars -- fixed-width pill.") forState:UIControlStateNormal];
     self.startButton.titleLabel.font = [UIFont boldSystemFontOfSize:12];
     self.startButton.backgroundColor = [HATheme successColor];
     [self.startButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
@@ -42,7 +43,7 @@
 
     // Pause button
     self.pauseButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.pauseButton setTitle:@"Pause" forState:UIControlStateNormal];
+    [self.pauseButton setTitle:HALocalizedString(@"cell.timer.pause", @"Button in the timer cell, pauses the timer. Max ~8 chars -- fixed-width pill.") forState:UIControlStateNormal];
     self.pauseButton.titleLabel.font = [UIFont boldSystemFontOfSize:12];
     self.pauseButton.backgroundColor = [HATheme warningColor];
     [self.pauseButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
@@ -53,7 +54,7 @@
 
     // Cancel button
     self.cancelButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.cancelButton setTitle:@"Cancel" forState:UIControlStateNormal];
+    [self.cancelButton setTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") forState:UIControlStateNormal];
     self.cancelButton.titleLabel.font = [UIFont boldSystemFontOfSize:12];
     self.cancelButton.backgroundColor = [HATheme destructiveColor];
     [self.cancelButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
@@ -98,7 +99,7 @@
 
     // Finish button (force-complete the timer)
     self.finishButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.finishButton setTitle:@"Finish" forState:UIControlStateNormal];
+    [self.finishButton setTitle:HALocalizedString(@"cell.timer.finish", @"Button in the timer cell, force-completes the timer. Max ~8 chars -- fixed-width pill.") forState:UIControlStateNormal];
     self.finishButton.titleLabel.font = [UIFont boldSystemFontOfSize:12];
     self.finishButton.backgroundColor = [HATheme accentColor];
     [self.finishButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
@@ -109,7 +110,7 @@
 
     // Change button (set new duration)
     self.changeButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.changeButton setTitle:@"Change" forState:UIControlStateNormal];
+    [self.changeButton setTitle:HALocalizedString(@"cell.timer.change", @"Button in the timer cell, opens the duration picker. Max ~8 chars -- fixed-width pill.") forState:UIControlStateNormal];
     self.changeButton.titleLabel.font = [UIFont boldSystemFontOfSize:12];
     [self.changeButton setTitleColor:[HATheme accentColor] forState:UIControlStateNormal];
     self.changeButton.translatesAutoresizingMaskIntoConstraints = NO;
@@ -139,9 +140,9 @@
     NSString *remaining = [entity timerRemaining];
     NSString *duration = [entity timerDuration];
     if (isActive || isPaused) {
-        self.timeLabel.text = remaining ?: duration ?: @"--:--:--";
+        self.timeLabel.text = remaining ?: duration ?: HALocalizedString(@"cell.timer.no_value", @"Remaining/duration label in the timer cell, shown when no value is available.");
     } else {
-        self.timeLabel.text = duration ?: @"--:--:--";
+        self.timeLabel.text = duration ?: HALocalizedString(@"cell.timer.no_value", @"Remaining/duration label in the timer cell, shown when no value is available.");
     }
 
     if (isActive) {
@@ -196,7 +197,7 @@
         }
     }
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Set Duration"
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:HALocalizedString(@"cell.timer.set_duration", @"Alert title for the timer duration picker.")
                                                                   message:@"\n\n\n\n\n\n\n"
                                                            preferredStyle:UIAlertControllerStyleAlert];
     [alert.view addSubview:picker];
@@ -207,7 +208,7 @@
     ]];
 
     __weak typeof(self) weakSelf = self;
-    [alert addAction:[UIAlertAction actionWithTitle:@"Set" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"cell.timer.set", @"Confirm button in the timer duration picker alert. Short label.") style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         NSTimeInterval secs = picker.countDownDuration;
         NSInteger h = (NSInteger)(secs / 3600);
         NSInteger m = (NSInteger)((NSInteger)secs % 3600) / 60;
@@ -215,7 +216,7 @@
         NSString *dur = [NSString stringWithFormat:@"%ld:%02ld:%02ld", (long)h, (long)m, (long)s];
         [weakSelf callService:@"change" inDomain:HAEntityDomainTimer withData:@{@"duration": dur}];
     }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     [vc presentViewController:alert animated:YES completion:nil];
 }
