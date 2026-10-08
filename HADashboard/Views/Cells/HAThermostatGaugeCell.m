@@ -112,6 +112,7 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
 @property (nonatomic, assign) double pendingTargetTemp;
 @property (nonatomic, assign) double pendingTargetTempLow;
 @property (nonatomic, assign) double pendingTargetTempHigh;
+@property (nonatomic, assign) BOOL showCurrentAsPrimary;
 @end
 
 @implementation HAThermostatGaugeCell
@@ -1105,7 +1106,9 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
                 [self positionThumbAtTemperature:temp];
                 [self applyArcFillDragWithFraction:[self fractionForTemperature:temp]
                                          direction:self.fillDirection];
-                self.tempLabel.text = [NSString stringWithFormat:@"%.1f%@", temp, self.tempUnitString];
+                if (!self.showCurrentAsPrimary) {
+                    self.tempLabel.text = [NSString stringWithFormat:@"%.1f%@", temp, self.tempUnitString];
+                }
             }
 
             if (fabs(temp - self.lastHapticTemp) >= kTempStep) {
@@ -1202,6 +1205,7 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
 
     // Check if card config says show_current_as_primary
     BOOL showCurrentAsPrimary = [configItem.customProperties[@"show_current_as_primary"] boolValue];
+    self.showCurrentAsPrimary = showCurrentAsPrimary;
 
     // Status label -- show hvac_action if available, else mode. Append humidity if available.
     NSString *statusText;
@@ -1584,7 +1588,24 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
 #pragma mark - Actions
 
 - (void)applyOptimisticSingleTemp:(double)newTarget {
-    self.tempLabel.text = [NSString stringWithFormat:@"%.1f%@", newTarget, self.tempUnitString];
+    if (self.showCurrentAsPrimary) {
+        // tempLabel shows current room temp — keep it; update the secondary label with the new target
+        NSString *tempIcon = [HAIconMapper glyphForIconName:@"home-thermometer-outline"]
+                          ?: [HAIconMapper glyphForIconName:@"thermometer"]
+                          ?: @"◎";
+        CGFloat sz = 16.0;
+        NSMutableAttributedString *attr = [[NSMutableAttributedString alloc] initWithString:tempIcon
+            attributes:@{NSFontAttributeName: [HAIconMapper mdiFontOfSize:sz],
+                         NSForegroundColorAttributeName: [HATheme secondaryTextColor]}];
+        [attr appendAttributedString:[[NSAttributedString alloc]
+            initWithString:[NSString stringWithFormat:@" %.1f %@", newTarget, self.tempUnitString]
+            attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:sz weight:UIFontWeightMedium],
+                         NSForegroundColorAttributeName: [HATheme secondaryTextColor]}]];
+        self.targetLabel.attributedText = attr;
+        self.targetLabel.hidden = NO;
+    } else {
+        self.tempLabel.text = [NSString stringWithFormat:@"%.1f%@", newTarget, self.tempUnitString];
+    }
     [self applyArcFillForTarget:newTarget
                     currentTemp:[self.entity currentTemperature]
                       direction:self.fillDirection
