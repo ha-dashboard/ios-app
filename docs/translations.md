@@ -44,13 +44,49 @@ with standard iOS `.strings` files. Entity state text ("Away", "Open", "Heat") i
 4. Validate before opening a PR:
 
    ```bash
-   scripts/check-translations.sh
+   scripts/check-translations.sh --strict
    ```
 
-   This checks that your file has exactly the same keys as `en.lproj` (missing
-   keys are fine — they fall back to English at runtime; extra keys are not,
-   they're almost always a typo), that every format specifier matches English
-   exactly, and that the file is UTF-8 with no BOM.
+   **A language can't be merged partially.** `--strict` is what CI actually
+   runs (`.github/workflows/translations.yml`, the `Translations /
+   check-translations` check), and it fails your PR if your `.lproj` is
+   incomplete in any of these ways:
+
+   - Any key present in `en.lproj` but missing from yours. (Without
+     `--strict` this is only a warning — a partial file still falls back to
+     English at runtime — but CI does not accept a partial merge, so get it
+     to zero before opening a PR, not just before it's convenient.)
+   - Any key in yours that isn't in `en.lproj` at all (almost always a typo
+     in the key name — compare against `en.lproj`).
+   - Any value that's empty or whitespace-only.
+   - A mismatched `%@`/`%ld`/etc. format specifier against the English
+     value — this is a crash, not a cosmetic bug, and fails in **every**
+     mode, strict or not.
+   - If `Localizable.stringsdict` exists: yours must exist too, and provide
+     every plural category your language needs (§2 above — `one`/`other`
+     for English, `one`/`many`/`other` for French, and so on).
+   - A `.strings` file that isn't valid UTF-8, or doesn't parse (an
+     unescaped quote, a missing semicolon, etc.) — fails in every mode too.
+
+   Run the plain (non-`--strict`) check any time while you're still working;
+   it reports the same things but only fails your local run on the
+   always-fatal issues (extra keys, bad specifiers, invalid syntax/encoding),
+   so you can see your remaining-keys count without it exiting non-zero.
+   Switch to `--strict` before you call a PR ready.
+
+   **A value identical to English is never a failure**, in either mode — some
+   strings legitimately don't change (`"OK"`, `"HA"`, a brand name). The
+   checker still lists them, as an informational summary, so you can sanity
+   check nothing was accidentally left untranslated by copy-paste. If you
+   have a string you know should stay identical and want to silence it from
+   that summary, list its key in an optional allowlist file:
+
+   ```bash
+   # HADashboard/fr.lproj/.i18n-identical-allowlist
+   # One key per line, # comments allowed.
+   action.ok
+   settings.live_stream.camera.front   # "Front" is also correct in French
+   ```
 
 ## Encoding
 
@@ -73,7 +109,13 @@ back to English on-device, which is a confusing first-PR experience. Running
 ## Review
 
 A translation-only PR should touch nothing outside `HADashboard/<lang>.lproj/`
-and `project.yml`'s `CFBundleLocalizations`. If a PR needs more than that
+and `project.yml`'s `CFBundleLocalizations`. The `Translations /
+check-translations` GitHub check runs `scripts/check-translations.sh
+--strict` automatically on your PR (no Xcode needed, it finishes in
+seconds) — a red check means your `.lproj` is incomplete or has an error;
+the log tells you exactly which keys and what to fix. A PR with a partial
+translation will not be merged, by design — finish the keys first, or open
+it as a draft while you work through them. If a PR needs more than that
 (e.g. a string is missing from `en.lproj`, or a layout clips at your language's
 typical text length), open an issue instead so a maintainer can fix the app
 side — please don't guess at an app code change in a translation PR.
