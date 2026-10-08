@@ -1,5 +1,6 @@
 #import "HABaseSnapshotTestCase.h"
 #import "HASnapshotTestHelpers.h"
+#import "HAEntity.h"
 #import "HACoverEntityCell.h"
 #import "HALockEntityCell.h"
 #import "HAAlarmEntityCell.h"
@@ -98,7 +99,12 @@
                                                               columnSpan:6
                                                              headingIcon:nil
                                                              displayName:nil];
-    CGSize size = CGSizeMake(floor(kSubGridUnit * 6), kStandardCellHeight);
+    // Mirrors HADashboardViewController's alarm height calc: with/without keypad
+    // based on the entity's code_format, not a flat constant.
+    BOOL hasKeypad = (entity.alarmCodeFormat != nil);
+    CGFloat height = hasKeypad ? [HAAlarmEntityCell preferredHeightWithKeypad]
+                                : [HAAlarmEntityCell preferredHeightWithoutKeypad];
+    CGSize size = CGSizeMake(floor(kSubGridUnit * 6), height);
     UIView *cell = [self cellForEntity:entity cellClass:[HAAlarmEntityCell class] size:size configItem:item];
     [self verifyView:cell identifier:@"alarmDisarmed"];
 }
@@ -110,7 +116,12 @@
                                                               columnSpan:6
                                                              headingIcon:nil
                                                              displayName:nil];
-    CGSize size = CGSizeMake(floor(kSubGridUnit * 6), kStandardCellHeight);
+    // Mirrors HADashboardViewController's alarm height calc: with/without keypad
+    // based on the entity's code_format, not a flat constant.
+    BOOL hasKeypad = (entity.alarmCodeFormat != nil);
+    CGFloat height = hasKeypad ? [HAAlarmEntityCell preferredHeightWithKeypad]
+                                : [HAAlarmEntityCell preferredHeightWithoutKeypad];
+    CGSize size = CGSizeMake(floor(kSubGridUnit * 6), height);
     UIView *cell = [self cellForEntity:entity cellClass:[HAAlarmEntityCell class] size:size configItem:item];
     [self verifyView:cell identifier:@"alarmArmedHome"];
 }
@@ -122,7 +133,12 @@
                                                               columnSpan:6
                                                              headingIcon:nil
                                                              displayName:nil];
-    CGSize size = CGSizeMake(floor(kSubGridUnit * 6), kStandardCellHeight);
+    // Mirrors HADashboardViewController's alarm height calc: with/without keypad
+    // based on the entity's code_format, not a flat constant.
+    BOOL hasKeypad = (entity.alarmCodeFormat != nil);
+    CGFloat height = hasKeypad ? [HAAlarmEntityCell preferredHeightWithKeypad]
+                                : [HAAlarmEntityCell preferredHeightWithoutKeypad];
+    CGSize size = CGSizeMake(floor(kSubGridUnit * 6), height);
     UIView *cell = [self cellForEntity:entity cellClass:[HAAlarmEntityCell class] size:size configItem:item];
     [self verifyView:cell identifier:@"alarmArmedAway"];
 }
@@ -134,7 +150,12 @@
                                                               columnSpan:6
                                                              headingIcon:nil
                                                              displayName:nil];
-    CGSize size = CGSizeMake(floor(kSubGridUnit * 6), kStandardCellHeight);
+    // Mirrors HADashboardViewController's alarm height calc: with/without keypad
+    // based on the entity's code_format, not a flat constant.
+    BOOL hasKeypad = (entity.alarmCodeFormat != nil);
+    CGFloat height = hasKeypad ? [HAAlarmEntityCell preferredHeightWithKeypad]
+                                : [HAAlarmEntityCell preferredHeightWithoutKeypad];
+    CGSize size = CGSizeMake(floor(kSubGridUnit * 6), height);
     UIView *cell = [self cellForEntity:entity cellClass:[HAAlarmEntityCell class] size:size configItem:item];
     [self verifyView:cell identifier:@"alarmTriggered"];
 }

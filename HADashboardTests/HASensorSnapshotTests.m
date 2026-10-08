@@ -95,7 +95,7 @@
     HADashboardConfigItem *item = [HASnapshotTestHelpers itemWithEntityId:entity.entityId
         cardType:@"timer" columnSpan:6 headingIcon:nil displayName:nil];
     UIView *cell = [self cellForEntity:entity cellClass:[HATimerEntityCell class]
-        size:CGSizeMake(floor(kSubGridUnit * 6), kStandardCellHeight) configItem:item];
+        size:CGSizeMake(floor(kSubGridUnit * 6), kGenericCardHeight) configItem:item];
     [self verifyView:cell identifier:nil];
 }
 
@@ -104,7 +104,7 @@
     HADashboardConfigItem *item = [HASnapshotTestHelpers itemWithEntityId:entity.entityId
         cardType:@"timer" columnSpan:6 headingIcon:nil displayName:nil];
     UIView *cell = [self cellForEntity:entity cellClass:[HATimerEntityCell class]
-        size:CGSizeMake(floor(kSubGridUnit * 6), kStandardCellHeight) configItem:item];
+        size:CGSizeMake(floor(kSubGridUnit * 6), kGenericCardHeight) configItem:item];
     [self verifyView:cell identifier:nil];
 }
 
@@ -113,7 +113,7 @@
     HADashboardConfigItem *item = [HASnapshotTestHelpers itemWithEntityId:entity.entityId
         cardType:@"timer" columnSpan:6 headingIcon:nil displayName:nil];
     UIView *cell = [self cellForEntity:entity cellClass:[HATimerEntityCell class]
-        size:CGSizeMake(floor(kSubGridUnit * 6), kStandardCellHeight) configItem:item];
+        size:CGSizeMake(floor(kSubGridUnit * 6), kGenericCardHeight) configItem:item];
     [self verifyView:cell identifier:nil];
 }
 

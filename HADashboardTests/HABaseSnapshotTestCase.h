@@ -13,6 +13,12 @@ static const CGFloat kSubGridUnit = 320.0 / 12.0; // ~26.7pt per sub-grid column
 
 /// Standard cell heights for snapshot tests.
 static const CGFloat kStandardCellHeight = 80.0;
+/// Height for standalone domain cards whose domain isn't given its own case in
+/// HADashboardViewController's per-item height calculation (e.g. light, timer,
+/// script) — matches that method's generic `else { height = 100.0 + headingExtra; }`
+/// fallback. kStandardCellHeight (80pt) is too short for several of these cells'
+/// actual content and clips/overlaps it; use this instead where that's the case.
+static const CGFloat kGenericCardHeight = 100.0;
 static const CGFloat kThermostatHeight = 280.0;
 static const CGFloat kVacuumHeight = 120.0;
 static const CGFloat kEntitiesRowHeight = 36.0;
