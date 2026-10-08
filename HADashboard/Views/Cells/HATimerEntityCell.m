@@ -5,6 +5,10 @@
 #import "HATheme.h"
 #import "UIView+HAUtilities.h"
 
+static const CGFloat kHATimerButtonBaseFontSize = 12.0;
+static const CGFloat kHATimerButtonMinimumScaleFactor = 0.6;
+static const CGFloat kHATimerButtonTitleHorizontalInset = 8.0; // matches the button's own content insets
+
 @interface HATimerEntityCell ()
 @property (nonatomic, strong) UILabel *timeLabel;
 @property (nonatomic, strong) UIButton *startButton;
@@ -12,6 +16,12 @@
 @property (nonatomic, strong) UIButton *cancelButton;
 @property (nonatomic, strong) UIButton *finishButton;
 @property (nonatomic, strong) UIButton *changeButton;
+/// Cache so -layoutSubviews only recomputes the shared button font when
+/// something that could change it actually changed (button width from a
+/// resize, or a button's title from re-localization) — not on every layout
+/// pass, which can happen often (scrolling, other cells' content changing).
+@property (nonatomic, assign) CGFloat ha_lastButtonFontComputationWidth;
+@property (nonatomic, copy) NSString *ha_lastButtonFontComputationTitles;
 @end
 
 @implementation HATimerEntityCell
@@ -85,9 +95,9 @@
 - (UIButton *)ha_timerButtonWithTitle:(NSString *)title backgroundColor:(UIColor *)backgroundColor action:(SEL)action {
     UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
     [button setTitle:title forState:UIControlStateNormal];
-    button.titleLabel.font = [UIFont boldSystemFontOfSize:12];
+    button.titleLabel.font = [UIFont boldSystemFontOfSize:kHATimerButtonBaseFontSize];
     button.titleLabel.adjustsFontSizeToFitWidth = YES;
-    button.titleLabel.minimumScaleFactor = 0.6;
+    button.titleLabel.minimumScaleFactor = kHATimerButtonMinimumScaleFactor;
     button.titleLabel.lineBreakMode = NSLineBreakByClipping;
     button.titleLabel.numberOfLines = 1;
     button.backgroundColor = backgroundColor;
@@ -129,6 +139,58 @@
     self.cancelButton.enabled = available && (isActive || isPaused);
     self.finishButton.enabled = available && (isActive || isPaused);
     self.changeButton.enabled = available;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    [self ha_updateSharedButtonFontIfNeeded];
+}
+
+#pragma mark - Shared Button Row Font
+
+/// Start/Pause/Cancel/Finish are equal-width (UIStackView FillEqually), but
+/// each button's own adjustsFontSizeToFitWidth shrinks its title
+/// independently — so a short title like "Pause" stays at the base size
+/// while a long one shrinks, and the row reads as mismatched font sizes.
+/// Instead, every button shares ONE font: the largest size that still fits
+/// the longest title in its (equal) button width, with
+/// kHATimerButtonMinimumScaleFactor as the floor adjustsFontSizeToFitWidth
+/// would also respect if our computed size were somehow still too large.
+- (void)ha_updateSharedButtonFontIfNeeded {
+    CGFloat width = CGRectGetWidth(self.startButton.bounds);
+    if (width <= 0) return;
+
+    NSString *titlesSignature = [@[
+        self.finishButton.currentTitle ?: @"", self.startButton.currentTitle ?: @"",
+        self.pauseButton.currentTitle ?: @"", self.cancelButton.currentTitle ?: @"",
+    ] componentsJoinedByString:@"␟"]; // unit-separator-ish join; titles can't contain it
+
+    if (fabs(width - self.ha_lastButtonFontComputationWidth) < 0.5 &&
+        [titlesSignature isEqualToString:self.ha_lastButtonFontComputationTitles]) {
+        return; // Nothing that would change the shared font has changed.
+    }
+    self.ha_lastButtonFontComputationWidth = width;
+    self.ha_lastButtonFontComputationTitles = titlesSignature;
+
+    NSArray<UIButton *> *buttons = @[self.finishButton, self.startButton, self.pauseButton, self.cancelButton];
+    UIFont *baseFont = [UIFont boldSystemFontOfSize:kHATimerButtonBaseFontSize];
+    CGFloat availableWidth = width - kHATimerButtonTitleHorizontalInset;
+    if (availableWidth <= 0) return;
+
+    CGFloat smallestScale = 1.0;
+    for (UIButton *button in buttons) {
+        NSString *title = button.currentTitle ?: @"";
+        if (title.length == 0) continue;
+        CGFloat textWidth = [title sizeWithAttributes:@{NSFontAttributeName: baseFont}].width;
+        if (textWidth <= 0) continue;
+        smallestScale = MIN(smallestScale, availableWidth / textWidth);
+    }
+    smallestScale = MAX(MIN(smallestScale, 1.0), kHATimerButtonMinimumScaleFactor);
+
+    UIFont *sharedFont = [UIFont boldSystemFontOfSize:kHATimerButtonBaseFontSize * smallestScale];
+    for (UIButton *button in buttons) {
+        button.titleLabel.font = sharedFont;
+    }
 }
 
 #pragma mark - Actions
@@ -199,6 +261,11 @@
     self.pauseButton.backgroundColor = [HATheme warningColor];
     self.cancelButton.backgroundColor = [HATheme destructiveColor];
     self.finishButton.backgroundColor = [HATheme accentColor];
+    // Force a recomputation on next layout rather than trusting the cache —
+    // cheap (a couple of string/float compares) and avoids a reused cell
+    // ever showing a stale shared font from a previous width/locale.
+    self.ha_lastButtonFontComputationWidth = 0;
+    self.ha_lastButtonFontComputationTitles = nil;
 }
 
 @end
