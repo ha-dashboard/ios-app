@@ -80,6 +80,20 @@
     [self verifyView:cell identifier:nil];
 }
 
+- (void)testThermostatShowCurrentAsPrimary {
+    // TRV mode: current room temp shown large, target setpoint shown small below
+    HAEntity *entity = [HASnapshotTestHelpers climateEntityHeat];
+    HADashboardConfigItem *item = [[HADashboardConfigItem alloc] init];
+    item.entityId = entity.entityId;
+    item.cardType = @"thermostat";
+    item.columnSpan = 9;
+    item.rowSpan = 1;
+    item.customProperties = @{@"show_current_as_primary": @YES};
+    UIView *cell = [self cellForEntity:entity cellClass:[HAThermostatGaugeCell class]
+        size:CGSizeMake(floor(kSubGridUnit * 9), kThermostatHeight) configItem:item];
+    [self verifyView:cell identifier:nil];
+}
+
 #pragma mark - HAHumidifierEntityCell (6-col, kStandardCellHeight)
 
 - (void)testHumidifierOn {

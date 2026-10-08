@@ -90,6 +90,7 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 @property (nonatomic, strong) NSMutableSet<NSString *> *pendingMarkdownTemplateStrings;
 @property (nonatomic, assign) BOOL screenshotScheduled;
 @property (nonatomic, strong) HAToastView *kioskToast;
+@property (nonatomic, strong) NSTimer *screenshotTriggerTimer;
 @end
 
 @implementation HADashboardViewController
@@ -210,6 +211,22 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     // Listen for entity updates
     HAConnectionManager *conn = [HAConnectionManager sharedManager];
     conn.delegate = self;
+
+    // Screenshot trigger: rebuildDashboard only runs when entity/Lovelace data
+    // changes (and can return early before reaching the trigger check below),
+    // so on an idle dashboard touching the trigger file can go unnoticed
+    // indefinitely. Poll for it independently and also re-check whenever the
+    // app returns to the foreground, so the SSH-driven screenshot workflow
+    // (see CLAUDE.md "Physical iPad Screenshots") works reliably.
+    // Only developer installs in /Applications (jailbroken SSH deploys) can be
+    // triggered this way, so App Store and sandboxed builds never poll.
+    if ([[[NSBundle mainBundle] bundlePath] hasPrefix:@"/Applications/"]) {
+        self.screenshotTriggerTimer = [NSTimer scheduledTimerWithTimeInterval:2.0
+                                                                         target:self
+                                                                       selector:@selector(checkScreenshotTrigger)
+                                                                       userInfo:nil
+                                                                        repeats:YES];
+    }
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -243,6 +260,13 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     [[NSNotificationCenter defaultCenter] addObserver:self
         selector:@selector(actionNavigateRequested:)
         name:HAActionNavigateNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+        selector:@selector(checkScreenshotTrigger)
+        name:UIApplicationDidBecomeActiveNotification object:nil];
+
+    // Catch up immediately in case the trigger file was written while this
+    // controller wasn't the one eligible to notice it (e.g. covered by Settings).
+    [self checkScreenshotTrigger];
 
     // Connect if not already
     HAConnectionManager *conn = [HAConnectionManager sharedManager];
@@ -1158,18 +1182,44 @@ static inline NSString *HANormalizeState(id val) {
     [self renderMarkdownTemplatesForEntityId:nil];
     [[HAPerfMonitor sharedMonitor] markRebuildEnd];
 
-    // Screenshot trigger: when /tmp/take_screenshot exists, capture after layout settles
-    if (!self.screenshotScheduled) {
-        NSString *triggerFile = @"/tmp/take_screenshot";
-        NSString *outputFile = @"/tmp/screenshot.png";
-        if ([[NSFileManager defaultManager] fileExistsAtPath:triggerFile]) {
-            self.screenshotScheduled = YES;
-            [[NSFileManager defaultManager] removeItemAtPath:triggerFile error:nil];
-            HALogD(@"dash", @"Screenshot trigger found, will capture in 3s");
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                [self captureScreenshotToPath:outputFile];
-            });
-        }
+    // Screenshot trigger: when a take_screenshot file exists, capture after
+    // layout settles. Also polled independently — see viewDidLoad.
+    [self checkScreenshotTrigger];
+}
+
+/// Candidate directories for the screenshot trigger/output files, broadest-first.
+/// - NSTemporaryDirectory() resolves to the per-app sandbox container's tmp dir
+///   on a sandboxed install (Mini 4/5, App Store, Catalyst), and to the real
+///   system /tmp on an unsandboxed /Applications install (iPad 2/3/4 jailbreak).
+/// - The hardcoded /private/tmp path is kept as a fallback purely so the
+///   literal `/tmp/take_screenshot` path already documented in CLAUDE.md and
+///   used by existing SSH scripts keeps working unchanged on iPad 2/3/4.
++ (NSArray<NSString *> *)screenshotCandidateDirectories {
+    NSMutableArray<NSString *> *dirs = [NSMutableArray array];
+    NSString *tmp = NSTemporaryDirectory();
+    if (tmp) [dirs addObject:tmp];
+    if (![dirs containsObject:@"/tmp/"]) [dirs addObject:@"/tmp/"];
+    return dirs;
+}
+
+- (void)checkScreenshotTrigger {
+    if (self.screenshotScheduled) return;
+
+    for (NSString *dir in [HADashboardViewController screenshotCandidateDirectories]) {
+        NSString *triggerFile = [dir stringByAppendingPathComponent:@"take_screenshot"];
+        if (![[NSFileManager defaultManager] fileExistsAtPath:triggerFile]) continue;
+
+        NSString *outputFile = [dir stringByAppendingPathComponent:@"screenshot.png"];
+        self.screenshotScheduled = YES;
+        // One capture per launch, so stop polling
+        [self.screenshotTriggerTimer invalidate];
+        self.screenshotTriggerTimer = nil;
+        [[NSFileManager defaultManager] removeItemAtPath:triggerFile error:nil];
+        HALogD(@"dash", @"Screenshot trigger found at %@, will capture in 3s", triggerFile);
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self captureScreenshotToPath:outputFile];
+        });
+        return;
     }
 }
 
@@ -1268,7 +1318,15 @@ static inline NSString *HANormalizeState(id val) {
         }
     }
 
-    self.dashboardConfig = [HALovelaceParser dashboardConfigFromView:view columns:[self currentColumns]];
+    HAConnectionManager *conn = [HAConnectionManager sharedManager];
+    self.dashboardConfig = [HALovelaceParser dashboardConfigFromView:view
+                                                             columns:[self currentColumns]
+                                                       entityAreaMap:conn.entityAreaMap ?: @{}
+                                                           areaNames:conn.areaNamesByAreaId
+                                                     entityDeviceMap:conn.entityDeviceMapping
+                                                         deviceNames:conn.deviceNamesByDeviceId
+                                                  floorNamesByAreaId:conn.floorNamesByAreaId
+                                                 entityRegistryNames:conn.entityRegistryNamesByEntityId];
 
     // For classic views, flatten all cards into a single section (section 0).
     // The parser produces one section per card, but masonry/panel need all items in one section.
@@ -1447,6 +1505,54 @@ static inline NSString *HANormalizeState(id val) {
     config.items = [allItems copy];
 
     self.dashboardConfig = config;
+}
+
+#pragma mark - View Selection Persistence (Issue #9)
+
+// Persists which Lovelace view is currently selected for the current
+// dashboard, so a restart/reboot restores the same view rather than
+// always landing back on view 0. Views are matched by their stable
+// `path` when available (survives reordering), falling back to index.
+- (void)saveSelectedViewSelection {
+    if (!self.lovelaceDashboard || self.selectedViewIndex >= self.lovelaceDashboard.views.count) {
+        return;
+    }
+    HALovelaceView *view = self.lovelaceDashboard.views[self.selectedViewIndex];
+    NSDictionary<NSString *, id> *viewInfo;
+    if (view.path.length > 0) {
+        viewInfo = @{@"path": view.path};
+    } else {
+        viewInfo = @{@"index": @(self.selectedViewIndex)};
+    }
+    NSString *dashboardPath = [[HAAuthManager sharedManager] selectedDashboardPath];
+    [[HAAuthManager sharedManager] saveLastSelectedView:viewInfo forDashboardPath:dashboardPath];
+}
+
+// Restores the saved view index for `dashboard` (keyed by `dashboardPath`),
+// clamping to a valid index and falling back to view 0 if the stored view
+// no longer exists (e.g. it was removed from the dashboard).
+- (void)restoreSelectedViewIndexForDashboard:(HALovelaceDashboard *)dashboard
+                                dashboardPath:(NSString *)dashboardPath {
+    NSDictionary<NSString *, id> *saved = [[HAAuthManager sharedManager] lastSelectedViewForDashboardPath:dashboardPath];
+    NSString *savedPath = saved[@"path"];
+    NSNumber *savedIndex = saved[@"index"];
+
+    if (savedPath.length > 0) {
+        for (NSUInteger i = 0; i < dashboard.views.count; i++) {
+            HALovelaceView *view = dashboard.views[i];
+            if ([view.path isEqualToString:savedPath]) {
+                self.selectedViewIndex = i;
+                return;
+            }
+        }
+    } else if (savedIndex != nil) {
+        NSUInteger idx = (NSUInteger)savedIndex.unsignedIntegerValue;
+        if (idx < dashboard.views.count) {
+            self.selectedViewIndex = idx;
+            return;
+        }
+    }
+    self.selectedViewIndex = 0;
 }
 
 - (void)populateViewPicker {
@@ -1639,6 +1745,12 @@ static inline NSString *HANormalizeState(id val) {
     [[HAAuthManager sharedManager] saveSelectedDashboardPath:urlPath];
     [self updateTitleButtonText:title];
 
+    // Force the upcoming didReceiveLovelaceDashboard: delivery to be treated
+    // as a fresh load (not a "refresh" of the same dashboard) so it restores
+    // this other dashboard's own last-selected view instead of keeping the
+    // view index we were just on.
+    self.lovelaceLoaded = NO;
+
     HAConnectionManager *conn = [HAConnectionManager sharedManager];
     if (conn.isConnected) {
         [self showLoading:YES message:@"Loading dashboard..."];
@@ -1674,6 +1786,7 @@ static inline NSString *HANormalizeState(id val) {
 - (void)viewPickerChanged:(UISegmentedControl *)sender {
     [HAHaptics selectionChanged];
     self.selectedViewIndex = (NSUInteger)sender.selectedSegmentIndex;
+    [self saveSelectedViewSelection];
     [self rebuildDashboard];
 }
 
@@ -2061,6 +2174,7 @@ heightForHeaderInSection:(NSInteger)section {
             [view.title.lowercaseString isEqualToString:viewPath.lowercaseString]) {
             self.selectedViewIndex = i;
             self.viewPicker.selectedSegmentIndex = (NSInteger)i;
+            [self saveSelectedViewSelection];
             [self rebuildDashboard];
             return;
         }
@@ -2071,6 +2185,7 @@ heightForHeaderInSection:(NSInteger)section {
     if (idx > 0 && (NSUInteger)idx < dashboard.views.count) {
         self.selectedViewIndex = (NSUInteger)idx;
         self.viewPicker.selectedSegmentIndex = (NSInteger)idx;
+        [self saveSelectedViewSelection];
         [self rebuildDashboard];
     }
 }
@@ -2524,7 +2639,11 @@ heightForHeaderInSection:(NSInteger)section {
     if (bootViewIndex > 0 && (NSUInteger)bootViewIndex < dashboard.views.count) {
         self.selectedViewIndex = (NSUInteger)bootViewIndex;
     } else if (!isRefresh) {
-        self.selectedViewIndex = 0;
+        // Fresh load of this dashboard (first launch, or switched to a
+        // different dashboard) — restore its own last-selected view rather
+        // than always landing back on view 0 (Issue #9).
+        NSString *dashboardPath = [[HAAuthManager sharedManager] selectedDashboardPath];
+        [self restoreSelectedViewIndexForDashboard:dashboard dashboardPath:dashboardPath];
     }
 
     HALogI(@"dash", @"Received Lovelace config: %lu views", (unsigned long)dashboard.views.count);

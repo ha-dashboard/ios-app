@@ -1059,31 +1059,38 @@ case "$TARGET" in
         _CLEANUP_DIRS+=("$_DEPLOY_WORK_DIR")
         APP_TAR="$_DEPLOY_WORK_DIR/HADashboard.app.tar.gz"
         echo "   Packaging .app..."
+        # All three jailbroken targets re-sign on-device with ldid, which — when
+        # given no entitlements file — writes a bare ad-hoc signature containing
+        # neither application-identifier nor team-identifier. Without those,
+        # securityd cannot resolve a keychain access group for the process, so
+        # SecItemAdd silently fails: credentials set via -HAServerURL/-HAAccessToken
+        # launch args survive only in memory for that one process and vanish on
+        # the next relaunch (crash, jetsam, respring, or a future redeploy),
+        # bouncing the user back to the login screen. Extract and re-apply the
+        # Xcode-signed app's real entitlements so the re-signed on-device binary
+        # keeps its application-identifier and Keychain access works persistently.
+        _STAGE="$_DEPLOY_WORK_DIR/stage-jb"
+        mkdir -p "$_STAGE"
+        cp -R "$APP" "$_STAGE/"
+        _STAGED_APP="$_STAGE/$(basename "$APP")"
+        _JB_ENTITLEMENTS="$_STAGED_APP/HA-Dashboard.jailbreak.entitlements"
+        if ! codesign -d --entitlements :- "$_STAGED_APP/HA Dashboard" \
+            > "$_JB_ENTITLEMENTS" 2>/dev/null ||
+           ! plutil -lint "$_JB_ENTITLEMENTS" >/dev/null 2>&1; then
+            echo "❌ Could not preserve the signed app entitlements for $_IPAD_LABEL Keychain access"
+            exit 1
+        fi
+        if ! plutil -extract application-identifier raw "$_JB_ENTITLEMENTS" >/dev/null 2>&1 &&
+           ! plutil -extract com.apple.application-identifier raw "$_JB_ENTITLEMENTS" >/dev/null 2>&1; then
+            echo "❌ The $_IPAD_LABEL signing entitlements do not contain an application identifier"
+            exit 1
+        fi
         if [[ "$TARGET" == "ipad4" ]]; then
             # iOS 10+: strip Apple codesign (conflicts with ldid on-device)
-            _STAGE="$_DEPLOY_WORK_DIR/stage-jb"
-            mkdir -p "$_STAGE"
-            cp -R "$APP" "$_STAGE/"
-            _STAGED_APP="$_STAGE/$(basename "$APP")"
-            _JB_ENTITLEMENTS="$_STAGED_APP/HA-Dashboard.jailbreak.entitlements"
-            if ! codesign -d --entitlements :- "$_STAGED_APP/HA Dashboard" \
-                > "$_JB_ENTITLEMENTS" 2>/dev/null ||
-               ! plutil -lint "$_JB_ENTITLEMENTS" >/dev/null 2>&1; then
-                echo "❌ Could not preserve the signed app entitlements for iPad 4 Keychain access"
-                exit 1
-            fi
-            if ! plutil -extract application-identifier raw "$_JB_ENTITLEMENTS" >/dev/null 2>&1 &&
-               ! plutil -extract com.apple.application-identifier raw "$_JB_ENTITLEMENTS" >/dev/null 2>&1; then
-                echo "❌ The iPad 4 signing entitlements do not contain an application identifier"
-                exit 1
-            fi
             codesign --remove-signature "$_STAGED_APP/HA Dashboard" 2>/dev/null || true
             rm -f "$_STAGED_APP/embedded.mobileprovision"
-            tar -czf "$APP_TAR" -C "$_STAGE" "$(basename "$APP")"
-        else
-            # iOS 9: ldid -S works fine over Apple-signed binaries
-            tar -czf "$APP_TAR" -C "$(dirname "$APP")" "$(basename "$APP")"
         fi
+        tar -czf "$APP_TAR" -C "$_STAGE" "$(basename "$APP")"
 
         # Merge deploy preferences into existing plist on device
         _PLIST="$_DEPLOY_WORK_DIR/${TARGET}-prefs.plist"

@@ -15,6 +15,8 @@ static NSString *const kAuthModeKey      = @"ha_auth_mode";
 static NSString *const kRefreshTokenKey  = @"ha_refresh_token";
 static NSString *const kTokenExpiryKey   = @"ha_token_expiry";
 static NSString *const kSelectedDashboardKey = @"ha_selected_dashboard";
+static NSString *const kLastSelectedViewsKey = @"ha_last_selected_views";
+static NSString *const kDefaultDashboardViewKey = @"__default__";
 static NSString *const kKioskModeKey         = @"ha_kiosk_mode";
 static NSString *const kProximityWakeKey     = @"ha_proximity_wake";
 static NSString *const kDemoModeKey      = @"ha_demo_mode";
@@ -312,6 +314,29 @@ static NSString *const kCameraGlobalMuteKey = @"HACameraGlobalMute";
     }
     [[NSUserDefaults standardUserDefaults] synchronize];
     [[NSNotificationCenter defaultCenter] postNotificationName:HAAuthManagerDidUpdateNotification object:self];
+}
+
+- (NSString *)normalizedDashboardViewKeyForPath:(NSString *)dashboardPath {
+    return (dashboardPath.length > 0) ? dashboardPath : kDefaultDashboardViewKey;
+}
+
+- (void)saveLastSelectedView:(NSDictionary<NSString *, id> *)viewInfo forDashboardPath:(NSString *)dashboardPath {
+    NSString *key = [self normalizedDashboardViewKeyForPath:dashboardPath];
+    NSDictionary *existing = [[NSUserDefaults standardUserDefaults] dictionaryForKey:kLastSelectedViewsKey];
+    NSMutableDictionary *all = existing ? [existing mutableCopy] : [NSMutableDictionary dictionary];
+    if (viewInfo) {
+        all[key] = viewInfo;
+    } else {
+        [all removeObjectForKey:key];
+    }
+    [[NSUserDefaults standardUserDefaults] setObject:all forKey:kLastSelectedViewsKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
+- (NSDictionary<NSString *, id> *)lastSelectedViewForDashboardPath:(NSString *)dashboardPath {
+    NSString *key = [self normalizedDashboardViewKeyForPath:dashboardPath];
+    NSDictionary *all = [[NSUserDefaults standardUserDefaults] dictionaryForKey:kLastSelectedViewsKey];
+    return all[key];
 }
 
 - (void)setKioskMode:(BOOL)enabled {

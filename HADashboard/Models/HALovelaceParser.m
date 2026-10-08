@@ -1,6 +1,7 @@
 #import "HALovelaceParser.h"
 #import "HADashboardConfig.h"
 #import "HASafeDict.h"
+#import "HAEntityNameResolver.h"
 
 #pragma mark - HALovelaceView
 
@@ -95,7 +96,54 @@
 }
 
 + (HADashboardConfig *)dashboardConfigFromView:(HALovelaceView *)view columns:(NSInteger)columns {
+    return [self dashboardConfigFromView:view columns:columns
+                           entityAreaMap:@{} areaNames:@{}
+                         entityDeviceMap:@{} deviceNames:@{}];
+}
+
++ (HADashboardConfig *)dashboardConfigFromView:(HALovelaceView *)view
+                                       columns:(NSInteger)columns
+                                 entityAreaMap:(NSDictionary<NSString *, NSString *> *)entityAreaMap
+                                     areaNames:(NSDictionary<NSString *, NSString *> *)areaNames
+                               entityDeviceMap:(NSDictionary<NSString *, NSString *> *)entityDeviceMap
+                                   deviceNames:(NSDictionary<NSString *, NSString *> *)deviceNames {
+    return [self dashboardConfigFromView:view columns:columns
+                           entityAreaMap:entityAreaMap areaNames:areaNames
+                         entityDeviceMap:entityDeviceMap deviceNames:deviceNames
+                      floorNamesByAreaId:@{}];
+}
+
++ (HADashboardConfig *)dashboardConfigFromView:(HALovelaceView *)view
+                                       columns:(NSInteger)columns
+                                 entityAreaMap:(NSDictionary<NSString *, NSString *> *)entityAreaMap
+                                     areaNames:(NSDictionary<NSString *, NSString *> *)areaNames
+                               entityDeviceMap:(NSDictionary<NSString *, NSString *> *)entityDeviceMap
+                                   deviceNames:(NSDictionary<NSString *, NSString *> *)deviceNames
+                            floorNamesByAreaId:(NSDictionary<NSString *, NSString *> *)floorNamesByAreaId {
+    return [self dashboardConfigFromView:view columns:columns
+                           entityAreaMap:entityAreaMap areaNames:areaNames
+                         entityDeviceMap:entityDeviceMap deviceNames:deviceNames
+                      floorNamesByAreaId:floorNamesByAreaId
+                     entityRegistryNames:@{}];
+}
+
++ (HADashboardConfig *)dashboardConfigFromView:(HALovelaceView *)view
+                                       columns:(NSInteger)columns
+                                 entityAreaMap:(NSDictionary<NSString *, NSString *> *)entityAreaMap
+                                     areaNames:(NSDictionary<NSString *, NSString *> *)areaNames
+                               entityDeviceMap:(NSDictionary<NSString *, NSString *> *)entityDeviceMap
+                                   deviceNames:(NSDictionary<NSString *, NSString *> *)deviceNames
+                            floorNamesByAreaId:(NSDictionary<NSString *, NSString *> *)floorNamesByAreaId
+                           entityRegistryNames:(NSDictionary<NSString *, NSString *> *)entityRegistryNames {
     if (!view) return nil;
+
+    HAEntityNameRegistryContext *nameContext =
+        [HAEntityNameRegistryContext contextWithEntityAreaMap:entityAreaMap
+                                                      areaNames:areaNames
+                                                entityDeviceMap:entityDeviceMap
+                                                    deviceNames:deviceNames
+                                             floorNamesByAreaId:floorNamesByAreaId
+                                            entityRegistryNames:entityRegistryNames];
 
     HADashboardConfig *config = [[HADashboardConfig alloc] init];
     config.title   = view.title;
@@ -143,7 +191,8 @@
                       gridColumns:0
                    sectionGridMax:sectionGridMax
                          sections:cardSections
-                         allItems:cardItems];
+                         allItems:cardItems
+                      nameContext:nameContext];
             }
 
             // Merge all card-level sections into one column section
@@ -241,7 +290,8 @@
                   gridColumns:0
                sectionGridMax:0
                      sections:sections
-                     allItems:allItems];
+                     allItems:allItems
+                  nameContext:nameContext];
         }
     }
 
@@ -287,7 +337,8 @@
         gridColumns:(NSInteger)gridColumns
      sectionGridMax:(NSInteger)sectionGridMax
            sections:(NSMutableArray<HADashboardConfigSection *> *)sections
-           allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems {
+           allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems
+        nameContext:(HAEntityNameRegistryContext *)nameContext {
 
     NSInteger startSectionCount = sections.count;
     NSInteger startItemCount = allItems.count;
@@ -299,7 +350,8 @@
            gridColumns:gridColumns
         sectionGridMax:sectionGridMax
               sections:sections
-              allItems:allItems];
+              allItems:allItems
+           nameContext:nameContext];
 
     NSArray *visibility = card[@"visibility"];
     if ([card[@"type"] isEqualToString:@"conditional"] && !visibility) {
@@ -335,7 +387,8 @@
          gridColumns:(NSInteger)gridColumns
       sectionGridMax:(NSInteger)sectionGridMax
             sections:(NSMutableArray<HADashboardConfigSection *> *)sections
-            allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems {
+            allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems
+         nameContext:(HAEntityNameRegistryContext *)nameContext {
 
     NSString *cardType = card[@"type"];
 
@@ -391,7 +444,8 @@
                   gridColumns:gridColumns
                sectionGridMax:sectionGridMax
                      sections:innerSections
-                     allItems:innerItems];
+                     allItems:innerItems
+                  nameContext:nameContext];
             // Attach conditions to all resulting items
             if ([conditions isKindOfClass:[NSArray class]] && conditions.count > 0) {
                 for (HADashboardConfigItem *item in innerItems) {
@@ -534,7 +588,8 @@
                       gridColumns:parentGridCols
                    sectionGridMax:sectionGridMax
                          sections:sections
-                         allItems:allItems];
+                         allItems:allItems
+                      nameContext:nameContext];
                 // Only first sub-card gets the heading title
                 gridTitle = nil;
                 gridIcon = nil;
@@ -643,8 +698,15 @@
         NSString *eid = entry[@"entity_id"];
         if (eid) {
             [entityIds addObject:eid];
-            if ([entry[@"name"] isKindOfClass:[NSString class]] && [entry[@"name"] length] > 0) {
-                nameOverrides[eid] = entry[@"name"];
+            // Row-level name: plain string, or an entity-name-config object/array
+            // (e.g. {"type": "area"} or [{"type": "area"}, {"type": "entity"}]) —
+            // resolved via the shared registry-aware resolver. Unresolved/unknown
+            // configs degrade to nil, leaving the entity's own name as the fallback.
+            NSString *resolvedName = [HAEntityNameResolver resolveNameValue:entry[@"name"]
+                                                                   forEntityId:eid
+                                                                       context:nameContext];
+            if (resolvedName.length > 0) {
+                nameOverrides[eid] = resolvedName;
             }
         }
     }
@@ -698,7 +760,25 @@
             NSMutableArray *entityConfigs = [NSMutableArray arrayWithCapacity:rawEntities.count];
             for (id entry in rawEntities) {
                 if ([entry isKindOfClass:[NSDictionary class]]) {
-                    [entityConfigs addObject:entry];
+                    NSDictionary *dict = (NSDictionary *)entry;
+                    // Resolve "name" (plain string or entity-name-config object/array)
+                    // so the glance cell receives a plain string, same as every
+                    // other card type. Unresolved configs drop the key entirely
+                    // so the cell falls back to the entity's own name.
+                    NSString *cfgName = [HAEntityNameResolver resolveNameValue:dict[@"name"]
+                                                                      forEntityId:dict[@"entity"]
+                                                                          context:nameContext];
+                    if (cfgName.length > 0) {
+                        NSMutableDictionary *resolved = [dict mutableCopy];
+                        resolved[@"name"] = cfgName;
+                        [entityConfigs addObject:[resolved copy]];
+                    } else if (dict[@"name"]) {
+                        NSMutableDictionary *resolved = [dict mutableCopy];
+                        [resolved removeObjectForKey:@"name"];
+                        [entityConfigs addObject:[resolved copy]];
+                    } else {
+                        [entityConfigs addObject:entry];
+                    }
                 } else if ([entry isKindOfClass:[NSString class]]) {
                     [entityConfigs addObject:@{@"entity": entry}];
                 }
@@ -744,7 +824,12 @@
                     if (dict[@"entity"]) cfg[@"entity"] = dict[@"entity"];
                     if (dict[@"show_state"]) cfg[@"show_state"] = dict[@"show_state"];
                     if (dict[@"show_graph"]) cfg[@"show_graph"] = dict[@"show_graph"];
-                    if (dict[@"name"]) cfg[@"name"] = dict[@"name"];
+                    // Per-entity name: plain string or entity-name-config object/array,
+                    // resolved via the shared registry-aware resolver.
+                    NSString *cfgName = [HAEntityNameResolver resolveNameValue:dict[@"name"]
+                                                                      forEntityId:dict[@"entity"]
+                                                                          context:nameContext];
+                    if (cfgName.length > 0) cfg[@"name"] = cfgName;
                     if (dict[@"color"]) cfg[@"color"] = dict[@"color"];
                     [entityConfigs addObject:[cfg copy]];
                 } else if ([entry isKindOfClass:[NSString class]]) {
@@ -777,7 +862,10 @@
                     NSMutableDictionary *cfg = [NSMutableDictionary dictionary];
                     NSDictionary *dict = (NSDictionary *)entry;
                     if (dict[@"entity"]) cfg[@"entity"] = dict[@"entity"];
-                    if (dict[@"name"]) cfg[@"name"] = dict[@"name"];
+                    NSString *cfgName = [HAEntityNameResolver resolveNameValue:dict[@"name"]
+                                                                      forEntityId:dict[@"entity"]
+                                                                          context:nameContext];
+                    if (cfgName.length > 0) cfg[@"name"] = cfgName;
                     [entityConfigs addObject:[cfg copy]];
                 } else if ([entry isKindOfClass:[NSString class]]) {
                     [entityConfigs addObject:@{@"entity": entry}];
@@ -994,9 +1082,18 @@
             NSDictionary *entry = extracted[i];
             HADashboardConfigItem *item = [[HADashboardConfigItem alloc] init];
             item.entityId    = entry[@"entity_id"];
-            // Resolve display name — trim whitespace (HA uses " " as blank name override)
-            NSString *entryName = [entry[@"name"] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-            NSString *cardName = [[card[@"name"] description] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+            // Resolve display name. Both the per-entity "name" and the card-level
+            // "name" may be a plain string or an entity-name-config object/array
+            // (e.g. {"type": "area"} or [{"type": "area"}, {"type": "entity"}]);
+            // the shared resolver trims strings and resolves configs via the
+            // registry, degrading to nil for unresolved/unknown values so
+            // display falls back to the entity's own display name.
+            NSString *entryName = [HAEntityNameResolver resolveNameValue:entry[@"name"]
+                                                                forEntityId:item.entityId
+                                                                    context:nameContext];
+            NSString *cardName = [HAEntityNameResolver resolveNameValue:card[@"name"]
+                                                               forEntityId:item.entityId
+                                                                   context:nameContext];
             // sectionTitle (from grid heading) takes priority for single-entity cards
             if (sectionTitle.length > 0 && extracted.count == 1) {
                 item.displayName = sectionTitle;
@@ -1249,7 +1346,7 @@
     if ([entity isKindOfClass:[NSString class]] && entity.length > 0) {
         NSMutableDictionary *entry = [NSMutableDictionary dictionary];
         entry[@"entity_id"] = entity;
-        if (card[@"name"]) entry[@"name"] = card[@"name"];
+        if (card[@"name"]) entry[@"name"] = card[@"name"]; // string or name-config object/array; resolved downstream
         [results addObject:entry];
     }
 
@@ -1263,7 +1360,7 @@
                 if ([camEntity isKindOfClass:[NSString class]] && camEntity.length > 0) {
                     NSMutableDictionary *entry = [NSMutableDictionary dictionary];
                     entry[@"entity_id"] = camEntity;
-                    if (card[@"name"]) entry[@"name"] = card[@"name"];
+                    if (card[@"name"]) entry[@"name"] = card[@"name"]; // string or name-config object/array; resolved downstream
                     [results addObject:entry];
                 }
             }
@@ -1280,7 +1377,7 @@
                 if ([chipEntity isKindOfClass:[NSString class]] && chipEntity.length > 0) {
                     NSMutableDictionary *entry = [NSMutableDictionary dictionary];
                     entry[@"entity_id"] = chipEntity;
-                    if (chip[@"name"]) entry[@"name"] = chip[@"name"];
+                    if (chip[@"name"]) entry[@"name"] = chip[@"name"]; // string or name-config object/array; resolved downstream
                     [results addObject:entry];
                 }
             }
@@ -1288,8 +1385,9 @@
     }
 
     // Custom mini-graph, mushroom, and other cards with entities array already handled above.
-    // Ensure the card-level "name" is applied to the first extracted entity when present.
-    if (results.count > 0 && [card[@"name"] isKindOfClass:[NSString class]]) {
+    // Ensure the card-level "name" is applied to the first extracted entity when present
+    // (string or name-config object/array; resolved downstream).
+    if (results.count > 0 && card[@"name"]) {
         NSMutableDictionary *first = [results.firstObject mutableCopy];
         if (!first[@"name"]) {
             first[@"name"] = card[@"name"];

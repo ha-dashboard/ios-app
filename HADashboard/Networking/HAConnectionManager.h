@@ -98,14 +98,32 @@ extern NSString *const HAConnectionManagerHADidStartNotification;              /
 /// Area names dictionary: area_id -> area name
 @property (nonatomic, strong, readonly) NSDictionary<NSString *, NSString *> *areaNamesByAreaId;
 
+/// Entity area map: entity_id -> area_id
+@property (nonatomic, strong, readonly) NSDictionary<NSString *, NSString *> *entityAreaMap;
+
 /// Device area map: device_id -> area_id
 @property (nonatomic, strong, readonly) NSDictionary<NSString *, NSString *> *deviceAreaMapping;
+
+/// Device name map: device_id -> display name
+@property (nonatomic, strong, readonly) NSDictionary<NSString *, NSString *> *deviceNamesByDeviceId;
+
+/// Entity device map: entity_id -> device_id
+@property (nonatomic, strong, readonly) NSDictionary<NSString *, NSString *> *entityDeviceMapping;
+
+/// Entity's own name as stored in the entity registry (user-set "name",
+/// else the integration-provided "original_name") — before any device-name
+/// prefix is stripped. Empty if registries aren't loaded.
+@property (nonatomic, strong, readonly) NSDictionary<NSString *, NSString *> *entityRegistryNamesByEntityId;
 
 /// Floor registry entries (available after registries load, nil if HA doesn't support floors)
 @property (nonatomic, copy, readonly) NSArray<HAFloor *> *floors;
 
 /// Look up the floor for a given area_id (nil if area has no floor assignment)
 - (HAFloor *)floorForAreaId:(NSString *)areaId;
+
+/// Floor name map: area_id -> floor display name. Empty if floors aren't
+/// loaded or HA doesn't support them (older versions).
+@property (nonatomic, strong, readonly) NSDictionary<NSString *, NSString *> *floorNamesByAreaId;
 
 /// Whether area/entity/device registries have been loaded
 @property (nonatomic, readonly) BOOL registriesLoaded;
