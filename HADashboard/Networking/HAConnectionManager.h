@@ -110,6 +110,11 @@ extern NSString *const HAConnectionManagerHADidStartNotification;              /
 /// Entity device map: entity_id -> device_id
 @property (nonatomic, strong, readonly) NSDictionary<NSString *, NSString *> *entityDeviceMapping;
 
+/// Entity's own name as stored in the entity registry (user-set "name",
+/// else the integration-provided "original_name") — before any device-name
+/// prefix is stripped. Empty if registries aren't loaded.
+@property (nonatomic, strong, readonly) NSDictionary<NSString *, NSString *> *entityRegistryNamesByEntityId;
+
 /// Floor registry entries (available after registries load, nil if HA doesn't support floors)
 @property (nonatomic, copy, readonly) NSArray<HAFloor *> *floors;
 
