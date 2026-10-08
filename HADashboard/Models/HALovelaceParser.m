@@ -120,6 +120,21 @@
                                entityDeviceMap:(NSDictionary<NSString *, NSString *> *)entityDeviceMap
                                    deviceNames:(NSDictionary<NSString *, NSString *> *)deviceNames
                             floorNamesByAreaId:(NSDictionary<NSString *, NSString *> *)floorNamesByAreaId {
+    return [self dashboardConfigFromView:view columns:columns
+                           entityAreaMap:entityAreaMap areaNames:areaNames
+                         entityDeviceMap:entityDeviceMap deviceNames:deviceNames
+                      floorNamesByAreaId:floorNamesByAreaId
+                     entityRegistryNames:@{}];
+}
+
++ (HADashboardConfig *)dashboardConfigFromView:(HALovelaceView *)view
+                                       columns:(NSInteger)columns
+                                 entityAreaMap:(NSDictionary<NSString *, NSString *> *)entityAreaMap
+                                     areaNames:(NSDictionary<NSString *, NSString *> *)areaNames
+                               entityDeviceMap:(NSDictionary<NSString *, NSString *> *)entityDeviceMap
+                                   deviceNames:(NSDictionary<NSString *, NSString *> *)deviceNames
+                            floorNamesByAreaId:(NSDictionary<NSString *, NSString *> *)floorNamesByAreaId
+                           entityRegistryNames:(NSDictionary<NSString *, NSString *> *)entityRegistryNames {
     if (!view) return nil;
 
     HAEntityNameRegistryContext *nameContext =
@@ -127,7 +142,8 @@
                                                       areaNames:areaNames
                                                 entityDeviceMap:entityDeviceMap
                                                     deviceNames:deviceNames
-                                             floorNamesByAreaId:floorNamesByAreaId];
+                                             floorNamesByAreaId:floorNamesByAreaId
+                                            entityRegistryNames:entityRegistryNames];
 
     HADashboardConfig *config = [[HADashboardConfig alloc] init];
     config.title   = view.title;

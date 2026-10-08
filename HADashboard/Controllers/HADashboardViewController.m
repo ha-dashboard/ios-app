@@ -1275,7 +1275,8 @@ static inline NSString *HANormalizeState(id val) {
                                                            areaNames:conn.areaNamesByAreaId
                                                      entityDeviceMap:conn.entityDeviceMapping
                                                          deviceNames:conn.deviceNamesByDeviceId
-                                                  floorNamesByAreaId:conn.floorNamesByAreaId];
+                                                  floorNamesByAreaId:conn.floorNamesByAreaId
+                                                 entityRegistryNames:conn.entityRegistryNamesByEntityId];
 
     // For classic views, flatten all cards into a single section (section 0).
     // The parser produces one section per card, but masonry/panel need all items in one section.
