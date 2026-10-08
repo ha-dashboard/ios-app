@@ -458,4 +458,46 @@
     XCTAssertNil([HAStateLocalizer lastResolvedLanguageCode], @"Cleanup must actually clear it");
 }
 
+- (void)testFrenchHAOnEnglishDeviceShowsFrenchStatesAtOfflineColdStart {
+    // The exact scenario the cold-start fix exists for: a French HA server
+    // that this install has connected to before (so "fr" is persisted),
+    // an English iPad (app chrome is "en"), no in-app override, and no
+    // network available right now (offline cold start). The cache file
+    // -loadCachedStateForLanguage: would read is a disk-I/O detail guarded
+    // out under XCTest by design (HAStateLocalizerIsRunningUnderXCTest);
+    // what matters behaviourally is proven here: (1) cold start picks "fr"
+    // over the English app chrome language, and (2) once that language's
+    // resources are the ones in memory (exactly what loading that cache
+    // file would produce), lookups return French text immediately, with
+    // zero network access.
+    [HAStateLocalizer test_setLastResolvedLanguageCode:@"fr"];
+
+    NSString *coldStartChoice = [HAStateLocalizer coldStartLanguageWithOverride:nil
+                                                                persistedLanguage:[HAStateLocalizer lastResolvedLanguageCode]
+                                                                appChromeLanguage:@"en"];
+    XCTAssertEqualObjects(coldStartChoice, @"fr", @"Cold start must prefer the persisted server language over the English app chrome");
+
+    // Simulate the synchronous launch-time cache load that
+    // -loadCachedStateForLanguage: performs in production, using the exact
+    // fixture that ships in HADashboardTests/Fixtures/ha-translations-fr.json.
+    NSDictionary *fr = [self loadFixtureNamed:@"ha-translations-fr"];
+    [[HAStateLocalizer sharedLocalizer] test_setResources:fr languageCode:coldStartChoice];
+
+    // No network access anywhere above or below this line -- the whole
+    // point of the offline cold-start case.
+    NSString *personState = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"person"
+                                                                              deviceClass:nil
+                                                                                 platform:nil
+                                                                           translationKey:nil
+                                                                                    state:@"not_home"];
+    XCTAssertEqualObjects(personState, @"Absent", @"French HA data must win immediately at cold start, not English");
+
+    NSString *doorState = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"binary_sensor"
+                                                                            deviceClass:@"door"
+                                                                               platform:nil
+                                                                         translationKey:nil
+                                                                                  state:@"on"];
+    XCTAssertEqualObjects(doorState, @"Ouvert");
+}
+
 @end
