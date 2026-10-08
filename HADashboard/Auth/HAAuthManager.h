@@ -67,6 +67,20 @@ typedef NS_ENUM(NSInteger, HAAuthMode) {
 - (void)handleAuthFailureWithCompletion:(void (^)(NSString *newToken, NSError *error))completion;
 
 - (void)saveSelectedDashboardPath:(NSString *)urlPath;
+
+/// Persists the last-selected Lovelace view for a given dashboard, so each
+/// dashboard remembers its own view across app restarts/reboots.
+///
+/// `dashboardPath` is the dashboard's url_path (nil for the default
+/// dashboard). `viewInfo` should be @{@"path": viewPath} when the view has
+/// a stable path, or @{@"index": @(index)} as a fallback when it doesn't.
+/// Pass nil for `viewInfo` to clear the stored selection for that dashboard.
+- (void)saveLastSelectedView:(NSDictionary<NSString *, id> *)viewInfo forDashboardPath:(NSString *)dashboardPath;
+
+/// Returns the last-saved view info for a given dashboard path (see
+/// -saveLastSelectedView:forDashboardPath:), or nil if nothing is stored.
+- (NSDictionary<NSString *, id> *)lastSelectedViewForDashboardPath:(NSString *)dashboardPath;
+
 - (void)setKioskMode:(BOOL)enabled;
 - (void)setProximityWakeEnabled:(BOOL)enabled;
 - (void)setDemoMode:(BOOL)enabled;
