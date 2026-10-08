@@ -135,10 +135,21 @@ echo "   Building and testing..."
 LOG_FILE="$(mktemp -t hadashboard-test-snapshots)"
 trap 'rm -f "$LOG_FILE"' EXIT
 
+# Run the whole test target unless the caller narrowed it: xcodebuild unions
+# -only-testing filters, so adding the target as well would run everything
+# (and in record mode re-record every reference).
+ONLY_TESTING_DEFAULT=(-only-testing:"$TEST_TARGET")
+for arg in ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}; do
+    if [[ "$arg" == -only-testing:* ]]; then
+        ONLY_TESTING_DEFAULT=()
+        break
+    fi
+done
+
 xcodebuild test \
     -scheme "$SCHEME" \
     -destination "$DESTINATION" \
-    -only-testing:"$TEST_TARGET" \
+    ${ONLY_TESTING_DEFAULT[@]+"${ONLY_TESTING_DEFAULT[@]}"} \
     IPHONEOS_DEPLOYMENT_TARGET=15.0 \
     CODE_SIGNING_ALLOWED=NO \
     ${RECORD_DEFINE[@]+"${RECORD_DEFINE[@]}"} \
