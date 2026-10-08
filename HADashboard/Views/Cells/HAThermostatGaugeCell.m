@@ -113,6 +113,9 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
 @property (nonatomic, assign) double pendingTargetTempLow;
 @property (nonatomic, assign) double pendingTargetTempHigh;
 @property (nonatomic, assign) BOOL showCurrentAsPrimary;
+
+// Label helpers
+- (NSAttributedString *)secondaryTempAttributedStringForValue:(double)temp;
 @end
 
 @implementation HAThermostatGaugeCell
@@ -1106,7 +1109,13 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
                 [self positionThumbAtTemperature:temp];
                 [self applyArcFillDragWithFraction:[self fractionForTemperature:temp]
                                          direction:self.fillDirection];
-                if (!self.showCurrentAsPrimary) {
+                if (self.showCurrentAsPrimary) {
+                    // tempLabel stays on current room temp; live-update the setpoint shown
+                    // in targetLabel so dragging the thumb reflects the new value, matching
+                    // what the +/- buttons already do via applyOptimisticSingleTemp:.
+                    self.targetLabel.attributedText = [self secondaryTempAttributedStringForValue:temp];
+                    self.targetLabel.hidden = NO;
+                } else {
                     self.tempLabel.text = [NSString stringWithFormat:@"%.1f%@", temp, self.tempUnitString];
                 }
             }
@@ -1153,6 +1162,27 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
         default:
             break;
     }
+}
+
+#pragma mark - Label Helpers
+
+/// Builds the "icon + value" attributed string used for the secondary (targetLabel) text —
+/// e.g. the target setpoint shown under the current temp in show_current_as_primary mode, or
+/// the current temp shown under the setpoint in default mode. Shared by configureWithEntity:
+/// and the optimistic nudge/drag paths so the format never drifts between them.
+- (NSAttributedString *)secondaryTempAttributedStringForValue:(double)temp {
+    NSString *tempIcon = [HAIconMapper glyphForIconName:@"home-thermometer-outline"]
+                      ?: [HAIconMapper glyphForIconName:@"thermometer"]
+                      ?: @"◎";
+    CGFloat secondarySize = 16.0;
+    NSMutableAttributedString *attr = [[NSMutableAttributedString alloc] initWithString:tempIcon
+        attributes:@{NSFontAttributeName: [HAIconMapper mdiFontOfSize:secondarySize],
+                     NSForegroundColorAttributeName: [HATheme secondaryTextColor]}];
+    [attr appendAttributedString:[[NSAttributedString alloc]
+        initWithString:[NSString stringWithFormat:@" %.1f %@", temp, self.tempUnitString]
+        attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:secondarySize weight:UIFontWeightMedium],
+                     NSForegroundColorAttributeName: [HATheme secondaryTextColor]}]];
+    return attr;
 }
 
 #pragma mark - Configure
@@ -1270,11 +1300,18 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
     }
 
     // Temperature display -- respect show_current_as_primary
-    NSString *tempIcon = [HAIconMapper glyphForIconName:@"home-thermometer-outline"]
-                      ?: [HAIconMapper glyphForIconName:@"thermometer"]
-                      ?: @"\u25CE";
 
-    CGFloat secondarySize = 16.0;
+    // A +/- tap debounce may still be in flight (pendingTargetTemp*): an entity update that
+    // arrives during that 5s window reflects the pre-tap state from HA's point of view, not
+    // the optimistic value the user just set. Prefer the pending value so this re-render
+    // doesn't visibly snap the setpoint back and then forward again once the service call lands.
+    BOOL hasPendingDebounce = (self.buttonDebounceTimer != nil);
+    NSNumber *effectiveTargetTemp = (hasPendingDebounce && !isDualSetpoint)
+        ? @(self.pendingTargetTemp) : targetTemp;
+    NSNumber *effectiveTargetTempLow = (hasPendingDebounce && isDualSetpoint)
+        ? @(self.pendingTargetTempLow) : targetTempLow;
+    NSNumber *effectiveTargetTempHigh = (hasPendingDebounce && isDualSetpoint)
+        ? @(self.pendingTargetTempHigh) : targetTempHigh;
 
     if (!self.thumbDragging) {
         if (showCurrentAsPrimary) {
@@ -1283,15 +1320,8 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
             } else {
                 self.tempLabel.text = @"--";
             }
-            if (targetTemp && ![mode isEqualToString:@"off"]) {
-                NSMutableAttributedString *targetAttr = [[NSMutableAttributedString alloc] initWithString:tempIcon
-                    attributes:@{NSFontAttributeName: [HAIconMapper mdiFontOfSize:secondarySize],
-                                 NSForegroundColorAttributeName: [HATheme secondaryTextColor]}];
-                [targetAttr appendAttributedString:[[NSAttributedString alloc]
-                    initWithString:[NSString stringWithFormat:@" %.1f %@", targetTemp.doubleValue, self.tempUnitString]
-                    attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:secondarySize weight:UIFontWeightMedium],
-                                 NSForegroundColorAttributeName: [HATheme secondaryTextColor]}]];
-                self.targetLabel.attributedText = targetAttr;
+            if (effectiveTargetTemp && ![mode isEqualToString:@"off"]) {
+                self.targetLabel.attributedText = [self secondaryTempAttributedStringForValue:effectiveTargetTemp.doubleValue];
                 self.targetLabel.hidden = NO;
             } else {
                 self.targetLabel.hidden = YES;
@@ -1299,25 +1329,18 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
         } else {
             if (isDualSetpoint && ![mode isEqualToString:@"off"]) {
                 // Set dual button titles; updateGaugeArcs hides tempLabel and shows these
-                [self.dualLowButton  setTitle:[NSString stringWithFormat:@"%.0f%@", targetTempLow.doubleValue,  self.tempUnitString] forState:UIControlStateNormal];
-                [self.dualHighButton setTitle:[NSString stringWithFormat:@"%.0f%@", targetTempHigh.doubleValue, self.tempUnitString] forState:UIControlStateNormal];
+                [self.dualLowButton  setTitle:[NSString stringWithFormat:@"%.0f%@", effectiveTargetTempLow.doubleValue,  self.tempUnitString] forState:UIControlStateNormal];
+                [self.dualHighButton setTitle:[NSString stringWithFormat:@"%.0f%@", effectiveTargetTempHigh.doubleValue, self.tempUnitString] forState:UIControlStateNormal];
                 self.tempLabel.text = nil; // hidden in dual mode; won't affect layout (height via dual buttons)
-            } else if (targetTemp && ![mode isEqualToString:@"off"]) {
-                self.tempLabel.text = [NSString stringWithFormat:@"%.1f%@", targetTemp.doubleValue, self.tempUnitString];
+            } else if (effectiveTargetTemp && ![mode isEqualToString:@"off"]) {
+                self.tempLabel.text = [NSString stringWithFormat:@"%.1f%@", effectiveTargetTemp.doubleValue, self.tempUnitString];
             } else if (currentTemp) {
                 self.tempLabel.text = [NSString stringWithFormat:@"%.0f%@", currentTemp.doubleValue, self.tempUnitString];
             } else {
                 self.tempLabel.text = @"--";
             }
             if (currentTemp) {
-                NSMutableAttributedString *currentAttr = [[NSMutableAttributedString alloc] initWithString:tempIcon
-                    attributes:@{NSFontAttributeName: [HAIconMapper mdiFontOfSize:secondarySize],
-                                 NSForegroundColorAttributeName: [HATheme secondaryTextColor]}];
-                [currentAttr appendAttributedString:[[NSAttributedString alloc]
-                    initWithString:[NSString stringWithFormat:@" %.1f %@", currentTemp.doubleValue, self.tempUnitString]
-                    attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:secondarySize weight:UIFontWeightMedium],
-                                 NSForegroundColorAttributeName: [HATheme secondaryTextColor]}]];
-                self.targetLabel.attributedText = currentAttr;
+                self.targetLabel.attributedText = [self secondaryTempAttributedStringForValue:currentTemp.doubleValue];
                 self.targetLabel.hidden = NO;
             } else {
                 self.targetLabel.hidden = YES;
@@ -1325,9 +1348,9 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
         }
 
         // Arc fill and thumb position/visibility
-        if (isDualSetpoint && targetTempLow && targetTempHigh && ![mode isEqualToString:@"off"]) {
-            [self applyDualArcFillForLow:targetTempLow.doubleValue
-                                    high:targetTempHigh.doubleValue
+        if (isDualSetpoint && effectiveTargetTempLow && effectiveTargetTempHigh && ![mode isEqualToString:@"off"]) {
+            [self applyDualArcFillForLow:effectiveTargetTempLow.doubleValue
+                                    high:effectiveTargetTempHigh.doubleValue
                              currentTemp:currentTemp
                                   action:action];
             // Two thumbs: heat (orange) at low, cool (blue) at high
@@ -1336,11 +1359,11 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
             self.thumbHighView.hidden = NO;
             self.thumbHighView.backgroundColor = [UIColor colorWithRed:0.3 green:0.6 blue:1.0 alpha:1.0];
             if (self.arcRadius > 0) {
-                [self positionThumbAtTemperature:targetTempLow.doubleValue];
-                [self positionHighThumbAtTemperature:targetTempHigh.doubleValue];
+                [self positionThumbAtTemperature:effectiveTargetTempLow.doubleValue];
+                [self positionHighThumbAtTemperature:effectiveTargetTempHigh.doubleValue];
             }
-        } else if (targetTemp && ![mode isEqualToString:@"off"]) {
-            [self applyArcFillForTarget:targetTemp.doubleValue
+        } else if (effectiveTargetTemp && ![mode isEqualToString:@"off"]) {
+            [self applyArcFillForTarget:effectiveTargetTemp.doubleValue
                             currentTemp:currentTemp
                               direction:self.fillDirection
                                  action:action];
@@ -1348,7 +1371,7 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
             self.thumbHighView.hidden = YES;
             self.thumbView.backgroundColor = modeColor;
             if (self.arcRadius > 0) {
-                [self positionThumbAtTemperature:targetTemp.doubleValue];
+                [self positionThumbAtTemperature:effectiveTargetTemp.doubleValue];
             }
         } else {
             [self applyArcFillForTarget:0.0 currentTemp:nil direction:HAGaugeFillNone action:nil];
@@ -1590,18 +1613,7 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
 - (void)applyOptimisticSingleTemp:(double)newTarget {
     if (self.showCurrentAsPrimary) {
         // tempLabel shows current room temp — keep it; update the secondary label with the new target
-        NSString *tempIcon = [HAIconMapper glyphForIconName:@"home-thermometer-outline"]
-                          ?: [HAIconMapper glyphForIconName:@"thermometer"]
-                          ?: @"◎";
-        CGFloat sz = 16.0;
-        NSMutableAttributedString *attr = [[NSMutableAttributedString alloc] initWithString:tempIcon
-            attributes:@{NSFontAttributeName: [HAIconMapper mdiFontOfSize:sz],
-                         NSForegroundColorAttributeName: [HATheme secondaryTextColor]}];
-        [attr appendAttributedString:[[NSAttributedString alloc]
-            initWithString:[NSString stringWithFormat:@" %.1f %@", newTarget, self.tempUnitString]
-            attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:sz weight:UIFontWeightMedium],
-                         NSForegroundColorAttributeName: [HATheme secondaryTextColor]}]];
-        self.targetLabel.attributedText = attr;
+        self.targetLabel.attributedText = [self secondaryTempAttributedStringForValue:newTarget];
         self.targetLabel.hidden = NO;
     } else {
         self.tempLabel.text = [NSString stringWithFormat:@"%.1f%@", newTarget, self.tempUnitString];
