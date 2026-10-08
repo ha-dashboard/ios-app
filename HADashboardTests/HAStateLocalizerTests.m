@@ -403,6 +403,59 @@
     XCTAssertNil([[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"sensor" attr:nil]);
 }
 
+#pragma mark - Attribute VALUE lookup (plan §2.4, verified live against HA 2026.9.4)
+
+- (void)testLocalizedAttributeValueHitsLiveHAData {
+    NSDictionary *en = [self loadFixtureNamed:@"ha-translations-en"];
+    [[HAStateLocalizer sharedLocalizer] test_setResources:en languageCode:@"en"];
+
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"preset_mode" value:@"away"], @"Away");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"fan_mode" value:@"high"], @"High");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"swing_mode" value:@"vertical"], @"Vertical");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"hvac_action" value:@"heating"], @"Heating");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"humidifier" deviceClass:nil attr:@"mode" value:@"auto"], @"Auto");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"water_heater" deviceClass:nil attr:@"operation_mode" value:@"eco"], @"Eco");
+}
+
+- (void)testLocalizedAttributeValueFollowsLanguage {
+    NSDictionary *fr = [self loadFixtureNamed:@"ha-translations-fr"];
+    [[HAStateLocalizer sharedLocalizer] test_setResources:fr languageCode:@"fr"];
+
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"preset_mode" value:@"away"], @"Absent");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"fan_mode" value:@"high"], @"Élevée");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"hvac_action" value:@"idle"], @"Inactif");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"humidifier" deviceClass:nil attr:@"mode" value:@"away"], @"Absent");
+    XCTAssertEqualObjects([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"water_heater" deviceClass:nil attr:@"operation_mode" value:@"off"], @"Arrêt");
+}
+
+- (void)testLocalizedAttributeValueFallsBackToAlgorithmicPrettifierOnMiss {
+    // Empty localizer -- no HA data at all. Must still return something
+    // reasonable (the same algorithmic prettifier the rest of the app
+    // uses), never the raw unprettified value, matching
+    // -localizedStateForDomain:…'s own fallback chain.
+    NSString *result = [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"preset_mode" value:@"away"];
+    XCTAssertEqualObjects(result, @"Away"); // humanReadableState("away") == "Away"
+}
+
+- (void)testLocalizedAttributeValueDeviceClassBucketBeatsGenericBucket {
+    // Verified live: HA's `event` domain keys event_type by device_class
+    // ("button"/"doorbell"), not the generic "_" bucket -- confirms the
+    // device_class rung is real and must be checked, same shape as
+    // -localizedStateForDomain:….
+    NSDictionary *fixture = @{
+        @"component.event.entity_component.button.state_attributes.event_type.state.press_start": @"Press start",
+        @"component.event.entity_component._.state_attributes.event_type.state.press_start": @"Generic press start",
+    };
+    [[HAStateLocalizer sharedLocalizer] test_setResources:fixture languageCode:@"en"];
+
+    NSString *withDeviceClass = [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"event" deviceClass:@"button" attr:@"event_type" value:@"press_start"];
+    XCTAssertEqualObjects(withDeviceClass, @"Press start");
+}
+
+- (void)testLocalizedAttributeValueReturnsValueUnchangedWhenNil {
+    XCTAssertNil([[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate" deviceClass:nil attr:@"preset_mode" value:nil]);
+}
+
 #pragma mark - Cold-start language (plan §2.7 cold-start gap)
 
 - (void)testColdStartPrefersOverrideOverPersistedAndAppChrome {

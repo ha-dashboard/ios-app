@@ -51,6 +51,14 @@ static BOOL HAStateLocalizerIsRunningUnderXCTest(void) {
     return [NSString stringWithFormat:@"component.%@.entity_component._.state_attributes.%@.name", domain, attr];
 }
 
++ (NSString *)dottedAttributeValueKeyForDomain:(NSString *)domain
+                                     deviceClass:(NSString *)deviceClass
+                                             attr:(NSString *)attr
+                                            value:(NSString *)value {
+    NSString *bucket = deviceClass.length > 0 ? deviceClass : @"_";
+    return [NSString stringWithFormat:@"component.%@.entity_component.%@.state_attributes.%@.state.%@", domain, bucket, attr, value];
+}
+
 + (NSString *)cacheFilenameForLanguage:(NSString *)languageCode {
     return [NSString stringWithFormat:@"%@%@%@", kHAStateLocalizerCacheFilePrefix, languageCode, kHAStateLocalizerCacheFileSuffix];
 }
@@ -226,6 +234,25 @@ static BOOL HAStateLocalizerIsRunningUnderXCTest(void) {
     NSString *key = [[self class] dottedAttributeNameKeyForDomain:domain attr:attr];
     NSString *hit = self.resources[key];
     return hit.length > 0 ? hit : nil;
+}
+
+- (nullable NSString *)localizedAttributeValueForDomain:(NSString *)domain
+                                               deviceClass:(NSString *)deviceClass
+                                                      attr:(NSString *)attr
+                                                     value:(NSString *)value {
+    if (value == nil) return value;
+    if (domain.length > 0 && attr.length > 0) {
+        if (deviceClass.length > 0) {
+            NSString *deviceClassKey = [[self class] dottedAttributeValueKeyForDomain:domain deviceClass:deviceClass attr:attr value:value];
+            NSString *liveHit = self.resources[deviceClassKey];
+            if (liveHit.length > 0) return liveHit;
+        }
+        NSString *bucketKey = [[self class] dottedAttributeValueKeyForDomain:domain deviceClass:nil attr:attr value:value];
+        NSString *liveBucketHit = self.resources[bucketKey];
+        if (liveBucketHit.length > 0) return liveBucketHit;
+    }
+    NSString *human = [HAEntityDisplayHelper humanReadableState:value];
+    return human.length > 0 ? human : value;
 }
 
 #pragma mark - Cache load (sync, launch-time)

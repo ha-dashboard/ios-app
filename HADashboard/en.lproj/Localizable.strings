@@ -938,3 +938,9 @@
 
 /* Action-sheet title for picking a water heater operation mode. */
 "alert.entity_detail.water_heater_operation_mode.title" = "Operation Mode";
+
+/* Prefix before the current-humidity percentage in the humidifier cell's info line. %.0f is the percentage value. */
+"cell.humidifier.current_humidity" = "Current: %.0f%%";
+
+/* Collapsed mode button in the humidifier cell, shown when no mode is set. Also used as the mode-picker action-sheet title. */
+"cell.humidifier.mode_button" = "Mode";

@@ -3502,7 +3502,8 @@
                                                                   message:nil
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
     for (NSString *mode in modes) {
-        [alert addAction:[UIAlertAction actionWithTitle:[mode capitalizedString] style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *displayTitle = [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"water_heater" deviceClass:nil attr:@"operation_mode" value:mode];
+        [alert addAction:[UIAlertAction actionWithTitle:displayTitle style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
             [HAHaptics lightImpact];
             self.serviceBlock(@"set_operation_mode", @"water_heater", @{@"operation_mode": mode}, self.entity.entityId);
         }]];

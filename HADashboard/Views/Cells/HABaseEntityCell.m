@@ -2,6 +2,7 @@
 #import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAEntityDisplayHelper.h"
+#import "HAStateLocalizer.h"
 #import "HADashboardConfig.h"
 #import "HATheme.h"
 #import "HAIconMapper.h"
@@ -243,6 +244,17 @@ static const CGFloat kHeadingGap = 2.0;
                         current:(NSString *)current
                      sourceView:(UIView *)sourceView
                         handler:(void(^)(NSString *selected))handler {
+    [self presentOptionsWithTitle:title options:options current:current sourceView:sourceView
+                            domain:nil attr:nil handler:handler];
+}
+
+- (void)presentOptionsWithTitle:(NSString *)title
+                        options:(NSArray<NSString *> *)options
+                        current:(NSString *)current
+                     sourceView:(UIView *)sourceView
+                         domain:(NSString *)domain
+                           attr:(NSString *)attr
+                        handler:(void(^)(NSString *selected))handler {
     UIViewController *vc = [self ha_parentViewController];
     if (!vc) return;
 
@@ -250,7 +262,10 @@ static const CGFloat kHeadingGap = 2.0;
                                                                   message:nil
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
     for (NSString *option in options) {
-        UIAlertAction *action = [UIAlertAction actionWithTitle:[option capitalizedString]
+        NSString *displayTitle = (domain.length > 0 && attr.length > 0)
+            ? [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:domain deviceClass:nil attr:attr value:option]
+            : [option capitalizedString];
+        UIAlertAction *action = [UIAlertAction actionWithTitle:displayTitle
                                                          style:UIAlertActionStyleDefault
                                                        handler:^(UIAlertAction *a) {
             [HAHaptics lightImpact];

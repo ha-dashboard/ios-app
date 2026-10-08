@@ -18,5 +18,16 @@
   "component.sensor.entity_component._.state_attributes.battery.name": "Batterie",
   "component.light.entity_component._.state_attributes.color_temp_kelvin.name": "Température de couleur (Kelvin)",
   "component.climate.entity_component._.state_attributes.fan_mode.name": "Mode de ventilation",
-  "component.cover.entity_component._.state_attributes.current_tilt_position.name": "Inclinaison"
+  "component.cover.entity_component._.state_attributes.current_tilt_position.name": "Inclinaison",
+  "component.climate.entity_component._.state_attributes.preset_mode.state.away": "Absent",
+  "component.climate.entity_component._.state_attributes.preset_mode.state.eco": "Éco",
+  "component.climate.entity_component._.state_attributes.fan_mode.state.high": "Élevée",
+  "component.climate.entity_component._.state_attributes.fan_mode.state.low": "Faible",
+  "component.climate.entity_component._.state_attributes.swing_mode.state.vertical": "Verticale",
+  "component.climate.entity_component._.state_attributes.hvac_action.state.heating": "Chauffe",
+  "component.climate.entity_component._.state_attributes.hvac_action.state.idle": "Inactif",
+  "component.humidifier.entity_component._.state_attributes.mode.state.auto": "Auto",
+  "component.humidifier.entity_component._.state_attributes.mode.state.away": "Absent",
+  "component.water_heater.entity_component._.state_attributes.operation_mode.state.eco": "Éco",
+  "component.water_heater.entity_component._.state_attributes.operation_mode.state.off": "Arrêt"
 }
