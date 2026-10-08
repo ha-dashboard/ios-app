@@ -1,4 +1,5 @@
 #import "HAUpdateEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -24,7 +25,7 @@
 
     // Update button
     self.updateButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.updateButton setTitle:@"Update" forState:UIControlStateNormal];
+    [self.updateButton setTitle:HALocalizedString(@"cell.update.update", @"Button in the update cell, installs an available update. Max ~10 chars.") forState:UIControlStateNormal];
     self.updateButton.titleLabel.font = [UIFont boldSystemFontOfSize:13];
     self.updateButton.backgroundColor = [HATheme accentColor];
     [self.updateButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
@@ -69,7 +70,7 @@
 
     // Skip button (below update button)
     self.skipButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.skipButton setTitle:@"Skip" forState:UIControlStateNormal];
+    [self.skipButton setTitle:HALocalizedString(@"cell.update.skip", @"Button in the update cell, skips an available update version. Max ~10 chars.") forState:UIControlStateNormal];
     self.skipButton.titleLabel.font = [UIFont systemFontOfSize:11 weight:UIFontWeightMedium];
     self.skipButton.translatesAutoresizingMaskIntoConstraints = NO;
     self.skipButton.hidden = YES;
@@ -101,11 +102,11 @@
         self.contentView.backgroundColor = [HATheme activeTintColor];
 
         if (isUpdating) {
-            [self.updateButton setTitle:@"Installing\u2026" forState:UIControlStateNormal];
+            [self.updateButton setTitle:HALocalizedString(@"cell.update.installing", @"Button in the update cell, shown while an update is being installed. Max ~14 chars.") forState:UIControlStateNormal];
             self.updateButton.enabled = NO;
             self.skipButton.enabled = NO;
         } else {
-            [self.updateButton setTitle:@"Update" forState:UIControlStateNormal];
+            [self.updateButton setTitle:HALocalizedString(@"cell.update.update", @"Button in the update cell, installs an available update. Max ~10 chars.") forState:UIControlStateNormal];
             self.updateButton.enabled = entity.isAvailable;
             self.skipButton.enabled = entity.isAvailable;
         }
@@ -119,7 +120,7 @@
             self.summaryLabel.hidden = YES;
         }
     } else {
-        self.versionLabel.text = [NSString stringWithFormat:@"v%@ (up to date)", installed];
+        self.versionLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.update.up_to_date", @"Version label in the update cell, shown when the installed version is already current. %@ is the installed version."), installed];
         self.versionLabel.textColor = [HATheme secondaryTextColor];
         self.updateButton.hidden = YES;
         self.skipButton.hidden = YES;

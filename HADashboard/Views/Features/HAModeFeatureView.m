@@ -1,10 +1,12 @@
 #import "HAModeFeatureView.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAEntity+Climate.h"
 #import "HAEntityAttributes.h"
 #import "HATheme.h"
 #import "HAHaptics.h"
 #import "HAEntityDisplayHelper.h"
+#import "HAStateLocalizer.h"
 #import "HAIconMapper.h"
 #import "UIView+HAUtilities.h"
 
@@ -173,7 +175,8 @@
 - (void)setupDropdownForAvailable:(BOOL)available {
     self.dropdownButton = [UIButton buttonWithType:UIButtonTypeSystem];
     self.dropdownButton.translatesAutoresizingMaskIntoConstraints = NO;
-    NSString *displayName = self.currentMode ? [self displayNameForMode:self.currentMode] : @"Select";
+    NSString *displayName = self.currentMode ? [self displayNameForMode:self.currentMode]
+        : HALocalizedString(@"feature.mode.select_placeholder", @"Dropdown button placeholder in the mode-feature strip (climate/alarm mode picker) when no mode is currently known.");
     [self.dropdownButton setTitle:[NSString stringWithFormat:@"%@ \u25BE", displayName] forState:UIControlStateNormal]; // ▾
     self.dropdownButton.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
     [self.dropdownButton setTitleColor:[HATheme primaryTextColor] forState:UIControlStateNormal];
@@ -226,7 +229,7 @@
         [sheet addAction:action];
     }
 
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [sheet addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     // iPad popover anchor
     sheet.popoverPresentationController.sourceView = sender;
@@ -280,6 +283,43 @@
 #pragma mark - Display Helpers
 
 - (NSString *)displayNameForMode:(NSString *)mode {
+    // climate-hvac-modes and alarm-modes are the entity's own `state` value
+    // (plan §2.2) -- HA translates these the same way as any other entity
+    // state (`component.climate.entity_component._.state.heat` = "Heat" /
+    // "Chauffage"), so route them through -localizedStateForDomain:….
+    //
+    // climate-preset-modes and climate-fan-modes are ATTRIBUTE values
+    // (`preset_mode`/`fan_mode`), translated under a different key
+    // template (`…state_attributes.{attr}.state.{value}`, plan §2.4,
+    // verified live) -- route through -localizedAttributeValueForDomain:…,
+    // which already falls back to the algorithmic prettifier internally
+    // when HA has no live data yet, so no separate fallback is needed here.
+    if ([self.featureType isEqualToString:@"climate-hvac-modes"]) {
+        NSString *localized = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"climate"
+                                                                                deviceClass:nil
+                                                                                   platform:nil
+                                                                             translationKey:nil
+                                                                                      state:mode];
+        if (localized.length > 0) return localized;
+    } else if ([self.featureType isEqualToString:@"alarm-modes"]) {
+        NSString *localized = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"alarm_control_panel"
+                                                                                deviceClass:nil
+                                                                                   platform:nil
+                                                                             translationKey:nil
+                                                                                      state:mode];
+        if (localized.length > 0) return localized;
+    } else if ([self.featureType isEqualToString:@"climate-preset-modes"]) {
+        return [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate"
+                                                                           deviceClass:nil
+                                                                                  attr:@"preset_mode"
+                                                                                 value:mode];
+    } else if ([self.featureType isEqualToString:@"climate-fan-modes"]) {
+        return [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"climate"
+                                                                           deviceClass:nil
+                                                                                  attr:@"fan_mode"
+                                                                                 value:mode];
+    }
+
     // "heat_cool" → "Heat/Cool", "armed_home" → "Armed Home"
     NSString *formatted = [mode stringByReplacingOccurrencesOfString:@"_" withString:@" "];
     return [formatted capitalizedString];

@@ -1,4 +1,5 @@
 #import "HAVacuumEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -203,16 +204,27 @@ static const CGFloat kButtonSpacing  = 12.0;
     self.fanSpeedButton.hidden = !showFanSpeed;
 
     if (!entity) {
-        self.statusLabel2.text = @"Unavailable";
+        self.statusLabel2.text = HALocalizedString(@"cell.vacuum.unavailable", @"Status label fallback in the vacuum cell, shown when the entity is unavailable.");
         [self applyIconColorForState:nil];
         [self updateButtonIcons:nil];
         return;
     }
 
-    // Status text: vacuum status with optional battery
+    // Status text: vacuum status with optional battery.
+    // `vacuumStatus` prefers an integration-specific `status` attribute over
+    // the entity's own `state` (HAEntity.m). Only the latter is something HA
+    // translates server-side (docs/plans/i18n-plan.md \u00a72) -- a custom
+    // attribute's text is integration-authored and not covered by
+    // `frontend/get_translations`, so it stays on the existing
+    // humanReadableState: prettifier. When there's no such attribute, route
+    // through the shared helper (-> HAStateLocalizer) like every other
+    // domain, instead of bypassing it.
     NSString *vacuumState = [entity vacuumStatus] ?: entity.state ?: @"unknown";
+    NSString *localizedStatus = [vacuumState isEqualToString:entity.state]
+        ? [HAEntityDisplayHelper formattedStateForEntity:entity decimals:1]
+        : [HAEntityDisplayHelper humanReadableState:vacuumState];
     NSNumber *battery = [entity vacuumBatteryLevel];
-    NSMutableString *display = [NSMutableString stringWithString:[HAEntityDisplayHelper humanReadableState:vacuumState]];
+    NSMutableString *display = [NSMutableString stringWithString:localizedStatus ?: @""];
     if (battery) {
         [display appendFormat:@" \u2022 %@%%", battery];
     }

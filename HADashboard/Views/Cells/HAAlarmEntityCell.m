@@ -1,4 +1,5 @@
 #import "HAAlarmEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAEntityAttributes.h"
 #import "HAConnectionManager.h"
@@ -70,22 +71,22 @@ static const NSInteger kKeypadTagEnter = 11;
     [self.contentView addSubview:self.alarmStateLabel];
 
     // Action buttons: Disarm / Home / Away
-    self.armAwayButton = [self createActionButtonWithTitle:@"Away"
+    self.armAwayButton = [self createActionButtonWithTitle:HALocalizedString(@"cell.alarm.away", @"Button in the alarm cell, arms in away mode. Max ~10 chars -- pill button.")
                                                     color:[HATheme destructiveColor]
                                                    action:@selector(armAwayTapped)];
-    self.armHomeButton = [self createActionButtonWithTitle:@"Home"
+    self.armHomeButton = [self createActionButtonWithTitle:HALocalizedString(@"cell.alarm.home", @"Button in the alarm cell, arms in home mode. Max ~10 chars -- pill button.")
                                                     color:[HATheme warningColor]
                                                    action:@selector(armHomeTapped)];
-    self.armNightButton = [self createActionButtonWithTitle:@"Night"
+    self.armNightButton = [self createActionButtonWithTitle:HALocalizedString(@"cell.alarm.night", @"Button in the alarm cell, arms in night mode. Max ~10 chars -- pill button.")
                                                       color:[HATheme destructiveColor]
                                                      action:@selector(armNightTapped)];
-    self.armVacationButton = [self createActionButtonWithTitle:@"Vacation"
+    self.armVacationButton = [self createActionButtonWithTitle:HALocalizedString(@"cell.alarm.vacation", @"Button in the alarm cell, arms in vacation mode. Max ~10 chars -- pill button.")
                                                         color:[HATheme destructiveColor]
                                                        action:@selector(armVacationTapped)];
-    self.armBypassButton = [self createActionButtonWithTitle:@"Bypass"
+    self.armBypassButton = [self createActionButtonWithTitle:HALocalizedString(@"cell.alarm.bypass", @"Button in the alarm cell, arms with custom bypass. Max ~10 chars -- pill button.")
                                                       color:[HATheme warningColor]
                                                      action:@selector(armBypassTapped)];
-    self.disarmButton = [self createActionButtonWithTitle:@"Disarm"
+    self.disarmButton = [self createActionButtonWithTitle:HALocalizedString(@"cell.alarm.disarm", @"Button in the alarm cell, disarms the alarm. Max ~10 chars -- pill button.")
                                                    color:[HATheme successColor]
                                                   action:@selector(disarmTapped)];
 
@@ -95,7 +96,7 @@ static const NSInteger kKeypadTagEnter = 11;
     self.codeTextField.textColor = [HATheme primaryTextColor];
     self.codeTextField.textAlignment = NSTextAlignmentCenter;
     self.codeTextField.secureTextEntry = YES;
-    self.codeTextField.placeholder = @"Code";
+    self.codeTextField.placeholder = HALocalizedString(@"cell.alarm.code", @"Text field placeholder in the alarm cell's code entry field.");
     self.codeTextField.backgroundColor = [HATheme controlBackgroundColor];
     self.codeTextField.layer.cornerRadius = 8.0;
     self.codeTextField.layer.borderWidth = 1.0;
@@ -346,15 +347,15 @@ static const NSInteger kKeypadTagEnter = 11;
 }
 
 - (NSString *)displayStringForState:(NSString *)state {
-    if ([state isEqualToString:@"armed_away"]) return @"Armed Away";
-    if ([state isEqualToString:@"armed_home"]) return @"Armed Home";
-    if ([state isEqualToString:@"armed_night"]) return @"Armed Night";
-    if ([state isEqualToString:@"armed_vacation"]) return @"Armed Vacation";
-    if ([state isEqualToString:@"disarmed"]) return @"Disarmed";
-    if ([state isEqualToString:@"pending"]) return @"Pending";
-    if ([state isEqualToString:@"arming"]) return @"Arming";
-    if ([state isEqualToString:@"triggered"]) return @"TRIGGERED";
-    return state ?: @"Unknown";
+    if ([state isEqualToString:@"armed_away"]) return HALocalizedString(@"cell.alarm.state.armed_away", @"State badge text in the alarm cell.");
+    if ([state isEqualToString:@"armed_home"]) return HALocalizedString(@"cell.alarm.state.armed_home", @"State badge text in the alarm cell.");
+    if ([state isEqualToString:@"armed_night"]) return HALocalizedString(@"cell.alarm.state.armed_night", @"State badge text in the alarm cell.");
+    if ([state isEqualToString:@"armed_vacation"]) return HALocalizedString(@"cell.alarm.state.armed_vacation", @"State badge text in the alarm cell.");
+    if ([state isEqualToString:@"disarmed"]) return HALocalizedString(@"cell.alarm.state.disarmed", @"State badge text in the alarm cell.");
+    if ([state isEqualToString:@"pending"]) return HALocalizedString(@"cell.alarm.state.pending", @"State badge text in the alarm cell.");
+    if ([state isEqualToString:@"arming"]) return HALocalizedString(@"cell.alarm.state.arming", @"State badge text in the alarm cell.");
+    if ([state isEqualToString:@"triggered"]) return HALocalizedString(@"cell.alarm.state.triggered", @"State badge text in the alarm cell, all-caps.");
+    return state ?: HALocalizedString(@"cell.alarm.state.unknown", @"State badge fallback text in the alarm cell, shown when the state is nil.");
 }
 
 #pragma mark - Keypad Actions

@@ -4,6 +4,7 @@
 #import "HADashboardConfig.h"
 #import "HAIconMapper.h"
 #import "HATheme.h"
+#import "HAStateLocalizer.h"
 
 @implementation HAEntityDisplayHelper
 
@@ -72,7 +73,27 @@
         if (relative) return relative;
     }
 
-    return state;
+    // Every other non-numeric, non-timestamp state (lock, climate, cover,
+    // alarm_control_panel, media_player, vacuum, person, device_tracker,
+    // scene, …) goes through the same HA-translation chain as binary_sensor
+    // above, via HAStateLocalizer. This is the fix for
+    // docs/plans/i18n-plan.md §2.5/§2.7 item 4-adjacent gap: before this,
+    // only binary_sensor was routed here, so e.g. a person entity's
+    // `not_home` reached every caller of -formattedStateForEntity: (tiles,
+    // the entities card, glance items, badge/chip rows, the generic
+    // HAEntityCardCell a Mushroom/Bubble custom card falls back to, …) as
+    // the raw, untranslated state string -- exactly psolyca's report in
+    // issue #19, just reached through a different cell than
+    // HAPersonEntityCell. `platform`/`translationKey` are nil because
+    // HAEntity does not carry the entity-registry's translation_key (the
+    // `entity` category Phase 2 deliberately does not fetch — see plan
+    // §2.7); HAStateLocalizer accepts and ignores them for exactly this
+    // call shape.
+    return [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:[entity domain]
+                                                             deviceClass:deviceClass
+                                                                platform:nil
+                                                          translationKey:nil
+                                                                   state:state];
 }
 
 + (NSString *)stateWithUnitForEntity:(HAEntity *)entity decimals:(NSInteger)decimals {
@@ -98,60 +119,17 @@
 #pragma mark - Binary Sensor State
 
 + (NSString *)binarySensorStateForDeviceClass:(NSString *)deviceClass isOn:(BOOL)isOn {
-    if (!deviceClass) return isOn ? @"On" : @"Off";
-
-    // Map device_class + state to friendly strings (matching HA frontend)
-    static NSDictionary *onStates = nil;
-    static NSDictionary *offStates = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        onStates = @{
-            @"door":             @"Open",
-            @"lock":             @"Unlocked",
-            @"window":           @"Open",
-            @"garage_door":      @"Open",
-            @"opening":          @"Open",
-            @"connectivity":     @"Connected",
-            @"plug":             @"Plugged In",
-            @"battery":          @"Low",
-            @"battery_charging": @"Charging",
-            @"motion":           @"Detected",
-            @"occupancy":        @"Detected",
-            @"moisture":         @"Wet",
-            @"smoke":            @"Detected",
-            @"problem":          @"Problem",
-            @"safety":           @"Unsafe",
-            @"running":          @"Running",
-            @"update":           @"Update Available",
-            @"presence":         @"Home",
-            @"power":            @"On",
-        };
-        offStates = @{
-            @"door":             @"Closed",
-            @"lock":             @"Locked",
-            @"window":           @"Closed",
-            @"garage_door":      @"Closed",
-            @"opening":          @"Closed",
-            @"connectivity":     @"Disconnected",
-            @"plug":             @"Unplugged",
-            @"battery":          @"Normal",
-            @"battery_charging": @"Not Charging",
-            @"motion":           @"Clear",
-            @"occupancy":        @"Clear",
-            @"moisture":         @"Dry",
-            @"smoke":            @"Clear",
-            @"problem":          @"OK",
-            @"safety":           @"Safe",
-            @"running":          @"Not Running",
-            @"update":           @"Up-to-date",
-            @"presence":         @"Away",
-            @"power":            @"Off",
-        };
-    });
-
-    NSDictionary *map = isOn ? onStates : offStates;
-    NSString *result = map[deviceClass];
-    return result ?: (isOn ? @"On" : @"Off");
+    // Device-class + state → friendly string now comes from Home Assistant's
+    // own `entity_component` translations (docs/plans/i18n-plan.md §2), not
+    // an app-hardcoded English table. HAStateLocalizer falls back to the
+    // exact pre-Phase-2 defaults when it has no HA data yet, so this stays
+    // byte-identical on first launch / offline / under test.
+    NSString *state = isOn ? @"on" : @"off";
+    return [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"binary_sensor"
+                                                             deviceClass:deviceClass
+                                                                platform:nil
+                                                          translationKey:nil
+                                                                   state:state];
 }
 
 #pragma mark - Human Readable State
@@ -182,29 +160,49 @@
 #pragma mark - Number Formatting
 
 + (NSString *)formattedNumberString:(double)value decimals:(NSInteger)decimals {
-    static NSNumberFormatter *formatter = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        formatter = [[NSNumberFormatter alloc] init];
-        formatter.numberStyle = NSNumberFormatterDecimalStyle;
-        formatter.usesGroupingSeparator = YES;
-    });
-
-    formatter.minimumFractionDigits = 0;
-    formatter.maximumFractionDigits = decimals;
-
     // Round via string formatting to avoid IEEE 754 precision artifacts
     NSString *fmt = [NSString stringWithFormat:@"%%.%ldf", (long)decimals];
     NSString *roundedStr = [NSString stringWithFormat:fmt, value];
     double rounded = [roundedStr doubleValue];
 
     // If the rounded value is an integer, show no decimal places
-    if (rounded == floor(rounded) && decimals > 0) {
-        formatter.maximumFractionDigits = 0;
-    }
+    NSInteger effectiveDecimals = (rounded == floor(rounded) && decimals > 0) ? 0 : decimals;
 
+    NSNumberFormatter *formatter = [self numberFormatterWithMaximumFractionDigits:effectiveDecimals];
     NSString *result = [formatter stringFromNumber:@(rounded)];
     return result ?: [NSString stringWithFormat:@"%g", rounded];
+}
+
+/// Returns an immutable, never-mutated-after-creation formatter for a given
+/// `maximumFractionDigits`, from a small cache keyed by that decimal count.
+///
+/// The previous implementation kept one `dispatch_once`-created formatter
+/// and mutated `minimumFractionDigits`/`maximumFractionDigits` on it per
+/// call with no synchronization — a genuine data race if this method is
+/// ever called from more than one thread (set-then-read on a shared mutable
+/// object). Keying a small `NSCache` by decimal count avoids the race
+/// without needing a lock around the mutation: each formatter, once built,
+/// is never changed again.
++ (NSNumberFormatter *)numberFormatterWithMaximumFractionDigits:(NSInteger)decimals {
+    static NSCache<NSNumber *, NSNumberFormatter *> *cache = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        cache = [[NSCache alloc] init];
+    });
+
+    NSNumber *key = @(decimals);
+    @synchronized (cache) {
+        NSNumberFormatter *cached = [cache objectForKey:key];
+        if (cached) return cached;
+
+        NSNumberFormatter *formatter = [[NSNumberFormatter alloc] init];
+        formatter.numberStyle = NSNumberFormatterDecimalStyle;
+        formatter.usesGroupingSeparator = YES;
+        formatter.minimumFractionDigits = 0;
+        formatter.maximumFractionDigits = decimals;
+        [cache setObject:formatter forKey:key];
+        return formatter;
+    }
 }
 
 #pragma mark - Duration Formatting

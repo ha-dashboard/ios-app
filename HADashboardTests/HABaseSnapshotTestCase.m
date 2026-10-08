@@ -24,10 +24,28 @@
 #pragma mark - Reference / Failure Image Directories
 
 /// Override to point at our source tree ReferenceImages directory.
+///
+/// Reference images are deterministic only when recorded and compared on
+/// the same simulator runtime (rendering/font metrics differ across iOS
+/// versions). Set HA_SNAPSHOT_RUNTIME_SUFFIX (e.g. "_ios18") via
+/// scripts/test-snapshots.sh to record or compare against a separate,
+/// OS-tagged directory without touching the existing "ReferenceImages_64"
+/// set recorded on iOS 17.4 — left unset, behavior is unchanged. This is a
+/// compile-time define (GCC_PREPROCESSOR_DEFINITIONS, same mechanism as
+/// RECORD_SNAPSHOTS below) rather than a runtime environment variable,
+/// because the simulator-hosted test process does not inherit the
+/// invoking shell's environment. See CLAUDE.md Testing section for the
+/// pinned runtime and the re-record procedure.
 - (NSString *)getReferenceImageDirectoryWithDefault:(NSString *)dir {
     NSString *thisFile = @__FILE__;
     NSString *testDir = [thisFile stringByDeletingLastPathComponent];
-    return [testDir stringByAppendingPathComponent:@"ReferenceImages"];
+#ifdef HA_SNAPSHOT_RUNTIME_SUFFIX
+    NSString *runtimeSuffix = @HA_SNAPSHOT_RUNTIME_SUFFIX;
+#else
+    NSString *runtimeSuffix = @"";
+#endif
+    NSString *folderName = [@"ReferenceImages" stringByAppendingString:runtimeSuffix];
+    return [testDir stringByAppendingPathComponent:folderName];
 }
 
 /// Override to point at our source tree FailureDiffs directory.
@@ -75,6 +93,11 @@
 }
 
 - (void)verifyView:(UIView *)view identifier:(NSString *)identifier inTheme:(NSInteger)mode gradient:(BOOL)gradient {
+    [self verifyView:view identifier:identifier inTheme:mode gradient:gradient perPixelTolerance:0 overallTolerance:0];
+}
+
+- (void)verifyView:(UIView *)view identifier:(NSString *)identifier inTheme:(NSInteger)mode gradient:(BOOL)gradient
+ perPixelTolerance:(CGFloat)perPixelTolerance overallTolerance:(CGFloat)overallTolerance {
     HAThemeMode originalMode = [HATheme currentMode];
     BOOL originalGradient = [HATheme isGradientEnabled];
 
@@ -103,7 +126,11 @@
         suffixedIdentifier = themeSuffix;
     }
 
-    FBSnapshotVerifyView(view, suffixedIdentifier);
+    if (perPixelTolerance > 0 || overallTolerance > 0) {
+        FBSnapshotVerifyViewWithPixelOptions(view, suffixedIdentifier, FBSnapshotTestCaseDefaultSuffixes(), perPixelTolerance, overallTolerance);
+    } else {
+        FBSnapshotVerifyView(view, suffixedIdentifier);
+    }
 
     [HATheme setCurrentMode:originalMode];
     [HATheme setGradientEnabled:originalGradient];

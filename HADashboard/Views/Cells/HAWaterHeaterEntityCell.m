@@ -1,10 +1,12 @@
 #import "HAWaterHeaterEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
 #import "HATheme.h"
 #import "HAHaptics.h"
 #import "HAEntityDisplayHelper.h"
+#import "HAStateLocalizer.h"
 #import "HAIconMapper.h"
 #import "UIView+HAUtilities.h"
 
@@ -79,12 +81,12 @@
     NSString *unit = entity.attributes[@"temperature_unit"] ?: @"\u00B0C";
     self.tempLabel.text = target
         ? [NSString stringWithFormat:@"%@%@", target, unit]
-        : @"--";
+        : HALocalizedString(@"cell.water_heater.no_value", @"Temperature label fallback in the water heater cell, shown when no target temperature is available.");
 
     // Current temperature
     NSNumber *current = entity.attributes[@"current_temperature"];
     if ([current isKindOfClass:[NSNumber class]]) {
-        self.currentTempLabel.text = [NSString stringWithFormat:@"Currently %@%@", current, unit];
+        self.currentTempLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.water_heater.currently", @"Current temperature label in the water heater cell. %1$@ is the current temperature, %2$@ is the unit."), current, unit];
         self.currentTempLabel.hidden = NO;
     } else {
         self.currentTempLabel.hidden = YES;
@@ -93,7 +95,8 @@
     // Operation mode
     NSString *opMode = entity.attributes[@"operation_mode"];
     if ([opMode isKindOfClass:[NSString class]]) {
-        [self.modeButton setTitle:[NSString stringWithFormat:@"%@ \u25BE", [opMode capitalizedString]]
+        NSString *localizedMode = [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"water_heater" deviceClass:nil attr:@"operation_mode" value:opMode];
+        [self.modeButton setTitle:[NSString stringWithFormat:@"%@ \u25BE", localizedMode]
                          forState:UIControlStateNormal];
         self.modeButton.hidden = NO;
     } else {
@@ -141,7 +144,8 @@
 
     NSString *current = self.entity.attributes[@"operation_mode"];
     [self presentOptionsWithTitle:nil options:modes current:current sourceView:self.modeButton
-                          handler:^(NSString *selected) {
+                            domain:@"water_heater" attr:@"operation_mode"
+                           handler:^(NSString *selected) {
         [HAHaptics lightImpact];
         [self callService:@"set_operation_mode" inDomain:@"water_heater"
                  withData:@{@"operation_mode": selected}];

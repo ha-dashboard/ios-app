@@ -1,4 +1,5 @@
 #import "HALoginViewController.h"
+#import "HAStrings.h"
 #import "HAConnectionFormView.h"
 #import "HAConstellationView.h"
 #import "HADashboardViewController.h"
@@ -21,7 +22,7 @@
 - (void)viewDidLoad {
     HALogD(@"auth", @"HALoginVC viewDidLoad BEGIN");
     [super viewDidLoad];
-    self.title = @"HA Dashboard";
+    self.title = HALocalizedString(@"login.nav_title", @"Navigation bar title for the login screen.");
     self.view.backgroundColor = [HATheme backgroundColor];
     self.navigationController.navigationBarHidden = YES;
 
@@ -170,7 +171,7 @@
 
     // Card title
     UILabel *cardTitle = [[UILabel alloc] init];
-    cardTitle.text = @"Connect to your server";
+    cardTitle.text = HALocalizedString(@"login.card_title", @"Card title on the login screen, above the connection form.");
     cardTitle.font = [UIFont systemFontOfSize:20 weight:UIFontWeightSemibold];
     cardTitle.textColor = [HATheme primaryTextColor];
     cardTitle.textAlignment = NSTextAlignmentCenter;
@@ -200,7 +201,7 @@
     [column addSubview:demoRow];
 
     UILabel *demoLabel = [[UILabel alloc] init];
-    demoLabel.text = @"Try Demo Mode";
+    demoLabel.text = HALocalizedString(@"login.try_demo_mode", @"Label next to the demo-mode toggle on the login screen.");
     demoLabel.font = [UIFont systemFontOfSize:14];
     demoLabel.textColor = [HATheme secondaryTextColor];
     demoLabel.translatesAutoresizingMaskIntoConstraints = NO;

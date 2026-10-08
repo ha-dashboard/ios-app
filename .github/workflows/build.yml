@@ -72,6 +72,9 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate --spec project.yml
 
+      - name: Validate translations
+        run: scripts/check-translations.sh
+
       - name: Build
         run: |
           xcodebuild build \
@@ -471,6 +474,8 @@ jobs:
           test "$(plutil -extract CFBundleVersion raw "$PLIST")" = "$RELEASE_BUILD_NUMBER"
           test -f "$APP/PrivacyInfo.xcprivacy"
           plutil -lint "$APP/PrivacyInfo.xcprivacy"
+          test -f "$APP/en.lproj/Localizable.strings"
+          plutil -lint "$APP/en.lproj/Localizable.strings"
 
           MACHO_MINIMUM=$(otool -l -arch arm64 "$BINARY" | awk '
             $1 == "cmd" && ($2 == "LC_BUILD_VERSION" || $2 == "LC_VERSION_MIN_IPHONEOS") { wanted = 1; next }
@@ -589,6 +594,8 @@ jobs:
           echo "Bundle ID: $(plutil -extract CFBundleIdentifier raw "$PLIST")"
           test -f "$APP/PrivacyInfo.xcprivacy"
           plutil -lint "$APP/PrivacyInfo.xcprivacy"
+          test -f "$APP/en.lproj/Localizable.strings"
+          plutil -lint "$APP/en.lproj/Localizable.strings"
           codesign --verify --deep --strict --verbose=2 "$APP"
 
       # ── Step 4: Export and verify Ad Hoc IPA before any upload ───────
@@ -630,6 +637,8 @@ jobs:
           test "$(plutil -extract CFBundleIdentifier raw "$APP/Info.plist")" = "com.hadashboard.app"
           test -f "$APP/PrivacyInfo.xcprivacy"
           plutil -lint "$APP/PrivacyInfo.xcprivacy"
+          test -f "$APP/en.lproj/Localizable.strings"
+          plutil -lint "$APP/en.lproj/Localizable.strings"
           for ARCH in armv7 arm64; do
             MINIMUM=$(otool -l -arch "$ARCH" "$BINARY" | awk '
               $1 == "cmd" && $2 == "LC_VERSION_MIN_IPHONEOS" { wanted = 1; next }
@@ -657,6 +666,8 @@ jobs:
           test "$(plutil -extract CFBundleVersion raw "$PLIST")" = "$RELEASE_BUILD_NUMBER"
           test -f "$APP/PrivacyInfo.xcprivacy"
           plutil -lint "$APP/PrivacyInfo.xcprivacy"
+          test -f "$APP/en.lproj/Localizable.strings"
+          plutil -lint "$APP/en.lproj/Localizable.strings"
           test "$(plutil -extract DTPlatformName raw "$PLIST")" = "iphoneos"
           DTXCODE=$(plutil -extract DTXcode raw "$PLIST")
           [[ "$DTXCODE" =~ ^[0-9]+$ ]]

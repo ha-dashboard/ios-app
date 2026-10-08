@@ -8,6 +8,8 @@
 #import "HAColorWheelView.h"
 #import "HAConnectionManager.h"
 #import "UIView+HAUtilities.h"
+#import "HAStrings.h"
+#import "HAStateLocalizer.h"
 
 #pragma mark - Light Detail Section
 
@@ -112,7 +114,7 @@
     // Color wheel (when HS/RGB/XY color is supported)
     if (self.hasHSColor) {
         self.colorLabel = [[UILabel alloc] init];
-        self.colorLabel.text = @"Color";
+        self.colorLabel.text = HALocalizedString(@"cell.entity_detail.light.color_label", @"Label above the color wheel in the light detail sheet. Short -- sits above a 200x200 wheel.");
         self.colorLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
         self.colorLabel.textColor = [HATheme secondaryTextColor];
         self.colorLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -138,7 +140,8 @@
     // Color temperature slider with gradient track
     if (self.hasColorTemp) {
         UILabel *ctLabel = [[UILabel alloc] init];
-        ctLabel.text = @"Color Temp";
+        ctLabel.text = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"light" attr:@"color_temp_kelvin"]
+            ?: HALocalizedString(@"attr.color_temp.name", @"Label above the color-temperature slider in the light detail sheet, used only when Home Assistant's own translation for light's color_temp_kelvin attribute is unavailable. Short -- sits above a narrow gradient slider.");
         ctLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
         ctLabel.textColor = [HATheme secondaryTextColor];
         ctLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -236,7 +239,7 @@
 
     // Flash button (quick identify blink)
     self.flashButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.flashButton setTitle:@"\u26A1 Flash" forState:UIControlStateNormal];
+    [self.flashButton setTitle:HALocalizedString(@"cell.entity_detail.light.flash_button", @"Button in the light detail sheet, briefly blinks the light to identify it. Includes a leading lightning-bolt glyph (\\u26A1). Max ~12 chars -- fixed-width button.") forState:UIControlStateNormal];
     self.flashButton.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
     self.flashButton.backgroundColor = [HATheme buttonBackgroundColor];
     self.flashButton.layer.cornerRadius = 8;
@@ -253,7 +256,7 @@
     ]];
     // Transition control
     self.transitionLabel = [[UILabel alloc] init];
-    self.transitionLabel.text = @"Transition";
+    self.transitionLabel.text = HALocalizedString(@"cell.entity_detail.light.transition_label", @"Label above the transition-duration segmented control in the light detail sheet. Short -- sits above a 5-item segment control.");
     self.transitionLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
     self.transitionLabel.textColor = [HATheme secondaryTextColor];
     self.transitionLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -276,7 +279,7 @@
     // Scene chips (scenes in the same area as this light)
     if (self.areaScenes.count > 0) {
         UILabel *scenesHeader = [[UILabel alloc] init];
-        scenesHeader.text = @"Scenes";
+        scenesHeader.text = HALocalizedString(@"cell.entity_detail.light.scenes_header", @"Header above the row of same-area scene chips in the light detail sheet. Short -- sits above a horizontal scroll row of pill buttons.");
         scenesHeader.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
         scenesHeader.textColor = [HATheme secondaryTextColor];
         scenesHeader.translatesAutoresizingMaskIntoConstraints = NO;
@@ -322,7 +325,7 @@
     self.entity = entity;
     BOOL isOn = entity.isOn;
 
-    [self.toggleButton setTitle:isOn ? @"Turn Off" : @"Turn On" forState:UIControlStateNormal];
+    [self.toggleButton setTitle:isOn ? HALocalizedString(@"action.turn_off", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity off. Max ~10 chars -- fixed-width pill.") : HALocalizedString(@"action.turn_on", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity on. Max ~10 chars -- fixed-width pill.") forState:UIControlStateNormal];
     [self.toggleButton setTitleColor:isOn ? [UIColor whiteColor] : [HATheme primaryTextColor] forState:UIControlStateNormal];
     self.toggleButton.backgroundColor = isOn ? [HATheme onTintColor] : [HATheme buttonBackgroundColor];
 
@@ -337,14 +340,16 @@
         NSInteger kelvin = kelvinNum ? kelvinNum.integerValue : 0;
         if (kelvin > 0) self.colorTempSlider.value = kelvin;
         self.colorTempSlider.enabled = isOn;
-        self.colorTempLabel.text = kelvin > 0 ? [NSString stringWithFormat:@"%ldK", (long)kelvin] : @"—";
+        self.colorTempLabel.text = kelvin > 0 ? [NSString stringWithFormat:@"%ldK", (long)kelvin] : HALocalizedString(@"cell.base.no_value", @"Fallback text in a cell/detail sheet when a value cannot be determined.");
     }
 
     // Effect
     if (self.effectButton) {
         NSString *effect = [entity effect];
-        NSString *title = (effect.length > 0) ? effect : @"None";
-        [self.effectButton setTitle:[NSString stringWithFormat:@"Effect: %@  \u25BE", title] forState:UIControlStateNormal];
+        NSString *title = (effect.length > 0) ? effect : HALocalizedString(@"cell.entity_detail.mode.none_placeholder", @"Placeholder shown in a mode/effect/preset picker button in an entity detail sheet when no current value is known. Short -- sits inline before a dropdown glyph.");
+        NSString *effectLabel = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"light" attr:@"effect"]
+            ?: HALocalizedString(@"attr.effect.name", @"Label on the effect-picker button in the light detail sheet, used only when Home Assistant's own translation for light's effect attribute is unavailable.");
+        [self.effectButton setTitle:[NSString stringWithFormat:HALocalizedString(@"format.entity_detail.effect_button", @"Effect-picker button title in the light detail sheet. %1$@ is the localized attribute label (e.g. \"Effect\"), %2$@ is the current effect name or a placeholder."), effectLabel, title] forState:UIControlStateNormal];
         self.effectButton.enabled = isOn;
     }
 
@@ -409,7 +414,9 @@
     NSArray *effects = [entity effectList];
     if (effects.count == 0) return;
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Effect"
+    NSString *effectAlertTitle = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"light" attr:@"effect"]
+        ?: HALocalizedString(@"attr.effect.name", @"Action-sheet title for picking a light effect, used only when Home Assistant's own translation for light's effect attribute is unavailable.");
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:effectAlertTitle
                                                                   message:nil
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
     for (NSString *effect in effects) {
@@ -420,7 +427,7 @@
             self.serviceBlock(@"turn_on", domain, [self mergeTransition:@{@"effect": effect}], entityId);
         }]];
     }
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     UIViewController *vc = [self.containerRef ha_parentViewController];
     if (vc) {
@@ -625,7 +632,8 @@
     NSArray *fanModes = [entity climateFanModes];
     if (fanModes.count > 0) {
         self.fanModeLabel = [[UILabel alloc] init];
-        self.fanModeLabel.text = @"Fan";
+        self.fanModeLabel.text = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"climate" attr:@"fan_mode"]
+            ?: HALocalizedString(@"attr.fan_mode.name", @"Label above the fan-mode segmented control in the climate detail sheet, used only when Home Assistant's own translation for climate's fan_mode attribute is unavailable. Short -- sits above a segment control.");
         self.fanModeLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
         self.fanModeLabel.textColor = [HATheme secondaryTextColor];
         self.fanModeLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -655,7 +663,7 @@
     BOOL hasAuxHeat = (entity.attributes[@"aux_heat"] != nil);
     if (hasAuxHeat) {
         self.auxHeatLabel = [[UILabel alloc] init];
-        self.auxHeatLabel.text = @"Aux Heat";
+        self.auxHeatLabel.text = HALocalizedString(@"attr.aux_heat.name", @"Label next to the aux-heat switch in the climate detail sheet. Deprecated in HA core, so not served by Home Assistant's own translations -- this is an app-owned fallback used unconditionally.");
         self.auxHeatLabel.font = [UIFont systemFontOfSize:14];
         self.auxHeatLabel.textColor = [HATheme primaryTextColor];
         self.auxHeatLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -703,11 +711,13 @@
 - (void)updateWithEntity:(HAEntity *)entity {
     self.entity = entity;
     NSNumber *target = [entity targetTemperature];
+    NSString *climateTargetLabel = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"climate" attr:@"temperature"]
+        ?: HALocalizedString(@"attr.target_temperature.name", @"Label preceding the target temperature in the climate detail sheet, used only when Home Assistant's own translation for climate's temperature attribute is unavailable.");
     if (target) {
         self.tempStepper.value = target.doubleValue;
-        self.targetLabel.text = [NSString stringWithFormat:@"Target: %.1f\u00B0", target.doubleValue];
+        self.targetLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.entity_detail.target_temperature", @"Target temperature label in the climate detail sheet. %1$@ is the localized attribute label (e.g. \"Target temperature\"), %2$.1f is the numeric value with one decimal."), climateTargetLabel, target.doubleValue];
     } else {
-        self.targetLabel.text = @"Target: —";
+        self.targetLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.entity_detail.target_temperature_no_value", @"Target temperature label in the climate detail sheet, shown when no target temperature is available. %1$@ is the localized attribute label (e.g. \"Target temperature\")."), climateTargetLabel];
     }
 
     NSString *mode = [entity hvacMode] ?: entity.state;
@@ -745,7 +755,9 @@
 }
 
 - (void)stepperChanged:(UIStepper *)sender {
-    self.targetLabel.text = [NSString stringWithFormat:@"Target: %.1f\u00B0", sender.value];
+    NSString *climateTargetLabel = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"climate" attr:@"temperature"]
+        ?: HALocalizedString(@"attr.target_temperature.name", @"Label preceding the target temperature in the climate detail sheet, used only when Home Assistant's own translation for climate's temperature attribute is unavailable.");
+    self.targetLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.entity_detail.target_temperature", @"Target temperature label in the climate detail sheet. %1$@ is the localized attribute label (e.g. \"Target temperature\"), %2$.1f is the numeric value with one decimal."), climateTargetLabel, sender.value];
     if (!self.entity || !self.serviceBlock) return;
     self.serviceBlock(@"set_temperature", @"climate", @{@"temperature": @(sender.value)}, self.entity.entityId);
 }
@@ -846,9 +858,9 @@
         buttonStack.translatesAutoresizingMaskIntoConstraints = NO;
         [container addSubview:buttonStack];
 
-        self.openButton = [self makeButton:@"Open" action:@selector(openTapped)];
-        self.stopButton = [self makeButton:@"Stop" action:@selector(stopTapped)];
-        self.closeButton = [self makeButton:@"Close" action:@selector(closeTapped)];
+        self.openButton = [self makeButton:HALocalizedString(@"cell.entity_detail.open_close.open", @"Button in the cover/valve detail sheet, opens the cover/valve. Max ~10 chars -- fixed-width pill.") action:@selector(openTapped)];
+        self.stopButton = [self makeButton:HALocalizedString(@"cell.entity_detail.stop_button", @"Button in the cover/valve/vacuum detail sheet, stops the current movement/operation. Max ~10 chars -- fixed-width pill.") action:@selector(stopTapped)];
+        self.closeButton = [self makeButton:HALocalizedString(@"cell.entity_detail.open_close.close", @"Button in the cover/valve detail sheet, closes the cover/valve. Max ~10 chars -- fixed-width pill.") action:@selector(closeTapped)];
 
         [buttonStack addArrangedSubview:self.openButton];
         [buttonStack addArrangedSubview:self.stopButton];
@@ -866,7 +878,8 @@
     // Tilt position slider (when TILT feature bit is set)
     if (self.supportsTilt) {
         UILabel *tiltTitle = [[UILabel alloc] init];
-        tiltTitle.text = @"Tilt";
+        tiltTitle.text = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"cover" attr:@"current_tilt_position"]
+            ?: HALocalizedString(@"attr.tilt_position.name", @"Label above the tilt slider in the cover detail sheet, used only when Home Assistant's own translation for cover's current_tilt_position attribute is unavailable. Short -- sits above a narrow slider.");
         tiltTitle.font = [UIFont systemFontOfSize:13];
         tiltTitle.textColor = [HATheme secondaryTextColor];
         tiltTitle.translatesAutoresizingMaskIntoConstraints = NO;
@@ -998,7 +1011,7 @@
     [container addSubview:self.toggleSwitch];
 
     UILabel *label = [[UILabel alloc] init];
-    label.text = @"Toggle";
+    label.text = HALocalizedString(@"cell.entity_detail.toggle.label", @"Label next to the switch in the generic toggle detail sheet (switch/input_boolean/automation domains).");
     label.font = [UIFont systemFontOfSize:15];
     label.textColor = [HATheme primaryTextColor];
     label.translatesAutoresizingMaskIntoConstraints = NO;
@@ -1404,7 +1417,9 @@
     NSArray *modes = [self.entity mediaSoundModes];
     if (modes.count == 0) return;
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Sound Mode"
+    NSString *soundModeAlertTitle = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"media_player" attr:@"sound_mode"]
+        ?: HALocalizedString(@"attr.sound_mode.name", @"Action-sheet title for picking a media player sound mode, used only when Home Assistant's own translation for media_player's sound_mode attribute is unavailable.");
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:soundModeAlertTitle
                                                                   message:nil
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
     for (NSString *mode in modes) {
@@ -1413,7 +1428,7 @@
             self.serviceBlock(@"select_sound_mode", @"media_player", @{@"sound_mode": mode}, self.entity.entityId);
         }]];
     }
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     UIViewController *vc = [self.containerRef ha_parentViewController];
     if (vc) {
@@ -1492,7 +1507,8 @@
 
     // Oscillation switch
     self.oscillateLabel = [[UILabel alloc] init];
-    self.oscillateLabel.text = @"Oscillation";
+    self.oscillateLabel.text = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"fan" attr:@"oscillating"]
+        ?: HALocalizedString(@"attr.oscillating.name", @"Label next to the oscillation switch in the fan detail sheet, used only when Home Assistant's own translation for fan's oscillating attribute is unavailable.");
     self.oscillateLabel.font = [UIFont systemFontOfSize:14];
     self.oscillateLabel.textColor = [HATheme primaryTextColor];
     self.oscillateLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -1550,7 +1566,8 @@
     // Direction buttons (forward/reverse)
     if (self.hasDirection) {
         UILabel *dirLabel = [[UILabel alloc] init];
-        dirLabel.text = @"Direction";
+        dirLabel.text = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"fan" attr:@"direction"]
+            ?: HALocalizedString(@"attr.direction.name", @"Label above the forward/reverse buttons in the fan detail sheet, used only when Home Assistant's own translation for fan's direction attribute is unavailable. Short -- sits above a 2-button row.");
         dirLabel.font = [UIFont systemFontOfSize:13];
         dirLabel.textColor = [HATheme secondaryTextColor];
         dirLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -1563,8 +1580,8 @@
         dirStack.translatesAutoresizingMaskIntoConstraints = NO;
         [container addSubview:dirStack];
 
-        self.forwardButton = [self makeDirButton:@"Forward" action:@selector(forwardTapped)];
-        self.reverseButton = [self makeDirButton:@"Reverse" action:@selector(reverseTapped)];
+        self.forwardButton = [self makeDirButton:HALocalizedString(@"cell.entity_detail.fan.forward_button", @"Button in the fan detail sheet, sets fan direction to forward. Max ~10 chars -- fixed-width pill.") action:@selector(forwardTapped)];
+        self.reverseButton = [self makeDirButton:HALocalizedString(@"cell.entity_detail.fan.reverse_button", @"Button in the fan detail sheet, sets fan direction to reverse. Max ~10 chars -- fixed-width pill.") action:@selector(reverseTapped)];
         [dirStack addArrangedSubview:self.forwardButton];
         [dirStack addArrangedSubview:self.reverseButton];
 
@@ -1608,7 +1625,7 @@
     self.entity = entity;
     BOOL isOn = entity.isOn;
 
-    [self.toggleButton setTitle:isOn ? @"Turn Off" : @"Turn On" forState:UIControlStateNormal];
+    [self.toggleButton setTitle:isOn ? HALocalizedString(@"action.turn_off", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity off. Max ~10 chars -- fixed-width pill.") : HALocalizedString(@"action.turn_on", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity on. Max ~10 chars -- fixed-width pill.") forState:UIControlStateNormal];
     [self.toggleButton setTitleColor:isOn ? [UIColor whiteColor] : [HATheme primaryTextColor] forState:UIControlStateNormal];
     self.toggleButton.backgroundColor = isOn ? [HATheme onTintColor] : [HATheme buttonBackgroundColor];
 
@@ -1624,8 +1641,8 @@
     // Preset mode
     if (self.presetModeButton) {
         NSString *current = [entity fanPresetMode];
-        NSString *title = (current.length > 0) ? current : @"None";
-        [self.presetModeButton setTitle:[NSString stringWithFormat:@"Preset: %@  \u25BE", title] forState:UIControlStateNormal];
+        NSString *title = (current.length > 0) ? current : HALocalizedString(@"cell.entity_detail.mode.none_placeholder", @"Placeholder shown in a mode/effect/preset picker button in an entity detail sheet when no current value is known. Short -- sits inline before a dropdown glyph.");
+        [self.presetModeButton setTitle:[NSString stringWithFormat:HALocalizedString(@"format.entity_detail.fan_preset_button", @"Preset-mode picker button title in the fan detail sheet. %@ is the current preset mode name or a placeholder, followed by a dropdown glyph (\\u25BE)."), title] forState:UIControlStateNormal];
         self.presetModeButton.enabled = isOn;
     }
 
@@ -1671,7 +1688,7 @@
     NSArray *modes = [self.entity fanPresetModes];
     if (modes.count == 0) return;
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Preset Mode"
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:HALocalizedString(@"alert.entity_detail.fan_preset_mode.title", @"Action-sheet title for picking a fan preset mode.")
                                                                   message:nil
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
     for (NSString *mode in modes) {
@@ -1680,7 +1697,7 @@
             self.serviceBlock(@"set_preset_mode", @"fan", @{@"preset_mode": mode}, self.entity.entityId);
         }]];
     }
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     UIViewController *vc = [self.containerRef ha_parentViewController];
     if (vc) {
@@ -1738,7 +1755,7 @@
 
     if (self.supportsOpen) {
         self.openButton = [UIButton buttonWithType:UIButtonTypeSystem];
-        [self.openButton setTitle:@"Open" forState:UIControlStateNormal];
+        [self.openButton setTitle:HALocalizedString(@"cell.lock.open", @"Button and alert title in the lock cell, unlatches/releases a lock that supports it. Max ~10 chars -- sits in a fixed-width pill.") forState:UIControlStateNormal];
         self.openButton.titleLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
         self.openButton.layer.cornerRadius = 8;
         self.openButton.clipsToBounds = YES;
@@ -1782,7 +1799,7 @@
     self.entity = entity;
 
     BOOL locked = [entity isLocked];
-    [self.lockButton setTitle:locked ? @"Unlock" : @"Lock" forState:UIControlStateNormal];
+    [self.lockButton setTitle:locked ? HALocalizedString(@"cell.lock.unlock", @"Button and alert title in the lock cell, unlocks the entity. Max ~10 chars -- sits in a fixed-width pill.") : HALocalizedString(@"cell.lock.lock", @"Button and alert title in the lock cell, locks the entity. Max ~10 chars -- sits in a fixed-width pill.") forState:UIControlStateNormal];
     [self.lockButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     self.lockButton.backgroundColor = locked ? [HATheme onTintColor] : [HATheme buttonBackgroundColor];
     if (!locked) {
@@ -1791,7 +1808,7 @@
 
     // Reset open button appearance if not in confirm state
     if (self.openButton && !self.awaitingOpenConfirm) {
-        [self.openButton setTitle:@"Open" forState:UIControlStateNormal];
+        [self.openButton setTitle:HALocalizedString(@"cell.lock.open", @"Button and alert title in the lock cell, unlatches/releases a lock that supports it. Max ~10 chars -- sits in a fixed-width pill.") forState:UIControlStateNormal];
         [self.openButton setTitleColor:[HATheme primaryTextColor] forState:UIControlStateNormal];
         self.openButton.backgroundColor = [HATheme buttonBackgroundColor];
     }
@@ -1820,7 +1837,7 @@
     } else {
         // First tap: enter confirmation state
         self.awaitingOpenConfirm = YES;
-        [self.openButton setTitle:@"Confirm Open?" forState:UIControlStateNormal];
+        [self.openButton setTitle:HALocalizedString(@"cell.entity_detail.lock.confirm_open", @"Button in the lock detail sheet, shown after the first tap on Open as a confirmation step before unlatching. Max ~14 chars -- fixed-width pill.") forState:UIControlStateNormal];
         self.openButton.backgroundColor = [UIColor colorWithRed:0.9 green:0.3 blue:0.2 alpha:1.0];
         [self.openButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
 
@@ -1900,9 +1917,9 @@
     buttonStack.translatesAutoresizingMaskIntoConstraints = NO;
     [container addSubview:buttonStack];
 
-    self.startButton = [self makeButton:@"Start" action:@selector(startTapped)];
-    self.pauseButton = [self makeButton:@"Pause" action:@selector(pauseTapped)];
-    self.returnButton = [self makeButton:@"Return" action:@selector(returnTapped)];
+    self.startButton = [self makeButton:HALocalizedString(@"cell.timer.start", @"Button in the timer cell, starts the timer. Max ~10 chars -- fixed-width pill.") action:@selector(startTapped)];
+    self.pauseButton = [self makeButton:HALocalizedString(@"cell.timer.pause", @"Button in the timer cell, pauses the timer. Max ~10 chars -- fixed-width pill.") action:@selector(pauseTapped)];
+    self.returnButton = [self makeButton:HALocalizedString(@"cell.entity_detail.vacuum.return_button", @"Button in the vacuum detail sheet, sends the vacuum back to its dock. Max ~10 chars -- fixed-width pill.") action:@selector(returnTapped)];
 
     [buttonStack addArrangedSubview:self.startButton];
     [buttonStack addArrangedSubview:self.pauseButton];
@@ -1932,15 +1949,15 @@
         [container addSubview:extraStack];
 
         if (hasStop) {
-            self.stopButton = [self makeButton:@"Stop" action:@selector(stopTapped)];
+            self.stopButton = [self makeButton:HALocalizedString(@"cell.entity_detail.stop_button", @"Button in the cover/valve/vacuum detail sheet, stops the current movement/operation. Max ~10 chars -- fixed-width pill.") action:@selector(stopTapped)];
             [extraStack addArrangedSubview:self.stopButton];
         }
         if (hasLocate) {
-            self.locateButton = [self makeButton:@"Locate" action:@selector(locateTapped)];
+            self.locateButton = [self makeButton:HALocalizedString(@"cell.entity_detail.vacuum.locate_button", @"Button in the vacuum detail sheet, makes the vacuum emit a locate sound. Max ~10 chars -- fixed-width pill.") action:@selector(locateTapped)];
             [extraStack addArrangedSubview:self.locateButton];
         }
         if (hasCleanSpot) {
-            self.cleanSpotButton = [self makeButton:@"Clean Spot" action:@selector(cleanSpotTapped)];
+            self.cleanSpotButton = [self makeButton:HALocalizedString(@"cell.entity_detail.vacuum.clean_spot_button", @"Button in the vacuum detail sheet, starts a spot clean. Max ~12 chars -- fixed-width pill.") action:@selector(cleanSpotTapped)];
             [extraStack addArrangedSubview:self.cleanSpotButton];
         }
 
@@ -2021,8 +2038,8 @@
     // Fan speed button label
     if (self.fanSpeedButton) {
         NSString *current = [entity vacuumFanSpeed];
-        NSString *title = (current.length > 0) ? current : @"Default";
-        [self.fanSpeedButton setTitle:[NSString stringWithFormat:@"Fan Speed: %@  \u25BE", title] forState:UIControlStateNormal];
+        NSString *title = (current.length > 0) ? current : HALocalizedString(@"cell.entity_detail.vacuum.fan_speed_default", @"Placeholder shown on the vacuum fan-speed picker button when no current fan speed is known. Short -- sits inline before a dropdown glyph.");
+        [self.fanSpeedButton setTitle:[NSString stringWithFormat:HALocalizedString(@"format.entity_detail.vacuum_fan_speed_button", @"Fan-speed picker button title in the vacuum detail sheet. %@ is the current fan speed name or a placeholder, followed by a dropdown glyph (\\u25BE)."), title] forState:UIControlStateNormal];
     }
 }
 
@@ -2066,7 +2083,7 @@
     NSArray *speeds = [self.entity vacuumFanSpeedList];
     if (speeds.count == 0) return;
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Fan Speed"
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:HALocalizedString(@"alert.entity_detail.vacuum_fan_speed.title", @"Action-sheet title for picking a vacuum fan speed.")
                                                                   message:nil
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
     for (NSString *speed in speeds) {
@@ -2075,7 +2092,7 @@
             self.serviceBlock(@"set_fan_speed", @"vacuum", @{@"fan_speed": speed}, self.entity.entityId);
         }]];
     }
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     UIViewController *vc = [self.containerRef ha_parentViewController];
     if (vc) {
@@ -2123,9 +2140,9 @@
     buttonStack.translatesAutoresizingMaskIntoConstraints = NO;
     [container addSubview:buttonStack];
 
-    self.startButton = [self makeButton:@"Start" action:@selector(startTapped)];
-    self.pauseButton = [self makeButton:@"Pause" action:@selector(pauseTapped)];
-    self.cancelButton = [self makeButton:@"Cancel" action:@selector(cancelTapped)];
+    self.startButton = [self makeButton:HALocalizedString(@"cell.timer.start", @"Button in the timer cell, starts the timer. Max ~10 chars -- fixed-width pill.") action:@selector(startTapped)];
+    self.pauseButton = [self makeButton:HALocalizedString(@"cell.timer.pause", @"Button in the timer cell, pauses the timer. Max ~10 chars -- fixed-width pill.") action:@selector(pauseTapped)];
+    self.cancelButton = [self makeButton:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") action:@selector(cancelTapped)];
 
     [buttonStack addArrangedSubview:self.startButton];
     [buttonStack addArrangedSubview:self.pauseButton];
@@ -2179,10 +2196,10 @@
         [self startCountdownTimer];
     } else if (isPaused) {
         NSString *remaining = [entity timerRemaining];
-        self.countdownLabel.text = remaining ?: @"--:--:--";
+        self.countdownLabel.text = remaining ?: HALocalizedString(@"cell.timer.no_value", @"Countdown display fallback in the timer cell, shown when the timer has no known remaining/duration value.");
     } else {
         NSString *duration = [entity timerDuration];
-        self.countdownLabel.text = duration ?: @"--:--:--";
+        self.countdownLabel.text = duration ?: HALocalizedString(@"cell.timer.no_value", @"Countdown display fallback in the timer cell, shown when the timer has no known remaining/duration value.");
     }
 }
 
@@ -2203,7 +2220,7 @@
 - (void)updateCountdownDisplay {
     NSString *finishesAt = [self.entity timerFinishesAt];
     if (!finishesAt) {
-        self.countdownLabel.text = @"--:--:--";
+        self.countdownLabel.text = HALocalizedString(@"cell.timer.no_value", @"Countdown display fallback in the timer cell, shown when the timer has no known remaining/duration value.");
         return;
     }
 
@@ -2211,13 +2228,13 @@
     NSDate *finishDate = [HADateUtils dateFromISO8601String:finishesAt];
 
     if (!finishDate) {
-        self.countdownLabel.text = @"--:--:--";
+        self.countdownLabel.text = HALocalizedString(@"cell.timer.no_value", @"Countdown display fallback in the timer cell, shown when the timer has no known remaining/duration value.");
         return;
     }
 
     NSTimeInterval remaining = [finishDate timeIntervalSinceNow];
     if (remaining <= 0) {
-        self.countdownLabel.text = @"0:00:00";
+        self.countdownLabel.text = HALocalizedString(@"cell.entity_detail.timer.zero", @"Countdown display in the timer detail sheet, shown once the countdown reaches zero before it stops.");
         [self stopCountdownTimer];
         return;
     }
@@ -2266,7 +2283,7 @@
     UIView *container = [[UIView alloc] init];
 
     self.activateButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.activateButton setTitle:@"Activate" forState:UIControlStateNormal];
+    [self.activateButton setTitle:HALocalizedString(@"cell.scene.activate", @"Button in the scene cell, activates the scene. Max ~10 chars -- fixed-width pill.") forState:UIControlStateNormal];
     self.activateButton.titleLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
     [self.activateButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     self.activateButton.backgroundColor = [HATheme onTintColor];
@@ -2327,15 +2344,15 @@
     self.modesStack.translatesAutoresizingMaskIntoConstraints = NO;
     [container addSubview:self.modesStack];
 
-    if (features & 1)  [self addModeButton:@"Arm Home"     service:@"alarm_arm_home"];
-    if (features & 2)  [self addModeButton:@"Arm Away"     service:@"alarm_arm_away"];
-    if (features & 4)  [self addModeButton:@"Arm Night"    service:@"alarm_arm_night"];
-    if (features & 32) [self addModeButton:@"Arm Vacation" service:@"alarm_arm_vacation"];
-    if (features & 16) [self addModeButton:@"Arm Custom"   service:@"alarm_arm_custom_bypass"];
+    if (features & 1)  [self addModeButton:HALocalizedString(@"cell.entity_detail.alarm.arm_home", @"Button in the alarm detail sheet, arms the alarm in Home mode. Max ~12 chars -- fixed-width pill.")     service:@"alarm_arm_home"];
+    if (features & 2)  [self addModeButton:HALocalizedString(@"cell.entity_detail.alarm.arm_away", @"Button in the alarm detail sheet, arms the alarm in Away mode. Max ~12 chars -- fixed-width pill.")     service:@"alarm_arm_away"];
+    if (features & 4)  [self addModeButton:HALocalizedString(@"cell.entity_detail.alarm.arm_night", @"Button in the alarm detail sheet, arms the alarm in Night mode. Max ~12 chars -- fixed-width pill.")    service:@"alarm_arm_night"];
+    if (features & 32) [self addModeButton:HALocalizedString(@"cell.entity_detail.alarm.arm_vacation", @"Button in the alarm detail sheet, arms the alarm in Vacation mode. Max ~14 chars -- fixed-width pill.") service:@"alarm_arm_vacation"];
+    if (features & 16) [self addModeButton:HALocalizedString(@"cell.entity_detail.alarm.arm_custom", @"Button in the alarm detail sheet, arms the alarm with a Custom Bypass mode. Max ~14 chars -- fixed-width pill.")   service:@"alarm_arm_custom_bypass"];
 
     // Disarm button
     self.disarmButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.disarmButton setTitle:@"Disarm" forState:UIControlStateNormal];
+    [self.disarmButton setTitle:HALocalizedString(@"cell.alarm.disarm", @"Button in the alarm cell, disarms the alarm. Max ~10 chars -- pill button.") forState:UIControlStateNormal];
     self.disarmButton.titleLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
     [self.disarmButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     self.disarmButton.backgroundColor = [UIColor colorWithRed:0.3 green:0.7 blue:0.3 alpha:1.0];
@@ -2349,7 +2366,7 @@
     // Code input field (if code required)
     if (codeRequired) {
         self.codeField = [[UITextField alloc] init];
-        self.codeField.placeholder = @"Enter code";
+        self.codeField.placeholder = HALocalizedString(@"cell.alarm.enter_code", @"Text field placeholder in the alarm detail sheet's code entry field.");
         self.codeField.font = [UIFont monospacedDigitSystemFontOfSize:18 weight:UIFontWeightMedium];
         self.codeField.textAlignment = NSTextAlignmentCenter;
         self.codeField.borderStyle = UITextBorderStyleRoundedRect;
@@ -2455,7 +2472,7 @@
     UIView *container = [[UIView alloc] init];
 
     self.pressButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.pressButton setTitle:@"Press" forState:UIControlStateNormal];
+    [self.pressButton setTitle:HALocalizedString(@"cell.button.press", @"Button in the button-entity cell, triggers a button-domain press. Max ~8 chars.") forState:UIControlStateNormal];
     self.pressButton.titleLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
     [self.pressButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     self.pressButton.backgroundColor = [HATheme onTintColor];
@@ -2511,7 +2528,7 @@
     [container addSubview:buttonStack];
 
     self.decrementButton = [self makeButton:@"−" action:@selector(decrementTapped)];
-    self.resetButton = [self makeButton:@"Reset" action:@selector(resetTapped)];
+    self.resetButton = [self makeButton:HALocalizedString(@"cell.counter.reset", @"Button in the counter cell, resets the counter to its initial value. Max ~10 chars -- fixed-width pill.") action:@selector(resetTapped)];
     self.incrementButton = [self makeButton:@"+" action:@selector(incrementTapped)];
 
     [buttonStack addArrangedSubview:self.decrementButton];
@@ -2723,7 +2740,7 @@
         [alert addAction:action];
     }
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     UIViewController *vc = [self.containerRef ha_parentViewController];
     if (vc) {
@@ -2793,9 +2810,9 @@
         buttonStack.translatesAutoresizingMaskIntoConstraints = NO;
         [container addSubview:buttonStack];
 
-        self.openButton = [self makeButton:@"Open" action:@selector(openTapped)];
-        self.stopButton = [self makeButton:@"Stop" action:@selector(stopTapped)];
-        self.closeButton = [self makeButton:@"Close" action:@selector(closeTapped)];
+        self.openButton = [self makeButton:HALocalizedString(@"cell.entity_detail.open_close.open", @"Button in the cover/valve detail sheet, opens the cover/valve. Max ~10 chars -- fixed-width pill.") action:@selector(openTapped)];
+        self.stopButton = [self makeButton:HALocalizedString(@"cell.entity_detail.stop_button", @"Button in the cover/valve/vacuum detail sheet, stops the current movement/operation. Max ~10 chars -- fixed-width pill.") action:@selector(stopTapped)];
+        self.closeButton = [self makeButton:HALocalizedString(@"cell.entity_detail.open_close.close", @"Button in the cover/valve detail sheet, closes the cover/valve. Max ~10 chars -- fixed-width pill.") action:@selector(closeTapped)];
 
         [buttonStack addArrangedSubview:self.openButton];
         [buttonStack addArrangedSubview:self.stopButton];
@@ -2904,7 +2921,7 @@
 - (void)updateWithEntity:(HAEntity *)entity {
     self.entity = entity;
     BOOL isOn = entity.isOn;
-    [self.toggleButton setTitle:isOn ? @"Turn Off" : @"Turn On" forState:UIControlStateNormal];
+    [self.toggleButton setTitle:isOn ? HALocalizedString(@"action.turn_off", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity off. Max ~10 chars -- fixed-width pill.") : HALocalizedString(@"action.turn_on", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity on. Max ~10 chars -- fixed-width pill.") forState:UIControlStateNormal];
     [self.toggleButton setTitleColor:isOn ? [UIColor whiteColor] : [HATheme primaryTextColor] forState:UIControlStateNormal];
     self.toggleButton.backgroundColor = isOn ? [UIColor colorWithRed:0.9 green:0.2 blue:0.2 alpha:1.0] : [HATheme buttonBackgroundColor];
 }
@@ -3025,7 +3042,7 @@
     self.entity = entity;
     BOOL isOn = entity.isOn;
 
-    [self.toggleButton setTitle:isOn ? @"Turn Off" : @"Turn On" forState:UIControlStateNormal];
+    [self.toggleButton setTitle:isOn ? HALocalizedString(@"action.turn_off", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity off. Max ~10 chars -- fixed-width pill.") : HALocalizedString(@"action.turn_on", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity on. Max ~10 chars -- fixed-width pill.") forState:UIControlStateNormal];
     [self.toggleButton setTitleColor:isOn ? [UIColor whiteColor] : [HATheme primaryTextColor] forState:UIControlStateNormal];
     self.toggleButton.backgroundColor = isOn ? [HATheme onTintColor] : [HATheme buttonBackgroundColor];
 
@@ -3037,8 +3054,8 @@
 
     if (self.modeButton) {
         NSString *current = [entity humidifierMode];
-        NSString *title = (current.length > 0) ? current : @"None";
-        [self.modeButton setTitle:[NSString stringWithFormat:@"Mode: %@  \u25BE", title] forState:UIControlStateNormal];
+        NSString *title = (current.length > 0) ? current : HALocalizedString(@"cell.entity_detail.mode.none_placeholder", @"Placeholder shown in a mode/effect/preset picker button in an entity detail sheet when no current value is known. Short -- sits inline before a dropdown glyph.");
+        [self.modeButton setTitle:[NSString stringWithFormat:HALocalizedString(@"format.entity_detail.mode_button", @"Mode picker button title in an entity detail sheet (humidifier/water heater). %@ is the current mode name or a placeholder, followed by a dropdown glyph (\\u25BE)."), title] forState:UIControlStateNormal];
         self.modeButton.enabled = isOn;
     }
 }
@@ -3065,7 +3082,7 @@
     NSArray *modes = [self.entity humidifierAvailableModes];
     if (modes.count == 0) return;
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Mode"
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:HALocalizedString(@"alert.entity_detail.humidifier_mode.title", @"Action-sheet title for picking a humidifier mode.")
                                                                   message:nil
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
     for (NSString *mode in modes) {
@@ -3074,7 +3091,7 @@
             self.serviceBlock(@"set_mode", @"humidifier", @{@"mode": mode}, self.entity.entityId);
         }]];
     }
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     UIViewController *vc = [self.containerRef ha_parentViewController];
     if (vc) {
@@ -3126,13 +3143,13 @@
     NSNumber *temp = [entity weatherTemperature];
     if (temp) {
         NSString *unit = [entity weatherTemperatureUnit] ?: @"\u00B0";
-        [stack addArrangedSubview:[self rowWithIcon:@"\U0001F321" label:@"Temperature" value:[NSString stringWithFormat:@"%.1f %@", temp.doubleValue, unit]]];
+        [stack addArrangedSubview:[self rowWithIcon:@"\U0001F321" label:HALocalizedString(@"cell.entity_detail.weather.temperature_label", @"Row label in the weather detail sheet. Short -- sits to the right of a small glyph.") value:[NSString stringWithFormat:@"%.1f %@", temp.doubleValue, unit]]];
     }
 
     // Humidity
     NSNumber *humidity = [entity weatherHumidity];
     if (humidity) {
-        [stack addArrangedSubview:[self rowWithIcon:@"\U0001F4A7" label:@"Humidity" value:[NSString stringWithFormat:@"%ld%%", (long)humidity.integerValue]]];
+        [stack addArrangedSubview:[self rowWithIcon:@"\U0001F4A7" label:HALocalizedString(@"cell.entity_detail.weather.humidity_label", @"Row label in the weather detail sheet. Short -- sits to the right of a small glyph.") value:[NSString stringWithFormat:@"%ld%%", (long)humidity.integerValue]]];
     }
 
     // Air pressure
@@ -3140,7 +3157,7 @@
     if (pressure) {
         NSString *pUnit = [entity weatherPressureUnit];
         NSString *pValue = pUnit ? [NSString stringWithFormat:@"%.0f %@", pressure.doubleValue, pUnit] : [NSString stringWithFormat:@"%.0f", pressure.doubleValue];
-        [stack addArrangedSubview:[self rowWithIcon:@"\u2B07" label:@"Pressure" value:pValue]];
+        [stack addArrangedSubview:[self rowWithIcon:@"\u2B07" label:HALocalizedString(@"cell.entity_detail.weather.pressure_label", @"Row label in the weather detail sheet. Short -- sits to the right of a small glyph.") value:pValue]];
     }
 
     // Wind speed
@@ -3148,7 +3165,7 @@
     if (wind) {
         NSString *wUnit = [entity weatherWindSpeedUnit];
         NSString *wValue = wUnit ? [NSString stringWithFormat:@"%.1f %@", wind.doubleValue, wUnit] : [NSString stringWithFormat:@"%.1f", wind.doubleValue];
-        [stack addArrangedSubview:[self rowWithIcon:@"\U0001F4A8" label:@"Wind" value:wValue]];
+        [stack addArrangedSubview:[self rowWithIcon:@"\U0001F4A8" label:HALocalizedString(@"cell.entity_detail.weather.wind_label", @"Row label in the weather detail sheet. Short -- sits to the right of a small glyph.") value:wValue]];
     }
 
     // Attribution
@@ -3270,7 +3287,7 @@
         [container addSubview:buttonRow];
 
         self.installButton = [UIButton buttonWithType:UIButtonTypeSystem];
-        [self.installButton setTitle:@"Install" forState:UIControlStateNormal];
+        [self.installButton setTitle:HALocalizedString(@"cell.entity_detail.update.install", @"Button in the update detail sheet, installs an available update. Max ~10 chars -- fixed-width pill.") forState:UIControlStateNormal];
         self.installButton.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
         [self.installButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
         self.installButton.backgroundColor = [HATheme onTintColor];
@@ -3280,7 +3297,7 @@
         [buttonRow addArrangedSubview:self.installButton];
 
         self.skipButton = [UIButton buttonWithType:UIButtonTypeSystem];
-        [self.skipButton setTitle:@"Skip" forState:UIControlStateNormal];
+        [self.skipButton setTitle:HALocalizedString(@"cell.update.skip", @"Button in the update cell, skips an available update version. Max ~10 chars.") forState:UIControlStateNormal];
         self.skipButton.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
         self.skipButton.backgroundColor = [HATheme buttonBackgroundColor];
         self.skipButton.layer.cornerRadius = 8;
@@ -3332,8 +3349,8 @@
 
     NSString *installed = [entity updateInstalledVersion] ?: @"—";
     NSString *latest = [entity updateLatestVersion] ?: @"—";
-    self.installedLabel.text = [NSString stringWithFormat:@"Installed: %@", installed];
-    self.latestLabel.text = [NSString stringWithFormat:@"Latest: %@", latest];
+    self.installedLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.entity_detail.update.installed", @"Installed-version label in the update detail sheet. %@ is the installed version string or a placeholder."), installed];
+    self.latestLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.entity_detail.update.latest", @"Latest-version label in the update detail sheet. %@ is the latest version string or a placeholder."), latest];
 
     BOOL updateAvailable = [entity updateAvailable];
     self.installButton.enabled = updateAvailable;
@@ -3452,20 +3469,26 @@
     NSNumber *temp = [entity waterHeaterTemperature];
     if (temp) {
         self.tempStepper.value = temp.doubleValue;
-        self.targetLabel.text = [NSString stringWithFormat:@"Target: %.0f\u00B0", temp.doubleValue];
+        NSString *waterHeaterTargetLabel = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"water_heater" attr:@"temperature"]
+            ?: HALocalizedString(@"attr.target_temperature.name", @"Label preceding the target temperature in the water heater detail sheet, used only when Home Assistant's own translation for water_heater's temperature attribute is unavailable.");
+        self.targetLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.entity_detail.target_temperature_whole", @"Target temperature label in the water heater detail sheet. %1$@ is the localized attribute label (e.g. \"Target temperature\"), %2$.0f is the numeric value with no decimals."), waterHeaterTargetLabel, temp.doubleValue];
     } else {
-        self.targetLabel.text = @"Target: \u2014";
+        NSString *waterHeaterTargetLabel = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"water_heater" attr:@"temperature"]
+            ?: HALocalizedString(@"attr.target_temperature.name", @"Label preceding the target temperature in the water heater detail sheet, used only when Home Assistant's own translation for water_heater's temperature attribute is unavailable.");
+        self.targetLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.entity_detail.target_temperature_no_value", @"Target temperature label in the climate detail sheet, shown when no target temperature is available. %1$@ is the localized attribute label (e.g. \"Target temperature\")."), waterHeaterTargetLabel];
     }
 
     if (self.modeButton) {
         NSString *current = [entity waterHeaterOperationMode];
-        NSString *title = (current.length > 0) ? [current capitalizedString] : @"\u2014";
-        [self.modeButton setTitle:[NSString stringWithFormat:@"Mode: %@  \u25BE", title] forState:UIControlStateNormal];
+        NSString *title = (current.length > 0) ? [current capitalizedString] : HALocalizedString(@"cell.base.no_value", @"Fallback text in a cell/detail sheet when a value cannot be determined.");
+        [self.modeButton setTitle:[NSString stringWithFormat:HALocalizedString(@"format.entity_detail.mode_button", @"Mode picker button title in an entity detail sheet (humidifier/water heater). %@ is the current mode name or a placeholder, followed by a dropdown glyph (\u25BE)."), title] forState:UIControlStateNormal];
     }
 }
 
 - (void)stepperChanged:(UIStepper *)sender {
-    self.targetLabel.text = [NSString stringWithFormat:@"Target: %.0f\u00B0", sender.value];
+    NSString *waterHeaterTargetLabel = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"water_heater" attr:@"temperature"]
+        ?: HALocalizedString(@"attr.target_temperature.name", @"Label preceding the target temperature in the water heater detail sheet, used only when Home Assistant's own translation for water_heater's temperature attribute is unavailable.");
+    self.targetLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.entity_detail.target_temperature_whole", @"Target temperature label in the water heater detail sheet. %1$@ is the localized attribute label (e.g. \"Target temperature\"), %2$.0f is the numeric value with no decimals."), waterHeaterTargetLabel, sender.value];
     if (!self.entity || !self.serviceBlock) return;
     self.serviceBlock(@"set_temperature", @"water_heater", @{@"temperature": @(sender.value)}, self.entity.entityId);
 }
@@ -3475,16 +3498,17 @@
     NSArray *modes = [self.entity waterHeaterOperationList];
     if (modes.count == 0) return;
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Operation Mode"
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:HALocalizedString(@"alert.entity_detail.water_heater_operation_mode.title", @"Action-sheet title for picking a water heater operation mode.")
                                                                   message:nil
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
     for (NSString *mode in modes) {
-        [alert addAction:[UIAlertAction actionWithTitle:[mode capitalizedString] style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *displayTitle = [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:@"water_heater" deviceClass:nil attr:@"operation_mode" value:mode];
+        [alert addAction:[UIAlertAction actionWithTitle:displayTitle style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
             [HAHaptics lightImpact];
             self.serviceBlock(@"set_operation_mode", @"water_heater", @{@"operation_mode": mode}, self.entity.entityId);
         }]];
     }
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     UIViewController *vc = [self.containerRef ha_parentViewController];
     if (vc) {

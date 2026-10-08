@@ -11,6 +11,7 @@ settings:
   base:
     TARGETED_DEVICE_FAMILY: "1,2"  # iPhone and iPad
     IPHONEOS_DEPLOYMENT_TARGET: "9.0"
+    DEVELOPMENT_LANGUAGE: en
     CLANG_ENABLE_OBJC_ARC: YES
     CLANG_ENABLE_MODULES: YES
     ARCHS: "arm64"
@@ -70,6 +71,8 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         UIAppFonts:
           - materialdesignicons-webfont.ttf
+        CFBundleLocalizations:
+          - en
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
@@ -129,6 +132,7 @@ targets:
         excludes:
           - "**/*.md"
           - "ReferenceImages/**"
+          - "ReferenceImages_*/**"
           - "FailureDiffs/**"
       - path: Vendor/iOSSnapshotTestCase
         type: group

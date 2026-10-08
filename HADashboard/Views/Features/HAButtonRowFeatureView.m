@@ -1,4 +1,5 @@
 #import "HAButtonRowFeatureView.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HATheme.h"
 #import "HAHaptics.h"
@@ -108,8 +109,8 @@
 - (void)setupLockButtonsForEntity:(HAEntity *)entity available:(BOOL)available {
     BOOL isLocked = [entity.state isEqualToString:@"locked"];
 
-    UIButton *lockBtn = [self makeButtonWithTitle:@"Lock" tag:10];
-    UIButton *unlockBtn = [self makeButtonWithTitle:@"Unlock" tag:11];
+    UIButton *lockBtn = [self makeButtonWithTitle:HALocalizedString(@"feature.lock.lock_button", @"Lock button in the lock-feature button row. Max ~8 chars.") tag:10];
+    UIButton *unlockBtn = [self makeButtonWithTitle:HALocalizedString(@"feature.lock.unlock_button", @"Unlock button in the lock-feature button row. Max ~8 chars.") tag:11];
 
     UIColor *activeColor = [HAEntityDisplayHelper iconColorForEntity:entity];
     if (isLocked) {

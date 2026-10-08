@@ -1,4 +1,5 @@
 #import "HACounterEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -52,7 +53,7 @@
 
     // Reset button
     self.resetButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.resetButton setTitle:@"Reset" forState:UIControlStateNormal];
+    [self.resetButton setTitle:HALocalizedString(@"cell.counter.reset", @"Button in the counter cell, resets the counter to its initial value. Max ~8 chars.") forState:UIControlStateNormal];
     self.resetButton.titleLabel.font = [UIFont systemFontOfSize:11];
     self.resetButton.translatesAutoresizingMaskIntoConstraints = NO;
     [self.resetButton addTarget:self action:@selector(resetTapped) forControlEvents:UIControlEventTouchUpInside];

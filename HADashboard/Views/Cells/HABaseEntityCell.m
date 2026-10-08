@@ -1,5 +1,8 @@
 #import "HABaseEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
+#import "HAEntityDisplayHelper.h"
+#import "HAStateLocalizer.h"
 #import "HADashboardConfig.h"
 #import "HATheme.h"
 #import "HAIconMapper.h"
@@ -9,6 +12,12 @@
 
 static const CGFloat kHeadingHeight = 28.0;
 static const CGFloat kHeadingGap = 2.0;
+// Fallback-card-type badge: its own line height plus a small gap above it,
+// mirroring kHeadingHeight/kHeadingGap. Kept in sync with the constraints in
+// setupSubviews (constant:4 gap above, constant:-6 from contentView bottom —
+// kFallbackBadgeHeight covers the label's own ~12pt line plus that padding).
+static const CGFloat kFallbackBadgeHeight = 14.0;
+static const CGFloat kFallbackBadgeGap = 4.0;
 
 @interface HABaseEntityCell ()
 @property (nonatomic, assign) BOOL showsHeading;
@@ -67,6 +76,32 @@ static const CGFloat kHeadingGap = 2.0;
         relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
     [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.stateLabel attribute:NSLayoutAttributeTop
         relatedBy:NSLayoutRelationEqual toItem:self.nameLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:4]];
+
+    // Fallback-card-type badge: pinned to the bottom of the card, independent
+    // of whatever a subclass lays out above it. Lower constraint priorities
+    // than the rest of this layout so a subclass's own bottom-anchored
+    // controls (sliders, buttons) always win and the badge simply doesn't
+    // appear to overlap — it's hidden by default (see configureWithEntity:).
+    self.fallbackBadgeLabel = [[UILabel alloc] init];
+    self.fallbackBadgeLabel.font = [UIFont systemFontOfSize:10];
+    self.fallbackBadgeLabel.textColor = [HATheme tertiaryTextColor];
+    self.fallbackBadgeLabel.numberOfLines = 1;
+    self.fallbackBadgeLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
+    self.fallbackBadgeLabel.hidden = YES;
+    self.fallbackBadgeLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.contentView addSubview:self.fallbackBadgeLabel];
+
+    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.fallbackBadgeLabel attribute:NSLayoutAttributeLeading
+        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeLeading multiplier:1 constant:padding]];
+    [self.contentView addConstraint:[NSLayoutConstraint constraintWithItem:self.fallbackBadgeLabel attribute:NSLayoutAttributeTrailing
+        relatedBy:NSLayoutRelationLessThanOrEqual toItem:self.contentView attribute:NSLayoutAttributeTrailing multiplier:1 constant:-padding]];
+    NSLayoutConstraint *badgeBottom = [NSLayoutConstraint constraintWithItem:self.fallbackBadgeLabel attribute:NSLayoutAttributeBottom
+        relatedBy:NSLayoutRelationEqual toItem:self.contentView attribute:NSLayoutAttributeBottom multiplier:1 constant:-6];
+    badgeBottom.priority = UILayoutPriorityDefaultHigh; // 750: yields to a subclass's own required bottom constraints
+    NSLayoutConstraint *badgeBelowState = [NSLayoutConstraint constraintWithItem:self.fallbackBadgeLabel attribute:NSLayoutAttributeTop
+        relatedBy:NSLayoutRelationGreaterThanOrEqual toItem:self.stateLabel attribute:NSLayoutAttributeBottom multiplier:1 constant:4];
+    [self.contentView addConstraint:badgeBottom];
+    [self.contentView addConstraint:badgeBelowState];
 }
 
 - (void)layoutSubviews {
@@ -92,6 +127,25 @@ static const CGFloat kHeadingGap = 2.0;
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
     self.entity = entity;
+
+    // Fallback-card-type badge: only set by the parser when a custom:* card
+    // it doesn't natively understand rendered generically instead of vanishing
+    // (GitHub #19) — see HADashboardConfigItem.fallbackCardType. The parser
+    // already leaves this nil when "Show Unsupported Cards" is off, so no
+    // separate setting check is needed here.
+    NSString *fallbackType = configItem.fallbackCardType;
+    if (fallbackType.length > 0) {
+        self.fallbackBadgeLabel.text = fallbackType;
+        self.fallbackBadgeLabel.hidden = NO;
+        self.fallbackBadgeLabel.accessibilityLabel = [NSString stringWithFormat:
+            HALocalizedString(@"card.fallbackBadge.accessibilityFormat",
+                @"VoiceOver label for the small badge on a generically-rendered card standing in for an unsupported custom card type. %1$@ is the raw Lovelace card type, e.g. custom:bubble-card."),
+            fallbackType];
+    } else {
+        self.fallbackBadgeLabel.text = nil;
+        self.fallbackBadgeLabel.hidden = YES;
+        self.fallbackBadgeLabel.accessibilityLabel = nil;
+    }
 
     // Configure heading (from grid heading — e.g. "House Climate", "Ribbit")
     NSString *headingIcon = configItem.customProperties[@"headingIcon"];
@@ -123,7 +177,7 @@ static const CGFloat kHeadingGap = 2.0;
 
     if (!entity) {
         self.nameLabel.text = configItem.entityId;
-        self.stateLabel.text = @"—";
+        self.stateLabel.text = HALocalizedString(@"cell.base.no_value", @"State label fallback in the base entity cell, shown when no display state is available.");
         self.contentView.alpha = 0.5;
         return;
     }
@@ -144,11 +198,19 @@ static const CGFloat kHeadingGap = 2.0;
 
 - (NSString *)displayState {
     if (!self.entity) return @"—";
-    return self.entity.state;
+    // Default fallback used by any subclass that doesn't override this —
+    // route through the shared helper (which in turn routes through
+    // HAStateLocalizer) rather than returning the raw HA state verbatim.
+    // See docs/plans/i18n-plan.md §2.5/§2.7.
+    return [HAEntityDisplayHelper formattedStateForEntity:self.entity decimals:1];
 }
 
 + (CGFloat)headingHeight {
     return kHeadingHeight + kHeadingGap;
+}
+
++ (CGFloat)fallbackBadgeExtraHeight {
+    return kFallbackBadgeHeight + kFallbackBadgeGap;
 }
 
 /// Configures the cell background color and opacity.
@@ -168,6 +230,9 @@ static const CGFloat kHeadingGap = 2.0;
     self.headingLabel.hidden = YES;
     self.showsHeading = NO;
     self.contentView.alpha = 1.0;
+    self.fallbackBadgeLabel.text = nil;
+    self.fallbackBadgeLabel.hidden = YES;
+    self.fallbackBadgeLabel.accessibilityLabel = nil;
     [self resetThemeColors];
 }
 
@@ -177,6 +242,7 @@ static const CGFloat kHeadingGap = 2.0;
     self.nameLabel.textColor = [HATheme secondaryTextColor];
     self.stateLabel.textColor = [HATheme primaryTextColor];
     self.headingLabel.textColor = [HATheme sectionHeaderColor];
+    self.fallbackBadgeLabel.textColor = [HATheme tertiaryTextColor];
 }
 
 - (void)applyOnStateTint:(BOOL)isOn {
@@ -237,6 +303,17 @@ static const CGFloat kHeadingGap = 2.0;
                         current:(NSString *)current
                      sourceView:(UIView *)sourceView
                         handler:(void(^)(NSString *selected))handler {
+    [self presentOptionsWithTitle:title options:options current:current sourceView:sourceView
+                            domain:nil attr:nil handler:handler];
+}
+
+- (void)presentOptionsWithTitle:(NSString *)title
+                        options:(NSArray<NSString *> *)options
+                        current:(NSString *)current
+                     sourceView:(UIView *)sourceView
+                         domain:(NSString *)domain
+                           attr:(NSString *)attr
+                        handler:(void(^)(NSString *selected))handler {
     UIViewController *vc = [self ha_parentViewController];
     if (!vc) return;
 
@@ -244,7 +321,10 @@ static const CGFloat kHeadingGap = 2.0;
                                                                   message:nil
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
     for (NSString *option in options) {
-        UIAlertAction *action = [UIAlertAction actionWithTitle:[option capitalizedString]
+        NSString *displayTitle = (domain.length > 0 && attr.length > 0)
+            ? [[HAStateLocalizer sharedLocalizer] localizedAttributeValueForDomain:domain deviceClass:nil attr:attr value:option]
+            : [option capitalizedString];
+        UIAlertAction *action = [UIAlertAction actionWithTitle:displayTitle
                                                          style:UIAlertActionStyleDefault
                                                        handler:^(UIAlertAction *a) {
             [HAHaptics lightImpact];
@@ -255,7 +335,7 @@ static const CGFloat kHeadingGap = 2.0;
         }
         [sheet addAction:action];
     }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [sheet addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     if (sourceView) {
         sheet.popoverPresentationController.sourceView = sourceView;

@@ -1,4 +1,5 @@
 #import "HAInputDateTimeEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -41,7 +42,7 @@
     self.hasTime = [entity inputDatetimeHasTime];
 
     NSString *display = [entity inputDatetimeDisplayString];
-    [self.valueButton setTitle:display ?: @"—" forState:UIControlStateNormal];
+    [self.valueButton setTitle:display ?: HALocalizedString(@"cell.input_datetime.no_value", @"Button fallback text in the input_datetime cell, shown when no value is set.") forState:UIControlStateNormal];
     self.valueButton.enabled = entity.isAvailable;
 }
 

@@ -6,6 +6,7 @@
 #import "HAUpdateEntityCell.h"
 #import "HADashboardConfig.h"
 #import "HAEntity.h"
+#import "HABaseEntityCell.h"
 
 @interface HASensorSnapshotTests : HABaseSnapshotTestCase
 @end
@@ -95,7 +96,7 @@
     HADashboardConfigItem *item = [HASnapshotTestHelpers itemWithEntityId:entity.entityId
         cardType:@"timer" columnSpan:6 headingIcon:nil displayName:nil];
     UIView *cell = [self cellForEntity:entity cellClass:[HATimerEntityCell class]
-        size:CGSizeMake(floor(kSubGridUnit * 6), kStandardCellHeight) configItem:item];
+        size:CGSizeMake(floor(kSubGridUnit * 6), kGenericCardHeight) configItem:item];
     [self verifyView:cell identifier:nil];
 }
 
@@ -104,7 +105,7 @@
     HADashboardConfigItem *item = [HASnapshotTestHelpers itemWithEntityId:entity.entityId
         cardType:@"timer" columnSpan:6 headingIcon:nil displayName:nil];
     UIView *cell = [self cellForEntity:entity cellClass:[HATimerEntityCell class]
-        size:CGSizeMake(floor(kSubGridUnit * 6), kStandardCellHeight) configItem:item];
+        size:CGSizeMake(floor(kSubGridUnit * 6), kGenericCardHeight) configItem:item];
     [self verifyView:cell identifier:nil];
 }
 
@@ -113,7 +114,7 @@
     HADashboardConfigItem *item = [HASnapshotTestHelpers itemWithEntityId:entity.entityId
         cardType:@"timer" columnSpan:6 headingIcon:nil displayName:nil];
     UIView *cell = [self cellForEntity:entity cellClass:[HATimerEntityCell class]
-        size:CGSizeMake(floor(kSubGridUnit * 6), kStandardCellHeight) configItem:item];
+        size:CGSizeMake(floor(kSubGridUnit * 6), kGenericCardHeight) configItem:item];
     [self verifyView:cell identifier:nil];
 }
 
@@ -134,6 +135,28 @@
         cardType:@"update" columnSpan:6 headingIcon:nil displayName:nil];
     UIView *cell = [self cellForEntity:entity cellClass:[HAUpdateEntityCell class]
         size:CGSizeMake(floor(kSubGridUnit * 6), kStandardCellHeight) configItem:item];
+    [self verifyView:cell identifier:nil];
+}
+
+#pragma mark - Fallback-card-type badge (GitHub #19)
+
+// An unmapped custom:* card (e.g. a mushroom-entity-card or any bubble-card
+// type) with an "entity" key renders generically instead of vanishing, but
+// HALovelaceParser stamps fallbackCardType on the item so HABaseEntityCell
+// shows a small, subtle badge rather than looking indistinguishable from a
+// fully-supported sensor card. See HALovelaceParser.isNativelySupportedCustomCardType:.
+- (void)testSensorWithFallbackCardTypeBadge {
+    HAEntity *entity = [HASnapshotTestHelpers sensorTemperature];
+    HADashboardConfigItem *item = [HASnapshotTestHelpers itemWithEntityId:entity.entityId
+        cardType:@"custom:mushroom-entity-card" columnSpan:6 headingIcon:nil displayName:nil];
+    item.fallbackCardType = @"custom:mushroom-entity-card";
+    // Matches HADashboardViewController.heightForItemAtIndexPath:itemWidth:,
+    // which adds +[HABaseEntityCell fallbackBadgeExtraHeight] to the standard
+    // height whenever fallbackCardType is set, so the badge has breathing
+    // room instead of crowding the "22.8°C" value above it.
+    CGFloat height = kStandardCellHeight + [HABaseEntityCell fallbackBadgeExtraHeight];
+    UIView *cell = [self cellForEntity:entity cellClass:[HASensorEntityCell class]
+        size:CGSizeMake(floor(kSubGridUnit * 6), height) configItem:item];
     [self verifyView:cell identifier:nil];
 }
 

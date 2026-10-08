@@ -1,4 +1,5 @@
 #import "HAInputSelectEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -45,7 +46,7 @@
     [super configureWithEntity:entity configItem:configItem];
 
     NSString *current = [entity inputSelectCurrentOption];
-    [self.optionButton setTitle:current ?: @"—" forState:UIControlStateNormal];
+    [self.optionButton setTitle:current ?: HALocalizedString(@"cell.input_select.no_value", @"Button fallback text in the input_select cell, shown when no option is selected.") forState:UIControlStateNormal];
     self.optionButton.enabled = entity.isAvailable;
 }
 
@@ -75,7 +76,7 @@
         [alert addAction:action];
     }
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     // iPad popover anchor
     alert.popoverPresentationController.sourceView = self.optionButton;

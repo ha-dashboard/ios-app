@@ -1,4 +1,5 @@
 #import "HACoverEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -165,7 +166,7 @@
         self.tiltSlider.hidden = NO;
         self.tiltSlider.enabled = available;
         self.tiltLabel.hidden = NO;
-        self.tiltLabel.text = [NSString stringWithFormat:@"Tilt %ld%%", (long)[tiltAttr integerValue]];
+        self.tiltLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.cover.tilt_percent", @"Tilt position label in the cover cell."), (long)[tiltAttr integerValue]];
         if (!self.isTrackingSlider) {
             self.tiltSlider.value = [tiltAttr floatValue];
         }
@@ -236,7 +237,7 @@
 - (void)tiltSliderTouchDown { self.isTrackingSlider = YES; }
 
 - (void)tiltSliderChanged {
-    self.tiltLabel.text = [NSString stringWithFormat:@"Tilt %.0f%%", self.tiltSlider.value];
+    self.tiltLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.cover.tilt_percent_live", @"Tilt position label in the cover cell while dragging the tilt slider."), self.tiltSlider.value];
 }
 
 - (void)tiltSliderTouchUp {

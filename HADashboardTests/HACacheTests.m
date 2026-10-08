@@ -389,11 +389,15 @@
 - (void)testClearCacheForDashboard {
     HADashboardConfigCache *cache = [HADashboardConfigCache sharedCache];
 
-    [cache cacheConfig:@{@"views": @[]} forDashboard:@"deleteme"];
-
-    XCTestExpectation *exp = [self expectationWithDescription:@"write"];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{ [exp fulfill]; });
+    // Synchronize on the write's actual completion instead of guessing at a
+    // fixed delay — cacheConfig:forDashboard: writes to disk asynchronously,
+    // and a fixed wait is inherently flaky under load/contention.
+    XCTestExpectation *exp = [self expectationWithDescription:@"write completes"];
+    BOOL changed = [cache cacheConfig:@{@"views": @[]} forDashboard:@"deleteme" completion:^(BOOL success) {
+        XCTAssertTrue(success, @"Write should succeed for a new/changed config");
+        [exp fulfill];
+    }];
+    XCTAssertTrue(changed, @"First write for this dashboard should report changed=YES");
     [self waitForExpectationsWithTimeout:3 handler:nil];
 
     XCTAssertTrue([cache hasCachedConfigForDashboard:@"deleteme"]);

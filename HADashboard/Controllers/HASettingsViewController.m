@@ -1,4 +1,5 @@
 #import "HASettingsViewController.h"
+#import "HAStrings.h"
 #import "HAAuthManager.h"
 #import "HAPerfMonitor.h"
 #import "HAConnectionManager.h"
@@ -17,6 +18,7 @@
 #import "HAStreamingManager.h"
 #import "HACameraRegistrationManager.h"
 #import "HARTSPCredentialManager.h"
+#import "HALovelaceParser.h"
 
 
 // NSUserDefaults keys for device integration
@@ -49,6 +51,13 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 @property (nonatomic, strong) UIView *gradientPreview;
 @property (nonatomic, strong) CAGradientLayer *previewGradientLayer;
 
+// Language (app-chrome override; hidden until a second .lproj ships)
+@property (nonatomic, strong) UILabel *languageSectionHeader;
+@property (nonatomic, strong) UIView *languageSection;
+@property (nonatomic, strong) UISegmentedControl *languageSegment;
+/// Segment index -> language code. Index 0 ("System default") maps to nil.
+@property (nonatomic, strong) NSArray<NSString *> *languageSegmentCodes;
+
 // Kiosk mode
 @property (nonatomic, strong) UIView *kioskSection;
 @property (nonatomic, strong) UISwitch *kioskSwitch;
@@ -68,6 +77,10 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 // Camera audio mute
 @property (nonatomic, strong) UIView *cameraMuteSection;
 @property (nonatomic, strong) UISwitch *cameraMuteSwitch;
+
+// Show unsupported-card placeholders
+@property (nonatomic, strong) UIView *unsupportedCardsSection;
+@property (nonatomic, strong) UISwitch *unsupportedCardsSwitch;
 
 // Local live camera/audio publisher (opt-in, foreground-only)
 @property (nonatomic, strong) UIView *liveStreamingSection;
@@ -109,7 +122,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"Settings";
+    self.title = HALocalizedString(@"settings.nav_title", @"Navigation bar title for the Settings screen.");
     self.view.backgroundColor = [HATheme backgroundColor];
 
     [self setupUI];
@@ -157,14 +170,14 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     [scrollView addSubview:container];
 
     // ── CONNECTION section ─────────────────────────────────────────────
-    self.connectionSectionHeader = [self createSectionHeaderWithText:@"CONNECTION"];
+    self.connectionSectionHeader = [self createSectionHeaderWithText:HALocalizedString(@"settings.section.connection.title", @"All-caps section header in Settings, above connection summary.")];
     [container addSubview:self.connectionSectionHeader];
 
     self.connectionRow = [self createConnectionSummaryRow];
     [container addSubview:self.connectionRow];
 
     // ── APPEARANCE section ────────────────────────────────────────────
-    self.appearanceSectionHeader = [self createSectionHeaderWithText:@"APPEARANCE"];
+    self.appearanceSectionHeader = [self createSectionHeaderWithText:HALocalizedString(@"settings.section.appearance.title", @"All-caps section header in Settings, above theme controls.")];
     [container addSubview:self.appearanceSectionHeader];
 
     self.themeStack = [[UIStackView alloc] init];
@@ -173,7 +186,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     self.themeStack.translatesAutoresizingMaskIntoConstraints = NO;
     [container addSubview:self.themeStack];
 
-    self.themeModeSegment = [[UISegmentedControl alloc] initWithItems:@[@"Auto", @"Dark", @"Light"]];
+    self.themeModeSegment = [[UISegmentedControl alloc] initWithItems:@[HALocalizedString(@"settings.theme_mode.auto", @"Segmented control option, Settings > Appearance theme mode. Short label."), HALocalizedString(@"settings.theme_mode.dark", @"Segmented control option, Settings > Appearance theme mode. Short label."), HALocalizedString(@"settings.theme_mode.light", @"Segmented control option, Settings > Appearance theme mode. Short label.")]];
     self.themeModeSegment.selectedSegmentIndex = (NSInteger)[HATheme currentMode];
     [self.themeModeSegment addTarget:self action:@selector(themeModeChanged:) forControlEvents:UIControlEventValueChanged];
     self.themeModeSegment.translatesAutoresizingMaskIntoConstraints = NO;
@@ -181,8 +194,8 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 
     // Sun entity toggle (use HA sun.sun instead of system dark mode)
     UISwitch *sunSw = nil;
-    self.sunEntityToggleRow = [self createToggleSection:@"Use Sun Entity"
-        helpText:@"Use Home Assistant sun.sun entity for auto dark mode instead of system appearance."
+    self.sunEntityToggleRow = [self createToggleSection:HALocalizedString(@"settings.section.sun_entity.title", @"Toggle row title in Settings > Appearance.")
+        helpText:HALocalizedString(@"settings.section.sun_entity.help", @"Help paragraph under the \"Use Sun Entity\" toggle in Settings.")
         isOn:[HATheme forceSunEntity]
         target:self action:@selector(sunEntitySwitchToggled:)
         switchOut:&sunSw];
@@ -199,7 +212,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     [self.themeStack addArrangedSubview:self.gradientToggleRow];
 
     UILabel *gradientLabel = [[UILabel alloc] init];
-    gradientLabel.text = @"Gradient Background";
+    gradientLabel.text = HALocalizedString(@"settings.section.gradient_background.title", @"Label above the gradient enable switch in Settings > Appearance.");
     gradientLabel.font = [UIFont systemFontOfSize:16];
     gradientLabel.textColor = [HATheme primaryTextColor];
     gradientLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -226,13 +239,13 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     [self.themeStack addArrangedSubview:self.gradientOptionsContainer];
 
     UILabel *presetLabel = [[UILabel alloc] init];
-    presetLabel.text = @"Gradient Preset";
+    presetLabel.text = HALocalizedString(@"settings.section.gradient_preset.title", @"Label above the gradient preset segmented control in Settings > Appearance.");
     presetLabel.font = [UIFont systemFontOfSize:12];
     presetLabel.textColor = [HATheme secondaryTextColor];
     presetLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.gradientOptionsContainer addSubview:presetLabel];
 
-    self.gradientPresetSegment = [[UISegmentedControl alloc] initWithItems:@[@"Purple", @"Ocean", @"Sunset", @"Forest", @"Night", @"Custom"]];
+    self.gradientPresetSegment = [[UISegmentedControl alloc] initWithItems:@[HALocalizedString(@"settings.gradient_preset.purple", @"Segmented control option, gradient preset picker in Settings. Short label."), HALocalizedString(@"settings.gradient_preset.ocean", @"Segmented control option, gradient preset picker in Settings. Short label."), HALocalizedString(@"settings.gradient_preset.sunset", @"Segmented control option, gradient preset picker in Settings. Short label."), HALocalizedString(@"settings.gradient_preset.forest", @"Segmented control option, gradient preset picker in Settings. Short label."), HALocalizedString(@"settings.gradient_preset.night", @"Segmented control option, gradient preset picker in Settings. Short label."), HALocalizedString(@"settings.gradient_preset.custom", @"Segmented control option, gradient preset picker in Settings. Short label.")]];
     self.gradientPresetSegment.selectedSegmentIndex = (NSInteger)[HATheme gradientPreset];
     [self.gradientPresetSegment addTarget:self action:@selector(gradientPresetChanged:) forControlEvents:UIControlEventValueChanged];
     self.gradientPresetSegment.translatesAutoresizingMaskIntoConstraints = NO;
@@ -316,14 +329,29 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         [self.gradientPreview.bottomAnchor constraintEqualToAnchor:self.gradientOptionsContainer.bottomAnchor],
     ]];
 
+    // ── LANGUAGE section ──────────────────────────────────────────────
+    // Hidden entirely while only one .lproj ships (today: just en.lproj).
+    // New <code>.lproj folders show up automatically -- see
+    // -[HAStrings availableLanguageCodes] -- with no code change required
+    // to surface them here.
+    self.languageSectionHeader = [self createSectionHeaderWithText:HALocalizedString(@"settings.section.language.title", @"All-caps section header in Settings, above the language picker. Hidden while only one language ships.")];
+    [container addSubview:self.languageSectionHeader];
+
+    self.languageSection = [self createLanguageSection];
+    [container addSubview:self.languageSection];
+
+    BOOL showLanguagePicker = [HAStrings availableLanguageCodes].count > 1;
+    self.languageSectionHeader.hidden = !showLanguagePicker;
+    self.languageSection.hidden = !showLanguagePicker;
+
     // ── DISPLAY section ───────────────────────────────────────────────
-    self.displaySectionHeader = [self createSectionHeaderWithText:@"DISPLAY"];
+    self.displaySectionHeader = [self createSectionHeaderWithText:HALocalizedString(@"settings.section.display.title", @"All-caps section header in Settings, above kiosk/demo/display toggles.")];
     [container addSubview:self.displaySectionHeader];
 
     // Kiosk mode
     UISwitch *kioskSw = nil;
-    self.kioskSection = [self createToggleSection:@"Kiosk Mode"
-        helpText:@"Hides navigation bar and prevents screen sleep. Triple-tap the top of the screen to temporarily show controls.\n\nFor full lockdown, enable Guided Access in iPad Settings \u2192 Accessibility \u2192 Guided Access, then triple-click the Home button while in the app."
+    self.kioskSection = [self createToggleSection:HALocalizedString(@"settings.section.kiosk_mode.title", @"Toggle row title in Settings > Display.")
+        helpText:HALocalizedString(@"settings.section.kiosk_mode.help", @"Help paragraph under the \"Kiosk Mode\" toggle in Settings. Two paragraphs, can wrap.")
         isOn:[[HAAuthManager sharedManager] isKioskMode]
         target:self action:@selector(kioskSwitchToggled:)
         switchOut:&kioskSw];
@@ -333,8 +361,8 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     // Wake on touch — sub-setting shown below kiosk, disabled when kiosk is off
     BOOL kioskOn = [[HAAuthManager sharedManager] isKioskMode];
     UISwitch *proxWakeSw = nil;
-    self.proximityWakeSection = [self createToggleSection:@"Wake on Touch"
-        helpText:@"Dims the screen after 60 seconds of inactivity. Touch anywhere to wake."
+    self.proximityWakeSection = [self createToggleSection:HALocalizedString(@"settings.section.wake_on_touch.title", @"Toggle row title in Settings > Display (sub-setting of Kiosk Mode).")
+        helpText:HALocalizedString(@"settings.section.wake_on_touch.help", @"Help paragraph under the \"Wake on Touch\" toggle in Settings.")
         isOn:[[HAAuthManager sharedManager] proximityWakeEnabled]
         target:self action:@selector(proximityWakeSwitchToggled:)
         switchOut:&proxWakeSw];
@@ -345,8 +373,8 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 
     // Demo mode
     UISwitch *demoSw = nil;
-    self.demoSection = [self createToggleSection:@"Demo Mode"
-        helpText:@"Shows the app with demo data instead of connecting to a Home Assistant server. Useful for demonstrating the app's capabilities."
+    self.demoSection = [self createToggleSection:HALocalizedString(@"settings.section.demo_mode.title", @"Toggle row title in Settings > Display.")
+        helpText:HALocalizedString(@"settings.section.demo_mode.help", @"Help paragraph under the \"Demo Mode\" toggle in Settings.")
         isOn:[[HAAuthManager sharedManager] isDemoMode]
         target:self action:@selector(demoSwitchToggled:)
         switchOut:&demoSw];
@@ -355,8 +383,8 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 
     // Auto-reload dashboard
     UISwitch *autoReloadSw = nil;
-    self.autoReloadSection = [self createToggleSection:@"Auto-Reload Dashboard"
-        helpText:@"Automatically reload the dashboard when its configuration is changed on the Home Assistant server."
+    self.autoReloadSection = [self createToggleSection:HALocalizedString(@"settings.section.auto_reload.title", @"Toggle row title in Settings > Display.")
+        helpText:HALocalizedString(@"settings.section.auto_reload.help", @"Help paragraph under the \"Auto-Reload Dashboard\" toggle in Settings.")
         isOn:[[HAAuthManager sharedManager] autoReloadDashboard]
         target:self action:@selector(autoReloadSwitchToggled:)
         switchOut:&autoReloadSw];
@@ -365,20 +393,33 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 
     // Camera audio mute default
     UISwitch *camMuteSw = nil;
-    self.cameraMuteSection = [self createToggleSection:@"Mute Camera Audio"
-        helpText:@"Controls audio playback for Home Assistant camera cards only. Local Camera Stream always includes microphone audio while a client is viewing it; turn that stream off to stop publishing audio."
+    self.cameraMuteSection = [self createToggleSection:HALocalizedString(@"settings.section.mute_camera_audio.title", @"Toggle row title in Settings > Display.")
+        helpText:HALocalizedString(@"settings.section.mute_camera_audio.help", @"Help paragraph under the \"Mute Camera Audio\" toggle in Settings.")
         isOn:[[HAAuthManager sharedManager] cameraGlobalMute]
         target:self action:@selector(cameraMuteSwitchToggled:)
         switchOut:&camMuteSw];
     self.cameraMuteSwitch = camMuteSw;
     [container addSubview:self.cameraMuteSection];
 
+    // Show unsupported cards (placeholder for Lovelace card types HA Dash
+    // can't render). Default ON; kiosk owners can turn it off for a clean
+    // display once they've confirmed which cards are affected.
+    UISwitch *unsupportedCardsSw = nil;
+    self.unsupportedCardsSection = [self createToggleSection:
+        HALocalizedString(@"settings.unsupportedCards.title", @"Settings toggle title in the Display section.")
+        helpText:HALocalizedString(@"settings.unsupportedCards.footer", @"Help text under the Show Unsupported Cards toggle.")
+        isOn:[HALovelaceParser showUnsupportedCardsEnabled]
+        target:self action:@selector(unsupportedCardsSwitchToggled:)
+        switchOut:&unsupportedCardsSw];
+    self.unsupportedCardsSwitch = unsupportedCardsSw;
+    [container addSubview:self.unsupportedCardsSection];
+
     self.liveStreamingSection = [self createLiveStreamingSection];
     [container addSubview:self.liveStreamingSection];
 
     // Clear cache button
     self.clearCacheButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.clearCacheButton setTitle:@"Clear Cache & Reload" forState:UIControlStateNormal];
+    [self.clearCacheButton setTitle:HALocalizedString(@"settings.action.clear_cache", @"Button in Settings > Display. Destructive-styled text button.") forState:UIControlStateNormal];
     self.clearCacheButton.titleLabel.font = [UIFont systemFontOfSize:16];
     self.clearCacheButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
     [self.clearCacheButton setTitleColor:[HATheme destructiveColor] forState:UIControlStateNormal];
@@ -387,45 +428,45 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     [container addSubview:self.clearCacheButton];
 
     // ── DEVICE INTEGRATION section ────────────────────────────────────
-    self.integrationSectionHeader = [self createSectionHeaderWithText:@"DEVICE INTEGRATION"];
+    self.integrationSectionHeader = [self createSectionHeaderWithText:HALocalizedString(@"settings.section.device_integration.title", @"All-caps section header in Settings, above device registration controls.")];
     [container addSubview:self.integrationSectionHeader];
 
     self.integrationSection = [self createDeviceIntegrationSection];
     [container addSubview:self.integrationSection];
 
     // ── ABOUT section ─────────────────────────────────────────────────
-    self.aboutSectionHeader = [self createSectionHeaderWithText:@"ABOUT"];
+    self.aboutSectionHeader = [self createSectionHeaderWithText:HALocalizedString(@"settings.section.about.title", @"All-caps section header in Settings, above app/version info.")];
     [container addSubview:self.aboutSectionHeader];
 
     self.aboutSection = [self createAboutSection];
     [container addSubview:self.aboutSection];
 
     // ── DEVELOPER section (placeholder for future options, hidden) ────
-    self.developerSectionHeader = [self createSectionHeaderWithText:@"DEVELOPER"];
+    self.developerSectionHeader = [self createSectionHeaderWithText:HALocalizedString(@"settings.section.developer.title", @"All-caps section header in Settings, hidden unless developer mode is unlocked.")];
     self.developerSectionHeader.hidden = ![HATheme isDeveloperMode];
     [container addSubview:self.developerSectionHeader];
     {
         // Developer section: vertical stack of toggle rows
         UISwitch *blurSw, *perfSw;
-        UIView *blurRow = [self createToggleSection:@"Disable Blur"
-            helpText:@"Turn off frosted-glass card backgrounds for A/B perf testing"
+        UIView *blurRow = [self createToggleSection:HALocalizedString(@"settings.dev.disable_blur.title", @"Toggle row title in Settings > Developer (hidden section).")
+            helpText:HALocalizedString(@"settings.dev.disable_blur.help", @"Help text under the \"Disable Blur\" developer toggle in Settings.")
             isOn:[HATheme blurDisabled]
             target:self action:@selector(blurDisabledToggled:)
             switchOut:&blurSw];
-        UIView *perfRow = [self createToggleSection:@"Performance Monitor"
-            helpText:@"Log FPS + timing to /tmp/perf.log (restart app to apply)"
+        UIView *perfRow = [self createToggleSection:HALocalizedString(@"settings.dev.performance_monitor.title", @"Toggle row title in Settings > Developer (hidden section).")
+            helpText:HALocalizedString(@"settings.dev.performance_monitor.help", @"Help text under the \"Performance Monitor\" developer toggle in Settings.")
             isOn:[[NSUserDefaults standardUserDefaults] boolForKey:@"HAPerfMonitorEnabled"]
             target:self action:@selector(perfMonitorToggled:)
             switchOut:&perfSw];
 
         // Camera stream mode selector
         UILabel *streamLabel = [[UILabel alloc] init];
-        streamLabel.text = @"Camera Stream Mode";
+        streamLabel.text = HALocalizedString(@"settings.dev.camera_stream_mode.title", @"Label above the camera stream mode segmented control in Settings > Developer.");
         streamLabel.font = [UIFont systemFontOfSize:16];
         streamLabel.textColor = [HATheme primaryTextColor];
         streamLabel.translatesAutoresizingMaskIntoConstraints = NO;
 
-        UISegmentedControl *streamSeg = [[UISegmentedControl alloc] initWithItems:@[@"Auto", @"MJPEG", @"HLS", @"Snapshot"]];
+        UISegmentedControl *streamSeg = [[UISegmentedControl alloc] initWithItems:@[HALocalizedString(@"settings.dev.stream_mode.auto", @"Segmented control option, developer camera stream mode picker. Short label."), HALocalizedString(@"settings.dev.stream_mode.mjpeg", @"Segmented control option, developer camera stream mode picker. Short label."), HALocalizedString(@"settings.dev.stream_mode.hls", @"Segmented control option, developer camera stream mode picker. Short label."), HALocalizedString(@"settings.dev.stream_mode.snapshot", @"Segmented control option, developer camera stream mode picker. Short label.")]];
         streamSeg.translatesAutoresizingMaskIntoConstraints = NO;
         NSString *savedMode = [[NSUserDefaults standardUserDefaults] stringForKey:@"HADevStreamMode"];
         if ([savedMode isEqualToString:@"mjpeg"])    streamSeg.selectedSegmentIndex = 1;
@@ -441,15 +482,15 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 
         // Verbose logging toggle
         UISwitch *verboseSw;
-        UIView *verboseRow = [self createToggleSection:@"Verbose Logging"
-            helpText:@"Log debug-level messages (camera frames, polling, data sizes). Useful for diagnosing issues."
+        UIView *verboseRow = [self createToggleSection:HALocalizedString(@"settings.dev.verbose_logging.title", @"Toggle row title in Settings > Developer (hidden section).")
+            helpText:HALocalizedString(@"settings.dev.verbose_logging.help", @"Help text under the \"Verbose Logging\" developer toggle in Settings.")
             isOn:([HALog minLevel] == HALogLevelDebug)
             target:self action:@selector(verboseLoggingToggled:)
             switchOut:&verboseSw];
 
         // Export logs button
         UIButton *exportBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-        [exportBtn setTitle:@"Export Logs" forState:UIControlStateNormal];
+        [exportBtn setTitle:HALocalizedString(@"settings.dev.export_logs", @"Button in Settings > Developer (hidden section).") forState:UIControlStateNormal];
         exportBtn.titleLabel.font = [UIFont systemFontOfSize:16];
         exportBtn.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
         exportBtn.translatesAutoresizingMaskIntoConstraints = NO;
@@ -467,7 +508,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 
     // ── Log Out & Reset ───────────────────────────────────────────────
     self.logoutButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.logoutButton setTitle:@"Log Out & Reset" forState:UIControlStateNormal];
+    [self.logoutButton setTitle:HALocalizedString(@"settings.action.log_out_reset", @"Button in Settings, bottom of screen. Destructive-styled text button.") forState:UIControlStateNormal];
     self.logoutButton.titleLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightMedium];
     [self.logoutButton setTitleColor:[HATheme destructiveColor] forState:UIControlStateNormal];
     self.logoutButton.translatesAutoresizingMaskIntoConstraints = NO;
@@ -480,12 +521,15 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         @"connRow":   self.connectionRow,
         @"appHdr":    self.appearanceSectionHeader,
         @"themeStack":self.themeStack,
+        @"langHdr":   self.languageSectionHeader,
+        @"langSec":   self.languageSection,
         @"dispHdr":   self.displaySectionHeader,
         @"kiosk":     self.kioskSection,
         @"proxWake":  self.proximityWakeSection,
         @"demo":      self.demoSection,
         @"autoReload":self.autoReloadSection,
         @"camMute":   self.cameraMuteSection,
+        @"unsupCards":self.unsupportedCardsSection,
         @"liveStream":self.liveStreamingSection,
         @"clrCache":  self.clearCacheButton,
         @"intHdr":    self.integrationSectionHeader,
@@ -499,7 +543,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     NSDictionary *metrics = @{@"p": @16, @"sh": @32, @"hg": @10, @"fh": @44};
 
     [container addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:
-        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[dispHdr]-hg-[kiosk]-p-[proxWake]-p-[demo]-p-[autoReload]-p-[camMute]-p-[liveStream]-p-[clrCache(fh)]-sh-[intHdr]-hg-[intSec]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
+        @"V:|[connHdr]-hg-[connRow]-sh-[appHdr]-hg-[themeStack]-sh-[langHdr]-hg-[langSec]-sh-[dispHdr]-hg-[kiosk]-p-[proxWake]-p-[demo]-p-[autoReload]-p-[camMute]-p-[unsupCards]-p-[liveStream]-p-[clrCache(fh)]-sh-[intHdr]-hg-[intSec]-sh-[aboutHdr]-hg-[about]-sh-[devHdr]-hg-[dev]-sh-[logout(fh)]|"
         options:0 metrics:metrics views:views]];
 
     for (NSString *name in views) {
@@ -533,7 +577,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     section.translatesAutoresizingMaskIntoConstraints = NO;
 
     UILabel *title = [[UILabel alloc] init];
-    title.text = @"Local Camera Stream";
+    title.text = HALocalizedString(@"settings.live_stream.title", @"Section title above the Local Camera Stream controls in Settings.");
     title.font = [UIFont systemFontOfSize:16];
     title.textColor = [HATheme primaryTextColor];
     title.translatesAutoresizingMaskIntoConstraints = NO;
@@ -545,7 +589,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     [self.liveStreamingSwitch addTarget:self action:@selector(liveStreamingToggled:) forControlEvents:UIControlEventValueChanged];
     [section addSubview:self.liveStreamingSwitch];
 
-    self.liveStreamingCameraSegment = [[UISegmentedControl alloc] initWithItems:@[@"Front", @"Rear", @"Both"]];
+    self.liveStreamingCameraSegment = [[UISegmentedControl alloc] initWithItems:@[HALocalizedString(@"settings.live_stream.camera.front", @"Segmented control option, Local Camera Stream camera picker. Short label."), HALocalizedString(@"settings.live_stream.camera.rear", @"Segmented control option, Local Camera Stream camera picker. Short label."), HALocalizedString(@"settings.live_stream.camera.both", @"Segmented control option, Local Camera Stream camera picker. Short label.")]];
     self.liveStreamingCameraSegment.translatesAutoresizingMaskIntoConstraints = NO;
     [self.liveStreamingCameraSegment setEnabled:manager.frontCameraAvailable forSegmentAtIndex:HAStreamingCameraModeFront];
     [self.liveStreamingCameraSegment setEnabled:manager.rearCameraAvailable forSegmentAtIndex:HAStreamingCameraModeRear];
@@ -581,7 +625,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     [section addSubview:self.liveStreamingStatusLabel];
 
     self.liveStreamingAccessButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.liveStreamingAccessButton setTitle:@"Protected access · Manage" forState:UIControlStateNormal];
+    [self.liveStreamingAccessButton setTitle:HALocalizedString(@"settings.live_stream.access_button", @"Button below the Local Camera Stream status label in Settings. Small text.") forState:UIControlStateNormal];
     self.liveStreamingAccessButton.titleLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightMedium];
     self.liveStreamingAccessButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
     self.liveStreamingAccessButton.translatesAutoresizingMaskIntoConstraints = NO;
@@ -689,7 +733,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     NSArray<NSString *> *urls = [HAStreamingManager sharedManager].streamURLs;
     if (urls.count == 0) return;
     [UIPasteboard generalPasteboard].string = [urls componentsJoinedByString:@"\n"];
-    [HAToastView showInView:self.view message:urls.count > 1 ? @"RTSP URLs copied" : @"RTSP URL copied" subtitle:nil duration:1.5 tapAction:nil];
+    [HAToastView showInView:self.view message:urls.count > 1 ? HALocalizedString(@"settings.toast.rtsp_urls_copied", @"Toast message after copying multiple RTSP URLs in Settings.") : HALocalizedString(@"settings.toast.rtsp_url_copied", @"Toast message after copying a single RTSP URL in Settings.") subtitle:nil duration:1.5 tapAction:nil];
 }
 
 - (void)liveStreamingAccessTapped:(UIButton *)sender {
@@ -701,11 +745,11 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         return;
     }
     HAStreamingManager *stream = [HAStreamingManager sharedManager];
-    UIAlertController *menu = [UIAlertController alertControllerWithTitle:@"Protected Stream Access"
-        message:@"Each device has its own strong password. When Register with Home Assistant is enabled, Home Assistant receives it over HTTPS or automatically over a local-network HTTP connection. On HTTP, that password is sent without transport encryption. RTSP media also remains plaintext on your trusted local network."
+    UIAlertController *menu = [UIAlertController alertControllerWithTitle:HALocalizedString(@"alert.protected_stream_access.title", @"Action sheet title for the protected stream access menu in Settings.")
+        message:HALocalizedString(@"alert.protected_stream_access.message", @"Action sheet message explaining camera stream credential security in Settings. Carries real security meaning -- do not paraphrase.")
         preferredStyle:UIAlertControllerStyleActionSheet];
     if (stream.streamURLs.count > 0) {
-        [menu addAction:[UIAlertAction actionWithTitle:@"Copy URL with Password"
+        [menu addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.copy_url_with_password", @"Action sheet button, copies the stream URL with embedded password.")
             style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
                 (void)action;
                 NSMutableArray<NSString *> *protectedURLs = [NSMutableArray array];
@@ -734,8 +778,8 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
                 }
                 self.sensitiveStreamPasteboardChangeCount = pasteboard.changeCount;
                 self.sensitiveStreamPasteboardExpiry = expiration;
-                [HAToastView showInView:self.view message:@"Sensitive connection URL copied"
-                    subtitle:@"Local clipboard item expires in 60 seconds" duration:2.5 tapAction:nil];
+                [HAToastView showInView:self.view message:HALocalizedString(@"settings.toast.sensitive_url_copied.title", @"Toast title after copying the password-embedded stream URL in Settings.")
+                    subtitle:HALocalizedString(@"settings.toast.sensitive_url_copied.subtitle", @"Toast subtitle after copying the password-embedded stream URL in Settings.") duration:2.5 tapAction:nil];
                 __weak typeof(self) weakSelf = self;
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(60 * NSEC_PER_SEC)),
                     dispatch_get_main_queue(), ^{
@@ -743,12 +787,12 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
                     });
             }]];
     }
-    [menu addAction:[UIAlertAction actionWithTitle:@"Rotate Stream Password"
+    [menu addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.rotate_stream_password", @"Action sheet / alert button, rotates the local stream's device password.")
         style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
             (void)action;
             [self confirmStreamCredentialRotation];
         }]];
-    [menu addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [menu addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
     menu.popoverPresentationController.sourceView = sender;
     menu.popoverPresentationController.sourceRect = sender.bounds;
     [self presentViewController:menu animated:YES completion:nil];
@@ -776,11 +820,11 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 }
 
 - (void)confirmStreamCredentialRotation {
-    UIAlertController *confirmation = [UIAlertController alertControllerWithTitle:@"Rotate Stream Password?"
-        message:@"Current clients will disconnect immediately. The protected listener re-arms with the new password first. The app then attempts to update app-owned Home Assistant camera entries asynchronously and retries transient failures while the same stream, registration setting, account, and server remain active. Manual clients will need the new URL."
+    UIAlertController *confirmation = [UIAlertController alertControllerWithTitle:HALocalizedString(@"alert.rotate_stream_password.title", @"Alert title confirming stream password rotation in Settings.")
+        message:HALocalizedString(@"alert.rotate_stream_password.message", @"Alert message confirming stream password rotation in Settings. Carries real security/behaviour meaning -- do not paraphrase.")
         preferredStyle:UIAlertControllerStyleAlert];
-    [confirmation addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-    [confirmation addAction:[UIAlertAction actionWithTitle:@"Rotate" style:UIAlertActionStyleDestructive
+    [confirmation addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
+    [confirmation addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.rotate", @"Destructive alert action confirming stream password rotation.") style:UIAlertActionStyleDestructive
         handler:^(UIAlertAction *action) {
             (void)action;
             self.liveStreamingAccessButton.enabled = NO;
@@ -791,9 +835,9 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
                     BOOL registrationCanUpdate = [HADeviceIntegrationManager sharedManager].enabled &&
                         [HACameraRegistrationManager sharedManager].automaticRegistrationTransportAllowed;
                     NSString *subtitle = registrationCanUpdate
-                        ? @"Home Assistant update follows; Settings shows progress"
-                        : @"Manual clients need the new protected URL";
-                    [HAToastView showInView:self.view message:@"Stream password rotated"
+                        ? HALocalizedString(@"settings.toast.rotate_follow_up.pending", @"Toast subtitle after rotating stream password, when HA registration will follow automatically.")
+                        : HALocalizedString(@"settings.toast.rotate_follow_up.manual_only", @"Toast subtitle after rotating stream password, when no automatic HA update will happen.");
+                    [HAToastView showInView:self.view message:HALocalizedString(@"settings.toast.password_rotated", @"Toast title after successfully rotating the stream password in Settings.")
                         subtitle:subtitle duration:2.5 tapAction:nil];
                 }
                 [self updateLiveStreamingStatus];
@@ -802,7 +846,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     [self presentViewController:confirmation animated:YES completion:nil];
 }
 
-- (void)showLiveStreamingError:(NSError *)error { UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Local Camera Stream" message:error.localizedDescription preferredStyle:UIAlertControllerStyleAlert]; [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]]; [self presentViewController:alert animated:YES completion:nil]; }
+- (void)showLiveStreamingError:(NSError *)error { UIAlertController *alert = [UIAlertController alertControllerWithTitle:HALocalizedString(@"settings.live_stream.title", @"Section title above the Local Camera Stream controls in Settings.") message:error.localizedDescription preferredStyle:UIAlertControllerStyleAlert]; [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.ok", @"Generic affirmative button (alerts, dialogs).") style:UIAlertActionStyleDefault handler:nil]]; [self presentViewController:alert animated:YES completion:nil]; }
 
 - (void)liveStreamingStateChanged:(NSNotification *)notification {
     (void)notification;
@@ -820,59 +864,59 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     // arming failed because a stale or damaged credential could not be read.
     self.liveStreamingAccessButton.enabled = manager.supported && manager.featureEnabled;
     if (!manager.supported) {
-        self.liveStreamingStatusLabel.text = @"Requires iOS 10.3.3 or newer.";
+        self.liveStreamingStatusLabel.text = HALocalizedString(@"settings.live_stream.status.unsupported", @"Local Camera Stream status label in Settings, shown when the feature needs a newer iOS.");
     } else if (manager.streaming && manager.secondaryStreamURL.length) {
         NSString *state = manager.isCapturing
-            ? [NSString stringWithFormat:@"CAMERA + MIC LIVE · %lu authenticated %@",
-                (unsigned long)manager.streamClientCount, manager.streamClientCount == 1 ? @"client" : @"clients"]
-            : @"PROTECTED · Camera off · Waiting for authenticated viewer";
-        self.liveStreamingStatusLabel.text = [NSString stringWithFormat:@"%@\nFRONT %@\nREAR %@\nTap an address to copy it without credentials.",
+            ? [NSString stringWithFormat:HALocalizedString(@"format.live_stream.status.live", @"Local Camera Stream status label in Settings, shown while actively capturing and streaming. %1$lu is the authenticated client count, %2$@ is \"client\" or \"clients\"."),
+                (unsigned long)manager.streamClientCount, manager.streamClientCount == 1 ? HALocalizedString(@"settings.live_stream.client_singular", @"Singular noun used inline in the live-stream status label ("1 authenticated client").") : HALocalizedString(@"settings.live_stream.client_plural", @"Plural noun used inline in the live-stream status label ("2 authenticated clients").")]
+            : HALocalizedString(@"settings.live_stream.status.protected_waiting", @"Local Camera Stream status label in Settings, shown while armed but not yet capturing.");
+        self.liveStreamingStatusLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.live_stream.status.dual_camera", @"Local Camera Stream status label in Settings, dual-camera mode. %1$@ is the live/waiting state text, %2$@ is the front stream address, %3$@ is the rear stream address."),
             state, manager.streamURL ?: @"", manager.secondaryStreamURL];
     } else if (manager.streaming) {
-        NSString *camera = manager.cameraMode == HAStreamingCameraModeRear ? @"REAR" : @"FRONT";
+        NSString *camera = manager.cameraMode == HAStreamingCameraModeRear ? HALocalizedString(@"settings.live_stream.camera_label.rear", @"Camera label, all-caps, prefixing the rear stream address in Settings.") : HALocalizedString(@"settings.live_stream.camera_label.front", @"Camera label, all-caps, prefixing the front stream address in Settings.");
         NSString *state = manager.isCapturing
-            ? [NSString stringWithFormat:@"CAMERA + MIC LIVE · %lu authenticated %@",
-                (unsigned long)manager.streamClientCount, manager.streamClientCount == 1 ? @"client" : @"clients"]
-            : @"PROTECTED · Camera off · Waiting for authenticated viewer";
-        self.liveStreamingStatusLabel.text = [NSString stringWithFormat:@"%@\n%@ %@\nTap the address to copy it without credentials.",
+            ? [NSString stringWithFormat:HALocalizedString(@"format.live_stream.status.live", @"Local Camera Stream status label in Settings, shown while actively capturing and streaming. %1$lu is the authenticated client count, %2$@ is \"client\" or \"clients\"."),
+                (unsigned long)manager.streamClientCount, manager.streamClientCount == 1 ? HALocalizedString(@"settings.live_stream.client_singular", @"Singular noun used inline in the live-stream status label ("1 authenticated client").") : HALocalizedString(@"settings.live_stream.client_plural", @"Plural noun used inline in the live-stream status label ("2 authenticated clients").")]
+            : HALocalizedString(@"settings.live_stream.status.protected_waiting", @"Local Camera Stream status label in Settings, shown while armed but not yet capturing.");
+        self.liveStreamingStatusLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.live_stream.status.single_camera", @"Local Camera Stream status label in Settings, single-camera mode. %1$@ is the live/waiting state text, %2$@ is the camera label (FRONT/REAR), %3$@ is the stream address."),
             state, camera, manager.streamURL ?: @""];
     } else if (manager.featureEnabled) {
-        self.liveStreamingStatusLabel.text = @"Protected stream is re-arming.";
+        self.liveStreamingStatusLabel.text = HALocalizedString(@"settings.live_stream.status.rearming", @"Local Camera Stream status label in Settings, shown briefly while the listener re-arms.");
     } else {
-        self.liveStreamingStatusLabel.text = @"Off · A unique device password is retained for the next use.";
+        self.liveStreamingStatusLabel.text = HALocalizedString(@"settings.live_stream.status.off", @"Local Camera Stream status label in Settings, shown when the feature is off.");
     }
     HACameraRegistrationManager *registration = [HACameraRegistrationManager sharedManager];
     if ([HADeviceIntegrationManager sharedManager].enabled && manager.streaming) {
         if (registration.isRetryScheduled) {
             NSString *retryStatus = [NSString stringWithFormat:
-                @"\nHome Assistant: retry %lu in %.0f s.",
+                HALocalizedString(@"format.live_stream.status.retry", @"Appended to the live-stream status label in Settings when a registration retry is scheduled. %1$lu is the retry attempt number, %2$.0f is the delay in seconds."),
                 (unsigned long)registration.retryAttempt,
                 registration.scheduledRetryDelay];
             if (registration.lastError.localizedDescription.length) {
-                retryStatus = [retryStatus stringByAppendingFormat:@"\nLast error: %@",
+                retryStatus = [retryStatus stringByAppendingFormat:HALocalizedString(@"format.live_stream.status.last_error", @"Appended to a status label in Settings to show the last registration error. %1$@ is the error description."),
                     registration.lastError.localizedDescription];
             }
             self.liveStreamingStatusLabel.text = [self.liveStreamingStatusLabel.text
                 stringByAppendingString:retryStatus];
         } else if (registration.isRegistering) {
             NSString *registeringStatus = registration.retryAttempt > 0
-                ? [NSString stringWithFormat:@"\nHome Assistant: registering camera (retry %lu)…",
+                ? [NSString stringWithFormat:HALocalizedString(@"format.live_stream.status.registering_retry", @"Appended to the live-stream status label in Settings while a camera-registration retry is in progress. %1$lu is the retry attempt number."),
                     (unsigned long)registration.retryAttempt]
-                : @"\nHome Assistant: registering camera…";
+                : HALocalizedString(@"settings.live_stream.status.registering", @"Appended to the live-stream status label in Settings while camera registration is first in progress.");
             if (registration.retryAttempt > 0 && registration.lastError.localizedDescription.length) {
-                registeringStatus = [registeringStatus stringByAppendingFormat:@"\nLast error: %@",
+                registeringStatus = [registeringStatus stringByAppendingFormat:HALocalizedString(@"format.live_stream.status.last_error", @"Appended to a status label in Settings to show the last registration error. %1$@ is the error description."),
                     registration.lastError.localizedDescription];
             }
             self.liveStreamingStatusLabel.text = [self.liveStreamingStatusLabel.text
                 stringByAppendingString:registeringStatus];
         } else if (registration.lastError) {
             self.liveStreamingStatusLabel.text = [self.liveStreamingStatusLabel.text
-                stringByAppendingFormat:@"\nHome Assistant: %@", registration.lastError.localizedDescription];
+                stringByAppendingFormat:HALocalizedString(@"format.live_stream.status.ha_error", @"Appended to the live-stream status label in Settings to show a registration error. %1$@ is the error description."), registration.lastError.localizedDescription];
         }
     }
     if (manager.supported) {
         self.liveStreamingStatusLabel.text = [self.liveStreamingStatusLabel.text
-            stringByAppendingString:@"\nSecurity: RTSP media and camera-password registration to a local HTTP Home Assistant server are plaintext on your LAN."];
+            stringByAppendingString:HALocalizedString(@"settings.live_stream.status.security_note", @"Appended to the live-stream status label in Settings as a standing security reminder.")];
     }
 }
 
@@ -885,6 +929,67 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     label.textColor = [HATheme secondaryTextColor];
     label.translatesAutoresizingMaskIntoConstraints = NO;
     return label;
+}
+
+- (UIView *)createLanguageSection {
+    UIView *section = [[UIView alloc] init];
+    section.translatesAutoresizingMaskIntoConstraints = NO;
+
+    UILabel *help = [[UILabel alloc] init];
+    help.text = HALocalizedString(@"settings.language.help", @"Help paragraph under the language picker in Settings.");
+    help.font = [UIFont systemFontOfSize:12];
+    help.textColor = [HATheme secondaryTextColor];
+    help.numberOfLines = 0;
+    help.translatesAutoresizingMaskIntoConstraints = NO;
+    [section addSubview:help];
+
+    NSArray<NSString *> *codes = [HAStrings availableLanguageCodes];
+    self.languageSegmentCodes = codes;
+
+    NSMutableArray<NSString *> *items = [NSMutableArray arrayWithObject:
+        HALocalizedString(@"settings.language.system_default", @"Segmented control option, Settings > Language picker. Follows the iOS system language.")];
+    for (NSString *code in codes) {
+        [items addObject:[HAStrings displayNameForLanguageCode:code]];
+    }
+
+    self.languageSegment = [[UISegmentedControl alloc] initWithItems:items];
+    NSString *override = [HAStrings overrideLanguageCode];
+    NSUInteger overrideIndex = override ? [codes indexOfObject:override] : NSNotFound;
+    self.languageSegment.selectedSegmentIndex = (overrideIndex == NSNotFound) ? 0 : (NSInteger)(overrideIndex + 1);
+    [self.languageSegment addTarget:self action:@selector(languageSegmentChanged:) forControlEvents:UIControlEventValueChanged];
+    self.languageSegment.translatesAutoresizingMaskIntoConstraints = NO;
+    [section addSubview:self.languageSegment];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [self.languageSegment.topAnchor constraintEqualToAnchor:section.topAnchor],
+        [self.languageSegment.leadingAnchor constraintEqualToAnchor:section.leadingAnchor],
+        [self.languageSegment.trailingAnchor constraintEqualToAnchor:section.trailingAnchor],
+        [help.topAnchor constraintEqualToAnchor:self.languageSegment.bottomAnchor constant:8],
+        [help.leadingAnchor constraintEqualToAnchor:section.leadingAnchor],
+        [help.trailingAnchor constraintEqualToAnchor:section.trailingAnchor],
+        [help.bottomAnchor constraintEqualToAnchor:section.bottomAnchor],
+    ]];
+
+    return section;
+}
+
+- (void)languageSegmentChanged:(UISegmentedControl *)sender {
+    NSInteger index = sender.selectedSegmentIndex;
+    NSString *newCode = (index == 0) ? nil : self.languageSegmentCodes[(NSUInteger)(index - 1)];
+    [HAStrings setOverrideLanguageCode:newCode];
+
+    // The override takes effect immediately for any screen built from here
+    // on, including this one -- rebuild it in place so the change is
+    // visible without waiting for a relaunch. Other already-presented
+    // screens pick it up next time they're shown.
+    for (UIView *subview in [self.view.subviews copy]) {
+        [subview removeFromSuperview];
+    }
+    [self setupUI];
+
+    [HAToastView showInView:self.view
+        message:HALocalizedString(@"settings.toast.language_changed", @"Toast shown after changing the in-app language override in Settings.")
+        subtitle:nil duration:1.5 tapAction:nil];
 }
 
 - (UIView *)createToggleSection:(NSString *)title helpText:(NSString *)helpText isOn:(BOOL)isOn
@@ -941,7 +1046,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     [stack addArrangedSubview:regRow];
 
     UILabel *regLabel = [[UILabel alloc] init];
-    regLabel.text = @"Register with Home Assistant";
+    regLabel.text = HALocalizedString(@"settings.device_integration.register.title", @"Toggle row label in Settings > Device Integration.");
     regLabel.font = [UIFont systemFontOfSize:16];
     regLabel.textColor = [HATheme primaryTextColor];
     regLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -976,7 +1081,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 
     // ── Device name field ──
     UILabel *nameLabel = [[UILabel alloc] init];
-    nameLabel.text = @"Device Name";
+    nameLabel.text = HALocalizedString(@"settings.device_integration.device_name.title", @"Label above the device name text field in Settings > Device Integration.");
     nameLabel.font = [UIFont systemFontOfSize:12];
     nameLabel.textColor = [HATheme secondaryTextColor];
     nameLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -1003,11 +1108,11 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     BOOL enabled = [HADeviceIntegrationManager sharedManager].enabled;
     self.registrationSwitch.on = enabled;
     if (!enabled) {
-        self.registrationStatusLabel.text = @"Off. Enable to send diagnostics to your Home Assistant, including battery, brightness, app/dashboard state, Wi-Fi identifiers when available, camera-stream status, and available storage only over a local webhook route.";
+        self.registrationStatusLabel.text = HALocalizedString(@"settings.device_integration.status.off", @"Device Integration status label in Settings, shown when registration is disabled. Long paragraph.");
     } else if (reg.isRegistered) {
-        self.registrationStatusLabel.text = @"Registered — device diagnostics and commands enabled.";
+        self.registrationStatusLabel.text = HALocalizedString(@"settings.device_integration.status.registered", @"Device Integration status label in Settings, shown once registration completed.");
     } else {
-        self.registrationStatusLabel.text = @"Registration is enabled but not complete. HA Dashboard will retry when it reconnects to Home Assistant.";
+        self.registrationStatusLabel.text = HALocalizedString(@"settings.device_integration.status.pending", @"Device Integration status label in Settings, shown when enabled but not yet registered.");
     }
 }
 
@@ -1024,7 +1129,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 - (void)registrationSwitchToggled:(UISwitch *)sender {
     if (sender.isOn) {
         sender.enabled = NO;
-        self.registrationStatusLabel.text = @"Registering\u2026";
+        self.registrationStatusLabel.text = HALocalizedString(@"settings.device_integration.status.registering", @"Device Integration status label in Settings, shown while a registration request is in flight.");
         [[HADeviceRegistration sharedManager] registerWithCompletion:^(BOOL success, NSError *error) {
             sender.enabled = YES;
             if (success) {
@@ -1038,11 +1143,11 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
                         credentialsWithError:&credentialError];
                     if (!credentials) {
                         self.registrationStatusLabel.text = [NSString stringWithFormat:
-                            @"Registered — protected camera credentials failed: %@",
-                            credentialError.localizedDescription ?: @"Unknown error"];
+                            HALocalizedString(@"format.device_integration.credentials_failed", @"Device Integration status label in Settings when protected camera credentials could not be read. %1$@ is the error description."),
+                            credentialError.localizedDescription ?: HALocalizedString(@"error.unknown", @"Generic fallback error description used when a specific NSError has none.")];
                         return;
                     }
-                    self.registrationStatusLabel.text = @"Registered — adding camera entries…";
+                    self.registrationStatusLabel.text = HALocalizedString(@"settings.device_integration.status.adding_cameras", @"Device Integration status label in Settings while camera entries are being added after registration.");
                     [[HACameraRegistrationManager sharedManager]
                         ensureCameraEntriesForStreamURLs:stream.streamURLs
                         deviceName:[HADeviceRegistration sharedManager].deviceName
@@ -1055,15 +1160,15 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
                                 [self updateRegistrationStatus];
                             } else {
                                 self.registrationStatusLabel.text = [NSString stringWithFormat:
-                                    @"Registered — camera entry failed: %@",
-                                    cameraError.localizedDescription ?: @"Unknown error"];
+                                    HALocalizedString(@"format.device_integration.camera_entry_failed", @"Device Integration status label in Settings when adding a camera entry failed. %1$@ is the error description."),
+                                    cameraError.localizedDescription ?: HALocalizedString(@"error.unknown", @"Generic fallback error description used when a specific NSError has none.")];
                             }
                         }];
                 }
             } else {
                 sender.on = NO;
-                self.registrationStatusLabel.text = [NSString stringWithFormat:@"Registration failed: %@",
-                    error.localizedDescription ?: @"Unknown error"];
+                self.registrationStatusLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.device_integration.registration_failed", @"Device Integration status label in Settings when registration itself failed. %1$@ is the error description."),
+                    error.localizedDescription ?: HALocalizedString(@"error.unknown", @"Generic fallback error description used when a specific NSError has none.")];
             }
         }];
     } else {
@@ -1099,31 +1204,31 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     NSDictionary *info = [[NSBundle mainBundle] infoDictionary];
     NSString *version = info[@"CFBundleShortVersionString"] ?: @"0.0.0";
     NSString *build = info[@"CFBundleVersion"] ?: @"0";
-    self.versionRow = [self aboutRow:@"Version" value:[NSString stringWithFormat:@"%@ (%@)", version, build]];
+    self.versionRow = [self aboutRow:HALocalizedString(@"settings.about.version.label", @"Label in Settings > About, left side of the app version row.") value:[NSString stringWithFormat:HALocalizedString(@"format.version_build", @"Value in Settings > About version row. %1$@ is the marketing version, %2$@ is the build number."), version, build]];
     self.versionRow.userInteractionEnabled = YES;
     UITapGestureRecognizer *devTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(versionTapped)];
     [self.versionRow addGestureRecognizer:devTap];
     [stack addArrangedSubview:self.versionRow];
 
     // Connected server
-    NSString *serverURL = [[HAAuthManager sharedManager] serverURL] ?: @"Not connected";
-    [stack addArrangedSubview:[self aboutRow:@"Server" value:serverURL]];
+    NSString *serverURL = [[HAAuthManager sharedManager] serverURL] ?: HALocalizedString(@"settings.connection.not_connected", @"Settings > About server row value, and connection summary, shown when no server is configured.");
+    [stack addArrangedSubview:[self aboutRow:HALocalizedString(@"settings.about.server.label", @"Label in Settings > About, left side of the connected-server row.") value:serverURL]];
 
     // GitHub
-    UIButton *githubButton = [self aboutLinkButton:@"GitHub Repository" url:@"https://github.com/ha-dashboard/ios-app"];
+    UIButton *githubButton = [self aboutLinkButton:HALocalizedString(@"settings.about.github_repository", @"Link button in Settings > About, opens the GitHub repository.") url:@"https://github.com/ha-dashboard/ios-app"];
     [stack addArrangedSubview:githubButton];
 
     // License
-    UIButton *licenseButton = [self aboutLinkButton:@"License: Apache 2.0" url:@"https://github.com/ha-dashboard/ios-app/blob/main/LICENSE"];
+    UIButton *licenseButton = [self aboutLinkButton:HALocalizedString(@"settings.about.license", @"Link button in Settings > About, opens the license file.") url:@"https://github.com/ha-dashboard/ios-app/blob/main/LICENSE"];
     [stack addArrangedSubview:licenseButton];
 
     // Privacy
-    UIButton *privacyButton = [self aboutLinkButton:@"Privacy Policy" url:@"https://github.com/ha-dashboard/ios-app/blob/main/PRIVACY.md"];
+    UIButton *privacyButton = [self aboutLinkButton:HALocalizedString(@"settings.about.privacy_policy", @"Link button in Settings > About, opens the privacy policy.") url:@"https://github.com/ha-dashboard/ios-app/blob/main/PRIVACY.md"];
     [stack addArrangedSubview:privacyButton];
 
     // Open source acknowledgements
     UILabel *oss = [[UILabel alloc] init];
-    oss.text = @"Built with SocketRocket, Lottie, and Material Design Icons.";
+    oss.text = HALocalizedString(@"settings.about.oss_credits", @"Open-source acknowledgements footer text in Settings > About. Small text, can wrap.");
     oss.font = [UIFont systemFontOfSize:12];
     oss.textColor = [HATheme tertiaryTextColor];
     oss.numberOfLines = 0;
@@ -1267,21 +1372,21 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     HAAuthManager *auth = [HAAuthManager sharedManager];
 
     if (auth.isDemoMode) {
-        self.connectionServerLabel.text = @"Demo Mode";
-        self.connectionModeLabel.text = @"Using sample data";
+        self.connectionServerLabel.text = HALocalizedString(@"settings.connection.demo_mode", @"Connection summary row title in Settings, shown when demo mode is active.");
+        self.connectionModeLabel.text = HALocalizedString(@"settings.connection.demo_subtitle", @"Connection summary row subtitle in Settings, shown when demo mode is active.");
     } else if (auth.isConfigured) {
-        self.connectionServerLabel.text = auth.serverURL ?: @"Connected";
+        self.connectionServerLabel.text = auth.serverURL ?: HALocalizedString(@"settings.connection.connected_fallback", @"Connection summary row title in Settings, fallback when a server URL is configured but unknown.");
         switch (auth.authMode) {
             case HAAuthModeOAuth:
-                self.connectionModeLabel.text = @"Username/Password";
+                self.connectionModeLabel.text = HALocalizedString(@"settings.connection.auth_mode.oauth", @"Connection summary row subtitle in Settings, shown in OAuth (username/password) auth mode.");
                 break;
             case HAAuthModeToken:
-                self.connectionModeLabel.text = @"Access Token";
+                self.connectionModeLabel.text = HALocalizedString(@"settings.connection.auth_mode.token", @"Connection summary row subtitle in Settings, shown in long-lived access token auth mode.");
                 break;
         }
     } else {
-        self.connectionServerLabel.text = @"Not connected";
-        self.connectionModeLabel.text = @"Tap to configure";
+        self.connectionServerLabel.text = HALocalizedString(@"settings.connection.not_connected", @"Settings > About server row value, and connection summary, shown when no server is configured.");
+        self.connectionModeLabel.text = HALocalizedString(@"settings.connection.tap_to_configure", @"Connection summary row subtitle in Settings, shown when no server is configured yet.");
     }
 }
 
@@ -1332,6 +1437,12 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     }
 }
 
+- (void)unsupportedCardsSwitchToggled:(UISwitch *)sender {
+    [[NSUserDefaults standardUserDefaults] setBool:sender.isOn forKey:HAShowUnsupportedCardsDefaultsKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    [[NSNotificationCenter defaultCenter] postNotificationName:HAShowUnsupportedCardsDidChangeNotification object:nil];
+}
+
 - (void)streamModeChanged:(UISegmentedControl *)seg {
     NSArray *modes = @[@"auto", @"mjpeg", @"hls", @"snapshot"];
     NSString *mode = modes[seg.selectedSegmentIndex];
@@ -1380,11 +1491,11 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 #pragma mark - Clear Cache
 
 - (void)clearCacheTapped {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Clear Cache"
-        message:@"This will clear all cached entity states and dashboard configs, then reload from the current source."
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:HALocalizedString(@"alert.clear_cache.title", @"Alert title confirming cache clear in Settings.")
+        message:HALocalizedString(@"alert.clear_cache.message", @"Alert message confirming cache clear in Settings.")
         preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Clear & Reload" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.clear_and_reload", @"Destructive alert action, clears cache and reloads.") style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
         // Clear persistent disk caches
         [[HACacheManager sharedManager] clearAllCaches];
 
@@ -1409,11 +1520,11 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
 #pragma mark - Logout
 
 - (void)logoutTapped {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Log Out & Reset"
-        message:@"This removes locally saved credentials, registration data, settings, cached dashboard data, and logs, then returns the app to its initial state. Home Assistant devices and camera entries remain on your server until you remove them there."
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:HALocalizedString(@"settings.action.log_out_reset", @"Button in Settings, bottom of screen. Destructive-styled text button.")
+        message:HALocalizedString(@"alert.log_out_reset.message", @"Alert message confirming logout/reset in Settings. Explains what local data is removed.")
         preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Log Out" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.log_out", @"Destructive alert action, logs out and resets the app.") style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
         HAConnectionManager *connection = [HAConnectionManager sharedManager];
         [connection disconnect];
         [connection clearEntityStore];
@@ -1570,7 +1681,7 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
         }];
 
         // Toast feedback
-        NSString *message = newState ? @"Developer Mode Enabled" : @"Developer Mode Disabled";
+        NSString *message = newState ? HALocalizedString(@"settings.dev.mode_enabled", @"Toast message shown when developer mode is unlocked via the version-tap gesture.") : HALocalizedString(@"settings.dev.mode_disabled", @"Toast message shown when developer mode is turned off via the version-tap gesture.");
         [HAToastView showInView:self.navigationController.view ?: self.view
                         message:message
                        subtitle:nil

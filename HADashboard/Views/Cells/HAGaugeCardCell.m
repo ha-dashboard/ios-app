@@ -1,4 +1,5 @@
 #import "HAGaugeCardCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HADashboardConfig.h"
 #import "HATheme.h"
@@ -228,7 +229,7 @@ static const CGFloat kGaugeEndAngle   = 2.0 * M_PI; // 3 o'clock (right)
             self.valueLabel.text = formattedValue;
         }
     } else {
-        self.valueLabel.text = [HAEntityDisplayHelper humanReadableState:stateStr] ?: @"--";
+        self.valueLabel.text = [HAEntityDisplayHelper formattedStateForEntity:entity decimals:1] ?: HALocalizedString(@"card.gauge.no_value", @"Value label fallback in the gauge card, shown when the state cannot be formatted.");
     }
     self.valueLabel.textColor = [HATheme primaryTextColor];
 
