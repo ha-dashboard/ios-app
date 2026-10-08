@@ -406,10 +406,8 @@ static NSString *const kDeviceNameOverride    = @"ha_device_name_override";
     // display once they've confirmed which cards are affected.
     UISwitch *unsupportedCardsSw = nil;
     self.unsupportedCardsSection = [self createToggleSection:
-        NSLocalizedStringWithDefaultValue(@"settings.unsupportedCards.title", nil, [NSBundle mainBundle],
-            @"Show Unsupported Cards", @"Settings toggle title.")
-        helpText:NSLocalizedStringWithDefaultValue(@"settings.unsupportedCards.footer", nil, [NSBundle mainBundle],
-            @"Shows a placeholder for card types HA Dash can't display yet.", @"Settings toggle footer/help text.")
+        HALocalizedString(@"settings.unsupportedCards.title", @"Settings toggle title in the Display section.")
+        helpText:HALocalizedString(@"settings.unsupportedCards.footer", @"Help text under the Show Unsupported Cards toggle.")
         isOn:[HALovelaceParser showUnsupportedCardsEnabled]
         target:self action:@selector(unsupportedCardsSwitchToggled:)
         switchOut:&unsupportedCardsSw];

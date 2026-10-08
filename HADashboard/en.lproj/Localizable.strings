@@ -938,3 +938,14 @@
 
 /* Action-sheet title for picking a water heater operation mode. */
 "alert.entity_detail.water_heater_operation_mode.title" = "Operation Mode";
+/* Settings toggle title in the Display section. */
+"settings.unsupportedCards.title" = "Show Unsupported Cards";
+
+/* Help text under the Show Unsupported Cards toggle. */
+"settings.unsupportedCards.footer" = "Shows a placeholder for card types HA Dash can't display yet.";
+
+/* Title shown on a placeholder for a Lovelace card type the app cannot render. */
+"card.unsupported.title" = "Unsupported card";
+
+/* VoiceOver label for an unsupported-card placeholder. %1$@ is the raw Lovelace card type, e.g. custom:bubble-card. */
+"card.unsupported.accessibilityFormat" = "Unsupported card: %1$@";

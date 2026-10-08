@@ -1,4 +1,5 @@
 #import "HAUnsupportedCardCell.h"
+#import "HAStrings.h"
 #import "HADashboardConfig.h"
 #import "HALovelaceParser.h"
 #import "HATheme.h"
@@ -15,9 +16,7 @@
     NSString *cardType = configItem.customProperties[HAUnsupportedCardTypeKey];
     if (cardType.length == 0) cardType = @"unknown";
 
-    self.nameLabel.text = NSLocalizedStringWithDefaultValue(
-        @"card.unsupported.title", nil, [NSBundle mainBundle],
-        @"Unsupported card",
+    self.nameLabel.text = HALocalizedString(@"card.unsupported.title",
         @"Title shown on a placeholder for a Lovelace card type the app cannot render.");
     self.stateLabel.text = cardType;
 
@@ -29,10 +28,8 @@
     self.contentView.alpha = 1.0;
 
     self.accessibilityLabel = [NSString stringWithFormat:
-        NSLocalizedStringWithDefaultValue(
-            @"card.unsupported.accessibilityFormat", nil, [NSBundle mainBundle],
-            @"Unsupported card: %@",
-            @"VoiceOver label for an unsupported-card placeholder. %@ is the raw Lovelace card type, e.g. custom:bubble-card."),
+        HALocalizedString(@"card.unsupported.accessibilityFormat",
+            @"VoiceOver label for an unsupported-card placeholder. %1$@ is the raw Lovelace card type, e.g. custom:bubble-card."),
         cardType];
 }
 
