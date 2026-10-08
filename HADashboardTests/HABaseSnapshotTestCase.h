@@ -56,6 +56,15 @@ static const CGFloat kTileHeight = 80.0;
 /// with a theme-suffixed identifier, then restores the original theme.
 - (void)verifyView:(UIView *)view identifier:(NSString *)identifier inTheme:(NSInteger)mode;
 
+/// Verify a view snapshot in a specific theme mode, with an explicit per-pixel
+/// and overall tolerance (see FBSnapshotVerifyViewWithPixelOptions). Use this
+/// only for a specific test known to have legitimate, tiny, non-deterministic
+/// rendering noise (e.g. UISwitch knob antialiasing) — never to paper over a
+/// real difference. The default verifyView:identifier:inTheme:gradient: (and
+/// verifyView:identifier:) remain pixel-exact (tolerance 0) for everything else.
+- (void)verifyView:(UIView *)view identifier:(NSString *)identifier inTheme:(NSInteger)mode gradient:(BOOL)gradient
+ perPixelTolerance:(CGFloat)perPixelTolerance overallTolerance:(CGFloat)overallTolerance;
+
 /// Verify a view snapshot in Dark+Gradient and Light themes.
 - (void)verifyView:(UIView *)view identifier:(NSString *)identifier;
 

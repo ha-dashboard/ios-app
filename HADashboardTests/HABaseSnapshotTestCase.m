@@ -93,6 +93,11 @@
 }
 
 - (void)verifyView:(UIView *)view identifier:(NSString *)identifier inTheme:(NSInteger)mode gradient:(BOOL)gradient {
+    [self verifyView:view identifier:identifier inTheme:mode gradient:gradient perPixelTolerance:0 overallTolerance:0];
+}
+
+- (void)verifyView:(UIView *)view identifier:(NSString *)identifier inTheme:(NSInteger)mode gradient:(BOOL)gradient
+ perPixelTolerance:(CGFloat)perPixelTolerance overallTolerance:(CGFloat)overallTolerance {
     HAThemeMode originalMode = [HATheme currentMode];
     BOOL originalGradient = [HATheme isGradientEnabled];
 
@@ -121,7 +126,11 @@
         suffixedIdentifier = themeSuffix;
     }
 
-    FBSnapshotVerifyView(view, suffixedIdentifier);
+    if (perPixelTolerance > 0 || overallTolerance > 0) {
+        FBSnapshotVerifyViewWithPixelOptions(view, suffixedIdentifier, FBSnapshotTestCaseDefaultSuffixes(), perPixelTolerance, overallTolerance);
+    } else {
+        FBSnapshotVerifyView(view, suffixedIdentifier);
+    }
 
     [HATheme setCurrentMode:originalMode];
     [HATheme setGradientEnabled:originalGradient];
