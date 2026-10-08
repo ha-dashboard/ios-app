@@ -181,26 +181,59 @@
 
 #pragma mark - Number Formatting
 
+// NOTE(fix/snapshot-test-runner): previously a single dispatch_once'd
+// NSNumberFormatter was shared across all callers/threads and had its
+// min/maxFractionDigits mutated on every call — a latent data race
+// (NSNumberFormatter is not safe to mutate concurrently). Replaced with a
+// per-thread formatter cache keyed by decimals, so each thread owns its
+// own formatter instances and no shared mutable state is touched. Kept
+// isolated to this one method so it merges cleanly with feature/i18n,
+// which also touches HAEntityDisplayHelper.
++ (NSMutableDictionary<NSNumber *, NSNumberFormatter *> *)ha_numberFormatterCache {
+    static NSString *const kCacheKey = @"HAEntityDisplayHelper.numberFormatterCache";
+    NSMutableDictionary *threadDict = NSThread.currentThread.threadDictionary;
+    NSMutableDictionary<NSNumber *, NSNumberFormatter *> *cache = threadDict[kCacheKey];
+    if (!cache) {
+        cache = [NSMutableDictionary dictionary];
+        threadDict[kCacheKey] = cache;
+    }
+    return cache;
+}
+
 + (NSString *)formattedNumberString:(double)value decimals:(NSInteger)decimals {
-    static NSNumberFormatter *formatter = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
+    NSMutableDictionary<NSNumber *, NSNumberFormatter *> *cache = [self ha_numberFormatterCache];
+
+    NSNumber *cacheKey = @(decimals);
+    NSNumberFormatter *formatter = cache[cacheKey];
+    if (!formatter) {
         formatter = [[NSNumberFormatter alloc] init];
         formatter.numberStyle = NSNumberFormatterDecimalStyle;
         formatter.usesGroupingSeparator = YES;
-    });
-
-    formatter.minimumFractionDigits = 0;
-    formatter.maximumFractionDigits = decimals;
+        formatter.minimumFractionDigits = 0;
+        formatter.maximumFractionDigits = decimals;
+        cache[cacheKey] = formatter;
+    }
 
     // Round via string formatting to avoid IEEE 754 precision artifacts
     NSString *fmt = [NSString stringWithFormat:@"%%.%ldf", (long)decimals];
     NSString *roundedStr = [NSString stringWithFormat:fmt, value];
     double rounded = [roundedStr doubleValue];
 
-    // If the rounded value is an integer, show no decimal places
+    // If the rounded value is an integer, show no decimal places. Use a
+    // separate cached formatter for this case instead of mutating the one
+    // keyed by `decimals` above.
     if (rounded == floor(rounded) && decimals > 0) {
-        formatter.maximumFractionDigits = 0;
+        NSNumber *integerCacheKey = @(NSIntegerMin);
+        NSNumberFormatter *integerFormatter = cache[integerCacheKey];
+        if (!integerFormatter) {
+            integerFormatter = [[NSNumberFormatter alloc] init];
+            integerFormatter.numberStyle = NSNumberFormatterDecimalStyle;
+            integerFormatter.usesGroupingSeparator = YES;
+            integerFormatter.minimumFractionDigits = 0;
+            integerFormatter.maximumFractionDigits = 0;
+            cache[integerCacheKey] = integerFormatter;
+        }
+        formatter = integerFormatter;
     }
 
     NSString *result = [formatter stringFromNumber:@(rounded)];
