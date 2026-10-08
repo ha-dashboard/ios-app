@@ -650,3 +650,79 @@
 
 /* Fallback dashboard name in the dashboard-switcher action sheet when a dashboard has no title. */
 "dashboard.untitled_fallback" = "Untitled";
+
+
+/* State label fallback in the base entity cell, shown when no display state is available. */
+"cell.base.no_value" = "—";
+
+/* Button in the button-entity cell, triggers a button-domain press. Max ~8 chars. */
+"cell.button.press" = "Press";
+
+/* Feedback label in the button-entity cell, briefly shown after a press. Max ~10 chars. */
+"cell.button.pressed" = "Pressed";
+
+/* Humidity label appended under the weather clock cell. %1$.0f is the humidity percentage, %2$@ is a literal "%" sign (passed as an argument rather than "%%" so the string stays fully positional). */
+"format.weather_clock.humidity" = "%1$.0f%2$@ Humidity";
+
+/* Button in the counter cell, resets the counter to its initial value. Max ~8 chars. */
+"cell.counter.reset" = "Reset";
+
+/* Tilt position label in the cover cell. %1$ld is the tilt percentage, %2$@ is a literal "%" sign (passed as an argument rather than "%%" so the string stays fully positional). */
+"format.cover.tilt_percent" = "Tilt %1$ld%2$@";
+
+/* Tilt position label in the cover cell while dragging the tilt slider. %1$.0f is the tilt percentage, %2$@ is a literal "%" sign (passed as an argument rather than "%%" so the string stays fully positional). */
+"format.cover.tilt_percent_live" = "Tilt %1$.0f%2$@";
+
+/* Button in the input_number cell, submits a typed value. Max ~8 chars. */
+"cell.input_number.set" = "Set";
+
+/* Button fallback text in the input_select cell, shown when no option is selected. */
+"cell.input_select.no_value" = "—";
+
+/* Placeholder text in the logbook card, shown when there is no recent activity. */
+"card.logbook.no_recent_activity" = "No recent activity";
+
+/* Fallback title in the logbook card header, shown when no title is configured. */
+"card.logbook.default_title" = "Logbook";
+
+/* Item count description in the todo cell, singular. */
+"cell.todo.item_count_singular" = "1 item";
+
+/* Item count description in the todo cell, plural. %ld is the item count. */
+"format.todo.item_count_plural" = "%ld items";
+
+/* Button in the update cell, installs an available update. Max ~10 chars. */
+"cell.update.update" = "Update";
+
+/* Button in the update cell, skips an available update version. Max ~10 chars. */
+"cell.update.skip" = "Skip";
+
+/* Button in the update cell, shown while an update is being installed. Max ~14 chars. */
+"cell.update.installing" = "Installing…";
+
+/* Version label in the update cell, shown when the installed version is already current. %@ is the installed version. */
+"format.update.up_to_date" = "v%@ (up to date)";
+
+/* Status label fallback in the vacuum cell, shown when the entity is unavailable. */
+"cell.vacuum.unavailable" = "Unavailable";
+
+/* Temperature label fallback in the water heater cell, shown when no target temperature is available. */
+"cell.water_heater.no_value" = "--";
+
+/* Current temperature label in the water heater cell. %1$@ is the current temperature, %2$@ is the unit. */
+"format.water_heater.currently" = "Currently %1$@%2$@";
+
+/* Current temperature label fallback in the climate cell, shown when no current temperature is available. */
+"cell.climate.no_value" = "—";
+
+/* Target temperature label in the climate cell. %.1f is the target temperature, with a degree sign already appended by the format. */
+"format.climate.target_temp" = "Target: %.1f°";
+
+/* Value label fallback in the gauge card, shown when the state cannot be formatted. */
+"card.gauge.no_value" = "--";
+
+/* Button fallback text in the input_datetime cell, shown when no value is set. */
+"cell.input_datetime.no_value" = "—";
+
+/* Temperature label fallback in the weather cell, shown when no temperature is available. */
+"cell.weather.no_value" = "—";

@@ -1,4 +1,5 @@
 #import "HAClimateEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -85,7 +86,7 @@
     if (currentTemp) {
         self.currentTempLabel.text = [NSString stringWithFormat:@"%.1f\u00B0", currentTemp.doubleValue];
     } else {
-        self.currentTempLabel.text = @"—";
+        self.currentTempLabel.text = HALocalizedString(@"cell.climate.no_value", @"Current temperature label fallback in the climate cell, shown when no current temperature is available.");
     }
 
     NSString *mode = [entity hvacMode];
@@ -103,7 +104,7 @@
         double stepVal = HAAttrDouble(entity.attributes, @"target_temp_step", 0.5);
         if (stepVal > 0) self.tempStepper.stepValue = stepVal;
         self.tempStepper.value = targetTemp.doubleValue;
-        self.targetTempLabel.text = [NSString stringWithFormat:@"Target: %.1f\u00B0", targetTemp.doubleValue];
+        self.targetTempLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.climate.target_temp", @"Target temperature label in the climate cell. %.1f is the target temperature, with a degree sign already appended by the format."), targetTemp.doubleValue];
     }
 
     // Background color based on mode
@@ -118,7 +119,7 @@
 
 - (void)stepperChanged:(UIStepper *)sender {
     double target = sender.value;
-    self.targetTempLabel.text = [NSString stringWithFormat:@"Target: %.1f\u00B0", target];
+    self.targetTempLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.climate.target_temp", @"Target temperature label in the climate cell. %.1f is the target temperature, with a degree sign already appended by the format."), target];
 
     if (!self.entity) return;
     NSDictionary *data = @{@"temperature": @(target)};

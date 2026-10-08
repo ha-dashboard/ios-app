@@ -1,4 +1,5 @@
 #import "HABaseEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HADashboardConfig.h"
 #import "HATheme.h"
@@ -123,7 +124,7 @@ static const CGFloat kHeadingGap = 2.0;
 
     if (!entity) {
         self.nameLabel.text = configItem.entityId;
-        self.stateLabel.text = @"—";
+        self.stateLabel.text = HALocalizedString(@"cell.base.no_value", @"State label fallback in the base entity cell, shown when no display state is available.");
         self.contentView.alpha = 0.5;
         return;
     }
@@ -255,7 +256,7 @@ static const CGFloat kHeadingGap = 2.0;
         }
         [sheet addAction:action];
     }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [sheet addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     if (sourceView) {
         sheet.popoverPresentationController.sourceView = sourceView;

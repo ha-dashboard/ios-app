@@ -1,4 +1,5 @@
 #import "HAVacuumEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -203,7 +204,7 @@ static const CGFloat kButtonSpacing  = 12.0;
     self.fanSpeedButton.hidden = !showFanSpeed;
 
     if (!entity) {
-        self.statusLabel2.text = @"Unavailable";
+        self.statusLabel2.text = HALocalizedString(@"cell.vacuum.unavailable", @"Status label fallback in the vacuum cell, shown when the entity is unavailable.");
         [self applyIconColorForState:nil];
         [self updateButtonIcons:nil];
         return;

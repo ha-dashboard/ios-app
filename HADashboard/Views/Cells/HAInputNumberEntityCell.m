@@ -1,4 +1,5 @@
 #import "HAInputNumberEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -54,7 +55,7 @@
 
     // Submit button for box mode
     self.boxSubmitButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.boxSubmitButton setTitle:@"Set" forState:UIControlStateNormal];
+    [self.boxSubmitButton setTitle:HALocalizedString(@"cell.input_number.set", @"Button in the input_number cell, submits a typed value. Max ~8 chars.") forState:UIControlStateNormal];
     self.boxSubmitButton.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     self.boxSubmitButton.backgroundColor = [HATheme accentColor];
     [self.boxSubmitButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
