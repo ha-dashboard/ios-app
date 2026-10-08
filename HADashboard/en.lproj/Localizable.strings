@@ -1,2 +1,342 @@
 /* Generic affirmative button (alerts, dialogs). */
 "action.ok" = "OK";
+
+
+/* Navigation bar title for the Settings screen. */
+"settings.nav_title" = "Settings";
+
+/* All-caps section header in Settings, above connection summary. */
+"settings.section.connection.title" = "CONNECTION";
+
+/* All-caps section header in Settings, above theme controls. */
+"settings.section.appearance.title" = "APPEARANCE";
+
+/* Segmented control option, Settings > Appearance theme mode. Short label. */
+"settings.theme_mode.auto" = "Auto";
+
+/* Segmented control option, Settings > Appearance theme mode. Short label. */
+"settings.theme_mode.dark" = "Dark";
+
+/* Segmented control option, Settings > Appearance theme mode. Short label. */
+"settings.theme_mode.light" = "Light";
+
+/* Toggle row title in Settings > Appearance. */
+"settings.section.sun_entity.title" = "Use Sun Entity";
+
+/* Help paragraph under the "Use Sun Entity" toggle in Settings. */
+"settings.section.sun_entity.help" = "Use Home Assistant sun.sun entity for auto dark mode instead of system appearance.";
+
+/* Label above the gradient enable switch in Settings > Appearance. */
+"settings.section.gradient_background.title" = "Gradient Background";
+
+/* Label above the gradient preset segmented control in Settings > Appearance. */
+"settings.section.gradient_preset.title" = "Gradient Preset";
+
+/* Segmented control option, gradient preset picker in Settings. Short label. */
+"settings.gradient_preset.purple" = "Purple";
+
+/* Segmented control option, gradient preset picker in Settings. Short label. */
+"settings.gradient_preset.ocean" = "Ocean";
+
+/* Segmented control option, gradient preset picker in Settings. Short label. */
+"settings.gradient_preset.sunset" = "Sunset";
+
+/* Segmented control option, gradient preset picker in Settings. Short label. */
+"settings.gradient_preset.forest" = "Forest";
+
+/* Segmented control option, gradient preset picker in Settings. Short label. */
+"settings.gradient_preset.night" = "Night";
+
+/* Segmented control option, gradient preset picker in Settings. Short label. */
+"settings.gradient_preset.custom" = "Custom";
+
+/* All-caps section header in Settings, above kiosk/demo/display toggles. */
+"settings.section.display.title" = "DISPLAY";
+
+/* Toggle row title in Settings > Display. */
+"settings.section.kiosk_mode.title" = "Kiosk Mode";
+
+/* Help paragraph under the "Kiosk Mode" toggle in Settings. Two paragraphs, can wrap. */
+"settings.section.kiosk_mode.help" = "Hides navigation bar and prevents screen sleep. Triple-tap the top of the screen to temporarily show controls.\n\nFor full lockdown, enable Guided Access in iPad Settings → Accessibility → Guided Access, then triple-click the Home button while in the app.";
+
+/* Toggle row title in Settings > Display (sub-setting of Kiosk Mode). */
+"settings.section.wake_on_touch.title" = "Wake on Touch";
+
+/* Help paragraph under the "Wake on Touch" toggle in Settings. */
+"settings.section.wake_on_touch.help" = "Dims the screen after 60 seconds of inactivity. Touch anywhere to wake.";
+
+/* Toggle row title in Settings > Display. */
+"settings.section.demo_mode.title" = "Demo Mode";
+
+/* Help paragraph under the "Demo Mode" toggle in Settings. */
+"settings.section.demo_mode.help" = "Shows the app with demo data instead of connecting to a Home Assistant server. Useful for demonstrating the app's capabilities.";
+
+/* Toggle row title in Settings > Display. */
+"settings.section.auto_reload.title" = "Auto-Reload Dashboard";
+
+/* Help paragraph under the "Auto-Reload Dashboard" toggle in Settings. */
+"settings.section.auto_reload.help" = "Automatically reload the dashboard when its configuration is changed on the Home Assistant server.";
+
+/* Toggle row title in Settings > Display. */
+"settings.section.mute_camera_audio.title" = "Mute Camera Audio";
+
+/* Help paragraph under the "Mute Camera Audio" toggle in Settings. */
+"settings.section.mute_camera_audio.help" = "Controls audio playback for Home Assistant camera cards only. Local Camera Stream always includes microphone audio while a client is viewing it; turn that stream off to stop publishing audio.";
+
+/* Button in Settings > Display. Destructive-styled text button. */
+"settings.action.clear_cache" = "Clear Cache & Reload";
+
+/* All-caps section header in Settings, above device registration controls. */
+"settings.section.device_integration.title" = "DEVICE INTEGRATION";
+
+/* All-caps section header in Settings, above app/version info. */
+"settings.section.about.title" = "ABOUT";
+
+/* All-caps section header in Settings, hidden unless developer mode is unlocked. */
+"settings.section.developer.title" = "DEVELOPER";
+
+/* Toggle row title in Settings > Developer (hidden section). */
+"settings.dev.disable_blur.title" = "Disable Blur";
+
+/* Help text under the "Disable Blur" developer toggle in Settings. */
+"settings.dev.disable_blur.help" = "Turn off frosted-glass card backgrounds for A/B perf testing";
+
+/* Toggle row title in Settings > Developer (hidden section). */
+"settings.dev.performance_monitor.title" = "Performance Monitor";
+
+/* Help text under the "Performance Monitor" developer toggle in Settings. */
+"settings.dev.performance_monitor.help" = "Log FPS + timing to /tmp/perf.log (restart app to apply)";
+
+/* Label above the camera stream mode segmented control in Settings > Developer. */
+"settings.dev.camera_stream_mode.title" = "Camera Stream Mode";
+
+/* Segmented control option, developer camera stream mode picker. Short label. */
+"settings.dev.stream_mode.auto" = "Auto";
+
+/* Segmented control option, developer camera stream mode picker. Short label. */
+"settings.dev.stream_mode.mjpeg" = "MJPEG";
+
+/* Segmented control option, developer camera stream mode picker. Short label. */
+"settings.dev.stream_mode.hls" = "HLS";
+
+/* Segmented control option, developer camera stream mode picker. Short label. */
+"settings.dev.stream_mode.snapshot" = "Snapshot";
+
+/* Toggle row title in Settings > Developer (hidden section). */
+"settings.dev.verbose_logging.title" = "Verbose Logging";
+
+/* Help text under the "Verbose Logging" developer toggle in Settings. */
+"settings.dev.verbose_logging.help" = "Log debug-level messages (camera frames, polling, data sizes). Useful for diagnosing issues.";
+
+/* Button in Settings > Developer (hidden section). */
+"settings.dev.export_logs" = "Export Logs";
+
+/* Button in Settings, bottom of screen. Destructive-styled text button. */
+"settings.action.log_out_reset" = "Log Out & Reset";
+
+/* Section title above the Local Camera Stream controls in Settings. */
+"settings.live_stream.title" = "Local Camera Stream";
+
+/* Segmented control option, Local Camera Stream camera picker. Short label. */
+"settings.live_stream.camera.front" = "Front";
+
+/* Segmented control option, Local Camera Stream camera picker. Short label. */
+"settings.live_stream.camera.rear" = "Rear";
+
+/* Segmented control option, Local Camera Stream camera picker. Short label. */
+"settings.live_stream.camera.both" = "Both";
+
+/* Button below the Local Camera Stream status label in Settings. Small text. */
+"settings.live_stream.access_button" = "Protected access · Manage";
+
+/* Toast message after copying multiple RTSP URLs in Settings. */
+"settings.toast.rtsp_urls_copied" = "RTSP URLs copied";
+
+/* Toast message after copying a single RTSP URL in Settings. */
+"settings.toast.rtsp_url_copied" = "RTSP URL copied";
+
+/* Action sheet title for the protected stream access menu in Settings. */
+"alert.protected_stream_access.title" = "Protected Stream Access";
+
+/* Action sheet message explaining camera stream credential security in Settings. Carries real security meaning -- do not paraphrase. */
+"alert.protected_stream_access.message" = "Each device has its own strong password. When Register with Home Assistant is enabled, Home Assistant receives it over HTTPS or automatically over a local-network HTTP connection. On HTTP, that password is sent without transport encryption. RTSP media also remains plaintext on your trusted local network.";
+
+/* Action sheet button, copies the stream URL with embedded password. */
+"action.copy_url_with_password" = "Copy URL with Password";
+
+/* Toast title after copying the password-embedded stream URL in Settings. */
+"settings.toast.sensitive_url_copied.title" = "Sensitive connection URL copied";
+
+/* Toast subtitle after copying the password-embedded stream URL in Settings. */
+"settings.toast.sensitive_url_copied.subtitle" = "Local clipboard item expires in 60 seconds";
+
+/* Action sheet / alert button, rotates the local stream's device password. */
+"action.rotate_stream_password" = "Rotate Stream Password";
+
+/* Cancel button in alerts and action sheets throughout Settings. */
+"action.cancel" = "Cancel";
+
+/* Alert title confirming stream password rotation in Settings. */
+"alert.rotate_stream_password.title" = "Rotate Stream Password?";
+
+/* Alert message confirming stream password rotation in Settings. Carries real security/behaviour meaning -- do not paraphrase. */
+"alert.rotate_stream_password.message" = "Current clients will disconnect immediately. The protected listener re-arms with the new password first. The app then attempts to update app-owned Home Assistant camera entries asynchronously and retries transient failures while the same stream, registration setting, account, and server remain active. Manual clients will need the new URL.";
+
+/* Destructive alert action confirming stream password rotation. */
+"action.rotate" = "Rotate";
+
+/* Toast subtitle after rotating stream password, when HA registration will follow automatically. */
+"settings.toast.rotate_follow_up.pending" = "Home Assistant update follows; Settings shows progress";
+
+/* Toast subtitle after rotating stream password, when no automatic HA update will happen. */
+"settings.toast.rotate_follow_up.manual_only" = "Manual clients need the new protected URL";
+
+/* Toast title after successfully rotating the stream password in Settings. */
+"settings.toast.password_rotated" = "Stream password rotated";
+
+/* Local Camera Stream status label in Settings, shown when the feature needs a newer iOS. */
+"settings.live_stream.status.unsupported" = "Requires iOS 10.3.3 or newer.";
+
+/* Local Camera Stream status label in Settings, shown while actively capturing and streaming. %1$lu is the authenticated client count, %2$@ is "client" or "clients". */
+"format.live_stream.status.live" = "CAMERA + MIC LIVE · %1$lu authenticated %2$@";
+
+/* Singular noun used inline in the live-stream status label ("1 authenticated client"). */
+"settings.live_stream.client_singular" = "client";
+
+/* Plural noun used inline in the live-stream status label ("2 authenticated clients"). */
+"settings.live_stream.client_plural" = "clients";
+
+/* Local Camera Stream status label in Settings, shown while armed but not yet capturing. */
+"settings.live_stream.status.protected_waiting" = "PROTECTED · Camera off · Waiting for authenticated viewer";
+
+/* Local Camera Stream status label in Settings, dual-camera mode. %1$@ is the live/waiting state text, %2$@ is the front stream address, %3$@ is the rear stream address. */
+"format.live_stream.status.dual_camera" = "%1$@\nFRONT %2$@\nREAR %3$@\nTap an address to copy it without credentials.";
+
+/* Camera label, all-caps, prefixing the front stream address in Settings. */
+"settings.live_stream.camera_label.front" = "FRONT";
+
+/* Camera label, all-caps, prefixing the rear stream address in Settings. */
+"settings.live_stream.camera_label.rear" = "REAR";
+
+/* Local Camera Stream status label in Settings, single-camera mode. %1$@ is the live/waiting state text, %2$@ is the camera label (FRONT/REAR), %3$@ is the stream address. */
+"format.live_stream.status.single_camera" = "%1$@\n%2$@ %3$@\nTap the address to copy it without credentials.";
+
+/* Local Camera Stream status label in Settings, shown briefly while the listener re-arms. */
+"settings.live_stream.status.rearming" = "Protected stream is re-arming.";
+
+/* Local Camera Stream status label in Settings, shown when the feature is off. */
+"settings.live_stream.status.off" = "Off · A unique device password is retained for the next use.";
+
+/* Appended to the live-stream status label in Settings when a registration retry is scheduled. %1$lu is the retry attempt number, %2$.0f is the delay in seconds. */
+"format.live_stream.status.retry" = "\nHome Assistant: retry %1$lu in %2$.0f s.";
+
+/* Appended to a status label in Settings to show the last registration error. %1$@ is the error description. */
+"format.live_stream.status.last_error" = "\nLast error: %1$@";
+
+/* Appended to the live-stream status label in Settings while a camera-registration retry is in progress. %1$lu is the retry attempt number. */
+"format.live_stream.status.registering_retry" = "\nHome Assistant: registering camera (retry %1$lu)…";
+
+/* Appended to the live-stream status label in Settings while camera registration is first in progress. */
+"settings.live_stream.status.registering" = "\nHome Assistant: registering camera…";
+
+/* Appended to the live-stream status label in Settings to show a registration error. %1$@ is the error description. */
+"format.live_stream.status.ha_error" = "\nHome Assistant: %1$@";
+
+/* Appended to the live-stream status label in Settings as a standing security reminder. */
+"settings.live_stream.status.security_note" = "\nSecurity: RTSP media and camera-password registration to a local HTTP Home Assistant server are plaintext on your LAN.";
+
+/* Toggle row label in Settings > Device Integration. */
+"settings.device_integration.register.title" = "Register with Home Assistant";
+
+/* Label above the device name text field in Settings > Device Integration. */
+"settings.device_integration.device_name.title" = "Device Name";
+
+/* Device Integration status label in Settings, shown when registration is disabled. Long paragraph. */
+"settings.device_integration.status.off" = "Off. Enable to send diagnostics to your Home Assistant, including battery, brightness, app/dashboard state, Wi-Fi identifiers when available, camera-stream status, and available storage only over a local webhook route.";
+
+/* Device Integration status label in Settings, shown once registration completed. */
+"settings.device_integration.status.registered" = "Registered — device diagnostics and commands enabled.";
+
+/* Device Integration status label in Settings, shown when enabled but not yet registered. */
+"settings.device_integration.status.pending" = "Registration is enabled but not complete. HA Dashboard will retry when it reconnects to Home Assistant.";
+
+/* Device Integration status label in Settings, shown while a registration request is in flight. */
+"settings.device_integration.status.registering" = "Registering…";
+
+/* Device Integration status label in Settings when protected camera credentials could not be read. %1$@ is the error description. */
+"format.device_integration.credentials_failed" = "Registered — protected camera credentials failed: %1$@";
+
+/* Generic fallback error description used when a specific NSError has none. */
+"error.unknown" = "Unknown error";
+
+/* Device Integration status label in Settings while camera entries are being added after registration. */
+"settings.device_integration.status.adding_cameras" = "Registered — adding camera entries…";
+
+/* Device Integration status label in Settings when adding a camera entry failed. %1$@ is the error description. */
+"format.device_integration.camera_entry_failed" = "Registered — camera entry failed: %1$@";
+
+/* Device Integration status label in Settings when registration itself failed. %1$@ is the error description. */
+"format.device_integration.registration_failed" = "Registration failed: %1$@";
+
+/* Label in Settings > About, left side of the app version row. */
+"settings.about.version.label" = "Version";
+
+/* Value in Settings > About version row. %1$@ is the marketing version, %2$@ is the build number. */
+"format.version_build" = "%1$@ (%2$@)";
+
+/* Settings > About server row value, and connection summary, shown when no server is configured. */
+"settings.connection.not_connected" = "Not connected";
+
+/* Label in Settings > About, left side of the connected-server row. */
+"settings.about.server.label" = "Server";
+
+/* Link button in Settings > About, opens the GitHub repository. */
+"settings.about.github_repository" = "GitHub Repository";
+
+/* Link button in Settings > About, opens the license file. */
+"settings.about.license" = "License: Apache 2.0";
+
+/* Link button in Settings > About, opens the privacy policy. */
+"settings.about.privacy_policy" = "Privacy Policy";
+
+/* Open-source acknowledgements footer text in Settings > About. Small text, can wrap. */
+"settings.about.oss_credits" = "Built with SocketRocket, Lottie, and Material Design Icons.";
+
+/* Connection summary row title in Settings, shown when demo mode is active. */
+"settings.connection.demo_mode" = "Demo Mode";
+
+/* Connection summary row subtitle in Settings, shown when demo mode is active. */
+"settings.connection.demo_subtitle" = "Using sample data";
+
+/* Connection summary row title in Settings, fallback when a server URL is configured but unknown. */
+"settings.connection.connected_fallback" = "Connected";
+
+/* Connection summary row subtitle in Settings, shown in OAuth (username/password) auth mode. */
+"settings.connection.auth_mode.oauth" = "Username/Password";
+
+/* Connection summary row subtitle in Settings, shown in long-lived access token auth mode. */
+"settings.connection.auth_mode.token" = "Access Token";
+
+/* Connection summary row subtitle in Settings, shown when no server is configured yet. */
+"settings.connection.tap_to_configure" = "Tap to configure";
+
+/* Alert title confirming cache clear in Settings. */
+"alert.clear_cache.title" = "Clear Cache";
+
+/* Alert message confirming cache clear in Settings. */
+"alert.clear_cache.message" = "This will clear all cached entity states and dashboard configs, then reload from the current source.";
+
+/* Destructive alert action, clears cache and reloads. */
+"action.clear_and_reload" = "Clear & Reload";
+
+/* Alert message confirming logout/reset in Settings. Explains what local data is removed. */
+"alert.log_out_reset.message" = "This removes locally saved credentials, registration data, settings, cached dashboard data, and logs, then returns the app to its initial state. Home Assistant devices and camera entries remain on your server until you remove them there.";
+
+/* Destructive alert action, logs out and resets the app. */
+"action.log_out" = "Log Out";
+
+/* Toast message shown when developer mode is unlocked via the version-tap gesture. */
+"settings.dev.mode_enabled" = "Developer Mode Enabled";
+
+/* Toast message shown when developer mode is turned off via the version-tap gesture. */
+"settings.dev.mode_disabled" = "Developer Mode Disabled";
