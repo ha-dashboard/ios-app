@@ -16,12 +16,20 @@
 @property (nonatomic, copy) NSDictionary<NSString *, NSString *> *deviceNames;
 /// area_id -> floor display name
 @property (nonatomic, copy) NSDictionary<NSString *, NSString *> *floorNamesByAreaId;
+/// entity_id -> the entity's own name as stored in the entity registry
+/// (user-set "name", else the integration-provided "original_name"),
+/// before any device-name prefix is stripped. Used only to resolve an
+/// explicit "entity" item inside a multi-item array (see
+/// resolveNameValue:forEntityId:context:) — a single-item "entity" config
+/// resolves to nil by design regardless of this map.
+@property (nonatomic, copy) NSDictionary<NSString *, NSString *> *entityRegistryNames;
 
 + (instancetype)contextWithEntityAreaMap:(NSDictionary<NSString *, NSString *> *)entityAreaMap
                                 areaNames:(NSDictionary<NSString *, NSString *> *)areaNames
                           entityDeviceMap:(NSDictionary<NSString *, NSString *> *)entityDeviceMap
                               deviceNames:(NSDictionary<NSString *, NSString *> *)deviceNames
-                       floorNamesByAreaId:(NSDictionary<NSString *, NSString *> *)floorNamesByAreaId;
+                       floorNamesByAreaId:(NSDictionary<NSString *, NSString *> *)floorNamesByAreaId
+                      entityRegistryNames:(NSDictionary<NSString *, NSString *> *)entityRegistryNames;
 
 /// A context with no registry data — every lookup degrades to nil.
 + (instancetype)emptyContext;
@@ -35,11 +43,27 @@
 /// and compute_entity_name_display.ts): the value can be a plain string, a
 /// single @{"type": ...} object, or an array of such objects joined with a
 /// single space. Supported types: "area", "device", "floor", "text", and
-/// "entity" (which intentionally resolves to nil so callers fall through to
-/// the entity's own display name — requesting the entity's name is the same
-/// as not overriding it). Unknown types (including "parent_device", which HA
-/// resolves against device-hierarchy data this app doesn't track) and
-/// malformed values degrade to nil rather than crashing.
+/// "entity".
+///
+/// A single-item "entity" config resolves to nil, since requesting the
+/// entity's own name is the same as not overriding it — callers already
+/// fall through to the entity's display name. Inside a multi-item array,
+/// though, HA joins in the entity's *own* name (not the full friendly name),
+/// stripping a leading device-name prefix — e.g. device "Kitchen Google" +
+/// entity "Kitchen Google Volume" => "Volume" — per computeEntityEntryName /
+/// stripPrefixFromEntityName in compute_entity_name.ts and
+/// strip_prefix_from_entity_name.ts. This resolver reproduces that stripping
+/// (case-insensitive match on " ", ": ", or " - " as the separator, then
+/// capitalizes the remainder unless its first word already has a capital)
+/// using entityRegistryNames + deviceNames from the context. It does not
+/// reproduce the frontend's "next_name_part" registry-flag gating of when to
+/// strip — this app's registry snapshot doesn't carry that field, so
+/// stripping is applied whenever a device name is known, which is the
+/// common case the gating exists to handle anyway.
+///
+/// Unknown types (including "parent_device", which HA resolves against
+/// device-hierarchy data this app doesn't track) and malformed values
+/// degrade to nil rather than crashing.
 @interface HAEntityNameResolver : NSObject
 
 /// @param nameValue  The raw "name" value from the Lovelace card/row config.
