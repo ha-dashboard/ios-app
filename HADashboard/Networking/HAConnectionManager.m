@@ -57,6 +57,7 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 @property (nonatomic, assign, readwrite) BOOL registriesLoaded;
 @property (nonatomic, strong) id rawEntityRegistry; // stored for reprocessing after device registry
 @property (nonatomic, strong) id rawAreaRegistry;   // stored for floor-area mapping
+@property (nonatomic, strong) id rawFloorRegistry;  // processed once the area registry is also loaded
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, void (^)(id, NSError *)> *pendingCompletions;
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, void (^)(NSDictionary *)> *eventHandlers; // subscriptionId -> handler
 @property (nonatomic, assign, readwrite) BOOL showingCachedData;
@@ -269,6 +270,7 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     self.floorByAreaId = nil;
     self.rawEntityRegistry = nil;
     self.rawAreaRegistry = nil;
+    self.rawFloorRegistry = nil;
     self.registriesLoaded = NO;
     self.areasLoaded = NO;
     self.entitiesRegistryLoaded = NO;
@@ -830,13 +832,19 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 }
 
 - (void)checkRegistriesComplete {
-    if (!self.areasLoaded || !self.devicesLoaded || !self.entitiesRegistryLoaded) return;
+    // Floors are optional (older HA rejects the command), but the floor
+    // response still marks floorsLoaded so dashboards rebuild with floor names.
+    if (!self.areasLoaded || !self.devicesLoaded || !self.entitiesRegistryLoaded || !self.floorsLoaded) return;
 
     // Rebuild entity area map now that device registry is available for fallback
     [self buildEntityAreaMap];
+    // Floor->area mapping needs the area registry, which may arrive after floors
+    if (self.rawFloorRegistry) {
+        [self processFloorRegistry:self.rawFloorRegistry];
+    }
 
     self.registriesLoaded = YES;
-    HALogI(@"conn", @"All registries loaded (floors: %@)", self.floorsLoaded ? @"yes" : @"pending");
+    HALogI(@"conn", @"All registries loaded (%lu floors)", (unsigned long)self.floors.count);
 
     // Re-resolve pending strategy dashboard with updated area/entity maps
     if (self.pendingStrategyConfig) {
@@ -1292,11 +1300,12 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
         } else if (msgId == self.floorRegistryMessageId) {
             self.floorRegistryMessageId = 0;
             if (success) {
-                [self processFloorRegistry:message[@"result"]];
+                self.rawFloorRegistry = message[@"result"];
             } else {
                 HALogW(@"conn", @"Floor registry fetch failed (may not be supported): %@", message[@"error"]);
             }
             self.floorsLoaded = YES;
+            [self checkRegistriesComplete];
         }
         return;
     }
