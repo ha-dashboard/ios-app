@@ -140,29 +140,49 @@
 #pragma mark - Number Formatting
 
 + (NSString *)formattedNumberString:(double)value decimals:(NSInteger)decimals {
-    static NSNumberFormatter *formatter = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        formatter = [[NSNumberFormatter alloc] init];
-        formatter.numberStyle = NSNumberFormatterDecimalStyle;
-        formatter.usesGroupingSeparator = YES;
-    });
-
-    formatter.minimumFractionDigits = 0;
-    formatter.maximumFractionDigits = decimals;
-
     // Round via string formatting to avoid IEEE 754 precision artifacts
     NSString *fmt = [NSString stringWithFormat:@"%%.%ldf", (long)decimals];
     NSString *roundedStr = [NSString stringWithFormat:fmt, value];
     double rounded = [roundedStr doubleValue];
 
     // If the rounded value is an integer, show no decimal places
-    if (rounded == floor(rounded) && decimals > 0) {
-        formatter.maximumFractionDigits = 0;
-    }
+    NSInteger effectiveDecimals = (rounded == floor(rounded) && decimals > 0) ? 0 : decimals;
 
+    NSNumberFormatter *formatter = [self numberFormatterWithMaximumFractionDigits:effectiveDecimals];
     NSString *result = [formatter stringFromNumber:@(rounded)];
     return result ?: [NSString stringWithFormat:@"%g", rounded];
+}
+
+/// Returns an immutable, never-mutated-after-creation formatter for a given
+/// `maximumFractionDigits`, from a small cache keyed by that decimal count.
+///
+/// The previous implementation kept one `dispatch_once`-created formatter
+/// and mutated `minimumFractionDigits`/`maximumFractionDigits` on it per
+/// call with no synchronization — a genuine data race if this method is
+/// ever called from more than one thread (set-then-read on a shared mutable
+/// object). Keying a small `NSCache` by decimal count avoids the race
+/// without needing a lock around the mutation: each formatter, once built,
+/// is never changed again.
++ (NSNumberFormatter *)numberFormatterWithMaximumFractionDigits:(NSInteger)decimals {
+    static NSCache<NSNumber *, NSNumberFormatter *> *cache = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        cache = [[NSCache alloc] init];
+    });
+
+    NSNumber *key = @(decimals);
+    @synchronized (cache) {
+        NSNumberFormatter *cached = [cache objectForKey:key];
+        if (cached) return cached;
+
+        NSNumberFormatter *formatter = [[NSNumberFormatter alloc] init];
+        formatter.numberStyle = NSNumberFormatterDecimalStyle;
+        formatter.usesGroupingSeparator = YES;
+        formatter.minimumFractionDigits = 0;
+        formatter.maximumFractionDigits = decimals;
+        [cache setObject:formatter forKey:key];
+        return formatter;
+    }
 }
 
 #pragma mark - Duration Formatting
