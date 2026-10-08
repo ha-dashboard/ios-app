@@ -920,7 +920,10 @@ static const CGFloat kGraphHeight = 160.0;
 
     NSString *stateStr = [HAEntityDisplayHelper stateWithUnitForEntity:entity decimals:1];
     if (!stateStr.length) {
-        stateStr = [HAEntityDisplayHelper humanReadableState:entity.state];
+        // Defensive fallback for the (normally unreachable) case where the
+        // primary path above returns empty -- still route through the
+        // shared helper rather than the raw, untranslated HA state.
+        stateStr = [HAEntityDisplayHelper formattedStateForEntity:entity decimals:1];
     }
     self.stateLabel.text = stateStr;
 }

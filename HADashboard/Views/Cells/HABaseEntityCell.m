@@ -1,6 +1,7 @@
 #import "HABaseEntityCell.h"
 #import "HAStrings.h"
 #import "HAEntity.h"
+#import "HAEntityDisplayHelper.h"
 #import "HADashboardConfig.h"
 #import "HATheme.h"
 #import "HAIconMapper.h"
@@ -145,7 +146,11 @@ static const CGFloat kHeadingGap = 2.0;
 
 - (NSString *)displayState {
     if (!self.entity) return @"—";
-    return self.entity.state;
+    // Default fallback used by any subclass that doesn't override this —
+    // route through the shared helper (which in turn routes through
+    // HAStateLocalizer) rather than returning the raw HA state verbatim.
+    // See docs/plans/i18n-plan.md §2.5/§2.7.
+    return [HAEntityDisplayHelper formattedStateForEntity:self.entity decimals:1];
 }
 
 + (CGFloat)headingHeight {

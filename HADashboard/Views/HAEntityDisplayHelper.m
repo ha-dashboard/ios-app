@@ -73,7 +73,27 @@
         if (relative) return relative;
     }
 
-    return state;
+    // Every other non-numeric, non-timestamp state (lock, climate, cover,
+    // alarm_control_panel, media_player, vacuum, person, device_tracker,
+    // scene, …) goes through the same HA-translation chain as binary_sensor
+    // above, via HAStateLocalizer. This is the fix for
+    // docs/plans/i18n-plan.md §2.5/§2.7 item 4-adjacent gap: before this,
+    // only binary_sensor was routed here, so e.g. a person entity's
+    // `not_home` reached every caller of -formattedStateForEntity: (tiles,
+    // the entities card, glance items, badge/chip rows, the generic
+    // HAEntityCardCell a Mushroom/Bubble custom card falls back to, …) as
+    // the raw, untranslated state string -- exactly psolyca's report in
+    // issue #19, just reached through a different cell than
+    // HAPersonEntityCell. `platform`/`translationKey` are nil because
+    // HAEntity does not carry the entity-registry's translation_key (the
+    // `entity` category Phase 2 deliberately does not fetch — see plan
+    // §2.7); HAStateLocalizer accepts and ignores them for exactly this
+    // call shape.
+    return [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:[entity domain]
+                                                             deviceClass:deviceClass
+                                                                platform:nil
+                                                          translationKey:nil
+                                                                   state:state];
 }
 
 + (NSString *)stateWithUnitForEntity:(HAEntity *)entity decimals:(NSInteger)decimals {
