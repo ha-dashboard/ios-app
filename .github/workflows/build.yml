@@ -697,11 +697,46 @@ jobs:
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             -allowProvisioningUpdates
 
+      # Keep the dSYMs: App Store/TestFlight crashes are symbolicated by Apple
+      # (uploadSymbols), but universal IPA crashes (iOS 9-14, sideloaded) and
+      # locally pulled device reports can only be symbolicated with these.
+      - name: Package dSYMs
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
+        run: |
+          set -euo pipefail
+          APPSTORE_DSYM="build/HADashboard-AppStore.xcarchive/dSYMs/HA Dashboard.app.dSYM"
+          UNIVERSAL_DSYM="build/HADashboard-Legacy.xcarchive/dSYMs/HA Dashboard.app.dSYM"
+          test -d "$APPSTORE_DSYM"
+          test -d "$UNIVERSAL_DSYM"
+          PREFIX="build/HADashboard-${VERSION}-${BUILD_NUMBER}"
+          ditto -c -k --norsrc --keepParent "$APPSTORE_DSYM" "${PREFIX}-appstore-arm64.dSYM.zip"
+          ditto -c -k --norsrc --keepParent "$UNIVERSAL_DSYM" "${PREFIX}-universal-armv7-arm64.dSYM.zip"
+          {
+            echo "HA Dashboard ${VERSION} (${BUILD_NUMBER}) dSYM UUIDs"
+            echo "App Store (arm64, iOS ${APP_STORE_MIN_IOS}+):"
+            dwarfdump --uuid "$APPSTORE_DSYM"
+            echo "Universal IPA (armv7+arm64, iOS 9.0+):"
+            dwarfdump --uuid "$UNIVERSAL_DSYM"
+          } > "${PREFIX}-dSYM-uuids.txt"
+          cat "${PREFIX}-dSYM-uuids.txt"
+
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: universal-ipa
           path: build/HADashboard-*-universal-armv7-arm64.ipa
+
+      - name: Upload dSYM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsyms
+          path: |
+            build/HADashboard-*.dSYM.zip
+            build/HADashboard-*-dSYM-uuids.txt
+          if-no-files-found: error
+          retention-days: 90
 
       # ── GitHub Release ──────────────────────────────────────────────
       - name: Create GitHub Release
@@ -710,6 +745,8 @@ jobs:
         with:
           files: |
             build/HADashboard-*-universal-armv7-arm64.ipa
+            build/HADashboard-*.dSYM.zip
+            build/HADashboard-*-dSYM-uuids.txt
           body_path: docs/releases/${{ github.ref_name }}-github.md
           generate_release_notes: false
           draft: false
