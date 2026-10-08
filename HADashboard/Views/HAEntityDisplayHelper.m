@@ -4,6 +4,7 @@
 #import "HADashboardConfig.h"
 #import "HAIconMapper.h"
 #import "HATheme.h"
+#import "HAStateLocalizer.h"
 
 @implementation HAEntityDisplayHelper
 
@@ -98,60 +99,17 @@
 #pragma mark - Binary Sensor State
 
 + (NSString *)binarySensorStateForDeviceClass:(NSString *)deviceClass isOn:(BOOL)isOn {
-    if (!deviceClass) return isOn ? @"On" : @"Off";
-
-    // Map device_class + state to friendly strings (matching HA frontend)
-    static NSDictionary *onStates = nil;
-    static NSDictionary *offStates = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        onStates = @{
-            @"door":             @"Open",
-            @"lock":             @"Unlocked",
-            @"window":           @"Open",
-            @"garage_door":      @"Open",
-            @"opening":          @"Open",
-            @"connectivity":     @"Connected",
-            @"plug":             @"Plugged In",
-            @"battery":          @"Low",
-            @"battery_charging": @"Charging",
-            @"motion":           @"Detected",
-            @"occupancy":        @"Detected",
-            @"moisture":         @"Wet",
-            @"smoke":            @"Detected",
-            @"problem":          @"Problem",
-            @"safety":           @"Unsafe",
-            @"running":          @"Running",
-            @"update":           @"Update Available",
-            @"presence":         @"Home",
-            @"power":            @"On",
-        };
-        offStates = @{
-            @"door":             @"Closed",
-            @"lock":             @"Locked",
-            @"window":           @"Closed",
-            @"garage_door":      @"Closed",
-            @"opening":          @"Closed",
-            @"connectivity":     @"Disconnected",
-            @"plug":             @"Unplugged",
-            @"battery":          @"Normal",
-            @"battery_charging": @"Not Charging",
-            @"motion":           @"Clear",
-            @"occupancy":        @"Clear",
-            @"moisture":         @"Dry",
-            @"smoke":            @"Clear",
-            @"problem":          @"OK",
-            @"safety":           @"Safe",
-            @"running":          @"Not Running",
-            @"update":           @"Up-to-date",
-            @"presence":         @"Away",
-            @"power":            @"Off",
-        };
-    });
-
-    NSDictionary *map = isOn ? onStates : offStates;
-    NSString *result = map[deviceClass];
-    return result ?: (isOn ? @"On" : @"Off");
+    // Device-class + state → friendly string now comes from Home Assistant's
+    // own `entity_component` translations (docs/plans/i18n-plan.md §2), not
+    // an app-hardcoded English table. HAStateLocalizer falls back to the
+    // exact pre-Phase-2 defaults when it has no HA data yet, so this stays
+    // byte-identical on first launch / offline / under test.
+    NSString *state = isOn ? @"on" : @"off";
+    return [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"binary_sensor"
+                                                             deviceClass:deviceClass
+                                                                platform:nil
+                                                          translationKey:nil
+                                                                   state:state];
 }
 
 #pragma mark - Human Readable State
