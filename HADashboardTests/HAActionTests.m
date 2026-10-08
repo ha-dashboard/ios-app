@@ -137,36 +137,45 @@
     XCTAssertEqualObjects(action.action, HAActionTypeToggle);
 }
 
+// Default tap action for non-toggle, non-actionable entities was changed from
+// more-info to none by 32ba3c7 ("fix: script button full-area tap + long-press
+// for entity detail"): detail view now only opens on long-press, so tap does
+// nothing for entities that don't toggle or activate.
 - (void)testDefaultTapActionForNonToggleableEntity {
     HAEntity *sensor = [HASnapshotTestHelpers sensorTemperature];
     HAAction *action = [HAAction defaultTapActionForEntity:sensor];
-    XCTAssertEqualObjects(action.action, HAActionTypeMoreInfo);
+    XCTAssertEqualObjects(action.action, HAActionTypeNone);
 }
 
-- (void)testDefaultTapActionForLockIsMoreInfo {
-    // Lock is NOT in HA's DOMAINS_TOGGLE — default should be more-info, not toggle
+- (void)testDefaultTapActionForLockIsNone {
+    // Lock is NOT in HA's DOMAINS_TOGGLE and isn't an actionable domain either
+    // (scene/script/button) — per 32ba3c7, tap does nothing; long-press for more-info.
     HAEntity *lock = [HASnapshotTestHelpers lockLocked];
     HAAction *action = [HAAction defaultTapActionForEntity:lock];
-    XCTAssertEqualObjects(action.action, HAActionTypeMoreInfo);
+    XCTAssertEqualObjects(action.action, HAActionTypeNone);
 }
 
-- (void)testDefaultTapActionForCoverIsMoreInfo {
-    // Cover is NOT in HA's DOMAINS_TOGGLE — default should be more-info
+- (void)testDefaultTapActionForCoverIsNone {
+    // Cover is NOT in HA's DOMAINS_TOGGLE and isn't actionable — per 32ba3c7, tap does nothing.
     HAEntity *cover = [HASnapshotTestHelpers coverEntityOpenShutter];
     HAAction *action = [HAAction defaultTapActionForEntity:cover];
-    XCTAssertEqualObjects(action.action, HAActionTypeMoreInfo);
+    XCTAssertEqualObjects(action.action, HAActionTypeNone);
 }
 
-- (void)testDefaultTapActionForSceneIsMoreInfo {
-    // Scene is NOT in DOMAINS_TOGGLE
+- (void)testDefaultTapActionForSceneIsToggle {
+    // Scene is NOT in DOMAINS_TOGGLE, but 32ba3c7 explicitly keeps scene/script/button
+    // "actionable": they still activate on tap (modeled as HAActionTypeToggle), unlike
+    // other non-toggle domains which now get HAActionTypeNone.
     HAEntity *scene = [HASnapshotTestHelpers sceneDefault];
     HAAction *action = [HAAction defaultTapActionForEntity:scene];
-    XCTAssertEqualObjects(action.action, HAActionTypeMoreInfo);
+    XCTAssertEqualObjects(action.action, HAActionTypeToggle);
 }
 
 - (void)testDefaultTapActionForNilEntity {
+    // No entity to toggle, activate, or show more-info for — falls through to the
+    // same "nothing happens on tap" default as any other non-actionable entity.
     HAAction *action = [HAAction defaultTapActionForEntity:nil];
-    XCTAssertEqualObjects(action.action, HAActionTypeMoreInfo);
+    XCTAssertEqualObjects(action.action, HAActionTypeNone);
 }
 
 - (void)testDefaultHoldAction {
