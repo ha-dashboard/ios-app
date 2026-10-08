@@ -441,7 +441,25 @@ build_device() {
 
     # Re-sign with entitlements from arm64 build
     echo "   Re-signing..." >&2
-    local IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | grep "Apple Development" | head -1 | sed 's/.*"\(.*\)"/\1/')
+    # Use the certificate that signed the Xcode template: the embedded profile
+    # only authorizes that certificate, and the keychain may hold Apple
+    # Development identities for other teams.
+    local IDENTITY=""
+    local CERT_DIR
+    CERT_DIR=$(mktemp -d)
+    if codesign -d --extract-certificates="$CERT_DIR/cert" "$ARM64_APP" 2>/dev/null &&
+       [[ -f "$CERT_DIR/cert0" ]]; then
+        local TEMPLATE_CERT_SHA1
+        TEMPLATE_CERT_SHA1=$(shasum -a 1 "$CERT_DIR/cert0" | awk '{print toupper($1)}')
+        if security find-identity -v -p codesigning 2>/dev/null | grep -q "$TEMPLATE_CERT_SHA1"; then
+            IDENTITY="$TEMPLATE_CERT_SHA1"
+        fi
+    fi
+    rm -rf "$CERT_DIR"
+    if [[ -z "$IDENTITY" ]]; then
+        IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | grep "Apple Development" | head -1 | sed 's/.*"\(.*\)"/\1/')
+        [[ -n "$IDENTITY" ]] && echo "   Warning: template signing certificate not in keychain; using first Apple Development identity" >&2
+    fi
     if [ -n "$IDENTITY" ]; then
         # Extract entitlements from arm64 binary
         local ENTITLEMENTS="$BUILD_DIR/entitlements.plist"
