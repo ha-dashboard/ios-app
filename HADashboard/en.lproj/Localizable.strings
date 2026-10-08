@@ -777,3 +777,161 @@
 
 /* Unlock button in the lock-feature button row. Max ~8 chars. */
 "feature.lock.unlock_button" = "Unlock";
+
+/* HAEntityDetailSection.m -- entity detail sheet strings below */
+
+/* Label above the color wheel in the light detail sheet. Short -- sits above a 200x200 wheel. */
+"cell.entity_detail.light.color_label" = "Color";
+
+/* Label above the color-temperature slider in the light detail sheet, used only when Home Assistant's own translation for light's color_temp_kelvin attribute is unavailable. Short -- sits above a narrow gradient slider. */
+"attr.color_temp.name" = "Color Temp";
+
+/* Button in the light detail sheet, briefly blinks the light to identify it. Includes a leading lightning-bolt glyph (⚡). Max ~12 chars -- fixed-width button. */
+"cell.entity_detail.light.flash_button" = "⚡ Flash";
+
+/* Label above the transition-duration segmented control in the light detail sheet. Short -- sits above a 5-item segment control. */
+"cell.entity_detail.light.transition_label" = "Transition";
+
+/* Header above the row of same-area scene chips in the light detail sheet. Short -- sits above a horizontal scroll row of pill buttons. */
+"cell.entity_detail.light.scenes_header" = "Scenes";
+
+/* Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity off. Max ~10 chars -- fixed-width pill. */
+"action.turn_off" = "Turn Off";
+
+/* Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity on. Max ~10 chars -- fixed-width pill. */
+"action.turn_on" = "Turn On";
+
+/* Effect-picker button title in the light detail sheet. %1$@ is the localized attribute label (e.g. "Effect"), %2$@ is the current effect name or a placeholder. */
+"format.entity_detail.effect_button" = "%1$@: %2$@  ▾";
+
+/* Action-sheet/button title for a light's effect, used only when Home Assistant's own translation for light's effect attribute is unavailable. */
+"attr.effect.name" = "Effect";
+
+/* Label above the fan-mode segmented control in the climate detail sheet, used only when Home Assistant's own translation for climate's fan_mode attribute is unavailable. Short -- sits above a segment control. */
+"attr.fan_mode.name" = "Fan";
+
+/* Label next to the aux-heat switch in the climate detail sheet. Deprecated in HA core, so not served by Home Assistant's own translations -- this is an app-owned fallback used unconditionally. */
+"attr.aux_heat.name" = "Aux Heat";
+
+/* Target temperature label in the climate detail sheet. %1$@ is the localized attribute label (e.g. "Target temperature"), %2$.1f is the numeric value with one decimal. */
+"format.entity_detail.target_temperature" = "%1$@: %2$.1f°";
+
+/* Target temperature label in the climate/water-heater detail sheet, shown when no target temperature is available. %1$@ is the localized attribute label (e.g. "Target temperature"). */
+"format.entity_detail.target_temperature_no_value" = "%1$@: —";
+
+/* Label preceding the target temperature in the climate/water-heater detail sheet, used only when Home Assistant's own translation for the entity's temperature attribute is unavailable. */
+"attr.target_temperature.name" = "Target";
+
+/* Label above the tilt slider in the cover detail sheet, used only when Home Assistant's own translation for cover's current_tilt_position attribute is unavailable. Short -- sits above a narrow slider. */
+"attr.tilt_position.name" = "Tilt";
+
+/* Button in the cover/valve detail sheet, opens the cover/valve. Max ~10 chars -- fixed-width pill. */
+"cell.entity_detail.open_close.open" = "Open";
+
+/* Button in the cover/valve/vacuum detail sheet, stops the current movement/operation. Max ~10 chars -- fixed-width pill. */
+"cell.entity_detail.stop_button" = "Stop";
+
+/* Button in the cover/valve detail sheet, closes the cover/valve. Max ~10 chars -- fixed-width pill. */
+"cell.entity_detail.open_close.close" = "Close";
+
+/* Label next to the switch in the generic toggle detail sheet (switch/input_boolean/automation domains). */
+"cell.entity_detail.toggle.label" = "Toggle";
+
+/* Label next to the oscillation switch in the fan detail sheet, used only when Home Assistant's own translation for fan's oscillating attribute is unavailable. */
+"attr.oscillating.name" = "Oscillation";
+
+/* Label above the forward/reverse buttons in the fan detail sheet, used only when Home Assistant's own translation for fan's direction attribute is unavailable. Short -- sits above a 2-button row. */
+"attr.direction.name" = "Direction";
+
+/* Button in the fan detail sheet, sets fan direction to forward. Max ~10 chars -- fixed-width pill. */
+"cell.entity_detail.fan.forward_button" = "Forward";
+
+/* Button in the fan detail sheet, sets fan direction to reverse. Max ~10 chars -- fixed-width pill. */
+"cell.entity_detail.fan.reverse_button" = "Reverse";
+
+/* Preset-mode picker button title in the fan detail sheet. %@ is the current preset mode name or a placeholder, followed by a dropdown glyph (▾). */
+"format.entity_detail.fan_preset_button" = "Preset: %@  ▾";
+
+/* Action-sheet title for picking a fan preset mode. */
+"alert.entity_detail.fan_preset_mode.title" = "Preset Mode";
+
+/* Action-sheet/button title for a media player's sound mode, used only when Home Assistant's own translation for media_player's sound_mode attribute is unavailable. */
+"attr.sound_mode.name" = "Sound Mode";
+
+/* Button in the lock detail sheet, shown after the first tap on Open as a confirmation step before unlatching. Max ~14 chars -- fixed-width pill. */
+"cell.entity_detail.lock.confirm_open" = "Confirm Open?";
+
+/* Button in the vacuum detail sheet, sends the vacuum back to its dock. Max ~10 chars -- fixed-width pill. */
+"cell.entity_detail.vacuum.return_button" = "Return";
+
+/* Button in the vacuum detail sheet, makes the vacuum emit a locate sound. Max ~10 chars -- fixed-width pill. */
+"cell.entity_detail.vacuum.locate_button" = "Locate";
+
+/* Button in the vacuum detail sheet, starts a spot clean. Max ~12 chars -- fixed-width pill. */
+"cell.entity_detail.vacuum.clean_spot_button" = "Clean Spot";
+
+/* Placeholder shown on the vacuum fan-speed picker button when no current fan speed is known. Short -- sits inline before a dropdown glyph. */
+"cell.entity_detail.vacuum.fan_speed_default" = "Default";
+
+/* Fan-speed picker button title in the vacuum detail sheet. %@ is the current fan speed name or a placeholder, followed by a dropdown glyph (▾). */
+"format.entity_detail.vacuum_fan_speed_button" = "Fan Speed: %@  ▾";
+
+/* Action-sheet title for picking a vacuum fan speed. */
+"alert.entity_detail.vacuum_fan_speed.title" = "Fan Speed";
+
+/* Countdown display in the timer detail sheet, shown once the countdown reaches zero before it stops. */
+"cell.entity_detail.timer.zero" = "0:00:00";
+
+/* Button in the alarm detail sheet, arms the alarm in Home mode. Max ~12 chars -- fixed-width pill. */
+"cell.entity_detail.alarm.arm_home" = "Arm Home";
+
+/* Button in the alarm detail sheet, arms the alarm in Away mode. Max ~12 chars -- fixed-width pill. */
+"cell.entity_detail.alarm.arm_away" = "Arm Away";
+
+/* Button in the alarm detail sheet, arms the alarm in Night mode. Max ~12 chars -- fixed-width pill. */
+"cell.entity_detail.alarm.arm_night" = "Arm Night";
+
+/* Button in the alarm detail sheet, arms the alarm in Vacation mode. Max ~14 chars -- fixed-width pill. */
+"cell.entity_detail.alarm.arm_vacation" = "Arm Vacation";
+
+/* Button in the alarm detail sheet, arms the alarm with a Custom Bypass mode. Max ~14 chars -- fixed-width pill. */
+"cell.entity_detail.alarm.arm_custom" = "Arm Custom";
+
+/* Text field placeholder in the alarm detail sheet's code entry field. */
+"cell.alarm.enter_code" = "Enter code";
+
+/* Row label in the weather detail sheet. Short -- sits to the right of a small glyph. */
+"cell.entity_detail.weather.temperature_label" = "Temperature";
+
+/* Row label in the weather detail sheet. Short -- sits to the right of a small glyph. */
+"cell.entity_detail.weather.humidity_label" = "Humidity";
+
+/* Row label in the weather detail sheet. Short -- sits to the right of a small glyph. */
+"cell.entity_detail.weather.pressure_label" = "Pressure";
+
+/* Row label in the weather detail sheet. Short -- sits to the right of a small glyph. */
+"cell.entity_detail.weather.wind_label" = "Wind";
+
+/* Button in the update detail sheet, installs an available update. Max ~10 chars -- fixed-width pill. */
+"cell.entity_detail.update.install" = "Install";
+
+/* Installed-version label in the update detail sheet. %@ is the installed version string or a placeholder. */
+"format.entity_detail.update.installed" = "Installed: %@";
+
+/* Latest-version label in the update detail sheet. %@ is the latest version string or a placeholder. */
+"format.entity_detail.update.latest" = "Latest: %@";
+
+/* Placeholder shown in a mode/effect/preset picker button in an entity detail sheet when no current value is known. Short -- sits inline before a dropdown glyph. */
+"cell.entity_detail.mode.none_placeholder" = "None";
+
+/* Mode picker button title in an entity detail sheet (humidifier/water heater). %@ is the current mode name or a placeholder, followed by a dropdown glyph (▾). */
+"format.entity_detail.mode_button" = "Mode: %@  ▾";
+
+/* Action-sheet title for picking a humidifier mode. */
+"alert.entity_detail.humidifier_mode.title" = "Mode";
+
+/* Target temperature label in the water heater detail sheet. %1$@ is the localized attribute label (e.g. "Target temperature"), %2$.0f is the numeric value with no decimals. */
+"format.entity_detail.target_temperature_whole" = "%1$@: %2$.0f°";
+
+/* Action-sheet title for picking a water heater operation mode. */
+"alert.entity_detail.water_heater_operation_mode.title" = "Operation Mode";
