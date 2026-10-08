@@ -696,7 +696,11 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
         if ([areaId isKindOfClass:[NSString class]] && areaId.length > 0) {
             areaMap[deviceId] = areaId;
         }
-        NSString *name = device[@"name_by_user"] ?: device[@"name"];
+        // "?:" only short-circuits on nil, not NSNull, so a JSON null name_by_user
+        // (common when the user hasn't renamed the device) must be checked
+        // explicitly or it masks the "name" fallback below.
+        id nameByUser = device[@"name_by_user"];
+        NSString *name = [nameByUser isKindOfClass:[NSString class]] ? nameByUser : device[@"name"];
         if ([name isKindOfClass:[NSString class]] && name.length > 0) {
             nameMap[deviceId] = name;
         }
@@ -909,6 +913,18 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 - (HAFloor *)floorForAreaId:(NSString *)areaId {
     if (!areaId) return nil;
     return self.floorByAreaId[areaId];
+}
+
+- (NSDictionary<NSString *, NSString *> *)floorNamesByAreaId {
+    if (self.floorByAreaId.count == 0) return @{};
+    NSMutableDictionary<NSString *, NSString *> *map = [NSMutableDictionary dictionaryWithCapacity:self.floorByAreaId.count];
+    for (NSString *areaId in self.floorByAreaId) {
+        HAFloor *floor = self.floorByAreaId[areaId];
+        if ([floor.name isKindOfClass:[NSString class]] && floor.name.length > 0) {
+            map[areaId] = floor.name;
+        }
+    }
+    return [map copy];
 }
 
 - (NSString *)areaNameForEntityId:(NSString *)entityId {

@@ -116,6 +116,10 @@ extern NSString *const HAConnectionManagerHADidStartNotification;              /
 /// Look up the floor for a given area_id (nil if area has no floor assignment)
 - (HAFloor *)floorForAreaId:(NSString *)areaId;
 
+/// Floor name map: area_id -> floor display name. Empty if floors aren't
+/// loaded or HA doesn't support them (older versions).
+@property (nonatomic, strong, readonly) NSDictionary<NSString *, NSString *> *floorNamesByAreaId;
+
 /// Whether area/entity/device registries have been loaded
 @property (nonatomic, readonly) BOOL registriesLoaded;
 
