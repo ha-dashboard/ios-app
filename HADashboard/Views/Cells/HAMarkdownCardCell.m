@@ -248,7 +248,11 @@ static NSString * const kAlertCloseMarker = @"\uE003";
     converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:kSmallCloseMarker];
     // ha-alert is a presentational wrapper. Keep its text, while deliberately
     // ignoring attributes such as alert-type rather than executing/rendering
-    // arbitrary HTML.
+    // arbitrary HTML. It is block-level (like <p>/<div>), so it starts on its
+    // own line — but only insert that line break when one isn't already
+    // there (e.g. after a preceding <br>), to avoid a spurious blank line.
+    expression = [NSRegularExpression regularExpressionWithPattern:@"(?<!\\n)<ha-alert(?:\\s+[^>]*)?>" options:NSRegularExpressionCaseInsensitive error:NULL];
+    converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:[@"\n" stringByAppendingString:kAlertOpenMarker]];
     expression = [NSRegularExpression regularExpressionWithPattern:@"<ha-alert(?:\\s+[^>]*)?>" options:NSRegularExpressionCaseInsensitive error:NULL];
     converted = [expression stringByReplacingMatchesInString:converted options:0 range:NSMakeRange(0, converted.length) withTemplate:kAlertOpenMarker];
     expression = [NSRegularExpression regularExpressionWithPattern:@"</ha-alert>" options:NSRegularExpressionCaseInsensitive error:NULL];
