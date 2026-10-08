@@ -7,6 +7,7 @@
 #import "HAHaptics.h"
 #import "HAIconMapper.h"
 #import "HAEntityDisplayHelper.h"
+#import "HAStateLocalizer.h"
 #import "UIView+HAUtilities.h"
 
 // Gauge geometry -- proportions matched to HA web's ha-control-circular-slider:
@@ -1239,11 +1240,22 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
     self.showCurrentAsPrimary = showCurrentAsPrimary;
 
     // Status label -- show hvac_action if available, else mode. Append humidity if available.
+    // `mode` is the entity's own `state` (climate domain) -- HA-translated
+    // the same way as any other entity state (plan §2.2), so route it
+    // through the shared localizer. `action` is the `hvac_action`
+    // ATTRIBUTE, translated under a different key template
+    // (`…state_attributes.hvac_action.state.{value}`, plan §2.4) that
+    // HAStateLocalizer does not yet expose a lookup for -- left on the
+    // algorithmic fallback, same as HAModeFeatureView's preset/fan modes.
     NSString *statusText;
     if ([action isKindOfClass:[NSString class]] && action.length > 0) {
         statusText = [HAEntityDisplayHelper humanReadableState:action];
     } else {
-        statusText = [HAEntityDisplayHelper humanReadableState:mode];
+        statusText = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"climate"
+                                                                       deviceClass:nil
+                                                                          platform:nil
+                                                                    translationKey:nil
+                                                                             state:mode];
     }
     NSNumber *currentHumidity = entity.attributes[@"current_humidity"];
     NSNumber *targetHumidity = entity.attributes[@"target_humidity"];
