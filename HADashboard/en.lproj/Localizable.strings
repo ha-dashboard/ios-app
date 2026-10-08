@@ -535,3 +535,22 @@
 
 /* Placeholder text in the calendar card's list view when there are no upcoming events. */
 "card.calendar.no_upcoming_events" = "No upcoming events";
+
+
+/* Label before the custom history range start-date button in the entity detail view. */
+"cell.entity_detail.from_label" = "From:";
+
+/* Label before the custom history range end-date button in the entity detail view. */
+"cell.entity_detail.to_label" = "To:";
+
+/* Button that applies a custom history date range in the entity detail view. */
+"action.apply" = "Apply";
+
+/* Action sheet title for the fallback start-date picker in the entity detail view. */
+"alert.date_picker.start_date_title" = "Start Date";
+
+/* Action sheet title for the fallback end-date picker in the entity detail view. */
+"alert.date_picker.end_date_title" = "End Date";
+
+/* Confirm button, dismisses a date/value picker. */
+"action.done" = "Done";
