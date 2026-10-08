@@ -166,7 +166,7 @@
         self.tiltSlider.hidden = NO;
         self.tiltSlider.enabled = available;
         self.tiltLabel.hidden = NO;
-        self.tiltLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.cover.tilt_percent", @"Tilt position label in the cover cell. %1$ld is the tilt percentage, %2$@ is a literal percent sign."), (long)[tiltAttr integerValue], @"%"];
+        self.tiltLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.cover.tilt_percent", @"Tilt position label in the cover cell."), (long)[tiltAttr integerValue]];
         if (!self.isTrackingSlider) {
             self.tiltSlider.value = [tiltAttr floatValue];
         }
@@ -237,7 +237,7 @@
 - (void)tiltSliderTouchDown { self.isTrackingSlider = YES; }
 
 - (void)tiltSliderChanged {
-    self.tiltLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.cover.tilt_percent_live", @"Tilt position label in the cover cell while dragging the tilt slider. %1$.0f is the tilt percentage, %2$@ is a literal percent sign."), self.tiltSlider.value, @"%"];
+    self.tiltLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.cover.tilt_percent_live", @"Tilt position label in the cover cell while dragging the tilt slider."), self.tiltSlider.value];
 }
 
 - (void)tiltSliderTouchUp {

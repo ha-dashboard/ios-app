@@ -106,3 +106,4 @@ ota_patch.txt
 
 # Pseudo-localisation output (scripts/check-translations.sh --pseudo)
 HADashboard/en-XA.lproj/
+__pycache__/

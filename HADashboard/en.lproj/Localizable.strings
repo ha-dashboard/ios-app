@@ -661,17 +661,17 @@
 /* Feedback label in the button-entity cell, briefly shown after a press. Max ~10 chars. */
 "cell.button.pressed" = "Pressed";
 
-/* Humidity label appended under the weather clock cell. %1$.0f is the humidity percentage, %2$@ is a literal "%" sign (passed as an argument rather than "%%" so the string stays fully positional). */
-"format.weather_clock.humidity" = "%1$.0f%2$@ Humidity";
+/* Humidity label appended under the weather clock cell. %.0f is the humidity percentage; %% is a literal percent sign, not a second value. */
+"format.weather_clock.humidity" = "%.0f%% Humidity";
 
 /* Button in the counter cell, resets the counter to its initial value. Max ~8 chars. */
 "cell.counter.reset" = "Reset";
 
-/* Tilt position label in the cover cell. %1$ld is the tilt percentage, %2$@ is a literal "%" sign (passed as an argument rather than "%%" so the string stays fully positional). */
-"format.cover.tilt_percent" = "Tilt %1$ld%2$@";
+/* Tilt position label in the cover cell. %ld is the tilt percentage; %% is a literal percent sign, not a second value. */
+"format.cover.tilt_percent" = "Tilt %ld%%";
 
-/* Tilt position label in the cover cell while dragging the tilt slider. %1$.0f is the tilt percentage, %2$@ is a literal "%" sign (passed as an argument rather than "%%" so the string stays fully positional). */
-"format.cover.tilt_percent_live" = "Tilt %1$.0f%2$@";
+/* Tilt position label in the cover cell while dragging the tilt slider. %.0f is the tilt percentage; %% is a literal percent sign, not a second value. */
+"format.cover.tilt_percent_live" = "Tilt %.0f%%";
 
 /* Button in the input_number cell, submits a typed value. Max ~8 chars. */
 "cell.input_number.set" = "Set";

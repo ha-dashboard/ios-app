@@ -219,7 +219,7 @@ static const CGFloat kBottomPadding = 12.0;
     // Humidity
     NSNumber *humidity = [self resolvedHumidityForEntity:entity];
     if (humidity) {
-        self.humidityLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.weather_clock.humidity", @"Humidity label appended under the weather clock cell. %1$.0f is the humidity percentage, %2$@ is a literal percent sign."), humidity.doubleValue, @"%"];
+        self.humidityLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.weather_clock.humidity", @"Humidity label appended under the weather clock cell."), humidity.doubleValue];
     } else {
         self.humidityLabel.text = nil;
     }

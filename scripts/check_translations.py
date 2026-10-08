@@ -15,8 +15,12 @@ STRINGS_LINE_RE = re.compile(
     r'^\s*"((?:[^"\\]|\\.)*)"\s*=\s*"((?:[^"\\]|\\.)*)"\s*;', re.MULTILINE
 )
 # %@, %1$@, %ld, %2$ld, %.2f, %1$.2f, %%, etc.
+# NOTE: '%%' (a literal percent sign, not a conversion) is intentionally NOT
+# matched here. It must never count as a specifier, and must never trigger
+# the positional-specifier requirement -- "Tilt %ld%%" has exactly one real
+# specifier (%ld) and is perfectly fine non-positional.
 SPECIFIER_RE = re.compile(
-    r'%(\d+\$)?[-+0 #]*\d*(\.\d+)?(hh|h|ll|l|q|L|z|j|t)?[@diufsuxXoc%]'
+    r'%(\d+\$)?[-+0#]*\d*(\.\d+)?(hh|h|ll|l|q|L|z|j|t)?[@diufsuxXc]'
 )
 CALL_SITE_RE = re.compile(r'HALocalizedString\(\s*@"((?:[^"\\]|\\.)*)"')
 PLURAL_CALL_SITE_RE = re.compile(r'HALocalizedPlural\(\s*@"((?:[^"\\]|\\.)*)"')
