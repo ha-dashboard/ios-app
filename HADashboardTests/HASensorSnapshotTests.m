@@ -137,4 +137,21 @@
     [self verifyView:cell identifier:nil];
 }
 
+#pragma mark - Fallback-card-type badge (GitHub #19)
+
+// An unmapped custom:* card (e.g. a mushroom-entity-card or any bubble-card
+// type) with an "entity" key renders generically instead of vanishing, but
+// HALovelaceParser stamps fallbackCardType on the item so HABaseEntityCell
+// shows a small, subtle badge rather than looking indistinguishable from a
+// fully-supported sensor card. See HALovelaceParser.isNativelySupportedCustomCardType:.
+- (void)testSensorWithFallbackCardTypeBadge {
+    HAEntity *entity = [HASnapshotTestHelpers sensorTemperature];
+    HADashboardConfigItem *item = [HASnapshotTestHelpers itemWithEntityId:entity.entityId
+        cardType:@"custom:mushroom-entity-card" columnSpan:6 headingIcon:nil displayName:nil];
+    item.fallbackCardType = @"custom:mushroom-entity-card";
+    UIView *cell = [self cellForEntity:entity cellClass:[HASensorEntityCell class]
+        size:CGSizeMake(floor(kSubGridUnit * 6), kStandardCellHeight) configItem:item];
+    [self verifyView:cell identifier:nil];
+}
+
 @end

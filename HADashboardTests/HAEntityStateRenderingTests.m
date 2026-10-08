@@ -7,6 +7,7 @@
 #import "HAGlanceItemView.h"
 #import "HAEntityRowView.h"
 #import "HABadgeRowCell.h"
+#import "HABaseEntityCell.h"
 
 // -----------------------------------------------------------------------
 // Regression coverage for the gap the coordinator flagged after the Phase 2
@@ -148,6 +149,62 @@
                                                                       translationKey:nil
                                                                                state:@"not_home"];
     XCTAssertEqualObjects(result, @"Away");
+}
+
+#pragma mark - Fallback-card-type badge (GitHub #19)
+//
+// HABaseEntityCell is the shared base for every domain cell (sensor, light,
+// switch, ...) plus HAEntityCardCell/HATileEntityCell, which all call
+// [super configureWithEntity:configItem:]. Setting fallbackCardType on the
+// item there is what gives every generic fallback path the badge for free.
+
+- (void)testBaseEntityCellShowsFallbackBadgeWhenFallbackCardTypeIsSet {
+    HAEntity *entity = [HASnapshotTestHelpers sensorTemperature];
+    HABaseEntityCell *cell = [[HABaseEntityCell alloc] initWithFrame:CGRectMake(0, 0, 160, 100)];
+    HADashboardConfigItem *configItem = [[HADashboardConfigItem alloc] init];
+    configItem.entityId = entity.entityId;
+    configItem.fallbackCardType = @"custom:mushroom-entity-card";
+
+    [cell configureWithEntity:entity configItem:configItem];
+    [cell layoutIfNeeded];
+
+    XCTAssertFalse(cell.fallbackBadgeLabel.hidden, @"The badge must be visible when fallbackCardType is set");
+    XCTAssertEqualObjects(cell.fallbackBadgeLabel.text, @"custom:mushroom-entity-card");
+}
+
+- (void)testBaseEntityCellHidesFallbackBadgeWhenFallbackCardTypeIsNil {
+    HAEntity *entity = [HASnapshotTestHelpers sensorTemperature];
+    HABaseEntityCell *cell = [[HABaseEntityCell alloc] initWithFrame:CGRectMake(0, 0, 160, 100)];
+    HADashboardConfigItem *configItem = [[HADashboardConfigItem alloc] init];
+    configItem.entityId = entity.entityId;
+    // fallbackCardType left nil -- a normal, fully-supported card.
+
+    [cell configureWithEntity:entity configItem:configItem];
+    [cell layoutIfNeeded];
+
+    XCTAssertTrue(cell.fallbackBadgeLabel.hidden, @"The badge must stay hidden for a normal card");
+    XCTAssertNil(cell.fallbackBadgeLabel.text);
+}
+
+- (void)testBaseEntityCellHidesFallbackBadgeAfterReuseWithoutFallbackCardType {
+    // Regression guard: a reused cell previously showing a fallback badge
+    // must not leak it onto the next (non-fallback) item it's configured for.
+    HAEntity *entity = [HASnapshotTestHelpers sensorTemperature];
+    HABaseEntityCell *cell = [[HABaseEntityCell alloc] initWithFrame:CGRectMake(0, 0, 160, 100)];
+    HADashboardConfigItem *fallbackItem = [[HADashboardConfigItem alloc] init];
+    fallbackItem.entityId = entity.entityId;
+    fallbackItem.fallbackCardType = @"custom:bubble-card";
+    [cell configureWithEntity:entity configItem:fallbackItem];
+    XCTAssertFalse(cell.fallbackBadgeLabel.hidden);
+
+    [cell prepareForReuse];
+
+    HADashboardConfigItem *normalItem = [[HADashboardConfigItem alloc] init];
+    normalItem.entityId = entity.entityId;
+    [cell configureWithEntity:entity configItem:normalItem];
+    [cell layoutIfNeeded];
+
+    XCTAssertTrue(cell.fallbackBadgeLabel.hidden, @"A reused cell must not keep showing a stale fallback badge");
 }
 
 @end
