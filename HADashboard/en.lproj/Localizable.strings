@@ -469,3 +469,19 @@
 
 /* Collapsed swing-mode button in the thermostat gauge cell, shown when no swing mode is set. Keep the trailing triangle glyph. */
 "cell.thermostat.swing_label" = "Swing ▾";
+
+
+/* Button in the lock cell, unlatches/releases a lock that supports it. Max ~10 chars -- sits in a fixed-width pill. */
+"cell.lock.open" = "Open";
+
+/* Button and alert title in the lock cell, locks the entity. Max ~10 chars -- sits in a fixed-width pill. */
+"cell.lock.lock" = "Lock";
+
+/* Button and alert title in the lock cell, unlocks the entity. Max ~10 chars -- sits in a fixed-width pill. */
+"cell.lock.unlock" = "Unlock";
+
+/* Confirmation alert message in the lock cell before locking/unlocking. %1$@ is "Lock" or "Unlock", %2$@ is the entity's friendly name. */
+"format.lock.confirm_action.message" = "%1$@ %2$@?";
+
+/* Text field placeholder in the lock-code entry alert. */
+"cell.lock.enter_code" = "Enter code";

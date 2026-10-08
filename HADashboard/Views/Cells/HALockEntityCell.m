@@ -1,4 +1,5 @@
 #import "HALockEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -40,7 +41,7 @@
 
     // Open button (unlatch/release — only shown when entity supports it)
     self.openButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.openButton setTitle:@"Open" forState:UIControlStateNormal];
+    [self.openButton setTitle:HALocalizedString(@"cell.lock.open", @"Button in the lock cell, unlatches/releases a lock that supports it. Max ~10 chars -- sits in a fixed-width pill.") forState:UIControlStateNormal];
     self.openButton.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     self.openButton.layer.cornerRadius = 6.0;
     self.openButton.backgroundColor = [HATheme accentColor];
@@ -81,20 +82,20 @@
 
     if ([entity isLocked]) {
         self.lockStateLabel.text = @"\U0001F512"; // locked padlock
-        [self.lockButton setTitle:@"Unlock" forState:UIControlStateNormal];
+        [self.lockButton setTitle:HALocalizedString(@"cell.lock.unlock", @"Button and alert title in the lock cell, unlocks the entity. Max ~10 chars -- sits in a fixed-width pill.") forState:UIControlStateNormal];
         self.lockButton.backgroundColor = [HATheme destructiveColor];
         [self.lockButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
         self.contentView.backgroundColor = [HATheme onTintColor];
     } else if ([entity isJammed]) {
         self.lockStateLabel.text = @"\u26A0"; // warning
-        [self.lockButton setTitle:@"Lock" forState:UIControlStateNormal];
+        [self.lockButton setTitle:HALocalizedString(@"cell.lock.lock", @"Button and alert title in the lock cell, locks the entity. Max ~10 chars -- sits in a fixed-width pill.") forState:UIControlStateNormal];
         self.lockButton.backgroundColor = [HATheme warningColor];
         [self.lockButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
         self.contentView.backgroundColor = [HATheme onTintColor];
     } else {
         // unlocked or unlocking/locking
         self.lockStateLabel.text = @"\U0001F513"; // unlocked padlock
-        [self.lockButton setTitle:@"Lock" forState:UIControlStateNormal];
+        [self.lockButton setTitle:HALocalizedString(@"cell.lock.lock", @"Button and alert title in the lock cell, locks the entity. Max ~10 chars -- sits in a fixed-width pill.") forState:UIControlStateNormal];
         self.lockButton.backgroundColor = [HATheme successColor];
         [self.lockButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
         self.contentView.backgroundColor = [HATheme cellBackgroundColor];
@@ -107,8 +108,10 @@
     if (!self.entity) return;
 
     BOOL isLocked = [self.entity isLocked];
-    NSString *actionTitle = isLocked ? @"Unlock" : @"Lock";
-    NSString *message = [NSString stringWithFormat:@"%@ %@?", actionTitle, [self.entity friendlyName]];
+    NSString *actionTitle = isLocked
+        ? HALocalizedString(@"cell.lock.unlock", @"Button and alert title in the lock cell, unlocks the entity. Max ~10 chars -- sits in a fixed-width pill.")
+        : HALocalizedString(@"cell.lock.lock", @"Button and alert title in the lock cell, locks the entity. Max ~10 chars -- sits in a fixed-width pill.");
+    NSString *message = [NSString stringWithFormat:HALocalizedString(@"format.lock.confirm_action.message", @"Confirmation alert message in the lock cell before locking/unlocking. %1$@ is \"Lock\" or \"Unlock\", %2$@ is the entity's friendly name."), actionTitle, [self.entity friendlyName]];
 
     // Check if entity requires a code
     NSString *codeFormat = HAAttrString(self.entity.attributes, HAAttrCodeFormat);
@@ -120,7 +123,7 @@
 
     if (needsCode) {
         [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
-            textField.placeholder = @"Enter code";
+            textField.placeholder = HALocalizedString(@"cell.lock.enter_code", @"Text field placeholder in the lock-code entry alert.");
             textField.secureTextEntry = YES;
             // Use numeric keyboard for numeric code patterns
             if ([codeFormat isEqualToString:@"number"] ||
@@ -139,7 +142,7 @@
         [self performLockAction:isLocked code:code];
     }]];
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     UIViewController *vc = [self ha_parentViewController];
     if (vc) {
