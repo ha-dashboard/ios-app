@@ -229,7 +229,17 @@ static BOOL HAStateLocalizerIsRunningUnderXCTest(void) {
 
     self.resources = validated;
     self.loadedLanguageCode = normalized;
-    self.lastRefreshDate = [NSDate date];
+    // Debounce against when the cache was actually fetched (file mtime),
+    // not "now" — otherwise a weeks-old cache loaded at launch would
+    // suppress the post-connect refresh for another 24 hours.
+    NSString *dir = [[HACacheManager sharedManager] persistentCacheDirectory];
+    NSDate *fetchedAt = nil;
+    if (dir) {
+        NSDictionary *attrs = [[NSFileManager defaultManager]
+            attributesOfItemAtPath:[dir stringByAppendingPathComponent:filename] error:nil];
+        fetchedAt = attrs[NSFileModificationDate];
+    }
+    self.lastRefreshDate = fetchedAt; // nil => next refresh always fetches
     HALogI(@"i18n", @"Loaded cached HA translations for '%@': %lu keys", normalized, (unsigned long)validated.count);
 }
 
