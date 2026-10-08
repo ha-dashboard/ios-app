@@ -457,6 +457,18 @@
 /* Entity state text shown when Home Assistant reports an entity's state as unknown. Home Assistant does not serve a translation for this over the WebSocket (see docs/plans/i18n-plan.md §2.3), so it stays app-owned. */
 "state.default.unknown" = "Unknown";
 
+/* Offline/first-launch fallback for a person entity's "home" state, shown only before any Home Assistant translation data has loaded. Matches Home Assistant's own English text. */
+"state.fallback.person.home" = "Home";
+
+/* Offline/first-launch fallback for a person entity's "not_home" state, shown only before any Home Assistant translation data has loaded. Matches Home Assistant's own English text. */
+"state.fallback.person.not_home" = "Away";
+
+/* Offline/first-launch fallback for a device_tracker entity's "home" state, shown only before any Home Assistant translation data has loaded. Matches Home Assistant's own English text. */
+"state.fallback.device_tracker.home" = "Home";
+
+/* Offline/first-launch fallback for a device_tracker entity's "not_home" state, shown only before any Home Assistant translation data has loaded. Matches Home Assistant's own English text. */
+"state.fallback.device_tracker.not_home" = "Away";
+
 
 /* Temperature label in the thermostat gauge cell, shown when no value is available. */
 "cell.thermostat.no_value" = "--";
@@ -570,3 +582,52 @@
 
 /* Button in the scene cell, triggers an automation entity. Max ~10 chars -- fixed-width pill. */
 "cell.scene.trigger" = "Trigger";
+
+
+/* Button in the alarm cell, arms in away mode. Max ~10 chars -- pill button. */
+"cell.alarm.away" = "Away";
+
+/* Button in the alarm cell, arms in home mode. Max ~10 chars -- pill button. */
+"cell.alarm.home" = "Home";
+
+/* Button in the alarm cell, arms in night mode. Max ~10 chars -- pill button. */
+"cell.alarm.night" = "Night";
+
+/* Button in the alarm cell, arms in vacation mode. Max ~10 chars -- pill button. */
+"cell.alarm.vacation" = "Vacation";
+
+/* Button in the alarm cell, arms with custom bypass. Max ~10 chars -- pill button. */
+"cell.alarm.bypass" = "Bypass";
+
+/* Button in the alarm cell, disarms the alarm. Max ~10 chars -- pill button. */
+"cell.alarm.disarm" = "Disarm";
+
+/* Text field placeholder in the alarm cell's code entry field. */
+"cell.alarm.code" = "Code";
+
+/* State badge text in the alarm cell. */
+"cell.alarm.state.armed_away" = "Armed Away";
+
+/* State badge text in the alarm cell. */
+"cell.alarm.state.armed_home" = "Armed Home";
+
+/* State badge text in the alarm cell. */
+"cell.alarm.state.armed_night" = "Armed Night";
+
+/* State badge text in the alarm cell. */
+"cell.alarm.state.armed_vacation" = "Armed Vacation";
+
+/* State badge text in the alarm cell. */
+"cell.alarm.state.disarmed" = "Disarmed";
+
+/* State badge text in the alarm cell. */
+"cell.alarm.state.pending" = "Pending";
+
+/* State badge text in the alarm cell. */
+"cell.alarm.state.arming" = "Arming";
+
+/* State badge text in the alarm cell, all-caps. */
+"cell.alarm.state.triggered" = "TRIGGERED";
+
+/* State badge fallback text in the alarm cell, shown when the state is nil. */
+"cell.alarm.state.unknown" = "Unknown";
