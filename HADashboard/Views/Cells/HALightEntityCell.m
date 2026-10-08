@@ -135,6 +135,49 @@
         relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:44]];
 }
 
+#pragma mark - Height Calculation
+
+/// Preferred height for a light card showing this entity, based on which rows
+/// it actually renders — mirrors the row logic in -configureWithEntity:configItem:.
+/// The name/toggle header row is top-anchored; the brightness and color-temp
+/// slider rows are bottom-anchored (see -setupSubviews), so — unlike a single
+/// linear stack — total height must be the SUM of the header and slider
+/// group heights, not just the taller of the two, or they silently overlap.
++ (CGFloat)preferredHeightForEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
+    CGFloat padding = 10.0;
+    CGFloat rowGap = 8.0;             // gap between the header row and the first slider row
+    CGFloat nameLabelHeight = 16.0;   // name label line height (13pt font)
+    CGFloat colorModeLabelHeight = 13.0; // color mode label line height (11pt font)
+    CGFloat colorModeLabelGap = 2.0;  // gap between name label and color mode label
+    CGFloat switchHeight = 31.0;      // UISwitch intrinsic height
+    CGFloat sliderRowHeight = 31.0;   // UISlider intrinsic height
+    CGFloat colorTempGap = 6.0;       // gap between brightness and color-temp slider rows (matches brightnessAboveColorTempConstraint)
+
+    BOOL isOn = entity.isOn;
+    // The color mode label and effect button share the same second header row
+    // (effectButton.centerY == colorModeLabel.centerY) — shown whenever either
+    // has content, even if the other doesn't.
+    BOOL showSecondHeaderRow = isOn && (entity.colorMode.length > 0 || entity.effectList.count > 0);
+    BOOL showColorTemp = isOn && entity.isAvailable && entity.supportsColorTemp;
+
+    CGFloat nameRowHeight = nameLabelHeight;
+    if (showSecondHeaderRow) {
+        nameRowHeight += colorModeLabelGap + colorModeLabelHeight;
+    }
+    CGFloat headerHeight = MAX(nameRowHeight, switchHeight);
+
+    CGFloat height = padding + headerHeight + padding;
+    if (isOn) {
+        // Brightness slider row is only shown while on; add it (and the gap
+        // that separates it from the header) on top of the header-only height.
+        height += rowGap + sliderRowHeight;
+        if (showColorTemp) {
+            height += colorTempGap + sliderRowHeight;
+        }
+    }
+    return height;
+}
+
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
     [super configureWithEntity:entity configItem:configItem];
 
