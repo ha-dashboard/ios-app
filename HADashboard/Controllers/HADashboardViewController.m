@@ -218,11 +218,15 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     // indefinitely. Poll for it independently and also re-check whenever the
     // app returns to the foreground, so the SSH-driven screenshot workflow
     // (see CLAUDE.md "Physical iPad Screenshots") works reliably.
-    self.screenshotTriggerTimer = [NSTimer scheduledTimerWithTimeInterval:2.0
-                                                                     target:self
-                                                                   selector:@selector(checkScreenshotTrigger)
-                                                                   userInfo:nil
-                                                                    repeats:YES];
+    // Only developer installs in /Applications (jailbroken SSH deploys) can be
+    // triggered this way, so App Store and sandboxed builds never poll.
+    if ([[[NSBundle mainBundle] bundlePath] hasPrefix:@"/Applications/"]) {
+        self.screenshotTriggerTimer = [NSTimer scheduledTimerWithTimeInterval:2.0
+                                                                         target:self
+                                                                       selector:@selector(checkScreenshotTrigger)
+                                                                       userInfo:nil
+                                                                        repeats:YES];
+    }
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -1207,6 +1211,9 @@ static inline NSString *HANormalizeState(id val) {
 
         NSString *outputFile = [dir stringByAppendingPathComponent:@"screenshot.png"];
         self.screenshotScheduled = YES;
+        // One capture per launch, so stop polling
+        [self.screenshotTriggerTimer invalidate];
+        self.screenshotTriggerTimer = nil;
         [[NSFileManager defaultManager] removeItemAtPath:triggerFile error:nil];
         HALogD(@"dash", @"Screenshot trigger found at %@, will capture in 3s", triggerFile);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{

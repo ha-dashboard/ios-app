@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		28CC43F17C652CF0F121968B /* HAScreenshotTriggerTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 5FF8F8BBB33554C15CB8B8E3 /* HAScreenshotTriggerTests.m */; };
+		FED6EBA65BB416FBCEF4F774 /* HARegistryLoadingTests.m in Sources */ = {isa = PBXBuildFile; fileRef = C4F7DC357A2DCB7C72EF35CB /* HARegistryLoadingTests.m */; };
+		7E713793F923745BFD9D8C93 /* HACameraHLSTests.m in Sources */ = {isa = PBXBuildFile; fileRef = F30D442A27A89349EF13EF46 /* HACameraHLSTests.m */; };
 		00038949C342C959E2F667B0 /* testTimerSectionPaused_timerSectionPaused_light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = D407B92D07874BD95496B151 /* testTimerSectionPaused_timerSectionPaused_light@2x.png */; };
 		001778B7ED749DFF94C6C9E2 /* testLightButton_showNameFalse__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 98224A06BD15296D69976A26 /* testLightButton_showNameFalse__dark_gradient@2x.png */; };
 		001AE9A431062052A8847D1B /* testWaterHeaterTile_default__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = E552F82D7EDFBEB60C5A0CF7 /* testWaterHeaterTile_default__light@2x.png */; };
@@ -31,6 +34,7 @@
 		02B1A43381F79621F0BF4991 /* HALoginViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6580FE39A826CE0764F1BC23 /* HALoginViewController.m */; };
 		02BB7A8E4FD7086EDA3E6115 /* testPersonScAway__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 3BF9B44CC4C531CF95B64F60 /* testPersonScAway__dark_gradient@2x.png */; };
 		02F82D519B17F3533F06604F /* HAEntityShowcaseSnapshotTests.m in Sources */ = {isa = PBXBuildFile; fileRef = DBBCE5A4068E2E8742CAC87F /* HAEntityShowcaseSnapshotTests.m */; };
+		37911FF9F7120042BA838622 /* HAEntityNameResolverTests.m in Sources */ = {isa = PBXBuildFile; fileRef = AAB75AB148EE9848395ACB18 /* HAEntityNameResolverTests.m */; };
 		02FB72EBD66048BB97D7F722 /* LOTFillRenderer.h in Sources */ = {isa = PBXBuildFile; fileRef = 6EE9E90383A88AC2C17BD46F /* LOTFillRenderer.h */; };
 		0312B7EB2B8C728201F3262C /* testLightScBasicOn__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 51C1F6A21053DF43A27747B7 /* testLightScBasicOn__dark_gradient@2x.png */; };
 		032C35014A464503F10BE790 /* testValveScClosed__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2AD77E742D7A927E33B079EC /* testValveScClosed__dark_gradient@2x.png */; };
@@ -226,7 +230,6 @@
 		281804327FE0100B6EE118AC /* testClimateScOff__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = E3993F78ABF541CC9A7F18EE /* testClimateScOff__dark_gradient@2x.png */; };
 		28592F6D4228F29D7E15A0DC /* LOTComposition.m in Sources */ = {isa = PBXBuildFile; fileRef = D8856372B928BA92BE39910D /* LOTComposition.m */; };
 		2881B660189B8CE69CB29C2E /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 40B14EFB95D338A8FAABC4B7 /* LaunchScreen.storyboard */; };
-		28CC43F17C652CF0F121968B /* HAScreenshotTriggerTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 5FF8F8BBB33554C15CB8B8E3 /* HAScreenshotTriggerTests.m */; };
 		28DA9B5CA5DCD25AEADF7665 /* testWaterHeaterTile_default__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2FDE89DDCD523B837886FB9E /* testWaterHeaterTile_default__dark_gradient@2x.png */; };
 		28E4640370F79C85871D68CE /* testSensorHumidity__gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 3D7F0AF40C088B8C8FDFDB65 /* testSensorHumidity__gradient@2x.png */; };
 		29428F74808D56C08834DF48 /* testSensorScPressure__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = B3F1658538EE3DF0E37D3860 /* testSensorScPressure__dark_gradient@2x.png */; };
@@ -234,7 +237,6 @@
 		29BDE8D05D11999CB1DD5CC6 /* testHeadingNoIcon__gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 9D10A1A9A3CDCE0F4EB3037F /* testHeadingNoIcon__gradient@2x.png */; };
 		29CB56A8ECF5AEB6890C88A2 /* HAGlanceSnapshotTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B9FE8836A444C5C92953489 /* HAGlanceSnapshotTests.m */; };
 		29EC1DF191114657AC9ADA3D /* testInputNumberTile_showStateFalse__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 590BC4218297A20AC8ED4CE0 /* testInputNumberTile_showStateFalse__dark_gradient@2x.png */; };
-		29F753F3665964A31D51AB78 /* HAEntityNameResolver.m in Sources */ = {isa = PBXBuildFile; fileRef = E616CB17EF191075D616B04E /* HAEntityNameResolver.m */; };
 		2A52AA386663BCE122D13DA7 /* testSensorSectionTemperature_sensorSectionTemp_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = B39C346D6532737B1AA88E6F /* testSensorSectionTemperature_sensorSectionTemp_gradient@2x.png */; };
 		2A5F71C557FCD7F306C597FF /* testClimateHeat__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = E52137CBAFDB0F7573E2091D /* testClimateHeat__dark_gradient@2x.png */; };
 		2A73162DA1087980A8779D54 /* LOTShapePath.h in Sources */ = {isa = PBXBuildFile; fileRef = 552746C79FEF0EC3E6F37564 /* LOTShapePath.h */; };
@@ -300,7 +302,6 @@
 		36C9F610C579152FDF0CDA85 /* LOTShapeTransform.h in Sources */ = {isa = PBXBuildFile; fileRef = 9A5F08E149D4783A5D40B22F /* LOTShapeTransform.h */; };
 		36EE24305AB72AADA394C3CB /* testLightSectionDimmed_lightSectionDimmed_dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 1340B1C23BD38465F197B1D5 /* testLightSectionDimmed_lightSectionDimmed_dark_gradient@2x.png */; };
 		377DA7048B6E5A88A8CE0E2E /* HAFloor.m in Sources */ = {isa = PBXBuildFile; fileRef = 0F02A765542397E99E967718 /* HAFloor.m */; };
-		37911FF9F7120042BA838622 /* HAEntityNameResolverTests.m in Sources */ = {isa = PBXBuildFile; fileRef = AAB75AB148EE9848395ACB18 /* HAEntityNameResolverTests.m */; };
 		37C4890205A139A7A043AB71 /* testSensorIlluminance__gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = C0E1807E65E1185C621F92FF /* testSensorIlluminance__gradient@2x.png */; };
 		380C3484B02CC590EFE79981 /* testLockLocked_lockLocked_dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 44DE93B66A6342399B565456 /* testLockLocked_lockLocked_dark_gradient@2x.png */; };
 		38F8169FFA64FFA9635128A2 /* HAPersonEntityCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 1206B0ACA072C21BA8B563BB /* HAPersonEntityCell.m */; };
@@ -587,6 +588,7 @@
 		6AE4D3B19247347952D24D3B /* testTileWithClimateHvacModes_tileClimateHvacModes_light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 85D33A2ECE259E85B22AE997 /* testTileWithClimateHvacModes_tileClimateHvacModes_light@2x.png */; };
 		6B340BE5788CDF68903E2B2F /* testBinarySensorScBatteryLow__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 9E658AC972165D77CE20FD34 /* testBinarySensorScBatteryLow__light@2x.png */; };
 		6B8AC1573FF113ED885EF362 /* HAEntityDisplayHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = 86C998DEAF38FE7FB6E67926 /* HAEntityDisplayHelper.m */; };
+		29F753F3665964A31D51AB78 /* HAEntityNameResolver.m in Sources */ = {isa = PBXBuildFile; fileRef = E616CB17EF191075D616B04E /* HAEntityNameResolver.m */; };
 		6B94941F9235BA0692FFDB2E /* testUnavailableSensor__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = FFC3F9CEABC0E283885E97C6 /* testUnavailableSensor__dark_gradient@2x.png */; };
 		6B96F455BB4F3F95F71499E9 /* HAAuthManagerTests.m in Sources */ = {isa = PBXBuildFile; fileRef = A32A8C2A29737730F1A99472 /* HAAuthManagerTests.m */; };
 		6BC6300209C05DF9EC75F962 /* LOTAnimationTransitionController.m in Sources */ = {isa = PBXBuildFile; fileRef = CA970B15E1105E953813F71B /* LOTAnimationTransitionController.m */; };
@@ -681,7 +683,6 @@
 		7E21976EF7D24E09B67D0D20 /* testMediaPlayerTile_showNameFalse__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = DBC4B4F1E6C1F66571C1EDC3 /* testMediaPlayerTile_showNameFalse__dark_gradient@2x.png */; };
 		7E37F22D9450E2594791C97B /* testClimateScFan__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = BB496983D6F6F4B593800A5E /* testClimateScFan__light@2x.png */; };
 		7E39225A6EA5075F6A80CAB7 /* testInputNumberBox__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 418DB3ABA073CDC86696FB85 /* testInputNumberBox__dark_gradient@2x.png */; };
-		7E713793F923745BFD9D8C93 /* HACameraHLSTests.m in Sources */ = {isa = PBXBuildFile; fileRef = F30D442A27A89349EF13EF46 /* HACameraHLSTests.m */; };
 		7EA6C01266EC6BC025C9D1E8 /* testInputTextTile_default__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = C931C8BB83DDCDE5CBF8C945 /* testInputTextTile_default__dark_gradient@2x.png */; };
 		7F0DF2D13DD507A65D23BF3E /* testUpdateAvailable__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 14B426609A82F254BF0A072F /* testUpdateAvailable__dark_gradient@2x.png */; };
 		7F2D9275F8BD5D46C1FE6B34 /* testHumidifierScEco__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 9B2C68033D7D845B2C60149C /* testHumidifierScEco__light@2x.png */; };
@@ -1366,7 +1367,6 @@
 		FE6E9BE497B60DED96D6C976 /* testLightOnRGB__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = D3EC39E852BB938D4C1622E4 /* testLightOnRGB__dark_gradient@2x.png */; };
 		FE8D2C850CBA7968A59A7F81 /* testSensorTile_iconOverride__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 96622324BC5C2A1A415A414C /* testSensorTile_iconOverride__dark_gradient@2x.png */; };
 		FED0F9E3721773778B8F965D /* testGaugeSeverity__gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F5C444B9EFA6F40871B4B8B5 /* testGaugeSeverity__gradient@2x.png */; };
-		FED6EBA65BB416FBCEF4F774 /* HARegistryLoadingTests.m in Sources */ = {isa = PBXBuildFile; fileRef = C4F7DC357A2DCB7C72EF35CB /* HARegistryLoadingTests.m */; };
 		FFE638BE994AC20EC8D6EE6A /* HAStatisticCardCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 6B44B655E117D5BE74075F2A /* HAStatisticCardCell.m */; };
 /* End PBXBuildFile section */
 
@@ -1381,6 +1381,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		5FF8F8BBB33554C15CB8B8E3 /* HAScreenshotTriggerTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAScreenshotTriggerTests.m; sourceTree = "<group>"; };
+		C4F7DC357A2DCB7C72EF35CB /* HARegistryLoadingTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HARegistryLoadingTests.m; sourceTree = "<group>"; };
+		F30D442A27A89349EF13EF46 /* HACameraHLSTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HACameraHLSTests.m; sourceTree = "<group>"; };
 		000F4A3D464DFD6E048297AD /* testSwitchTile_nameOverride__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testSwitchTile_nameOverride__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		002D5AB7591D7457BC6A1807 /* testHumidifierTile_modes__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testHumidifierTile_modes__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		003CB58637360AC680F25FFB /* HATopAlignedFlowLayout.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HATopAlignedFlowLayout.m; sourceTree = "<group>"; };
@@ -1939,7 +1942,6 @@
 		5F401C00A70F25A271EE501B /* fog-day.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "fog-day.json"; sourceTree = "<group>"; };
 		5F58EFC4BD4BF1AA17032842 /* testUpdateTile_showNameFalse__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testUpdateTile_showNameFalse__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		5FBDCC6103F2A7B89F467079 /* testInputNumberTile_showStateFalse__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testInputNumberTile_showStateFalse__light@2x.png"; sourceTree = "<group>"; };
-		5FF8F8BBB33554C15CB8B8E3 /* HAScreenshotTriggerTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAScreenshotTriggerTests.m; sourceTree = "<group>"; };
 		60096532829E8887FBBD4146 /* UIColor+Expanded.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "UIColor+Expanded.m"; sourceTree = "<group>"; };
 		60310D5EF22B42C40BD057AA /* testSliderFeatureCoverPosition50_sliderCoverPosition50_dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testSliderFeatureCoverPosition50_sliderCoverPosition50_dark_gradient@2x.png"; sourceTree = "<group>"; };
 		605C63A67B08D0B3D3CBA855 /* LOTBezierData.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = LOTBezierData.m; sourceTree = "<group>"; };
@@ -2184,6 +2186,8 @@
 		86B02E27609090619C6890B6 /* HAEntityDisplayHelper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAEntityDisplayHelper.h; sourceTree = "<group>"; };
 		86B850684166965F87FDF0AE /* LOTShapeTrimPath.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = LOTShapeTrimPath.m; sourceTree = "<group>"; };
 		86C998DEAF38FE7FB6E67926 /* HAEntityDisplayHelper.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAEntityDisplayHelper.m; sourceTree = "<group>"; };
+		90BAE4698E77BEF284DF9773 /* HAEntityNameResolver.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAEntityNameResolver.h; sourceTree = "<group>"; };
+		E616CB17EF191075D616B04E /* HAEntityNameResolver.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAEntityNameResolver.m; sourceTree = "<group>"; };
 		86F02E711D9F3C06A26A52A1 /* HAInputDateTimeEntityCell.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAInputDateTimeEntityCell.m; sourceTree = "<group>"; };
 		86FBE42E1558876346C054CA /* HASettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HASettingsViewController.h; sourceTree = "<group>"; };
 		872054D39B6422C8298962A3 /* HALog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HALog.m; sourceTree = "<group>"; };
@@ -2246,7 +2250,6 @@
 		906A47A955A2CB96C3B6EB94 /* testSensorScBattery__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testSensorScBattery__light@2x.png"; sourceTree = "<group>"; };
 		908D7835DC6BF4E447C9DC3F /* HAGlanceItemView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAGlanceItemView.m; sourceTree = "<group>"; };
 		90B7582D1944D9E44D6ADCBB /* testVacuumDocked_vacuumDocked_dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testVacuumDocked_vacuumDocked_dark_gradient@2x.png"; sourceTree = "<group>"; };
-		90BAE4698E77BEF284DF9773 /* HAEntityNameResolver.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAEntityNameResolver.h; sourceTree = "<group>"; };
 		914FE571164A4E9510E4EC37 /* testSliderFeatureCoverPosition50_sliderCoverPosition50_light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testSliderFeatureCoverPosition50_sliderCoverPosition50_light@2x.png"; sourceTree = "<group>"; };
 		9164344120036AF95656D5D9 /* LOTArrayInterpolator.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = LOTArrayInterpolator.m; sourceTree = "<group>"; };
 		9175DD273974CD67E67CA3DE /* HALogbookCardCell.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HALogbookCardCell.h; sourceTree = "<group>"; };
@@ -2404,7 +2407,6 @@
 		A9C77127CD881DB5BC88006A /* testButtonRowCoverOpenClose_buttonRowCoverOpenClose_dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testButtonRowCoverOpenClose_buttonRowCoverOpenClose_dark_gradient@2x.png"; sourceTree = "<group>"; };
 		A9FDE3C5315118B3D4AC8D1F /* testCoverSectionOpen_coverSectionOpen_dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testCoverSectionOpen_coverSectionOpen_dark_gradient@2x.png"; sourceTree = "<group>"; };
 		AA55425BF2E211955ACE0D0F /* testPersonGlance_default__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testPersonGlance_default__light@2x.png"; sourceTree = "<group>"; };
-		AAB75AB148EE9848395ACB18 /* HAEntityNameResolverTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAEntityNameResolverTests.m; sourceTree = "<group>"; };
 		AB1ACE78809AD0A2A23A4D16 /* LOTModels.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LOTModels.h; sourceTree = "<group>"; };
 		AB77D386D3F718A05EC17198 /* testAlarmArmedAway_alarmArmedAway_dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testAlarmArmedAway_alarmArmedAway_dark_gradient@2x.png"; sourceTree = "<group>"; };
 		ABB84AD60E8E51DB404632AC /* HAGaugeCardCell.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAGaugeCardCell.h; sourceTree = "<group>"; };
@@ -2536,7 +2538,6 @@
 		C498C4E88679FAC5DC6041CF /* testCoverScPosTilt__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testCoverScPosTilt__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		C4B15C0B28A07765843540F3 /* testMediaPlayerTile_iconOverride__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testMediaPlayerTile_iconOverride__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		C4E79F5D64C62B310364F8E0 /* testTimerIdle__gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testTimerIdle__gradient@2x.png"; sourceTree = "<group>"; };
-		C4F7DC357A2DCB7C72EF35CB /* HARegistryLoadingTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HARegistryLoadingTests.m; sourceTree = "<group>"; };
 		C5212B65EC0B01BC90E3423C /* testClimateCool__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testClimateCool__light@2x.png"; sourceTree = "<group>"; };
 		C5790255A52E5AE41134CF1D /* testTileWithLockCommands_tileLockCommands_light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testTileWithLockCommands_tileLockCommands_light@2x.png"; sourceTree = "<group>"; };
 		C58FD6D33F2A0F379CA8AC67 /* testVacuumSectionDocked_vacuumSectionDocked_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testVacuumSectionDocked_vacuumSectionDocked_gradient@2x.png"; sourceTree = "<group>"; };
@@ -2672,6 +2673,7 @@
 		DB0AB0F55FB42F5EF7092C74 /* testMediaPlayerSectionOff_mediaPlayerSectionOff_dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testMediaPlayerSectionOff_mediaPlayerSectionOff_dark_gradient@2x.png"; sourceTree = "<group>"; };
 		DB26150F8EC883BF5F7EAB61 /* testClimateTile_showStateFalse__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testClimateTile_showStateFalse__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		DB27D546C8BC7E6977A74AC2 /* testButtonDefault__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testButtonDefault__light@2x.png"; sourceTree = "<group>"; };
+		AAB75AB148EE9848395ACB18 /* HAEntityNameResolverTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAEntityNameResolverTests.m; sourceTree = "<group>"; };
 		DBBCE5A4068E2E8742CAC87F /* HAEntityShowcaseSnapshotTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAEntityShowcaseSnapshotTests.m; sourceTree = "<group>"; };
 		DBC4B4F1E6C1F66571C1EDC3 /* testMediaPlayerTile_showNameFalse__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testMediaPlayerTile_showNameFalse__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		DBFBAA1E8B2155BC999433C3 /* testCoverTile_nameOverride__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testCoverTile_nameOverride__light@2x.png"; sourceTree = "<group>"; };
@@ -2739,7 +2741,6 @@
 		E552F82D7EDFBEB60C5A0CF7 /* testWaterHeaterTile_default__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testWaterHeaterTile_default__light@2x.png"; sourceTree = "<group>"; };
 		E555C053AA6C9D35A88C1ED9 /* HAAreaCardCell.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAAreaCardCell.h; sourceTree = "<group>"; };
 		E5F046F03F0499ECF27B7313 /* testLightOnRGB__gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testLightOnRGB__gradient@2x.png"; sourceTree = "<group>"; };
-		E616CB17EF191075D616B04E /* HAEntityNameResolver.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAEntityNameResolver.m; sourceTree = "<group>"; };
 		E62363DC6D8F8414640CC381 /* HABottomSheetPresentationController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HABottomSheetPresentationController.m; sourceTree = "<group>"; };
 		E63AA781416458D2C5FE5A22 /* testTileWithClimateHvacModes_tileClimateHvacModes_dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testTileWithClimateHvacModes_tileClimateHvacModes_dark_gradient@2x.png"; sourceTree = "<group>"; };
 		E63D0A5ABE917517CE66944F /* testButtonRowLockLocked_buttonRowLockLocked_dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testButtonRowLockLocked_buttonRowLockLocked_dark_gradient@2x.png"; sourceTree = "<group>"; };
@@ -2819,7 +2820,6 @@
 		F2CC37281454F9612529EA52 /* testHeadingNoIcon__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testHeadingNoIcon__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		F2E6F9EAED2578A501B5DEA6 /* testLockLocked_lockLocked_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testLockLocked_lockLocked_gradient@2x.png"; sourceTree = "<group>"; };
 		F2EDCCF60C1805CDCC5285A4 /* testDetailViewLock_detailViewLock_dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testDetailViewLock_detailViewLock_dark_gradient@2x.png"; sourceTree = "<group>"; };
-		F30D442A27A89349EF13EF46 /* HACameraHLSTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HACameraHLSTests.m; sourceTree = "<group>"; };
 		F32776B7831BD54574FE4CC2 /* SRWebSocket.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SRWebSocket.h; sourceTree = "<group>"; };
 		F33262B35A9DC55AB46504C9 /* testLightScAllModes__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testLightScAllModes__light@2x.png"; sourceTree = "<group>"; };
 		F337E887A9B1A51358369ED6 /* testBadgeRow4Items__gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testBadgeRow4Items__gradient@2x.png"; sourceTree = "<group>"; };
@@ -4541,7 +4541,6 @@
 				328789DB337D0797BCDCDD9D /* HABaseSnapshotTestCase.h */,
 				CB202B450A9EBD9E273426E3 /* HABaseSnapshotTestCase.m */,
 				6A4ADBBFFA9D4D28AD62F59F /* HACacheTests.m */,
-				F30D442A27A89349EF13EF46 /* HACameraHLSTests.m */,
 				2943BB830FEC55FCCEDF66F3 /* HAClassicLayoutTests.m */,
 				A8072BB3C22561E6A2C4170E /* HAClimateSnapshotTests.m */,
 				6F1BA5152B815D413B721C0B /* HACompositeSnapshotTests.m */,
@@ -4563,12 +4562,13 @@
 				A1B49BC6C1B9796F6A51D137 /* HAInputSnapshotTests.m */,
 				0A496416F16A6F8B4787A3C2 /* HALayoutSnapshotTests.m */,
 				B515DAD59397BD82D51BE42F /* HALightingSnapshotTests.m */,
+				F30D442A27A89349EF13EF46 /* HACameraHLSTests.m */,
+				C4F7DC357A2DCB7C72EF35CB /* HARegistryLoadingTests.m */,
+				5FF8F8BBB33554C15CB8B8E3 /* HAScreenshotTriggerTests.m */,
 				72FFAE7B08DD2FF900440D81 /* HAMJPEGStreamTests.m */,
 				BF3BB81D6358A1EFC0A7F6C4 /* HAOAuthClientTests.m */,
-				C4F7DC357A2DCB7C72EF35CB /* HARegistryLoadingTests.m */,
 				A6391A33D6AC3257EF4FEAD7 /* HARTSPCredentialManagerTests.m */,
 				5EC033606331DA18E5D52CE4 /* HASafeDictTests.m */,
-				5FF8F8BBB33554C15CB8B8E3 /* HAScreenshotTriggerTests.m */,
 				C432ACD4D867243A79F62F3D /* HASensorSnapshotTests.m */,
 				96430275DA9C1A3D906305F4 /* HASnapshotTestHelpers.h */,
 				EE9C4C72189AA85B5EC9ED55 /* HASnapshotTestHelpers.m */,
@@ -4924,12 +4924,13 @@
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					0B2DB332E2D264881C0F8202 = {
-						DevelopmentTeam = 3N7576PTNR;
+						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
 			};
 			buildConfigurationList = 01BD8002697F7900340B3450 /* Build configuration list for PBXProject "HADashboard" */;
+			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -4939,7 +4940,6 @@
 			mainGroup = 77CF34BDA4294E11B29D6909;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
-			productRefGroup = EB1E6FFC9E4AD1CBD44AC043 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -6023,7 +6023,6 @@
 				6B96F455BB4F3F95F71499E9 /* HAAuthManagerTests.m in Sources */,
 				DA435C75D5CFF7853B085407 /* HABaseSnapshotTestCase.m in Sources */,
 				0ABD799AC8AFA8C64D8F29E4 /* HACacheTests.m in Sources */,
-				7E713793F923745BFD9D8C93 /* HACameraHLSTests.m in Sources */,
 				D1159FB81724A845F116D1BE /* HAClassicLayoutTests.m in Sources */,
 				A324B257636E2DBD3E48BBCA /* HAClimateSnapshotTests.m in Sources */,
 				10EF3E7F400D8073D7E48296 /* HACompositeSnapshotTests.m in Sources */,
@@ -6045,12 +6044,13 @@
 				AEC9B5BD1030B53269824A28 /* HAInputSnapshotTests.m in Sources */,
 				AE4C3C8556722A3FA9BF0621 /* HALayoutSnapshotTests.m in Sources */,
 				EFF2D03A1A5B6318EECB0750 /* HALightingSnapshotTests.m in Sources */,
+				7E713793F923745BFD9D8C93 /* HACameraHLSTests.m in Sources */,
+				FED6EBA65BB416FBCEF4F774 /* HARegistryLoadingTests.m in Sources */,
+				28CC43F17C652CF0F121968B /* HAScreenshotTriggerTests.m in Sources */,
 				48421F38085456F0C84F5DC3 /* HAMJPEGStreamTests.m in Sources */,
 				F022C139DA5CD97CAD9B39FF /* HAOAuthClientTests.m in Sources */,
 				C092F7F18948B1D893F54D1B /* HARTSPCredentialManagerTests.m in Sources */,
-				FED6EBA65BB416FBCEF4F774 /* HARegistryLoadingTests.m in Sources */,
 				2C4275DCD5D60B53C580C634 /* HASafeDictTests.m in Sources */,
-				28CC43F17C652CF0F121968B /* HAScreenshotTriggerTests.m in Sources */,
 				978DD2C57D1B0B5ACDCD1FB5 /* HASensorSnapshotTests.m in Sources */,
 				8001FCCF9601F206DFB000EC /* HASnapshotTestHelpers.m in Sources */,
 				0A03A4280BF4E3CB85A7B808 /* HAStreamingTests.m in Sources */,
