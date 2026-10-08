@@ -296,19 +296,26 @@ reports a pass/fail summary with a non-zero exit code on failure. Override the s
 
 - `HADashboardTests/HABaseSnapshotTestCase` — shared base with `verifyView:identifier:` (dual-theme) and cell helpers
 - `HADashboardTests/HASnapshotTestHelpers` — factory methods for all entity domains
-- `HADashboardTests/ReferenceImages_64/` — reference images (committed, source of truth), recorded
-  on iOS 17.4. The `_64` suffix is `iOSSnapshotTestCase`'s architecture-word-size suffix, appended
+- `HADashboardTests/ReferenceImages_ios18_64/` — **current** reference images (committed, source
+  of truth), recorded on the pinned simulator (iPad (10th generation), iOS 18.0). This is the
+  default `scripts/test-snapshots.sh` compares and records against.
+- `HADashboardTests/ReferenceImages_64/` — **legacy** reference images recorded on iOS 17.4. Kept
+  for history/rollback, not maintained — don't add to or re-record into this directory.
+- The `_64` suffix on both is `iOSSnapshotTestCase`'s architecture-word-size suffix, appended
   automatically after whatever directory name `getReferenceImageDirectoryWithDefault:` returns —
   it is not something to rename by hand.
 - **Pinned runtime for deterministic re-recording:** rendering (font metrics, hinting) differs
   across simulator OS versions, so references must be recorded and compared on the same runtime.
-  `HABaseSnapshotTestCase.m` and `HAHeadingSnapshotTests.m` read `HA_SNAPSHOT_RUNTIME_SUFFIX` from
-  the environment and append it to the reference directory name (e.g. `_ios18` →
-  `ReferenceImages_ios18_64`), leaving the existing `ReferenceImages_64` set untouched when unset.
-  To record a full OS-tagged set on the current pinned simulator (iPad (10th generation), iOS 18.0):
-  `HA_SNAPSHOT_RUNTIME_SUFFIX=_ios18 scripts/test-snapshots.sh record`, then compare with the same
-  variable exported. This is a maintainer decision — see the re-record plan in the
-  `fix/snapshot-test-runner` PR description before running it against the full suite.
+  `HABaseSnapshotTestCase.m` and `HAHeadingSnapshotTests.m` read a compile-time
+  `HA_SNAPSHOT_RUNTIME_SUFFIX` define (set via `GCC_PREPROCESSOR_DEFINITIONS` — a runtime
+  environment variable wouldn't reach the simulator-hosted test process) and append it to the
+  reference directory name (e.g. `_ios18` → `ReferenceImages_ios18_64`).
+  `scripts/test-snapshots.sh` defaults `HA_SNAPSHOT_RUNTIME_SUFFIX` to `_ios18`; pass
+  `HA_SNAPSHOT_RUNTIME_SUFFIX=""` to target the legacy iOS 17.4 set instead, or any other suffix
+  to record/compare a different pinned runtime's set without touching either existing one.
+  To record a fresh OS-tagged set on the pinned simulator:
+  `HA_SNAPSHOT_RUNTIME_SUFFIX=_ios18 scripts/test-snapshots.sh record` (or just
+  `scripts/test-snapshots.sh record`, since that's now the default).
 
 ### Visual Parity Screenshots
 

@@ -19,6 +19,11 @@ set -uo pipefail
 #   otherwise: falls back to a booted/available "iPad (10th generation)"
 #   simulator, preferring the iOS 18.0 runtime that reference images are
 #   pinned to (see CLAUDE.md Testing section), then any available iPad.
+#
+# Reference images default to the iOS 18.0-pinned set (ReferenceImages_ios18_64).
+#   HA_SNAPSHOT_RUNTIME_SUFFIX=_ios18   (default) - pinned iOS 18.0 set
+#   HA_SNAPSHOT_RUNTIME_SUFFIX=""       - legacy iOS 17.4 set (ReferenceImages_64)
+#   HA_SNAPSHOT_RUNTIME_SUFFIX=_foo     - any other OS-tagged set
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -108,12 +113,16 @@ fi
 # pin are passed as compile-time GCC_PREPROCESSOR_DEFINITIONS (one build
 # setting — specifying it twice would make the second occurrence win
 # instead of merging) rather than runtime environment variables.
+# Default to the pinned iOS 18.0 reference set. Set HA_SNAPSHOT_RUNTIME_SUFFIX=""
+# (empty, explicitly) to fall back to the legacy iOS 17.4 "ReferenceImages_64" set.
+RUNTIME_SUFFIX="${HA_SNAPSHOT_RUNTIME_SUFFIX-_ios18}"
+
 PREPROCESSOR_DEFS='$(inherited)'
 if [[ "$RECORD_MODE" == "YES" ]]; then
     PREPROCESSOR_DEFS="$PREPROCESSOR_DEFS RECORD_SNAPSHOTS=1"
 fi
-if [[ -n "${HA_SNAPSHOT_RUNTIME_SUFFIX:-}" ]]; then
-    PREPROCESSOR_DEFS="$PREPROCESSOR_DEFS HA_SNAPSHOT_RUNTIME_SUFFIX='\"${HA_SNAPSHOT_RUNTIME_SUFFIX}\"'"
+if [[ -n "$RUNTIME_SUFFIX" ]]; then
+    PREPROCESSOR_DEFS="$PREPROCESSOR_DEFS HA_SNAPSHOT_RUNTIME_SUFFIX='\"${RUNTIME_SUFFIX}\"'"
 fi
 RECORD_DEFINE=()
 if [[ "$PREPROCESSOR_DEFS" != '$(inherited)' ]]; then
