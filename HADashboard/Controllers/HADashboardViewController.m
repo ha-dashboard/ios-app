@@ -804,6 +804,14 @@ static const CGFloat kRowUnitHeight = 56.0;
     BOOL hasHeading = (item.customProperties[@"headingIcon"] != nil && item.displayName.length > 0);
     CGFloat headingExtra = hasHeading ? [HABaseEntityCell headingHeight] : 0;
 
+    // Extra height for the fallback-card-type badge (HABaseEntityCell, shown
+    // on every generic/domain cell that calls [super configureWithEntity:
+    // configItem:]) — give it breathing room instead of crowding the content
+    // above it. Never applies to "heading"/"markdown"/"badges"/compact items
+    // below: the parser only ever sets fallbackCardType on a generic
+    // single/multi-entity item, never on those dedicated composite types.
+    CGFloat fallbackBadgeExtra = (item.fallbackCardType.length > 0) ? [HABaseEntityCell fallbackBadgeExtraHeight] : 0;
+
     // Compact button/tile cards (inside horizontal-stack) use a fixed small height
     BOOL isCompact = [item.customProperties[@"compact"] boolValue];
     if (isCompact) {
@@ -884,7 +892,7 @@ static const CGFloat kRowUnitHeight = 56.0;
         CGFloat rowSpanHeight = (item.rowSpan * kRowUnitHeight) + ((item.rowSpan - 1) * interItemSpacing) + headingExtra;
         height = MAX(height, rowSpanHeight);
     }
-    return height;
+    return height + fallbackBadgeExtra;
 }
 
 #pragma mark - Data

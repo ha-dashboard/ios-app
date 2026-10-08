@@ -285,4 +285,109 @@
     XCTAssertNoThrow([self configForCards:@[card]]);
 }
 
+#pragma mark - isNativelySupportedCustomCardType: table (GitHub #19)
+//
+// A custom:* card the parser maps natively or partially on purpose must
+// never be flagged as a fallback — only a truly unmapped custom:* type gets
+// the fallback-card-type badge.
+
+- (void)testIsNativelySupportedCustomCardType_table {
+    NSDictionary<NSString *, NSNumber *> *table = @{
+        // Natively/partially mapped -> YES
+        @"custom:advanced-camera-card": @YES,
+        @"custom:frigate-camera-card": @YES,
+        @"custom:mini-graph-card": @YES,
+        @"custom:badge-card": @YES,
+        @"custom:mushroom-chips-card": @YES,
+        @"custom:clock-weather-card": @YES,
+        // Unmapped -> NO
+        @"custom:bubble-card": @NO,
+        @"custom:mushroom-entity-card": @NO,
+        @"custom:mushroom-light-card": @NO,
+        @"custom:mushroom-template-card": @NO,
+        @"custom:button-card": @NO,
+        // Not a custom:* type at all -> NO (built-in cards are never "unsupported")
+        @"entities": @NO,
+        @"tile": @NO,
+        @"mini-graph-card": @NO, // missing "custom:" prefix
+    };
+    for (NSString *type in table) {
+        BOOL expected = table[type].boolValue;
+        XCTAssertEqual([HALovelaceParser isNativelySupportedCustomCardType:type], expected,
+            @"%@ should be %@", type, expected ? @"natively supported" : @"a fallback type");
+    }
+}
+
+#pragma mark - fallbackCardType badge (GitHub #19)
+//
+// An unmapped custom:* card with an "entity"/"entities" key produced zero
+// placeholders before this feature (it extracts entities, so it never hit
+// _handleUnsupportedCard) and rendered generically with no visible marker.
+// It should still render generically (never a placeholder), but the
+// generated item(s) must carry fallbackCardType so the cell can badge it.
+
+- (void)testUnmappedCustomCardWithEntity_setsFallbackCardTypeOnGenericItem {
+    HADashboardConfig *config = [self configForCards:@[@{
+        @"type": @"custom:mushroom-entity-card",
+        @"entity": @"sensor.downstairs_temperature"
+    }]];
+
+    HADashboardConfigItem *item = [self itemWithEntityId:@"sensor.downstairs_temperature" in:config];
+    XCTAssertNotNil(item, @"An unmapped custom card with an entity key must still render generically, not vanish");
+    XCTAssertEqualObjects(item.fallbackCardType, @"custom:mushroom-entity-card");
+    XCTAssertNil([self firstUnsupportedItemIn:config], @"Must never ALSO produce an unsupported-card placeholder");
+}
+
+- (void)testUnmappedCustomCardWithEntities_setsFallbackCardTypeOnEveryGenericItem {
+    HADashboardConfig *config = [self configForCards:@[@{
+        @"type": @"custom:bubble-card",
+        @"card_type": @"climate-buttons",
+        @"entities": @[@"climate.living_room", @"climate.bedroom"]
+    }]];
+
+    for (NSString *entityId in @[@"climate.living_room", @"climate.bedroom"]) {
+        HADashboardConfigItem *item = [self itemWithEntityId:entityId in:config];
+        XCTAssertNotNil(item, @"%@ should be present", entityId);
+        XCTAssertEqualObjects(item.fallbackCardType, @"custom:bubble-card");
+    }
+}
+
+- (void)testNativelySupportedCustomCard_doesNotSetFallbackCardType {
+    HADashboardConfig *config = [self configForCards:@[@{
+        @"type": @"custom:mini-graph-card",
+        @"entities": @[@"sensor.downstairs_temperature"]
+    }]];
+
+    HADashboardConfigItem *item = config.items.firstObject;
+    XCTAssertNotNil(item);
+    XCTAssertNil(item.fallbackCardType, @"A natively-mapped custom card must never be badged as a fallback");
+}
+
+- (void)testBuiltInCard_neverSetsFallbackCardType {
+    HADashboardConfig *config = [self configForCards:@[@{
+        @"type": @"entity",
+        @"entity": @"sensor.downstairs_temperature"
+    }]];
+
+    HADashboardConfigItem *item = [self itemWithEntityId:@"sensor.downstairs_temperature" in:config];
+    XCTAssertNotNil(item);
+    XCTAssertNil(item.fallbackCardType, @"A built-in (non custom:*) card is never a fallback");
+}
+
+- (void)testUnmappedCustomCardWithEntity_toggleOff_doesNotSetFallbackCardType {
+    // Mirrors the placeholder toggle: OFF restores pre-feature behaviour —
+    // generic rendering stays, but with no visible marker at all.
+    [[NSUserDefaults standardUserDefaults] setBool:NO forKey:HAShowUnsupportedCardsDefaultsKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+
+    HADashboardConfig *config = [self configForCards:@[@{
+        @"type": @"custom:mushroom-entity-card",
+        @"entity": @"sensor.downstairs_temperature"
+    }]];
+
+    HADashboardConfigItem *item = [self itemWithEntityId:@"sensor.downstairs_temperature" in:config];
+    XCTAssertNotNil(item, @"Generic rendering must stay even with the toggle off");
+    XCTAssertNil(item.fallbackCardType, @"Toggle OFF must hide the badge too (fallbackCardType unset)");
+}
+
 @end
