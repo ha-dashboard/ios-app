@@ -513,3 +513,25 @@
 
 /* Action sheet title for picking a media source in the media player cell. */
 "cell.media_player.source" = "Source";
+
+
+/* Button in the calendar card header, jumps to today. Also used as a day-header label. Max ~8 chars. */
+"cell.calendar.today" = "Today";
+
+/* Day-header label in the calendar card's list view, for the day after today. Max ~10 chars. */
+"cell.calendar.tomorrow" = "Tomorrow";
+
+/* Date range label in the calendar card header, week view, same month. %1$ld is the start day, %2$ld is the end day, %3$@ is the month abbreviation, %4$@ is the year. Produces e.g. "16 – 22 Feb 2026". */
+"format.calendar.date_range_same_month" = "%1$ld – %2$ld %3$@ %4$@";
+
+/* Date range label in the calendar card header, week view, spanning two months. %1$ld is the start day, %2$@ is the start month abbreviation, %3$ld is the end day, %4$@ is the end month abbreviation, %5$@ is the year. */
+"format.calendar.date_range_cross_month" = "%1$ld %2$@ – %3$ld %4$@ %5$@";
+
+/* Time label in a calendar event row, shown for all-day events. */
+"card.calendar.all_day" = "All day";
+
+/* Time range label in a calendar event row. %1$@ is the start time, %2$@ is the end time. */
+"format.calendar.time_range" = "%1$@ - %2$@";
+
+/* Placeholder text in the calendar card's list view when there are no upcoming events. */
+"card.calendar.no_upcoming_events" = "No upcoming events";

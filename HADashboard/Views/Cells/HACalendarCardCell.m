@@ -1,4 +1,5 @@
 #import "HACalendarCardCell.h"
+#import "HAStrings.h"
 #import "HADashboardConfig.h"
 #import "HAAuthManager.h"
 #import "HADateUtils.h"
@@ -99,7 +100,7 @@ static UIColor *sDefaultEventColor;
 
     // Today button
     self.todayButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.todayButton setTitle:@"Today" forState:UIControlStateNormal];
+    [self.todayButton setTitle:HALocalizedString(@"cell.calendar.today", @"Button in the calendar card header, jumps to today. Also used as a day-header label. Max ~8 chars.") forState:UIControlStateNormal];
     self.todayButton.titleLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightMedium];
     self.todayButton.layer.cornerRadius = 4;
     self.todayButton.layer.borderWidth = 0.5;
@@ -324,12 +325,12 @@ static UIColor *sDefaultEventColor;
         NSString *year = [fmt stringFromDate:end];
 
         if (startMonth == endMonth) {
-            self.dateRangeLabel.text = [NSString stringWithFormat:@"%ld – %ld %@ %@",
+            self.dateRangeLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.calendar.date_range_same_month", @"Date range label in the calendar card header, week view, same month. %1$ld is the start day, %2$ld is the end day, %3$@ is the month abbreviation, %4$@ is the year. Produces e.g. "16 – 22 Feb 2026"."),
                                         (long)startDay, (long)endDay, endMonthStr, year];
         } else {
             fmt.dateFormat = @"MMM";
             NSString *startMonthStr = [fmt stringFromDate:start];
-            self.dateRangeLabel.text = [NSString stringWithFormat:@"%ld %@ – %ld %@ %@",
+            self.dateRangeLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.calendar.date_range_cross_month", @"Date range label in the calendar card header, week view, spanning two months. %1$ld is the start day, %2$@ is the start month abbreviation, %3$ld is the end day, %4$@ is the end month abbreviation, %5$@ is the year."),
                                         (long)startDay, startMonthStr, (long)endDay, endMonthStr, year];
         }
     }
@@ -601,8 +602,8 @@ static UIColor *sDefaultEventColor;
 - (NSString *)dayNameForDate:(NSDate *)date {
     NSDate *today = [self.calendar startOfDayForDate:[NSDate date]];
     NSDate *tomorrow = [self.calendar dateByAddingUnit:NSCalendarUnitDay value:1 toDate:today options:0];
-    if ([self.calendar isDate:date inSameDayAsDate:today]) return @"Today";
-    if ([self.calendar isDate:date inSameDayAsDate:tomorrow]) return @"Tomorrow";
+    if ([self.calendar isDate:date inSameDayAsDate:today]) return HALocalizedString(@"cell.calendar.today", @"Button in the calendar card header, jumps to today. Also used as a day-header label. Max ~8 chars.");
+    if ([self.calendar isDate:date inSameDayAsDate:tomorrow]) return HALocalizedString(@"cell.calendar.tomorrow", @"Day-header label in the calendar card's list view, for the day after today. Max ~10 chars.");
 
     NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
     fmt.dateFormat = @"EEEE";
@@ -649,12 +650,12 @@ static UIColor *sDefaultEventColor;
     timeLabel.textColor = [HATheme secondaryTextColor];
 
     if (event.allDay) {
-        timeLabel.text = @"All day";
+        timeLabel.text = HALocalizedString(@"card.calendar.all_day", @"Time label in a calendar event row, shown for all-day events.");
     } else {
         NSString *start = [self.timeFormatter stringFromDate:event.startDate];
         if (event.endDate) {
             NSString *end = [self.timeFormatter stringFromDate:event.endDate];
-            timeLabel.text = [NSString stringWithFormat:@"%@ - %@", start, end];
+            timeLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.calendar.time_range", @"Time range label in a calendar event row. %1$@ is the start time, %2$@ is the end time."), start, end];
         } else {
             timeLabel.text = start;
         }
@@ -792,7 +793,7 @@ static UIColor *sDefaultEventColor;
         UILabel *noEvents = [[UILabel alloc] initWithFrame:CGRectMake(kPadding, listTop, width - kPadding * 2, 24)];
         noEvents.font = [UIFont systemFontOfSize:12];
         noEvents.textColor = [HATheme secondaryTextColor];
-        noEvents.text = @"No upcoming events";
+        noEvents.text = HALocalizedString(@"card.calendar.no_upcoming_events", @"Placeholder text in the calendar card's list view when there are no upcoming events.");
         [self.contentContainer addSubview:noEvents];
     } else {
         for (NSUInteger i = 0; i < upcoming.count; i++) {
