@@ -1063,6 +1063,7 @@
 		C4F70D23DA478D3C12A0A8D8 /* testHumidifierTile_showStateFalse__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = B949CA64B6918C8B90225BB8 /* testHumidifierTile_showStateFalse__light@2x.png */; };
 		C522F1A6098254A5CDE86BEE /* testCoverOpenShutter_coverOpenShutter_light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 61C75F3F5218A92A67A6D0A8 /* testCoverOpenShutter_coverOpenShutter_light@2x.png */; };
 		C553253145BA64C76882AF36 /* testCoverScGarage__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 67C8CE315DE2067322DA324B /* testCoverScGarage__dark_gradient@2x.png */; };
+		C556F384972D234D1D721AAE /* HAEntityStateRenderingTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 65D6EF8BC21A1B080955D121 /* HAEntityStateRenderingTests.m */; };
 		C56B72669BF55681D8067455 /* testPersonGlance_default__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = AA55425BF2E211955ACE0D0F /* testPersonGlance_default__light@2x.png */; };
 		C58DC4BC13A2FD39457C1354 /* LOTMaskContainer.m in Sources */ = {isa = PBXBuildFile; fileRef = 1912900C0FEAEC9AD8ABC2B5 /* LOTMaskContainer.m */; };
 		C5BE5A4A59FE099570776D4E /* testClimateTile_fanModes__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 8B7881CFB0E0CD20F1744784 /* testClimateTile_fanModes__light@2x.png */; };
@@ -1985,6 +1986,7 @@
 		656042DA189197AF0641E164 /* testGlanceStateColor_glanceStateColor_dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testGlanceStateColor_glanceStateColor_dark_gradient@2x.png"; sourceTree = "<group>"; };
 		6564CB1D67C4F31CF98EE426 /* testAlarmTriggered_alarmTriggered_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testAlarmTriggered_alarmTriggered_gradient@2x.png"; sourceTree = "<group>"; };
 		6580FE39A826CE0764F1BC23 /* HALoginViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HALoginViewController.m; sourceTree = "<group>"; };
+		65D6EF8BC21A1B080955D121 /* HAEntityStateRenderingTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAEntityStateRenderingTests.m; sourceTree = "<group>"; };
 		65F0B8B193E1B0BA9FA7AEBA /* testPersonHome_personHome_dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testPersonHome_personHome_dark_gradient@2x.png"; sourceTree = "<group>"; };
 		6646E71D598B487F2B035817 /* testTileWithLockCommands_tileLockCommands_dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testTileWithLockCommands_tileLockCommands_dark_gradient@2x.png"; sourceTree = "<group>"; };
 		6689D57ACFCBD98F2C5EF4B7 /* LOTGradientFillRender.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LOTGradientFillRender.h; sourceTree = "<group>"; };
@@ -4599,6 +4601,7 @@
 				B0FC52DBF38D5F096335F32C /* HAEntityDetailSnapshotTests.m */,
 				AAB75AB148EE9848395ACB18 /* HAEntityNameResolverTests.m */,
 				DBBCE5A4068E2E8742CAC87F /* HAEntityShowcaseSnapshotTests.m */,
+				65D6EF8BC21A1B080955D121 /* HAEntityStateRenderingTests.m */,
 				B10613BD6A68BD6B118F6CEE /* HAGlanceCardTests.m */,
 				8B9FE8836A444C5C92953489 /* HAGlanceSnapshotTests.m */,
 				B5324DD36622E0F22E421202 /* HAHeadingSnapshotTests.m */,
@@ -6087,6 +6090,7 @@
 				EE55F94A9796036388368AE8 /* HAEntityDetailSnapshotTests.m in Sources */,
 				37911FF9F7120042BA838622 /* HAEntityNameResolverTests.m in Sources */,
 				02F82D519B17F3533F06604F /* HAEntityShowcaseSnapshotTests.m in Sources */,
+				C556F384972D234D1D721AAE /* HAEntityStateRenderingTests.m in Sources */,
 				A1B599F6956510965DBCD7FD /* HAGlanceCardTests.m in Sources */,
 				29CB56A8ECF5AEB6890C88A2 /* HAGlanceSnapshotTests.m in Sources */,
 				42FA5D8E38B7EA1E8827A1C7 /* HAHeadingSnapshotTests.m in Sources */,
