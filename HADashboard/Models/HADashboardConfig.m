@@ -1,4 +1,5 @@
 #import "HADashboardConfig.h"
+#import "HAStrings.h"
 #import "HASafeDict.h"
 
 #pragma mark - HADashboardConfigItem
@@ -47,7 +48,7 @@
     }
 
     HADashboardConfig *config = [[HADashboardConfig alloc] init];
-    config.title   = HASafeDictString(dict, @"title", @"Dashboard");
+    config.title   = HASafeDictString(dict, @"title", HALocalizedString(@"dashboard.default_title", @"Fallback dashboard title/name used throughout the title button and dashboard switcher when none is set."));
     config.columns = HASafeDictInteger(dict, @"columns", 3);
 
     NSArray *itemDicts = dict[@"items"];
@@ -80,7 +81,7 @@
 
 + (instancetype)defaultConfigWithEntityIds:(NSArray<NSString *> *)entityIds columns:(NSInteger)columns {
     HADashboardConfig *config = [[HADashboardConfig alloc] init];
-    config.title = @"Dashboard";
+    config.title = HALocalizedString(@"dashboard.default_title", @"Fallback dashboard title/name used throughout the title button and dashboard switcher when none is set.");
     config.columns = columns > 0 ? columns : 3;
 
     NSMutableArray *items = [NSMutableArray arrayWithCapacity:entityIds.count];

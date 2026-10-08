@@ -1,4 +1,5 @@
 #import "HAConnectionSettingsViewController.h"
+#import "HAStrings.h"
 #import "HAAuthManager.h"
 #import "HAConnectionFormView.h"
 #import "HAConnectionManager.h"
@@ -13,7 +14,7 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"Connection";
+    self.title = HALocalizedString(@"settings.connection_nav_title", @"Navigation bar title for the connection settings screen.");
     self.view.backgroundColor = [HATheme backgroundColor];
 
     [self setupUI];

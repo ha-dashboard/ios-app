@@ -1,0 +1,22 @@
+{
+  "component.person.entity_component._.state.not_home": "Absent",
+  "component.person.entity_component._.state.home": "Maison",
+  "component.binary_sensor.entity_component.door.state.on": "Ouvert",
+  "component.binary_sensor.entity_component.door.state.off": "Fermé",
+  "component.binary_sensor.entity_component.motion.state.on": "Détecté",
+  "component.binary_sensor.entity_component.motion.state.off": "Aucun",
+  "component.binary_sensor.entity_component._.state.on": "Activé",
+  "component.binary_sensor.entity_component._.state.off": "Désactivé",
+  "component.cover.entity_component._.state.open": "Ouvert",
+  "component.cover.entity_component._.state.closed": "Fermé",
+  "component.lock.entity_component._.state.locked": "Verrouillé",
+  "component.lock.entity_component._.state.unlocked": "Déverrouillé",
+  "component.climate.entity_component._.state.heat": "Chauffage",
+  "component.climate.entity_component._.state.off": "Arrêt",
+  "component.media_player.entity_component._.state.playing": "Lecture en cours",
+  "component.media_player.entity_component._.state.paused": "En pause",
+  "component.sensor.entity_component._.state_attributes.battery.name": "Batterie",
+  "component.light.entity_component._.state_attributes.color_temp_kelvin.name": "Température de couleur (Kelvin)",
+  "component.climate.entity_component._.state_attributes.fan_mode.name": "Mode de ventilation",
+  "component.cover.entity_component._.state_attributes.current_tilt_position.name": "Inclinaison"
+}

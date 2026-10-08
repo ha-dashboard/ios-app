@@ -11,6 +11,8 @@
 #import "HAEntityStateCache.h"
 #import "HADashboardConfigCache.h"
 #import "HALog.h"
+#import "HAStateLocalizer.h"
+#import "HAStrings.h"
 
 NSString *const HAConnectionManagerDidConnectNotification           = @"HAConnectionManagerDidConnect";
 NSString *const HAConnectionManagerDidDisconnectNotification        = @"HAConnectionManagerDidDisconnect";
@@ -140,6 +142,20 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     BOOL loaded = NO;
 
     // Load cached entity states
+    // Load any cached HA state translations synchronously, before the first
+    // render (docs/plans/i18n-plan.md §2.7). The real HA profile language
+    // isn't known until after connect (that needs a round trip), but we
+    // persist the server's last-resolved language on every prior connect
+    // (+[HAStateLocalizer lastResolvedLanguageCode]) and prefer that over
+    // the device/app chrome language — a French HA on an English iPad
+    // should show French states immediately offline, not just after the
+    // first post-connect refresh. -refreshStateLocalizerLanguage corrects
+    // this (and updates the persisted value) once connected.
+    NSString *bestGuessLanguage = [HAStateLocalizer coldStartLanguageWithOverride:[HAStrings overrideLanguageCode]
+                                                                  persistedLanguage:[HAStateLocalizer lastResolvedLanguageCode]
+                                                                  appChromeLanguage:[HAStrings activeLanguageCode]];
+    [[HAStateLocalizer sharedLocalizer] loadCachedStateForLanguage:bestGuessLanguage];
+
     NSDictionary<NSString *, NSDictionary *> *cachedStates = [[HAEntityStateCache sharedCache] loadCachedStates];
     if (cachedStates.count > 0) {
         @synchronized(self.entityStore) {
@@ -1015,6 +1031,95 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     self.reconnectTimer = nil;
 }
 
+#pragma mark - State Localizer (Phase 2 i18n — docs/plans/i18n-plan.md §2)
+
+/// Resolves the HA-content language (§2.6: in-app override ->
+/// frontend/get_user_data -> get_config -> app chrome language -> "en")
+/// and kicks off HAStateLocalizer's fetch for it. Also (re)subscribes to
+/// live language-preference pushes so a profile language change in the HA
+/// UI is picked up without a reconnect.
+- (void)refreshStateLocalizerLanguage {
+    NSString *override = [HAStrings overrideLanguageCode];
+    if (override.length > 0) {
+        [[HAStateLocalizer sharedLocalizer] refreshForLanguage:override connectionManager:self];
+        [self subscribeToHAContentLanguageChanges];
+        return;
+    }
+
+    __weak typeof(self) weakSelf = self;
+    [self sendCommand:@{@"type": @"frontend/get_user_data", @"key": @"language"}
+           completion:^(id result, NSError *error) {
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) return;
+
+        NSString *userDataLanguage = nil;
+        if ([result isKindOfClass:[NSDictionary class]]) {
+            id value = result[@"value"];
+            if ([value isKindOfClass:[NSDictionary class]]) {
+                id lang = value[@"language"];
+                if ([lang isKindOfClass:[NSString class]]) userDataLanguage = lang;
+            }
+        }
+
+        if (userDataLanguage.length > 0) {
+            NSString *resolved = [HAStateLocalizer resolveLanguageWithOverride:nil
+                                                                userDataLanguage:userDataLanguage
+                                                                  configLanguage:nil
+                                                               appChromeLanguage:[HAStrings activeLanguageCode]];
+            [[HAStateLocalizer sharedLocalizer] refreshForLanguage:resolved connectionManager:strongSelf];
+            [strongSelf subscribeToHAContentLanguageChanges];
+            return;
+        }
+
+        // No per-user preference set — fall back to the server default.
+        [strongSelf sendCommand:@{@"type": @"get_config"}
+                      completion:^(id configResult, NSError *configError) {
+            typeof(self) strongSelf2 = weakSelf;
+            if (!strongSelf2) return;
+
+            NSString *configLanguage = nil;
+            if ([configResult isKindOfClass:[NSDictionary class]]) {
+                id lang = configResult[@"language"];
+                if ([lang isKindOfClass:[NSString class]]) configLanguage = lang;
+            }
+
+            NSString *resolved = [HAStateLocalizer resolveLanguageWithOverride:nil
+                                                                userDataLanguage:nil
+                                                                  configLanguage:configLanguage
+                                                               appChromeLanguage:[HAStrings activeLanguageCode]];
+            [[HAStateLocalizer sharedLocalizer] refreshForLanguage:resolved connectionManager:strongSelf2];
+            [strongSelf2 subscribeToHAContentLanguageChanges];
+        }];
+    }];
+}
+
+/// Subscribes to `frontend/subscribe_user_data` (key "language") so a
+/// profile-language change made in the HA UI refreshes HAStateLocalizer
+/// without requiring a reconnect. The in-app override, if set, always wins.
+- (void)subscribeToHAContentLanguageChanges {
+    __weak typeof(self) weakSelf = self;
+    [self subscribeWithCommand:@{@"type": @"frontend/subscribe_user_data", @"key": @"language"}
+                        handler:^(NSDictionary *eventData) {
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        if ([HAStrings overrideLanguageCode].length > 0) return; // in-app override wins
+
+        NSString *pushedLanguage = nil;
+        id value = eventData[@"value"];
+        if ([value isKindOfClass:[NSDictionary class]]) {
+            id lang = value[@"language"];
+            if ([lang isKindOfClass:[NSString class]]) pushedLanguage = lang;
+        }
+        if (pushedLanguage.length == 0) return;
+
+        NSString *resolved = [HAStateLocalizer resolveLanguageWithOverride:nil
+                                                            userDataLanguage:pushedLanguage
+                                                              configLanguage:nil
+                                                           appChromeLanguage:[HAStrings activeLanguageCode]];
+        [[HAStateLocalizer sharedLocalizer] refreshForLanguage:resolved connectionManager:strongSelf];
+    }];
+}
+
 #pragma mark - HAWebSocketClientDelegate
 
 - (void)webSocketClientDidConnect:(HAWebSocketClient *)client {
@@ -1065,6 +1170,12 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 
     // Fetch floor registry (optional — older HA versions may not support it)
     self.floorRegistryMessageId = [self.wsClient sendCommand:@{@"type": @"config/floor_registry/list"}];
+
+    // Resolve the HA-content language and (re)fetch its entity-state
+    // translations (docs/plans/i18n-plan.md §2.7). Independent of the
+    // registry fetches above — a failure here only means states render
+    // without HA-sourced translations, never a connect failure.
+    [self refreshStateLocalizerLanguage];
 
     [self.delegate connectionManagerDidConnect:self];
     [[NSNotificationCenter defaultCenter]

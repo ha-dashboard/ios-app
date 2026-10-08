@@ -1,4 +1,5 @@
 #import "HALogbookCardCell.h"
+#import "HAStrings.h"
 #import "HADashboardConfig.h"
 #import "HAEntity.h"
 #import "HALogbookManager.h"
@@ -40,7 +41,7 @@ static const NSInteger kMaxEntries = 10;
         [self.contentView addSubview:self.entryStack];
 
         self.emptyLabel = [[UILabel alloc] init];
-        self.emptyLabel.text = @"No recent activity";
+        self.emptyLabel.text = HALocalizedString(@"card.logbook.no_recent_activity", @"Placeholder text in the logbook card, shown when there is no recent activity.");
         self.emptyLabel.font = [UIFont systemFontOfSize:13];
         self.emptyLabel.textColor = [HATheme secondaryTextColor];
         self.emptyLabel.textAlignment = NSTextAlignmentCenter;
@@ -86,7 +87,7 @@ static const NSInteger kMaxEntries = 10;
     if (![title isKindOfClass:[NSString class]] || title.length == 0) {
         title = section.title;
     }
-    self.titleLabel.text = title ?: @"Logbook";
+    self.titleLabel.text = title ?: HALocalizedString(@"card.logbook.default_title", @"Fallback title in the logbook card header, shown when no title is configured.");
 
     self.hoursToShow = 24;
     if ([props[@"hours_to_show"] isKindOfClass:[NSNumber class]]) {

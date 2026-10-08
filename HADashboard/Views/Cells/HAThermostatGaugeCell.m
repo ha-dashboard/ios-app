@@ -1,4 +1,5 @@
 #import "HAThermostatGaugeCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -6,6 +7,7 @@
 #import "HAHaptics.h"
 #import "HAIconMapper.h"
 #import "HAEntityDisplayHelper.h"
+#import "HAStateLocalizer.h"
 #import "UIView+HAUtilities.h"
 
 // Gauge geometry -- proportions matched to HA web's ha-control-circular-slider:
@@ -1238,11 +1240,22 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
     self.showCurrentAsPrimary = showCurrentAsPrimary;
 
     // Status label -- show hvac_action if available, else mode. Append humidity if available.
+    // `mode` is the entity's own `state` (climate domain) -- HA-translated
+    // the same way as any other entity state (plan §2.2), so route it
+    // through the shared localizer. `action` is the `hvac_action`
+    // ATTRIBUTE, translated under a different key template
+    // (`…state_attributes.hvac_action.state.{value}`, plan §2.4) that
+    // HAStateLocalizer does not yet expose a lookup for -- left on the
+    // algorithmic fallback, same as HAModeFeatureView's preset/fan modes.
     NSString *statusText;
     if ([action isKindOfClass:[NSString class]] && action.length > 0) {
         statusText = [HAEntityDisplayHelper humanReadableState:action];
     } else {
-        statusText = [HAEntityDisplayHelper humanReadableState:mode];
+        statusText = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"climate"
+                                                                       deviceClass:nil
+                                                                          platform:nil
+                                                                    translationKey:nil
+                                                                             state:mode];
     }
     NSNumber *currentHumidity = entity.attributes[@"current_humidity"];
     NSNumber *targetHumidity = entity.attributes[@"target_humidity"];
@@ -1318,7 +1331,7 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
             if (currentTemp) {
                 self.tempLabel.text = [NSString stringWithFormat:@"%.0f%@", currentTemp.doubleValue, self.tempUnitString];
             } else {
-                self.tempLabel.text = @"--";
+                self.tempLabel.text = HALocalizedString(@"cell.thermostat.no_value", @"Temperature label in the thermostat gauge cell, shown when no value is available.");
             }
             if (effectiveTargetTemp && ![mode isEqualToString:@"off"]) {
                 self.targetLabel.attributedText = [self secondaryTempAttributedStringForValue:effectiveTargetTemp.doubleValue];
@@ -1337,7 +1350,7 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
             } else if (currentTemp) {
                 self.tempLabel.text = [NSString stringWithFormat:@"%.0f%@", currentTemp.doubleValue, self.tempUnitString];
             } else {
-                self.tempLabel.text = @"--";
+                self.tempLabel.text = HALocalizedString(@"cell.thermostat.no_value", @"Temperature label in the thermostat gauge cell, shown when no value is available.");
             }
             if (currentTemp) {
                 self.targetLabel.attributedText = [self secondaryTempAttributedStringForValue:currentTemp.doubleValue];
@@ -1524,7 +1537,7 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
     if ([presetModes isKindOfClass:[NSArray class]] && presetModes.count > 0) {
         NSString *title = currentPreset
             ? [NSString stringWithFormat:@"%@ \u25BE", [currentPreset capitalizedString]]
-            : @"Preset \u25BE";
+            : HALocalizedString(@"cell.thermostat.preset_label", @"Collapsed preset-mode button in the thermostat gauge cell, shown when no preset is set. Keep the trailing triangle glyph.");
         [self.extraModesStack addArrangedSubview:[self makeExtraModeButton:title tag:100]];
         hasExtras = YES;
     }
@@ -1534,7 +1547,7 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
     if ([fanModes isKindOfClass:[NSArray class]] && fanModes.count > 0) {
         NSString *title = currentFan
             ? [NSString stringWithFormat:@"%@ \u25BE", [currentFan capitalizedString]]
-            : @"Fan \u25BE";
+            : HALocalizedString(@"cell.thermostat.fan_label", @"Collapsed fan-mode button in the thermostat gauge cell, shown when no fan mode is set. Keep the trailing triangle glyph.");
         [self.extraModesStack addArrangedSubview:[self makeExtraModeButton:title tag:101]];
         hasExtras = YES;
     }
@@ -1544,7 +1557,7 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
     if ([swingModes isKindOfClass:[NSArray class]] && swingModes.count > 0) {
         NSString *title = currentSwing
             ? [NSString stringWithFormat:@"%@ \u25BE", [currentSwing capitalizedString]]
-            : @"Swing \u25BE";
+            : HALocalizedString(@"cell.thermostat.swing_label", @"Collapsed swing-mode button in the thermostat gauge cell, shown when no swing mode is set. Keep the trailing triangle glyph.");
         [self.extraModesStack addArrangedSubview:[self makeExtraModeButton:title tag:102]];
         hasExtras = YES;
     }
@@ -1602,7 +1615,7 @@ typedef NS_ENUM(NSInteger, HAGaugeFillDirection) {
         }];
         [sheet addAction:action];
     }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [sheet addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
     sheet.popoverPresentationController.sourceView = sender;
     sheet.popoverPresentationController.sourceRect = sender.bounds;
     [vc presentViewController:sheet animated:YES completion:nil];

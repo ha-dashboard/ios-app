@@ -1,5 +1,7 @@
 #import "HABaseEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
+#import "HAEntityDisplayHelper.h"
 #import "HADashboardConfig.h"
 #import "HATheme.h"
 #import "HAIconMapper.h"
@@ -123,7 +125,7 @@ static const CGFloat kHeadingGap = 2.0;
 
     if (!entity) {
         self.nameLabel.text = configItem.entityId;
-        self.stateLabel.text = @"—";
+        self.stateLabel.text = HALocalizedString(@"cell.base.no_value", @"State label fallback in the base entity cell, shown when no display state is available.");
         self.contentView.alpha = 0.5;
         return;
     }
@@ -144,7 +146,11 @@ static const CGFloat kHeadingGap = 2.0;
 
 - (NSString *)displayState {
     if (!self.entity) return @"—";
-    return self.entity.state;
+    // Default fallback used by any subclass that doesn't override this —
+    // route through the shared helper (which in turn routes through
+    // HAStateLocalizer) rather than returning the raw HA state verbatim.
+    // See docs/plans/i18n-plan.md §2.5/§2.7.
+    return [HAEntityDisplayHelper formattedStateForEntity:self.entity decimals:1];
 }
 
 + (CGFloat)headingHeight {
@@ -255,7 +261,7 @@ static const CGFloat kHeadingGap = 2.0;
         }
         [sheet addAction:action];
     }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [sheet addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     if (sourceView) {
         sheet.popoverPresentationController.sourceView = sourceView;

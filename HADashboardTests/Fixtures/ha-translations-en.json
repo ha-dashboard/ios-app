@@ -1,0 +1,22 @@
+{
+  "component.person.entity_component._.state.not_home": "Away",
+  "component.person.entity_component._.state.home": "Home",
+  "component.binary_sensor.entity_component.door.state.on": "Open",
+  "component.binary_sensor.entity_component.door.state.off": "Closed",
+  "component.binary_sensor.entity_component.motion.state.on": "Detected",
+  "component.binary_sensor.entity_component.motion.state.off": "Clear",
+  "component.binary_sensor.entity_component._.state.on": "On",
+  "component.binary_sensor.entity_component._.state.off": "Off",
+  "component.cover.entity_component._.state.open": "Open",
+  "component.cover.entity_component._.state.closed": "Closed",
+  "component.lock.entity_component._.state.locked": "Locked",
+  "component.lock.entity_component._.state.unlocked": "Unlocked",
+  "component.climate.entity_component._.state.heat": "Heat",
+  "component.climate.entity_component._.state.off": "Off",
+  "component.media_player.entity_component._.state.playing": "Playing",
+  "component.media_player.entity_component._.state.paused": "Paused",
+  "component.sensor.entity_component._.state_attributes.battery.name": "Battery",
+  "component.light.entity_component._.state_attributes.color_temp_kelvin.name": "Color temperature (Kelvin)",
+  "component.climate.entity_component._.state_attributes.fan_mode.name": "Fan mode",
+  "component.cover.entity_component._.state_attributes.current_tilt_position.name": "Tilt position"
+}

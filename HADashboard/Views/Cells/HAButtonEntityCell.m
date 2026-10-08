@@ -1,4 +1,5 @@
 #import "HAButtonEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -23,7 +24,7 @@ static const NSTimeInterval kPressFeedbackDuration = 1.5;
 
     // Press button
     self.pressButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.pressButton setTitle:@"Press" forState:UIControlStateNormal];
+    [self.pressButton setTitle:HALocalizedString(@"cell.button.press", @"Button in the button-entity cell, triggers a button-domain press. Max ~8 chars.") forState:UIControlStateNormal];
     self.pressButton.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     self.pressButton.backgroundColor = [HATheme accentColor];
     [self.pressButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
@@ -34,7 +35,7 @@ static const NSTimeInterval kPressFeedbackDuration = 1.5;
 
     // Feedback label
     self.feedbackLabel = [self labelWithFont:[UIFont boldSystemFontOfSize:13] color:[HATheme successColor] lines:1];
-    self.feedbackLabel.text = @"Pressed";
+    self.feedbackLabel.text = HALocalizedString(@"cell.button.pressed", @"Feedback label in the button-entity cell, briefly shown after a press. Max ~10 chars.");
     self.feedbackLabel.textAlignment = NSTextAlignmentCenter;
     self.feedbackLabel.alpha = 0.0;
 

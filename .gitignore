@@ -78,6 +78,7 @@ docs/*
 !docs/support.html
 !docs/rosettasim-deployment.md
 !docs/live-camera-streaming-v1.md
+!docs/translations.md
 !docs/releases/
 docs/releases/*
 !docs/releases/*.md
@@ -102,3 +103,7 @@ test-harness/screenshots/
 *.panic.log
 *.memorydump
 ota_patch.txt
+
+# Pseudo-localisation output (scripts/check-translations.sh --pseudo)
+HADashboard/en-XA.lproj/
+__pycache__/

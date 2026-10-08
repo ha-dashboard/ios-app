@@ -1,4 +1,5 @@
 #import "HAWaterHeaterEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -79,12 +80,12 @@
     NSString *unit = entity.attributes[@"temperature_unit"] ?: @"\u00B0C";
     self.tempLabel.text = target
         ? [NSString stringWithFormat:@"%@%@", target, unit]
-        : @"--";
+        : HALocalizedString(@"cell.water_heater.no_value", @"Temperature label fallback in the water heater cell, shown when no target temperature is available.");
 
     // Current temperature
     NSNumber *current = entity.attributes[@"current_temperature"];
     if ([current isKindOfClass:[NSNumber class]]) {
-        self.currentTempLabel.text = [NSString stringWithFormat:@"Currently %@%@", current, unit];
+        self.currentTempLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.water_heater.currently", @"Current temperature label in the water heater cell. %1$@ is the current temperature, %2$@ is the unit."), current, unit];
         self.currentTempLabel.hidden = NO;
     } else {
         self.currentTempLabel.hidden = YES;

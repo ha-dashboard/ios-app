@@ -1,4 +1,5 @@
 #import "HATodoEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HADashboardConfig.h"
 #import "HATheme.h"
@@ -57,9 +58,9 @@
 
     // Description
     if (count == 1) {
-        self.itemCountDescLabel.text = @"1 item";
+        self.itemCountDescLabel.text = HALocalizedString(@"cell.todo.item_count_singular", @"Item count description in the todo cell, singular.");
     } else {
-        self.itemCountDescLabel.text = [NSString stringWithFormat:@"%ld items", (long)count];
+        self.itemCountDescLabel.text = [NSString stringWithFormat:HALocalizedString(@"format.todo.item_count_plural", @"Item count description in the todo cell, plural. %ld is the item count."), (long)count];
     }
 
     self.contentView.backgroundColor = (count > 0) ? [HATheme onTintColor] : [HATheme cellBackgroundColor];

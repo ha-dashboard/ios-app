@@ -1,4 +1,5 @@
 #import "HASceneEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -24,7 +25,7 @@ static const NSTimeInterval kActivationFeedbackDuration = 1.5;
 
     // Activate button
     self.activateButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.activateButton setTitle:@"Activate" forState:UIControlStateNormal];
+    [self.activateButton setTitle:HALocalizedString(@"cell.scene.activate", @"Button in the scene cell, activates the scene. Max ~10 chars -- fixed-width pill.") forState:UIControlStateNormal];
     self.activateButton.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     self.activateButton.backgroundColor = [HATheme accentColor];
     [self.activateButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
@@ -35,7 +36,7 @@ static const NSTimeInterval kActivationFeedbackDuration = 1.5;
 
     // Feedback label (shown briefly after activation)
     self.feedbackLabel = [self labelWithFont:[UIFont boldSystemFontOfSize:13] color:[HATheme successColor] lines:1];
-    self.feedbackLabel.text = @"Activated";
+    self.feedbackLabel.text = HALocalizedString(@"cell.scene.activated", @"Feedback label in the scene cell, briefly shown after activation. Max ~10 chars.");
     self.feedbackLabel.textAlignment = NSTextAlignmentCenter;
     self.feedbackLabel.alpha = 0.0;
 
@@ -57,7 +58,7 @@ static const NSTimeInterval kActivationFeedbackDuration = 1.5;
 
     // Stop button (for running scripts)
     self.stopButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.stopButton setTitle:@"Stop" forState:UIControlStateNormal];
+    [self.stopButton setTitle:HALocalizedString(@"cell.scene.stop", @"Button in the scene cell, stops a running script. Max ~8 chars -- fixed-width pill.") forState:UIControlStateNormal];
     self.stopButton.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     self.stopButton.backgroundColor = [HATheme destructiveColor];
     [self.stopButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
@@ -82,15 +83,15 @@ static const NSTimeInterval kActivationFeedbackDuration = 1.5;
 
     NSString *domain = [entity domain];
     if ([domain isEqualToString:HAEntityDomainScript]) {
-        [self.activateButton setTitle:@"Run" forState:UIControlStateNormal];
+        [self.activateButton setTitle:HALocalizedString(@"cell.scene.run", @"Button in the scene cell, runs a script entity. Max ~10 chars -- fixed-width pill.") forState:UIControlStateNormal];
         // Show Stop button when script is running
         BOOL isRunning = entity.isOn;
         self.stopButton.hidden = !isRunning;
     } else if ([domain isEqualToString:@"automation"]) {
-        [self.activateButton setTitle:@"Trigger" forState:UIControlStateNormal];
+        [self.activateButton setTitle:HALocalizedString(@"cell.scene.trigger", @"Button in the scene cell, triggers an automation entity. Max ~10 chars -- fixed-width pill.") forState:UIControlStateNormal];
         self.stopButton.hidden = YES;
     } else {
-        [self.activateButton setTitle:@"Activate" forState:UIControlStateNormal];
+        [self.activateButton setTitle:HALocalizedString(@"cell.scene.activate", @"Button in the scene cell, activates the scene. Max ~10 chars -- fixed-width pill.") forState:UIControlStateNormal];
         self.stopButton.hidden = YES;
     }
     self.activateButton.backgroundColor = [HATheme accentColor];

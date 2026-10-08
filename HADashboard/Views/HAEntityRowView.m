@@ -1,4 +1,5 @@
 #import "HAEntityRowView.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HATheme.h"
 #import "HASwitch.h"
@@ -91,7 +92,7 @@
 
     // Compact "Press" button for button / input_button entities
     self.pressButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.pressButton setTitle:@"Press" forState:UIControlStateNormal];
+    [self.pressButton setTitle:HALocalizedString(@"cell.button.press", @"Button in the button-entity cell, triggers a button-domain press. Max ~8 chars.") forState:UIControlStateNormal];
     self.pressButton.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
     self.pressButton.layer.cornerRadius = 14;
     self.pressButton.layer.borderWidth = 1.0;
@@ -246,7 +247,7 @@
 
     if (!entity) {
         self.nameLabel.text = @"";
-        self.stateLabel.text = @"—";
+        self.stateLabel.text = HALocalizedString(@"cell.base.no_value", @"State label fallback in the base entity cell, shown when no display state is available.");
         self.iconLabel.text = nil;
         self.toggleSwitch.hidden = YES;
         self.pressButton.hidden = YES;
@@ -523,7 +524,7 @@
         [alert addAction:action];
     }
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     // iPad popover anchor
     alert.popoverPresentationController.sourceView = self.stateLabel;

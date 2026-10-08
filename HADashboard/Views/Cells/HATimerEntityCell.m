@@ -1,4 +1,5 @@
 #import "HATimerEntityCell.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HADashboardConfig.h"
@@ -46,10 +47,10 @@ static const CGFloat kHATimerButtonTitleHorizontalInset = 8.0; // matches the bu
     // the card and get pushed off the left edge, clipping "Start" to "art".
     // Equal-width distribution always fits, and adjustsFontSizeToFitWidth
     // shrinks the title rather than clipping it if a translation is long.
-    self.startButton = [self ha_timerButtonWithTitle:@"Start" backgroundColor:[HATheme successColor] action:@selector(startTapped)];
-    self.pauseButton = [self ha_timerButtonWithTitle:@"Pause" backgroundColor:[HATheme warningColor] action:@selector(pauseTapped)];
-    self.cancelButton = [self ha_timerButtonWithTitle:@"Cancel" backgroundColor:[HATheme destructiveColor] action:@selector(cancelTapped)];
-    self.finishButton = [self ha_timerButtonWithTitle:@"Finish" backgroundColor:[HATheme accentColor] action:@selector(finishTapped)];
+    self.startButton = [self ha_timerButtonWithTitle:HALocalizedString(@"cell.timer.start", @"Button in the timer cell, starts the timer. Equal-width button; text shrinks to fit.") backgroundColor:[HATheme successColor] action:@selector(startTapped)];
+    self.pauseButton = [self ha_timerButtonWithTitle:HALocalizedString(@"cell.timer.pause", @"Button in the timer cell, pauses the timer. Equal-width button; text shrinks to fit.") backgroundColor:[HATheme warningColor] action:@selector(pauseTapped)];
+    self.cancelButton = [self ha_timerButtonWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") backgroundColor:[HATheme destructiveColor] action:@selector(cancelTapped)];
+    self.finishButton = [self ha_timerButtonWithTitle:HALocalizedString(@"cell.timer.finish", @"Button in the timer cell, force-completes the timer. Equal-width button; text shrinks to fit.") backgroundColor:[HATheme accentColor] action:@selector(finishTapped)];
 
     UIStackView *buttonRow = [[UIStackView alloc] initWithArrangedSubviews:@[
         self.finishButton, self.startButton, self.pauseButton, self.cancelButton
@@ -69,7 +70,7 @@ static const CGFloat kHATimerButtonTitleHorizontalInset = 8.0; // matches the bu
 
     // Change button (set new duration)
     self.changeButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.changeButton setTitle:@"Change" forState:UIControlStateNormal];
+    [self.changeButton setTitle:HALocalizedString(@"cell.timer.change", @"Button in the timer cell, opens the duration picker. Max ~8 chars -- fixed-width pill.") forState:UIControlStateNormal];
     self.changeButton.titleLabel.font = [UIFont boldSystemFontOfSize:12];
     self.changeButton.titleLabel.adjustsFontSizeToFitWidth = YES;
     self.changeButton.titleLabel.minimumScaleFactor = 0.6;
@@ -120,9 +121,9 @@ static const CGFloat kHATimerButtonTitleHorizontalInset = 8.0; // matches the bu
     NSString *remaining = [entity timerRemaining];
     NSString *duration = [entity timerDuration];
     if (isActive || isPaused) {
-        self.timeLabel.text = remaining ?: duration ?: @"--:--:--";
+        self.timeLabel.text = remaining ?: duration ?: HALocalizedString(@"cell.timer.no_value", @"Remaining/duration label in the timer cell, shown when no value is available.");
     } else {
-        self.timeLabel.text = duration ?: @"--:--:--";
+        self.timeLabel.text = duration ?: HALocalizedString(@"cell.timer.no_value", @"Remaining/duration label in the timer cell, shown when no value is available.");
     }
 
     if (isActive) {
@@ -229,7 +230,7 @@ static const CGFloat kHATimerButtonTitleHorizontalInset = 8.0; // matches the bu
         }
     }
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Set Duration"
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:HALocalizedString(@"cell.timer.set_duration", @"Alert title for the timer duration picker.")
                                                                   message:@"\n\n\n\n\n\n\n"
                                                            preferredStyle:UIAlertControllerStyleAlert];
     [alert.view addSubview:picker];
@@ -240,7 +241,7 @@ static const CGFloat kHATimerButtonTitleHorizontalInset = 8.0; // matches the bu
     ]];
 
     __weak typeof(self) weakSelf = self;
-    [alert addAction:[UIAlertAction actionWithTitle:@"Set" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"cell.timer.set", @"Confirm button in the timer duration picker alert. Short label.") style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         NSTimeInterval secs = picker.countDownDuration;
         NSInteger h = (NSInteger)(secs / 3600);
         NSInteger m = (NSInteger)((NSInteger)secs % 3600) / 60;
@@ -248,7 +249,7 @@ static const CGFloat kHATimerButtonTitleHorizontalInset = 8.0; // matches the bu
         NSString *dur = [NSString stringWithFormat:@"%ld:%02ld:%02ld", (long)h, (long)m, (long)s];
         [weakSelf callService:@"change" inDomain:HAEntityDomainTimer withData:@{@"duration": dur}];
     }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     [vc presentViewController:alert animated:YES completion:nil];
 }

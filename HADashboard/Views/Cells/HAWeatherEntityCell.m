@@ -1,4 +1,5 @@
 #import "HAWeatherEntityCell.h"
+#import "HAStrings.h"
 #import "HADateUtils.h"
 #import "HAEntity.h"
 #import "HADashboardConfig.h"
@@ -111,7 +112,7 @@ static const NSInteger kDefaultForecastRows = 5;
     if (temp) {
         self.tempLabel.text = [NSString stringWithFormat:@"%.0f%@", temp.doubleValue, unit];
     } else {
-        self.tempLabel.text = @"\u2014";
+        self.tempLabel.text = HALocalizedString(@"cell.weather.no_value", @"Temperature label fallback in the weather cell, shown when no temperature is available.");
     }
 
     // Build details string

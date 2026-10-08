@@ -1,4 +1,5 @@
 #import "HAActionDispatcher.h"
+#import "HAStrings.h"
 #import "HAAction.h"
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
@@ -46,13 +47,13 @@ NSString *const HAActionNavigateNotification = @"HAActionNavigateNotification";
         message = ((NSDictionary *)action.confirmation)[@"text"];
     }
     if (!message) {
-        message = @"Are you sure?";
+        message = HALocalizedString(@"alert.confirm_action.default_message", @"Fallback confirmation alert message for a Lovelace tap-action confirmation dialog that specifies no custom text.");
     }
 
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:nil
                                                                   message:message
                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel"
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.")
                                               style:UIAlertActionStyleCancel
                                             handler:nil]];
     __weak typeof(self) weakSelf = self;
@@ -65,7 +66,7 @@ NSString *const HAActionNavigateNotification = @"HAActionNavigateNotification";
     confirmedAction.target = action.target;
     confirmedAction.entityOverride = action.entityOverride;
     // Don't set confirmation again — prevent infinite loop
-    [alert addAction:[UIAlertAction actionWithTitle:@"Confirm"
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.confirm", @"Confirm button in a Lovelace tap-action confirmation dialog.")
                                               style:UIAlertActionStyleDefault
                                             handler:^(UIAlertAction *_) {
         [weakSelf doExecuteAction:confirmedAction forEntity:entity fromViewController:vc];

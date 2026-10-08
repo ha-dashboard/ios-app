@@ -1,4 +1,5 @@
 #import "HADashboardViewController.h"
+#import "HAStrings.h"
 #import "HALog.h"
 #import "HAAuthManager.h"
 #import "HAConnectionManager.h"
@@ -114,7 +115,7 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 
     // Tappable title button — shows current dashboard name with chevron
     self.titleButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self updateTitleButtonText:@"Dashboard"];
+    [self updateTitleButtonText:HALocalizedString(@"dashboard.default_title", @"Fallback dashboard title/name used throughout the title button and dashboard switcher when none is set.")];
     self.titleButton.titleLabel.font = [UIFont boldSystemFontOfSize:17];
     self.titleButton.tintColor = [HATheme primaryTextColor];
     [self.titleButton addTarget:self action:@selector(titleTapped:) forControlEvents:UIControlEventTouchUpInside];
@@ -135,7 +136,7 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
             settingsButton = [[UIBarButtonItem alloc] initWithImage:cogImage style:UIBarButtonItemStylePlain
                 target:self action:@selector(settingsTapped)];
         } else {
-            settingsButton = [[UIBarButtonItem alloc] initWithTitle:@"Settings"
+            settingsButton = [[UIBarButtonItem alloc] initWithTitle:HALocalizedString(@"dashboard.settings_button_fallback", @"Fallback nav bar button title on pre-iOS 13 devices when the gear glyph can't be rendered. Opens Settings.")
                 style:UIBarButtonItemStylePlain target:self action:@selector(settingsTapped)];
         }
     }
@@ -443,7 +444,7 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     self.connectionLabel.font = [UIFont boldSystemFontOfSize:12];
     self.connectionLabel.textColor = [UIColor whiteColor];
     self.connectionLabel.textAlignment = NSTextAlignmentCenter;
-    self.connectionLabel.text = @"Disconnected";
+    self.connectionLabel.text = HALocalizedString(@"dashboard.status.disconnected", @"Connection status bar text, shown at launch and when disconnected with no specific error.");
     self.connectionLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.connectionBar addSubview:self.connectionLabel];
 
@@ -1297,7 +1298,7 @@ static inline NSString *HANormalizeState(id val) {
     NSString *currentPath = [[HAAuthManager sharedManager] selectedDashboardPath];
     NSString *dashName = [self dashboardNameForPath:currentPath];
     if (!dashName) dashName = self.lovelaceDashboard.title;
-    if (!dashName) dashName = @"Dashboard";
+    if (!dashName) dashName = HALocalizedString(@"dashboard.default_title", @"Fallback dashboard title/name used throughout the title button and dashboard switcher when none is set.");
     [self updateTitleButtonText:dashName];
 
     // Route layout based on viewType
@@ -1499,7 +1500,7 @@ static inline NSString *HANormalizeState(id val) {
         [noAreaIds sortUsingComparator:entitySorter];
 
         HADashboardConfigSection *otherSection = [[HADashboardConfigSection alloc] init];
-        otherSection.title = @"Other";
+        otherSection.title = HALocalizedString(@"dashboard.section.other", @"Fallback section title for entities with no area assignment, in the auto-generated dashboard.");
         otherSection.entityIds = [noAreaIds copy];
         otherSection.cardType = @"entities";
 
@@ -1516,7 +1517,7 @@ static inline NSString *HANormalizeState(id val) {
     wrapperSection.items = [allItems copy];
 
     HADashboardConfig *config = [[HADashboardConfig alloc] init];
-    config.title = @"Dashboard";
+    config.title = HALocalizedString(@"dashboard.default_title", @"Fallback dashboard title/name used throughout the title button and dashboard switcher when none is set.");
     config.columns = [self currentColumns];
     config.sections = @[wrapperSection];
     config.items = [allItems copy];
@@ -1709,7 +1710,7 @@ static inline NSString *HANormalizeState(id val) {
 #pragma mark - Title Dashboard Switcher
 
 - (void)updateTitleButtonText:(NSString *)name {
-    NSString *display = (name.length > 0) ? name : @"Dashboard";
+    NSString *display = (name.length > 0) ? name : HALocalizedString(@"dashboard.default_title", @"Fallback dashboard title/name used throughout the title button and dashboard switcher when none is set.");
     [self.titleButton setTitle:[NSString stringWithFormat:@"%@ \u25BE", display] forState:UIControlStateNormal];
     [self.titleButton sizeToFit];
 }
@@ -1718,7 +1719,7 @@ static inline NSString *HANormalizeState(id val) {
     for (NSDictionary *d in self.availableDashboards) {
         NSString *urlPath = d[@"url_path"];
         if ([urlPath isEqualToString:path] || (urlPath == nil && path == nil)) {
-            return d[@"title"] ?: @"Dashboard";
+            return d[@"title"] ?: HALocalizedString(@"dashboard.default_title", @"Fallback dashboard title/name used throughout the title button and dashboard switcher when none is set.");
         }
     }
     return nil;
@@ -1734,7 +1735,7 @@ static inline NSString *HANormalizeState(id val) {
     NSString *currentPath = [[HAAuthManager sharedManager] selectedDashboardPath];
 
     for (NSDictionary *dashboard in self.availableDashboards) {
-        NSString *title = dashboard[@"title"] ?: @"Untitled";
+        NSString *title = dashboard[@"title"] ?: HALocalizedString(@"dashboard.untitled_fallback", @"Fallback dashboard name in the dashboard-switcher action sheet when a dashboard has no title.");
         NSString *urlPath = dashboard[@"url_path"];
 
         BOOL isSelected = [urlPath isEqualToString:currentPath] ||
@@ -1749,7 +1750,7 @@ static inline NSString *HANormalizeState(id val) {
         [alert addAction:action];
     }
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
 
     // iPad: present as popover from title button
     alert.popoverPresentationController.sourceView = self.titleButton;
@@ -2621,14 +2622,14 @@ heightForHeaderInSection:(NSInteger)section {
 }
 
 - (void)connectionManager:(HAConnectionManager *)manager didDisconnectWithError:(NSError *)error {
-    NSString *msg = error ? [NSString stringWithFormat:@"Disconnected — reconnecting..."] : @"Disconnected";
+    NSString *msg = error ? [NSString stringWithFormat:HALocalizedString(@"dashboard.status.disconnected_reconnecting", @"Connection status bar text, shown while automatically retrying after a disconnect.")] : HALocalizedString(@"dashboard.status.disconnected", @"Connection status bar text, shown at launch and when disconnected with no specific error.");
     [self showConnectionBar:YES message:msg];
 
     if (!self.statesLoaded) {
         // Hide skeleton and show error text
         [self.skeletonView stopAnimating];
         self.skeletonView.hidden = YES;
-        self.statusLabel.text = error ? error.localizedDescription : @"Disconnected";
+        self.statusLabel.text = error ? error.localizedDescription : HALocalizedString(@"dashboard.status.disconnected", @"Connection status bar text, shown at launch and when disconnected with no specific error.");
         self.statusLabel.textColor = [UIColor redColor];
         self.statusLabel.hidden = NO;
     }

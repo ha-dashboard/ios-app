@@ -4,6 +4,7 @@
 #import "HATheme.h"
 #import "HAAuthManager.h"
 #import "NSMutableURLRequest+HAHelpers.h"
+#import "HAStateLocalizer.h"
 
 static const CGFloat kAvatarSize = 40.0;
 
@@ -64,11 +65,32 @@ static const CGFloat kAvatarSize = 40.0;
     [super configureWithEntity:entity configItem:configItem];
 
     NSString *state = entity.state;
+    // This cell renders BOTH `person` and `device_tracker` domains
+    // (HAEntityCellFactory routes device_tracker to kPersonCellId) — HA
+    // translates them under separate dotted-key buckets
+    // (`component.person.…` vs `component.device_tracker.…`, plan §2.1's
+    // coverage table), so the entity's OWN domain must be passed through,
+    // not a hardcoded "person". Passing the wrong domain here previously
+    // meant a device_tracker entity's legacy offline fallback
+    // (state.fallback.device_tracker.*) could never actually be reached by
+    // this cell, since every lookup was mislabeled as "person".
+    NSString *domain = [entity domain] ?: @"person";
     if ([state isEqualToString:@"home"]) {
-        self.locationLabel.text = @"Home";
+        // "Home"/"Away" come from Home Assistant's own translations now
+        // (docs/plans/i18n-plan.md §2.5), not an app-hardcoded literal —
+        // this is the fix for GitHub issue #19's raw `not_home`.
+        self.locationLabel.text = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:domain
+                                                                                    deviceClass:nil
+                                                                                       platform:entity.platform
+                                                                                 translationKey:nil
+                                                                                          state:state];
         self.locationLabel.textColor = [UIColor colorWithRed:0.2 green:0.7 blue:0.2 alpha:1.0];
     } else if ([state isEqualToString:@"not_home"]) {
-        self.locationLabel.text = @"Away";
+        self.locationLabel.text = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:domain
+                                                                                    deviceClass:nil
+                                                                                       platform:entity.platform
+                                                                                 translationKey:nil
+                                                                                          state:state];
         self.locationLabel.textColor = [HATheme secondaryTextColor];
     } else {
         // Zone name

@@ -1,4 +1,5 @@
 #import "HAGraphView.h"
+#import "HAStrings.h"
 #import "HATheme.h"
 #import <sys/utsname.h>
 
@@ -1306,7 +1307,7 @@ static NSDateFormatter *sCachedTimeFmt(void) {
             if (visibleCount > 0) {
                 self.tooltipValueLabel.attributedText = attrStr;
             } else {
-                self.tooltipValueLabel.text = @"\u2014";
+                self.tooltipValueLabel.text = HALocalizedString(@"cell.graph.tooltip_no_value", @"Tooltip value label fallback in the graph view, shown when no data point is under the touch/cursor.");
             }
 
             // Compute tooltip dimensions
@@ -1532,7 +1533,7 @@ static NSDateFormatter *sCachedTimeFmt(void) {
                 if (visibleCount > 0) {
                     self.tooltipValueLabel.attributedText = attrStr;
                 } else {
-                    self.tooltipValueLabel.text = @"\u2014";
+                    self.tooltipValueLabel.text = HALocalizedString(@"cell.graph.tooltip_no_value", @"Tooltip value label fallback in the graph view, shown when no data point is under the touch/cursor.");
                 }
 
                 // Compute tooltip dimensions

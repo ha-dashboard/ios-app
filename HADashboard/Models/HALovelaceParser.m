@@ -1,4 +1,5 @@
 #import "HALovelaceParser.h"
+#import "HAStrings.h"
 #import "HADashboardConfig.h"
 #import "HASafeDict.h"
 #import "HAEntityNameResolver.h"
@@ -30,7 +31,7 @@ NSString *const HAUnsupportedCardTypeKey = @"unsupportedCardType";
             for (NSDictionary *vd in viewDicts) {
                 if (![vd isKindOfClass:[NSDictionary class]]) continue;
                 HALovelaceView *view = [[HALovelaceView alloc] init];
-                view.title = HASafeDictString(vd, @"title", [NSString stringWithFormat:@"View %lu", (unsigned long)(views.count + 1)]);
+                view.title = HASafeDictString(vd, @"title", [NSString stringWithFormat:HALocalizedString(@"format.lovelace.view_fallback_name", @"Fallback Lovelace view name when the dashboard config does not name a view. %1$lu is the 1-based view number."), (unsigned long)(views.count + 1)]);
                 view.path  = vd[@"path"];
                 view.icon  = vd[@"icon"];
                 // Collect cards from both "cards" (classic) and "sections" (HA 2024+)

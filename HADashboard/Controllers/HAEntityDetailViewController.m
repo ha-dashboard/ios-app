@@ -1,4 +1,5 @@
 #import "HAEntityDetailViewController.h"
+#import "HAStrings.h"
 #import "HAEntity.h"
 #import "HATheme.h"
 #import "HAIconMapper.h"
@@ -650,21 +651,21 @@ static const CGFloat kGraphHeight = 160.0;
     self.datePickerContainer = container;
 
     UILabel *fromLabel = [[UILabel alloc] init];
-    fromLabel.text = @"From:";
+    fromLabel.text = HALocalizedString(@"cell.entity_detail.from_label", @"Label before the custom history range start-date button in the entity detail view.");
     fromLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
     fromLabel.textColor = [HATheme secondaryTextColor];
     fromLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [container addSubview:fromLabel];
 
     UILabel *toLabel = [[UILabel alloc] init];
-    toLabel.text = @"To:";
+    toLabel.text = HALocalizedString(@"cell.entity_detail.to_label", @"Label before the custom history range end-date button in the entity detail view.");
     toLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
     toLabel.textColor = [HATheme secondaryTextColor];
     toLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [container addSubview:toLabel];
 
     UIButton *applyBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-    [applyBtn setTitle:@"Apply" forState:UIControlStateNormal];
+    [applyBtn setTitle:HALocalizedString(@"action.apply", @"Button that applies a custom history date range in the entity detail view.") forState:UIControlStateNormal];
     [applyBtn setTitleColor:[UIColor colorWithRed:0.30 green:0.60 blue:1.00 alpha:1.0] forState:UIControlStateNormal];
     applyBtn.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightSemibold];
     applyBtn.translatesAutoresizingMaskIntoConstraints = NO;
@@ -774,7 +775,7 @@ static const CGFloat kGraphHeight = 160.0;
 - (void)showEndDatePicker { [self showFallbackDatePickerForStart:NO]; }
 
 - (void)showFallbackDatePickerForStart:(BOOL)isStart {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:isStart ? @"Start Date" : @"End Date"
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:isStart ? HALocalizedString(@"alert.date_picker.start_date_title", @"Action sheet title for the fallback start-date picker in the entity detail view.") : HALocalizedString(@"alert.date_picker.end_date_title", @"Action sheet title for the fallback end-date picker in the entity detail view.")
                                                                   message:@"\n\n\n\n\n\n\n\n\n"
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
     UIDatePicker *picker = [[UIDatePicker alloc] init];
@@ -784,7 +785,7 @@ static const CGFloat kGraphHeight = 160.0;
     picker.frame = CGRectMake(10, 30, 300, 200);
     [alert.view addSubview:picker];
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"Done" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.done", @"Confirm button, dismisses a date/value picker.") style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         if (isStart) self.customStartDate = picker.date; else self.customEndDate = picker.date;
         NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
         fmt.dateStyle = NSDateFormatterMediumStyle;
@@ -792,7 +793,7 @@ static const CGFloat kGraphHeight = 160.0;
         UIButton *btn = [self.datePickerContainer viewWithTag:isStart ? 200 : 201];
         if ([btn isKindOfClass:[UIButton class]]) [btn setTitle:[fmt stringFromDate:picker.date] forState:UIControlStateNormal];
     }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
     alert.popoverPresentationController.sourceView = self.datePickerContainer;
     [self presentViewController:alert animated:YES completion:nil];
 }
@@ -919,7 +920,10 @@ static const CGFloat kGraphHeight = 160.0;
 
     NSString *stateStr = [HAEntityDisplayHelper stateWithUnitForEntity:entity decimals:1];
     if (!stateStr.length) {
-        stateStr = [HAEntityDisplayHelper humanReadableState:entity.state];
+        // Defensive fallback for the (normally unreachable) case where the
+        // primary path above returns empty -- still route through the
+        // shared helper rather than the raw, untranslated HA state.
+        stateStr = [HAEntityDisplayHelper formattedStateForEntity:entity decimals:1];
     }
     self.stateLabel.text = stateStr;
 }
