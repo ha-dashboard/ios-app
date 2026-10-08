@@ -1,0 +1,50 @@
+name: Translations
+
+# Dedicated, fast, Xcode-free gate for HADashboard/*.lproj content. Runs
+# scripts/check-translations.sh --strict -- a language must be merged
+# complete, never partial (see docs/translations.md).
+#
+# No Xcode, no simulators, no secrets: this only needs python3, so it runs
+# on ubuntu-latest and finishes in seconds, unlike the Xcode-based jobs in
+# build.yml. Safe to run on PRs from forks -- `pull_request` (not
+# `pull_request_target`) gets a read-only, secret-less token for a fork PR
+# by default, and `permissions: contents: read` below pins that down
+# explicitly regardless of repo-level defaults. (Fork PRs on this repo may
+# still show as "action_required" pending a maintainer's manual approval
+# to run at all -- that's the repo's Actions approval setting, unrelated
+# to this workflow's own permissions, and out of scope here.)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'HADashboard/**/*.lproj/**'
+      - 'scripts/check-translations.sh'
+      - 'scripts/check_translations.py'
+      - '.github/workflows/translations.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'HADashboard/**/*.lproj/**'
+      - 'scripts/check-translations.sh'
+      - 'scripts/check_translations.py'
+      - '.github/workflows/translations.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check-translations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Validate translations (strict -- no partial language merges)
+        run: scripts/check-translations.sh --strict
+
+      - name: Run checker self-tests
+        run: python3 -I scripts/test_check_translations.py -v
