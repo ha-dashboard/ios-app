@@ -772,6 +772,24 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
         return;
     }
 
+    // A custom:* card type this parser doesn't natively understand, but which
+    // produced entities anyway (an "entity"/"entities" key) — e.g. a
+    // mushroom-entity-card or any bubble-card type. It renders generically
+    // below instead of vanishing (GitHub #19), but should be visibly marked
+    // as a fallback so it isn't mistaken for a fully-supported card. Stamped
+    // on the generated item(s) only when "Show Unsupported Cards" is on, same
+    // gating as the placeholder path above, so the two always agree and both
+    // rebuild live via HAShowUnsupportedCardsDidChangeNotification.
+    NSString *fallbackCardType = nil;
+    if ([cardType hasPrefix:@"custom:"] && ![self isNativelySupportedCustomCardType:cardType]) {
+        if ([self _logUnsupportedCardTypeOnce:cardType]) {
+            HALogW(@"parser", @"Unsupported custom card type \"%@\" at %@ — rendering generically with fallback badge", cardType, cardPath ?: @"?");
+        }
+        if ([self showUnsupportedCardsEnabled]) {
+            fallbackCardType = cardType;
+        }
+    }
+
     // Collect all entity IDs and name overrides for this card
     NSMutableArray<NSString *> *entityIds = [NSMutableArray arrayWithCapacity:extracted.count];
     NSMutableDictionary<NSString *, NSString *> *nameOverrides = [NSMutableDictionary dictionary];
@@ -1135,6 +1153,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
         item.cardType    = compositeType;
         item.columnSpan  = cardColumnSpan;
         item.rowSpan     = cardRowSpan;
+        item.fallbackCardType = fallbackCardType;
 
         // Glance card: store card-level display settings on the item
         if ([compositeType isEqualToString:@"glance"]) {
@@ -1202,6 +1221,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             }
             item.columnSpan  = cardColumnSpan;
             item.rowSpan     = cardRowSpan;
+            item.fallbackCardType = fallbackCardType;
 
             // Extract custom properties from the card config (merge with existing, e.g. headingIcon)
             NSMutableDictionary *props = [NSMutableDictionary dictionaryWithDictionary:item.customProperties ?: @{}];
@@ -1390,6 +1410,19 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                                        @"shopping-list", @"todo-list"]];
     }
     return types;
+}
+
++ (BOOL)isNativelySupportedCustomCardType:(NSString *)cardType {
+    if (![cardType isKindOfClass:[NSString class]] || ![cardType hasPrefix:@"custom:"]) return NO;
+    // Mirrors the containsString:/isEqualToString: checks used throughout this
+    // file to route specific custom:* card types to dedicated rendering —
+    // keep this list in sync whenever one of those checks changes.
+    if ([cardType containsString:@"camera"]) return YES;             // custom:advanced-camera-card, etc.
+    if ([cardType containsString:@"mini-graph"]) return YES;         // custom:mini-graph-card
+    if ([cardType containsString:@"badge"]) return YES;              // custom:badge-card
+    if ([cardType isEqualToString:@"custom:mushroom-chips-card"]) return YES;
+    if ([cardType containsString:@"clock-weather"]) return YES;      // custom:clock-weather-card
+    return NO;
 }
 
 /// A grid/stack container with no (or no usable) child cards is an empty

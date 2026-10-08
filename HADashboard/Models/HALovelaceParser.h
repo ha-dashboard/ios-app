@@ -109,4 +109,13 @@ extern NSString *const HAUnsupportedCardTypeKey;
 /// user has never changed the Settings → Display toggle.
 + (BOOL)showUnsupportedCardsEnabled;
 
+/// Whether `cardType` (a raw Lovelace "type" string, e.g. "custom:mini-graph-card")
+/// is a `custom:*` card this parser natively understands or partially maps —
+/// camera cards, mini-graph, badge/mushroom-chips, clock-weather, etc. Returns
+/// NO for every other `custom:*` type, including one with an "entity"/"entities"
+/// key that falls through to generic entity rendering (e.g. mushroom-entity-card,
+/// any bubble-card type) — those get the fallback-card-type badge.
+/// Returns NO for a non-"custom:" type (built-in HA cards are never "unsupported").
++ (BOOL)isNativelySupportedCustomCardType:(NSString *)cardType;
+
 @end

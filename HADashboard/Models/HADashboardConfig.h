@@ -18,6 +18,14 @@
 /// Conditional visibility: array of @{@"entity": entityId, @"state": requiredState}
 /// Item is shown only when ALL conditions are met. nil = always show.
 @property (nonatomic, copy) NSArray<NSDictionary *> *visibilityConditions;
+/// Set when this item's generic rendering is standing in for an unmapped
+/// custom:* Lovelace card that happened to carry an "entity"/"entities" key
+/// (e.g. "custom:bubble-card"), so it didn't produce zero entities and
+/// therefore wasn't routed to the HAUnsupportedCardType placeholder. The raw
+/// Lovelace "type" string, or nil for a normal (non-fallback) item. The cell
+/// shows this as a small, subtle badge so the fallback isn't mistaken for a
+/// fully-supported card. See +[HALovelaceParser isNativelySupportedCustomCardType:].
+@property (nonatomic, copy) NSString *fallbackCardType;
 
 - (instancetype)initWithDictionary:(NSDictionary *)dict;
 
