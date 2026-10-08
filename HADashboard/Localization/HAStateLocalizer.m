@@ -116,6 +116,43 @@ static BOOL HAStateLocalizerIsRunningUnderXCTest(void) {
     return defaults;
 }
 
+/// Legacy fallback for `person`/`device_tracker` home/away, consulted ONLY
+/// when no live HA translation data exists yet (first launch, offline, or
+/// an HA that rejects the fetch). `person`/`device_tracker` have no
+/// device_class, so they never hit `legacyBinarySensorDefaults` — without
+/// this they fell all the way through to `-humanReadableState:`, which
+/// turns `not_home` into "Not Home" rather than the pre-Phase-2 "Away".
+///
+/// Unlike `legacyBinarySensorDefaults` (deliberately raw English — it is a
+/// byte-for-byte pin of the deleted onStates/offStates table), these go
+/// through `HALocalizedString` so a translator can cover the offline case
+/// too, and are resolved fresh on every call (not cached in a static
+/// dictionary) so an in-app language-override change takes effect
+/// immediately rather than being frozen at first use.
++ (nullable NSString *)legacyBucketFallbackForDomain:(NSString *)domain state:(NSString *)state {
+    if ([domain isEqualToString:@"person"]) {
+        if ([state isEqualToString:@"home"]) {
+            return HALocalizedString(@"state.fallback.person.home",
+                @"Offline/first-launch fallback for a person entity's \"home\" state, shown only before any Home Assistant translation data has loaded. Matches Home Assistant's own English text.");
+        }
+        if ([state isEqualToString:@"not_home"]) {
+            return HALocalizedString(@"state.fallback.person.not_home",
+                @"Offline/first-launch fallback for a person entity's \"not_home\" state, shown only before any Home Assistant translation data has loaded. Matches Home Assistant's own English text.");
+        }
+    }
+    if ([domain isEqualToString:@"device_tracker"]) {
+        if ([state isEqualToString:@"home"]) {
+            return HALocalizedString(@"state.fallback.device_tracker.home",
+                @"Offline/first-launch fallback for a device_tracker entity's \"home\" state, shown only before any Home Assistant translation data has loaded. Matches Home Assistant's own English text.");
+        }
+        if ([state isEqualToString:@"not_home"]) {
+            return HALocalizedString(@"state.fallback.device_tracker.not_home",
+                @"Offline/first-launch fallback for a device_tracker entity's \"not_home\" state, shown only before any Home Assistant translation data has loaded. Matches Home Assistant's own English text.");
+        }
+    }
+    return nil;
+}
+
 #pragma mark - Consume
 
 - (NSString *)localizedStateForDomain:(NSString *)domain
@@ -162,13 +199,15 @@ static BOOL HAStateLocalizerIsRunningUnderXCTest(void) {
         if (liveBucketHit.length > 0) return liveBucketHit;
 
         // No live data for this key at all — fall back to the legacy
-        // binary_sensor defaults (the pre-Phase-2 English table). This is
-        // what makes the empty-localizer case byte-identical to how the app
-        // behaved before this class existed.
+        // defaults (the pre-Phase-2 English behaviour). This is what makes
+        // the empty-localizer case byte-identical to how the app behaved
+        // before this class existed.
         if (deviceClassKey) {
             NSString *legacyHit = [[self class] legacyBinarySensorDefaults][deviceClassKey];
             if (legacyHit.length > 0) return legacyHit;
         }
+        NSString *legacyBucketHit = [[self class] legacyBucketFallbackForDomain:domain state:state];
+        if (legacyBucketHit.length > 0) return legacyBucketHit;
     }
 
     NSString *human = [HAEntityDisplayHelper humanReadableState:state];
