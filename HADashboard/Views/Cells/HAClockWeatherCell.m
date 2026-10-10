@@ -549,9 +549,13 @@ static const CGFloat kBottomPadding = 12.0;
 /// Load animated weather icon using lottie-ios 2.x (LOTAnimationView).
 /// Falls back to MDI glyph + Core Animation if Lottie JSON not found.
 - (void)loadWeatherIconForCondition:(NSString *)condition {
-    // Determine day/night
+    // Determine day/night. Use overrideDate when set (tests) so the icon is
+    // deterministic instead of drifting with the real wall-clock hour —
+    // matches the pattern at the top of this file (`now = self.overrideDate
+    // ?: [NSDate date]`).
     NSCalendar *cal = [NSCalendar currentCalendar];
-    NSInteger hour = [cal component:NSCalendarUnitHour fromDate:[NSDate date]];
+    NSDate *referenceDate = self.overrideDate ?: [NSDate date];
+    NSInteger hour = [cal component:NSCalendarUnitHour fromDate:referenceDate];
     BOOL isDaytime = (hour >= 6 && hour < 20);
 
     NSString *iconName = [[self class] iconFileNameForCondition:condition isDaytime:isDaytime];
