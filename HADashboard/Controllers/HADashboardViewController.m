@@ -861,7 +861,7 @@ static const CGFloat kRowUnitHeight = 56.0;
     } else if ([[entity domain] isEqualToString:HAEntityDomainVacuum]) {
         height = 160.0 + headingExtra;
     } else if ([[entity domain] isEqualToString:HAEntityDomainWeather]) {
-        height = [HAWeatherEntityCell preferredHeight] + headingExtra;
+        height = [HAWeatherEntityCell preferredHeightForConfigItem:item] + headingExtra;
     } else if ([[entity domain] isEqualToString:HAEntityDomainAlarmControlPanel]) {
         BOOL hasKeypad = ([entity alarmCodeFormat] != nil);
         height = (hasKeypad ? [HAAlarmEntityCell preferredHeightWithKeypad]

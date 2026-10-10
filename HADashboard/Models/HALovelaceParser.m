@@ -1269,6 +1269,21 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                 if (card[@"locale"])             props[@"locale"]             = card[@"locale"];
             }
 
+            // Weather-forecast card: show_current/show_forecast toggle which
+            // sections the cell renders (both default true in HA); forecast_type/
+            // forecast_slots/secondary_info_attribute/round_temperature are
+            // forwarded to the weather cell and its forecast fetch. Stored
+            // whenever present (including explicit false) so the cell can tell
+            // "unset" (default true) apart from "explicitly false".
+            if ([cardType isEqualToString:@"weather-forecast"]) {
+                if (card[@"show_current"] != nil) props[@"show_current"] = card[@"show_current"];
+                if (card[@"show_forecast"] != nil) props[@"show_forecast"] = card[@"show_forecast"];
+                if ([card[@"forecast_type"] isKindOfClass:[NSString class]]) props[@"forecast_type"] = card[@"forecast_type"];
+                if ([card[@"forecast_slots"] isKindOfClass:[NSNumber class]]) props[@"forecast_slots"] = card[@"forecast_slots"];
+                if ([card[@"secondary_info_attribute"] isKindOfClass:[NSString class]]) props[@"secondary_info_attribute"] = card[@"secondary_info_attribute"];
+                if ([card[@"round_temperature"] isKindOfClass:[NSNumber class]]) props[@"round_temperature"] = card[@"round_temperature"];
+            }
+
             // Calendar card: extract initial_view configuration
             if ([cardType isEqualToString:@"calendar"]) {
                 if ([card[@"initial_view"] isKindOfClass:[NSString class]]) {

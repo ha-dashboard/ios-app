@@ -1145,6 +1145,8 @@
 		D0AE3D140FF7179FC9C5A83E /* testDeviceTrackerScHome__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 9ECE504EF802C22B296BBF51 /* testDeviceTrackerScHome__light@2x.png */; };
 		D1159FB81724A845F116D1BE /* HAClassicLayoutTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 2943BB830FEC55FCCEDF66F3 /* HAClassicLayoutTests.m */; };
 		FA122B7377AC4AB4AEDD115C /* HAUnsupportedCardTests.m in Sources */ = {isa = PBXBuildFile; fileRef = E1CCD0813B724C118219979F /* HAUnsupportedCardTests.m */; };
+		97E1FE1967C34581A154E1B4 /* HAWeatherEntityCellTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 4600991AD01B41F78DB61EBC /* HAWeatherEntityCellTests.m */; };
+		6097FD45E82E45B3B2D233CE /* HAWeatherForecastParserTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 45912C74E1BF4A5394B9F6C9 /* HAWeatherForecastParserTests.m */; };
 		D132F187F9EA42974A279894 /* testVacuumButton_default__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 191AFC01879312924CA918B3 /* testVacuumButton_default__light@2x.png */; };
 		D1404AC86339B7703074AB59 /* LOTInterpolatorCallback.m in Sources */ = {isa = PBXBuildFile; fileRef = 75FEE7DB83310810EA1720C5 /* LOTInterpolatorCallback.m */; };
 		D1646B27435280D164CA0805 /* testMediaPlayerSectionPaused_mediaPlayerSectionPaused_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = C36C575CEC24262C81B76041 /* testMediaPlayerSectionPaused_mediaPlayerSectionPaused_gradient@2x.png */; };
@@ -1631,6 +1633,8 @@
 		28FF553C887F4837BD0AEDDE /* testUpdateScCurrent__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testUpdateScCurrent__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		2943BB830FEC55FCCEDF66F3 /* HAClassicLayoutTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAClassicLayoutTests.m; sourceTree = "<group>"; };
 		E1CCD0813B724C118219979F /* HAUnsupportedCardTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAUnsupportedCardTests.m; sourceTree = "<group>"; };
+		4600991AD01B41F78DB61EBC /* HAWeatherEntityCellTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAWeatherEntityCellTests.m; sourceTree = "<group>"; };
+		45912C74E1BF4A5394B9F6C9 /* HAWeatherForecastParserTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAWeatherForecastParserTests.m; sourceTree = "<group>"; };
 		297CE72DD4CCE591A7E760D4 /* testThermostatScHeatCool__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testThermostatScHeatCool__light@2x.png"; sourceTree = "<group>"; };
 		29BA13385B013480237288B2 /* HAFloor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAFloor.h; sourceTree = "<group>"; };
 		29C2927FB32CF88FC005BA5C /* testFanOnFull__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testFanOnFull__dark_gradient@2x.png"; sourceTree = "<group>"; };
@@ -4635,6 +4639,8 @@
 				25A23BBB01EFF935B0E6A107 /* HATileFeatureTests.m */,
 				E1CCD0813B724C118219979F /* HAUnsupportedCardTests.m */,
 				21E9E5196C3254A941DBB228 /* HAViewPersistenceTests.m */,
+				4600991AD01B41F78DB61EBC /* HAWeatherEntityCellTests.m */,
+				45912C74E1BF4A5394B9F6C9 /* HAWeatherForecastParserTests.m */,
 				C1BB9C3B8E916A2F22D8696F /* Info.plist */,
 			);
 			path = HADashboardTests;
@@ -6087,6 +6093,8 @@
 				7E713793F923745BFD9D8C93 /* HACameraHLSTests.m in Sources */,
 				D1159FB81724A845F116D1BE /* HAClassicLayoutTests.m in Sources */,
 				FA122B7377AC4AB4AEDD115C /* HAUnsupportedCardTests.m in Sources */,
+				97E1FE1967C34581A154E1B4 /* HAWeatherEntityCellTests.m in Sources */,
+				6097FD45E82E45B3B2D233CE /* HAWeatherForecastParserTests.m in Sources */,
 				A324B257636E2DBD3E48BBCA /* HAClimateSnapshotTests.m in Sources */,
 				10EF3E7F400D8073D7E48296 /* HACompositeSnapshotTests.m in Sources */,
 				BDA7BCA55F4007220732D48A /* HAControlSnapshotTests.m in Sources */,
