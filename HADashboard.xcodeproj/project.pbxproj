@@ -592,6 +592,7 @@
 		6B90CCEC2B7748D7D7EA6727 /* HAStrings.m in Sources */ = {isa = PBXBuildFile; fileRef = 110DD3AD464B75AE46A41B41 /* HAStrings.m */; };
 		6B94941F9235BA0692FFDB2E /* testUnavailableSensor__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = FFC3F9CEABC0E283885E97C6 /* testUnavailableSensor__dark_gradient@2x.png */; };
 		6B96F455BB4F3F95F71499E9 /* HAAuthManagerTests.m in Sources */ = {isa = PBXBuildFile; fileRef = A32A8C2A29737730F1A99472 /* HAAuthManagerTests.m */; };
+		7CCAA13FB11D40A59DCD055D /* HAConnectionManagerReconnectTests.m in Sources */ = {isa = PBXBuildFile; fileRef = F87E71BFDE104BC7A4124833 /* HAConnectionManagerReconnectTests.m */; };
 		6BC6300209C05DF9EC75F962 /* LOTAnimationTransitionController.m in Sources */ = {isa = PBXBuildFile; fileRef = CA970B15E1105E953813F71B /* LOTAnimationTransitionController.m */; };
 		6C4B482CCCB9C110282C5D4A /* testFanSectionOnHalf_fanSectionOnHalf_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 4D2917F59C7BDFCA221FE701 /* testFanSectionOnHalf_fanSectionOnHalf_gradient@2x.png */; };
 		6CD2012D9CCDD19F44E285A2 /* testFanSectionOff_fanSectionOff_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2FA67EB46D294664EFFAF26A /* testFanSectionOff_fanSectionOff_gradient@2x.png */; };
@@ -2082,6 +2083,7 @@
 		7341C58F46BCA6AC06D483C4 /* testVacuumSectionReturning_vacuumSectionReturning_light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testVacuumSectionReturning_vacuumSectionReturning_light@2x.png"; sourceTree = "<group>"; };
 		735DD3DA28F8D096BBE9172E /* LOTRenderNode.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = LOTRenderNode.m; sourceTree = "<group>"; };
 		7376E6E3086B763C5C48BE5A /* HAConnectionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAConnectionManager.h; sourceTree = "<group>"; };
+		60D964A63DEC4EDA9A9C7C27 /* HAConnectionManager+TestAccess.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "HAConnectionManager+TestAccess.h"; sourceTree = "<group>"; };
 		739E3AAFEE723F558E6E8BE0 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
 		739E98FECCD070466888C7CA /* testClimateScAll__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testClimateScAll__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		73A193D9B709DC1B8EE1B3DE /* testMediaPlayerGlance_default__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testMediaPlayerGlance_default__dark_gradient@2x.png"; sourceTree = "<group>"; };
@@ -2388,6 +2390,7 @@
 		A29D81C5B8FE103951E4F59F /* testCoverSectionClosed_coverSectionClosed_light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testCoverSectionClosed_coverSectionClosed_light@2x.png"; sourceTree = "<group>"; };
 		A32996F87672A187C4CF188A /* testButtonRowLockLocked_buttonRowLockLocked_light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testButtonRowLockLocked_buttonRowLockLocked_light@2x.png"; sourceTree = "<group>"; };
 		A32A8C2A29737730F1A99472 /* HAAuthManagerTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAAuthManagerTests.m; sourceTree = "<group>"; };
+		F87E71BFDE104BC7A4124833 /* HAConnectionManagerReconnectTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAConnectionManagerReconnectTests.m; sourceTree = "<group>"; };
 		A345DD3250B3C5096F3E8A4D /* testUpdateTile_default__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testUpdateTile_default__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		A3A72371865D8132CD013A83 /* testInputDateTimeScTime__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testInputDateTimeScTime__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		A3D0DE3B817C4D80B6DB76EC /* HAButtonEntityCell.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAButtonEntityCell.m; sourceTree = "<group>"; };
@@ -4328,6 +4331,7 @@
 				5753921C664BF976733932B2 /* HACameraRegistrationManager.m */,
 				7376E6E3086B763C5C48BE5A /* HAConnectionManager.h */,
 				D923F28F7F9CA85F2AE6DC64 /* HAConnectionManager.m */,
+				60D964A63DEC4EDA9A9C7C27 /* HAConnectionManager+TestAccess.h */,
 				E1BDF17A04D61972A6A72B12 /* HADateUtils.h */,
 				F18D7E4AF4E6F1082C2E43DD /* HADateUtils.m */,
 				8D76A5173454DC50DF024ECD /* HADeviceIntegrationManager.h */,
@@ -4591,6 +4595,7 @@
 				CFE19C9BEF326CEF38EDDBA5 /* HAActionTests.m */,
 				A32A8C2A29737730F1A99472 /* HAAuthManagerTests.m */,
 				328789DB337D0797BCDCDD9D /* HABaseSnapshotTestCase.h */,
+				F87E71BFDE104BC7A4124833 /* HAConnectionManagerReconnectTests.m */,
 				CB202B450A9EBD9E273426E3 /* HABaseSnapshotTestCase.m */,
 				6A4ADBBFFA9D4D28AD62F59F /* HACacheTests.m */,
 				F30D442A27A89349EF13EF46 /* HACameraHLSTests.m */,
@@ -6083,6 +6088,7 @@
 				DC457D1CDDC0847559276600 /* HAActionTests.m in Sources */,
 				6B96F455BB4F3F95F71499E9 /* HAAuthManagerTests.m in Sources */,
 				DA435C75D5CFF7853B085407 /* HABaseSnapshotTestCase.m in Sources */,
+				7CCAA13FB11D40A59DCD055D /* HAConnectionManagerReconnectTests.m in Sources */,
 				0ABD799AC8AFA8C64D8F29E4 /* HACacheTests.m in Sources */,
 				7E713793F923745BFD9D8C93 /* HACameraHLSTests.m in Sources */,
 				D1159FB81724A845F116D1BE /* HAClassicLayoutTests.m in Sources */,
