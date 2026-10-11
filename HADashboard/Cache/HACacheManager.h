@@ -1,9 +1,21 @@
 #import <Foundation/Foundation.h>
 
+/// Minimal JSON read/write surface used by on-disk caches. Extracted so callers
+/// (e.g. HAEntityStateCache) can inject a fake in unit tests instead of hitting
+/// the real filesystem via the HACacheManager singleton.
+@protocol HACacheWriting <NSObject>
+
+- (id)readJSONFromFile:(NSString *)filename;
+- (void)writeJSON:(id)object toFile:(NSString *)filename completion:(void (^)(BOOL success))completion;
+- (BOOL)writeJSONSync:(id)object toFile:(NSString *)filename;
+- (NSString *)persistentCacheDirectory;
+
+@end
+
 /// Manages disk-based caching for dashboard config, entity states, and registries.
 /// Cache directories are keyed by SHA256(serverURL) so switching servers loads
 /// that server's cache automatically.
-@interface HACacheManager : NSObject
+@interface HACacheManager : NSObject <HACacheWriting>
 
 + (instancetype)sharedManager;
 
