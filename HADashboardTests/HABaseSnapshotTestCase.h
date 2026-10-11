@@ -68,4 +68,12 @@ static const CGFloat kTileHeight = 80.0;
 /// Verify a view snapshot in Dark+Gradient and Light themes.
 - (void)verifyView:(UIView *)view identifier:(NSString *)identifier;
 
+/// Fixed date (2026-01-15 14:30:00 UTC, a Thursday) for deterministic
+/// date/time-dependent rendering in snapshot tests — clock faces, "day N"
+/// forecast weekday labels, day/night icon selection, etc. Single source of
+/// truth so every test that needs a stable "now" uses the same value;
+/// HASnapshotTestHelpers.m's +fixedForecastBaseDate mirrors this value for
+/// code that isn't a test-case subclass and can't call it directly.
+- (NSDate *)fixedTestDate;
+
 @end

@@ -141,4 +141,18 @@
     [self verifyView:view identifier:identifier inTheme:HAThemeModeLight];
 }
 
+#pragma mark - Deterministic Dates
+
+- (NSDate *)fixedTestDate {
+    NSDateComponents *components = [[NSDateComponents alloc] init];
+    components.year = 2026;
+    components.month = 1;
+    components.day = 15;
+    components.hour = 14;
+    components.minute = 30;
+    components.second = 0;
+    components.timeZone = [NSTimeZone timeZoneForSecondsFromGMT:0];
+    return [[NSCalendar calendarWithIdentifier:NSCalendarIdentifierGregorian] dateFromComponents:components];
+}
+
 @end

@@ -38,9 +38,16 @@
 
 + (void)fetchForecastForEntity:(HAEntity *)entity
                     completion:(void(^)(NSArray *forecast, NSError *error))completion {
+    [self fetchForecastForEntity:entity forecastType:nil completion:completion];
+}
+
++ (void)fetchForecastForEntity:(HAEntity *)entity
+                   forecastType:(NSString *)forecastType
+                     completion:(void(^)(NSArray *forecast, NSError *error))completion {
     if (!entity || !completion) return;
 
-    // First try legacy entity attributes path (pre-2023.9 HA)
+    // First try legacy entity attributes path (pre-2023.9 HA) — same priority
+    // HA's own getForecast() gives attribute-based forecasts.
     NSArray *legacyForecast = [entity weatherForecast];
     if (legacyForecast.count > 0) {
         if ([NSThread isMainThread]) {
@@ -53,13 +60,33 @@
         return;
     }
 
+    if ([forecastType isEqualToString:@"legacy"]) {
+        // forecast_type: legacy explicitly opts out of the modern service call
+        // (mirrors _needForecastSubscription() in hui-weather-forecast-card.ts).
+        // No attribute-based forecast was found above, so there is none to show.
+        if ([NSThread isMainThread]) {
+            completion(nil, nil);
+        } else {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(nil, nil);
+            });
+        }
+        return;
+    }
+
+    static NSSet<NSString *> *modernForecastTypes = nil;
+    if (!modernForecastTypes) {
+        modernForecastTypes = [NSSet setWithArray:@[@"daily", @"hourly", @"twice_daily"]];
+    }
+    NSString *serviceForecastType = [modernForecastTypes containsObject:forecastType] ? forecastType : @"daily";
+
     // Modern HA: call weather.get_forecasts service with return_response
     NSDictionary *command = @{
         @"type": @"call_service",
         @"domain": @"weather",
         @"service": @"get_forecasts",
         @"target": @{@"entity_id": entity.entityId},
-        @"service_data": @{@"type": @"daily"},
+        @"service_data": @{@"type": serviceForecastType},
         @"return_response": @YES
     };
 

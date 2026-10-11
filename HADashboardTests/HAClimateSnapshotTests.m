@@ -143,6 +143,52 @@
     [self verifyView:cell identifier:nil];
 }
 
+#pragma mark - HAWeatherEntityCell show_current / show_forecast (GitHub #20)
+
+- (void)testWeatherBothSections {
+    // HA default: show_current and show_forecast both true.
+    HAEntity *entity = [HASnapshotTestHelpers weatherSunny];
+    HADashboardConfigItem *item = [[HADashboardConfigItem alloc] init];
+    item.entityId = entity.entityId;
+    item.cardType = @"weather-forecast";
+    item.columnSpan = 12;
+    item.rowSpan = 1;
+    CGFloat height = [HAWeatherEntityCell preferredHeightForConfigItem:item];
+    UIView *cell = [self cellForEntity:entity cellClass:[HAWeatherEntityCell class]
+        size:CGSizeMake(floor(kSubGridUnit * 12), height) configItem:item];
+    [self verifyView:cell identifier:nil];
+}
+
+- (void)testWeatherCurrentOnly {
+    // show_forecast: false — only the current-conditions section renders.
+    HAEntity *entity = [HASnapshotTestHelpers weatherSunny];
+    HADashboardConfigItem *item = [[HADashboardConfigItem alloc] init];
+    item.entityId = entity.entityId;
+    item.cardType = @"weather-forecast";
+    item.columnSpan = 12;
+    item.rowSpan = 1;
+    item.customProperties = @{@"show_forecast": @NO};
+    CGFloat height = [HAWeatherEntityCell preferredHeightForConfigItem:item];
+    UIView *cell = [self cellForEntity:entity cellClass:[HAWeatherEntityCell class]
+        size:CGSizeMake(floor(kSubGridUnit * 12), height) configItem:item];
+    [self verifyView:cell identifier:nil];
+}
+
+- (void)testWeatherForecastOnly {
+    // show_current: false — only the forecast strip renders.
+    HAEntity *entity = [HASnapshotTestHelpers weatherSunny];
+    HADashboardConfigItem *item = [[HADashboardConfigItem alloc] init];
+    item.entityId = entity.entityId;
+    item.cardType = @"weather-forecast";
+    item.columnSpan = 12;
+    item.rowSpan = 1;
+    item.customProperties = @{@"show_current": @NO};
+    CGFloat height = [HAWeatherEntityCell preferredHeightForConfigItem:item];
+    UIView *cell = [self cellForEntity:entity cellClass:[HAWeatherEntityCell class]
+        size:CGSizeMake(floor(kSubGridUnit * 12), height) configItem:item];
+    [self verifyView:cell identifier:nil];
+}
+
 #pragma mark - HAClockWeatherCell (12-col, kClockWeatherHeight)
 
 - (void)testClockWeatherSunny {
@@ -169,19 +215,8 @@
     [self verifyView:cell identifier:nil];
 }
 
-#pragma mark - Helpers
-
-/// Returns a fixed date (2026-01-15 14:30:00 UTC) for deterministic clock rendering.
-- (NSDate *)fixedTestDate {
-    NSDateComponents *components = [[NSDateComponents alloc] init];
-    components.year = 2026;
-    components.month = 1;
-    components.day = 15;
-    components.hour = 14;
-    components.minute = 30;
-    components.second = 0;
-    components.timeZone = [NSTimeZone timeZoneForSecondsFromGMT:0];
-    return [[NSCalendar calendarWithIdentifier:NSCalendarIdentifierGregorian] dateFromComponents:components];
-}
+// -fixedTestDate is inherited from HABaseSnapshotTestCase (shared with
+// HASnapshotTestHelpers' +fixedForecastBaseDate, which mirrors the same
+// value for non-test-case code).
 
 @end
