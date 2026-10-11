@@ -52,6 +52,7 @@ static const CGFloat kMaxColumnWidth = 500.0;
     if ([cardType isEqualToString:@"weather-forecast"] || [cardType isEqualToString:@"weather"]) return 4;
     if ([cardType isEqualToString:@"history-graph"] || [cardType isEqualToString:@"graph"]) return 4;
     if ([cardType isEqualToString:@"sensor"]) return 2;
+    if ([cardType isEqualToString:@"clock"]) return 2; // hui-clock-card getCardSize (1 only for explicit small)
     if ([cardType isEqualToString:@"media-control"] || [cardType containsString:@"media-player"]) return 3;
     if ([cardType isEqualToString:@"alarm-panel"] || [cardType containsString:@"alarm"]) return 3;
 

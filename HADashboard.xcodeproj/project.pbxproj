@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BC9CFB2AC1914C1DD9E756CD /* HAClockCardTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 35EEE3AA0C1CEE30348CC3F1 /* HAClockCardTests.m */; };
+		EFAE9B42E02EE1B0A9EC4490 /* HAClockCardSnapshotTests.m in Sources */ = {isa = PBXBuildFile; fileRef = F6100C6FE8F724D2FD32C5F0 /* HAClockCardSnapshotTests.m */; };
+		EBE0D3EBFC4D8794CAE9AFF7 /* HAClockCardCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 35004B84A370B7F279743089 /* HAClockCardCell.m */; };
+		51DD0B643DF39DE92517DA3B /* HAClockCardFormatter.m in Sources */ = {isa = PBXBuildFile; fileRef = A107524BC4DBB8C0CDD10669 /* HAClockCardFormatter.m */; };
 		00038949C342C959E2F667B0 /* testTimerSectionPaused_timerSectionPaused_light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = D407B92D07874BD95496B151 /* testTimerSectionPaused_timerSectionPaused_light@2x.png */; };
 		001778B7ED749DFF94C6C9E2 /* testLightButton_showNameFalse__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 98224A06BD15296D69976A26 /* testLightButton_showNameFalse__dark_gradient@2x.png */; };
 		001AE9A431062052A8847D1B /* testWaterHeaterTile_default__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = E552F82D7EDFBEB60C5A0CF7 /* testWaterHeaterTile_default__light@2x.png */; };
@@ -1396,6 +1400,12 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		35EEE3AA0C1CEE30348CC3F1 /* HAClockCardTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAClockCardTests.m; sourceTree = "<group>"; };
+		F6100C6FE8F724D2FD32C5F0 /* HAClockCardSnapshotTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAClockCardSnapshotTests.m; sourceTree = "<group>"; };
+		35004B84A370B7F279743089 /* HAClockCardCell.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAClockCardCell.m; sourceTree = "<group>"; };
+		DF2F8D432DC63EA8CE956A41 /* HAClockCardCell.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAClockCardCell.h; sourceTree = "<group>"; };
+		A107524BC4DBB8C0CDD10669 /* HAClockCardFormatter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAClockCardFormatter.m; sourceTree = "<group>"; };
+		CA5354C43D94EBE5710321E4 /* HAClockCardFormatter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAClockCardFormatter.h; sourceTree = "<group>"; };
 		000F4A3D464DFD6E048297AD /* testSwitchTile_nameOverride__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testSwitchTile_nameOverride__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		002D5AB7591D7457BC6A1807 /* testHumidifierTile_modes__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testHumidifierTile_modes__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		003CB58637360AC680F25FFB /* HATopAlignedFlowLayout.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HATopAlignedFlowLayout.m; sourceTree = "<group>"; };
@@ -2957,6 +2967,8 @@
 				B5537DFCAB4A2DC1E69870E3 /* HACameraEntityCell.m */,
 				F42FD53F76E2FDF60DD31E8E /* HAClimateEntityCell.h */,
 				695E20B62974A974A8BF894A /* HAClimateEntityCell.m */,
+				DF2F8D432DC63EA8CE956A41 /* HAClockCardCell.h */,
+				35004B84A370B7F279743089 /* HAClockCardCell.m */,
 				80BC554292BEAD522E3E77FF /* HAClockWeatherCell.h */,
 				76033E2F5AC06B27BDE3B78B /* HAClockWeatherCell.m */,
 				CAFF5E2CE07581B30E463E86 /* HACounterEntityCell.h */,
@@ -3302,6 +3314,8 @@
 				D803A08E36BE929F394FEDA9 /* HAEntityCellFactory.m */,
 				EECF0602B33DB92B2D726B41 /* HAEntityDetailSection.h */,
 				39AE66676AE6EAA9570BDC43 /* HAEntityDetailSection.m */,
+				CA5354C43D94EBE5710321E4 /* HAClockCardFormatter.h */,
+				A107524BC4DBB8C0CDD10669 /* HAClockCardFormatter.m */,
 				86B02E27609090619C6890B6 /* HAEntityDisplayHelper.h */,
 				86C998DEAF38FE7FB6E67926 /* HAEntityDisplayHelper.m */,
 				A9037653F77DB49A02960524 /* HAEntityRowView.h */,
@@ -4642,6 +4656,8 @@
 				A7F3570A925EE8CD028FA470 /* HAThermostatPrimaryPolishTests.m */,
 				89C3AEC2DEBB17550A98AECB /* HATileFeatureSnapshotTests.m */,
 				25A23BBB01EFF935B0E6A107 /* HATileFeatureTests.m */,
+				F6100C6FE8F724D2FD32C5F0 /* HAClockCardSnapshotTests.m */,
+				35EEE3AA0C1CEE30348CC3F1 /* HAClockCardTests.m */,
 				E1CCD0813B724C118219979F /* HAUnsupportedCardTests.m */,
 				21E9E5196C3254A941DBB228 /* HAViewPersistenceTests.m */,
 				4600991AD01B41F78DB61EBC /* HAWeatherEntityCellTests.m */,
@@ -6098,6 +6114,8 @@
 				0ABD799AC8AFA8C64D8F29E4 /* HACacheTests.m in Sources */,
 				7E713793F923745BFD9D8C93 /* HACameraHLSTests.m in Sources */,
 				D1159FB81724A845F116D1BE /* HAClassicLayoutTests.m in Sources */,
+				EFAE9B42E02EE1B0A9EC4490 /* HAClockCardSnapshotTests.m in Sources */,
+				BC9CFB2AC1914C1DD9E756CD /* HAClockCardTests.m in Sources */,
 				FA122B7377AC4AB4AEDD115C /* HAUnsupportedCardTests.m in Sources */,
 				97E1FE1967C34581A154E1B4 /* HAWeatherEntityCellTests.m in Sources */,
 				6097FD45E82E45B3B2D233CE /* HAWeatherForecastParserTests.m in Sources */,
@@ -6177,6 +6195,7 @@
 				BBB86B24FB7AF6C047C2EBFA /* HACameraEntityCell.m in Sources */,
 				F941AFAA09A469A72FBA04F6 /* HACameraRegistrationManager.m in Sources */,
 				ED1125408B8C1B6A44EA69E9 /* HAClimateEntityCell.m in Sources */,
+				EBE0D3EBFC4D8794CAE9AFF7 /* HAClockCardCell.m in Sources */,
 				DDEA7123AF56287E575DCF7C /* HAClockWeatherCell.m in Sources */,
 				98D03C1230A2C4C015DB5F30 /* HAColorWheelView.m in Sources */,
 				0BE750FD2213FCDCE6552861 /* HAColumnarLayout.m in Sources */,
@@ -6213,6 +6232,7 @@
 				761059BD40EECB14B417E125 /* HAEntityCellFactory.m in Sources */,
 				B9B9320F99BB1EE258060084 /* HAEntityDetailSection.m in Sources */,
 				DD67EF4B0DE6BE37014390C2 /* HAEntityDetailViewController.m in Sources */,
+				51DD0B643DF39DE92517DA3B /* HAClockCardFormatter.m in Sources */,
 				6B8AC1573FF113ED885EF362 /* HAEntityDisplayHelper.m in Sources */,
 				29F753F3665964A31D51AB78 /* HAEntityNameResolver.m in Sources */,
 				802C1095A8F35AA1ECAA3371 /* HAEntityRowView.m in Sources */,

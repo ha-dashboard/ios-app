@@ -682,6 +682,10 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
         }
     }
 
+    // The grid heading (if any) before the card's own title is folded in below —
+    // the clock card renders its own title inside the card, not as a heading.
+    NSString *headingTitle = sectionTitle;
+
     // Use card title if no section title provided
     if (!sectionTitle) {
         sectionTitle = HASafeDictStringOrNil(card, @"title");
@@ -744,9 +748,27 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             [cardType isEqualToString:@"button"] ||
             [cardType isEqualToString:@"sensor"]) {
             cardColumnSpan = 6;
+        } else if ([cardType isEqualToString:@"clock"] && sectionGridMax > 0) {
+            cardColumnSpan = 6; // hui-clock-card getGridOptions: columns 6
         } else {
             cardColumnSpan = 12;
         }
+    }
+
+    // HA built-in clock card: entity-less, rendered natively by HAClockCardCell.
+    // Exact match — "custom:clock-weather-card" is routed by containsString:
+    // "clock-weather" elsewhere and must never land here.
+    if ([cardType isEqualToString:@"clock"]) {
+        [self _addClockCard:card
+               headingTitle:headingTitle
+                sectionIcon:sectionIcon
+                 columnSpan:cardColumnSpan
+          clampToMinColumns:(gridColumns <= 0)
+                    rowSpan:cardRowSpan
+             sectionGridMax:sectionGridMax
+                   sections:sections
+                   allItems:allItems];
+        return;
     }
 
     // Parse view_layout.position for sidebar view support
@@ -1409,6 +1431,90 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
     }
 
     [sections addObject:section];
+}
+
+#pragma mark - Clock Card
+
+/// Copies the built-in `clock` card's config onto a single entity-less item
+/// for HAClockCardCell, and applies hui-clock-card's getGridOptions() sizing
+/// in sections views.
++ (void)_addClockCard:(NSDictionary *)card
+         headingTitle:(NSString *)headingTitle
+          sectionIcon:(NSString *)sectionIcon
+           columnSpan:(NSInteger)columnSpan
+    clampToMinColumns:(BOOL)clampToMinColumns
+              rowSpan:(NSInteger)rowSpan
+       sectionGridMax:(NSInteger)sectionGridMax
+             sections:(NSMutableArray<HADashboardConfigSection *> *)sections
+             allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems {
+    NSMutableDictionary *props = [NSMutableDictionary dictionary];
+    for (NSString *key in @[@"clock_style", @"clock_size", @"seconds_motion", @"time_zone", @"ticks", @"face_style"]) {
+        if ([card[key] isKindOfClass:[NSString class]]) props[key] = card[key];
+    }
+    for (NSString *key in @[@"show_seconds", @"no_background", @"border"]) {
+        if ([card[key] isKindOfClass:[NSNumber class]]) props[key] = card[key];
+    }
+    // TimeFormat is "language" | "system" | "12" | "24"; YAML may hand us 12/24 as numbers.
+    if ([card[@"time_format"] isKindOfClass:[NSString class]] || [card[@"time_format"] isKindOfClass:[NSNumber class]]) {
+        props[@"time_format"] = card[@"time_format"];
+    }
+    if ([card[@"date_format"] isKindOfClass:[NSArray class]]) props[@"date_format"] = card[@"date_format"];
+    NSString *title = HASafeDictStringOrNil(card, @"title");
+    if (title) props[@"clock_title"] = title;
+
+    // A grid heading (not the clock's own title) uses the embedded headingIcon
+    // mechanism, exactly like the other card types.
+    BOOL isGridHeading = headingTitle.length > 0 && ![headingTitle isEqualToString:title];
+    HADashboardConfigItem *item = [[HADashboardConfigItem alloc] init];
+    item.cardType = @"clock";
+    if (isGridHeading && sectionIcon.length > 0) {
+        item.displayName = headingTitle;
+        props[@"headingIcon"] = sectionIcon;
+    }
+
+    item.columnSpan = columnSpan > 0 ? columnSpan : 12;
+    item.rowSpan = rowSpan;
+    if (sectionGridMax > 0) {
+        // hui-clock-card getGridOptions(): rows clamp to [min_rows, max_rows],
+        // columns to min_columns. Classic (masonry) views size to content.
+        BOOL analog = [props[@"clock_style"] isEqual:@"analog"];
+        NSString *size = props[@"clock_size"];
+        BOOL hasTitle = title.length > 0;
+        NSInteger rows, minRows, maxRows, minColumns;
+        if (analog) {
+            maxRows = 0;
+            if ([size isEqual:@"medium"]) {
+                rows = 3; minRows = hasTitle ? 4 : 3; minColumns = 5;
+            } else if ([size isEqual:@"large"]) {
+                rows = 4; minRows = hasTitle ? 5 : 4; minColumns = 6;
+            } else {
+                rows = 2; minRows = hasTitle ? 3 : 2; minColumns = 2;
+            }
+        } else {
+            maxRows = 4;
+            if ([size isEqual:@"medium"]) {
+                rows = 2; minRows = hasTitle ? 2 : 1; minColumns = 4;
+            } else if ([size isEqual:@"large"]) {
+                rows = 2; minRows = 2; minColumns = 6;
+            } else {
+                rows = 1; minRows = 1; minColumns = 3;
+            }
+        }
+        NSInteger effectiveRows = MAX(rowSpan > 0 ? rowSpan : rows, minRows);
+        if (maxRows > 0) effectiveRows = MIN(effectiveRows, maxRows);
+        item.rowSpan = effectiveRows;
+        if (clampToMinColumns) item.columnSpan = MIN(MAX(item.columnSpan, minColumns), 12);
+    }
+    item.customProperties = [props copy];
+
+    HADashboardConfigSection *section = [[HADashboardConfigSection alloc] init];
+    section.title = isGridHeading ? headingTitle : nil;
+    section.cardType = @"clock";
+    section.icon = sectionIcon;
+    section.entityIds = @[];
+    section.items = @[item];
+    [sections addObject:section];
+    [allItems addObject:item];
 }
 
 #pragma mark - Unsupported Card Placeholder
