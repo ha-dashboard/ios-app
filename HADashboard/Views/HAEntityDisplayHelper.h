@@ -23,6 +23,14 @@
 /// @param decimals Number of decimal places (1 for badges, 2 for detail views)
 + (NSString *)formattedStateForEntity:(HAEntity *)entity decimals:(NSInteger)decimals;
 
+/// YES for device_class timestamp/uptime or an ISO 8601-shaped state string.
++ (BOOL)isTimestampState:(NSString *)state deviceClass:(NSString *)deviceClass;
+
+/// As above, rendering timestamp states (device_class timestamp/uptime or an
+/// ISO 8601 state) with a card's HA `time_format` (string or {type, style});
+/// nil uses HA's default (relative, or total for uptime).
++ (NSString *)formattedStateForEntity:(HAEntity *)entity decimals:(NSInteger)decimals timeFormat:(id)timeFormat;
+
 /// Format state + unit as a single string (e.g. "21.5 °C")
 + (NSString *)stateWithUnitForEntity:(HAEntity *)entity decimals:(NSInteger)decimals;
 
@@ -63,8 +71,10 @@
 
 /// Format an ISO 8601 timestamp or state value per HA's format option.
 /// Supports: "relative" (e.g. "5 min ago"), "total" (duration since epoch),
-/// "date" (date only), "time" (time only), "datetime" (date + time).
+/// "date" (date only), "time" (time only), "datetime" (date + time), either as
+/// a string or as HA's {type, style} object (date/datetime "short" = numeric,
+/// time "long" = with seconds).
 /// Returns the original value if format is unknown or parsing fails.
-+ (NSString *)formattedValue:(NSString *)value withFormat:(NSString *)format;
++ (NSString *)formattedValue:(NSString *)value withFormat:(id)format;
 
 @end
