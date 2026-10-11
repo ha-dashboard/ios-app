@@ -30,6 +30,7 @@
 #import "HAHeadingCell.h"
 #import "HACameraEntityCell.h"
 #import "HAClockWeatherCell.h"
+#import "HAClockCardCell.h"
 #import "HAGlanceCardCell.h"
 #import "HAAction.h"
 #import "HAActionDispatcher.h"
@@ -851,6 +852,9 @@ static const CGFloat kRowUnitHeight = 56.0;
         NSString *initialView = item.customProperties[@"initial_view"];
         HACalendarViewMode mode = ([initialView hasPrefix:@"list"]) ? HACalendarViewModeList : HACalendarViewModeMonth;
         height = [HACalendarCardCell preferredHeightForMode:mode] + headingExtra;
+    } else if ([item.cardType isEqualToString:@"clock"]) {
+        // Sections views also get HA's getGridOptions() rows via item.rowSpan below.
+        height = [HAClockCardCell preferredHeightForConfigItem:item width:itemWidth] + headingExtra;
     } else if ([item.cardType containsString:@"clock-weather"]) {
         NSNumber *rows = item.customProperties[@"forecast_rows"];
         NSInteger forecastRows = rows ? [rows integerValue] : 5;
@@ -1953,6 +1957,8 @@ static inline NSString *HANormalizeState(id val) {
         [(HACalendarCardCell *)cell beginLoading];
     } else if ([cell isKindOfClass:[HALogbookCardCell class]]) {
         [(HALogbookCardCell *)cell beginLoading];
+    } else if ([cell isKindOfClass:[HAClockCardCell class]]) {
+        [(HAClockCardCell *)cell beginTicking];
     }
 
     // Apply blur background (idempotent — safe to call from both cellForItem and willDisplay)
@@ -1963,8 +1969,11 @@ static inline NSString *HANormalizeState(id val) {
     // (shouldRasterize bakes the blur into a static bitmap, breaking compositing).
     BOOL isCamera = [cell isKindOfClass:[HACameraEntityCell class]];
     BOOL isBadge = [cell isKindOfClass:[HABadgeRowCell class]];
+    // A clock redraws every second; a no_background clock (corner radius 0)
+    // would otherwise be re-rasterized on each tick.
+    BOOL isClock = [cell isKindOfClass:[HAClockCardCell class]];
     BOOL isCard = (cell.contentView.layer.cornerRadius > 0);
-    cell.layer.shouldRasterize = !isCamera && !isCard && !isBadge;
+    cell.layer.shouldRasterize = !isCamera && !isCard && !isBadge && !isClock;
     cell.layer.rasterizationScale = [UIScreen mainScreen].scale;
 }
 
@@ -1978,6 +1987,8 @@ static inline NSString *HANormalizeState(id val) {
         [(HACameraEntityCell *)cell cancelLoading];
     } else if ([cell isKindOfClass:[HACalendarCardCell class]]) {
         [(HACalendarCardCell *)cell cancelLoading];
+    } else if ([cell isKindOfClass:[HAClockCardCell class]]) {
+        [(HAClockCardCell *)cell endTicking];
     }
 }
 
