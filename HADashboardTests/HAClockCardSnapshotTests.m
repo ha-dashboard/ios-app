@@ -37,10 +37,14 @@ static NSDictionary *HAReporterCard(void) {
 }
 
 - (UIView *)clockCellForCard:(NSDictionary *)card language:(NSString *)language {
-    return [self clockCellForCards:@[card] language:language];
+    return [self clockCellForCards:@[card] language:language width:kColumnWidth];
 }
 
-- (UIView *)clockCellForCards:(NSArray *)cards language:(NSString *)language {
+- (UIView *)clockCellForCard:(NSDictionary *)card language:(NSString *)language width:(CGFloat)width {
+    return [self clockCellForCards:@[card] language:language width:width];
+}
+
+- (UIView *)clockCellForCards:(NSArray *)cards language:(NSString *)language width:(CGFloat)width {
     NSMutableArray *zoned = [NSMutableArray array];
     for (NSDictionary *card in cards) {
         NSMutableDictionary *c = [card mutableCopy];
@@ -67,7 +71,6 @@ static NSDictionary *HAReporterCard(void) {
     XCTAssertNotNil(item);
 
     // Same height rule as HADashboardViewController -heightForItemAtIndexPath:.
-    CGFloat width = kColumnWidth;
     BOOL hasHeading = item.customProperties[@"headingIcon"] != nil && item.displayName.length > 0;
     CGFloat headingExtra = hasHeading ? [HABaseEntityCell headingHeight] : 0;
     CGFloat height = [HAClockCardCell preferredHeightForConfigItem:item width:width] + headingExtra;
@@ -132,6 +135,26 @@ static NSDictionary *HAReporterCard(void) {
             @{@"type": @"clock", @"clock_size": @"medium", @"show_seconds": @YES},
         ],
     } language:@"fr"] identifier:nil];
+}
+
+#pragma mark - Narrow cells (iPad Mini, max_columns 4, default 6/12 span ≈ 115pt)
+
+- (void)testDigitalNarrowLargeTwelveHourSecondsDate {
+    // Must scale the whole time group down uniformly, never truncate "8:06".
+    [self verifyView:[self clockCellForCard:@{
+        @"type": @"clock", @"clock_size": @"large", @"show_seconds": @YES, @"time_format": @"12",
+        @"date_format": @[@"weekday-long", @"day-numeric", @"month-long"],
+    } language:@"en" width:115.0] identifier:nil];
+}
+
+- (void)testAnalogNarrowMediumNumbersUprightMinuteTicksDate {
+    // Dial shrinks below the 160pt nominal; numerals, strokes, hands and the
+    // date must shrink with it instead of colliding.
+    [self verifyView:[self clockCellForCard:@{
+        @"type": @"clock", @"clock_style": @"analog", @"clock_size": @"medium",
+        @"face_style": @"numbers_upright", @"ticks": @"minute", @"show_seconds": @YES,
+        @"date_format": @[@"weekday-short", @"day-numeric"],
+    } language:@"en" width:115.0] identifier:nil];
 }
 
 #pragma mark - Analog

@@ -102,6 +102,14 @@ static CGFloat HAClockTimeRowHeight(HAClockSize size) {
     return ceil(HAClockDigitalTimeFontSize(size) * 0.8);
 }
 
+/// Smallest uniform scale the digital time group shrinks to in a narrow cell.
+static const CGFloat kMinimumTimeScale = 0.4;
+
+static CGFloat HAClockScaledTimeRowHeight(HAClockSize size, CGFloat scale) {
+    if (scale >= 1.0) return HAClockTimeRowHeight(size);
+    return ceil(HAClockDigitalTimeFontSize(size) * 0.8 * scale);
+}
+
 static UIFont *HAClockTitleFont(HAClockSize size) {
     return [UIFont systemFontOfSize:HAClockTitleFontSize(size)];
 }
@@ -311,15 +319,26 @@ static NSString *HAClockRomanNumeral(NSInteger number) {
     if (diameter <= 0) return;
 
     CGPoint center = CGPointMake(boundsSize.width / 2.0, boundsSize.height / 2.0);
+    // HA draws at a fixed --clock-size. When the cell is too narrow and the
+    // dial shrinks, every fixed-px metric (fonts, stroke and hand widths,
+    // centre dot, border) shrinks with it; lengths that HA already expresses
+    // as a fraction of --clock-size use the actual diameter directly. At or
+    // above nominal size the scale is exactly 1, so output is unchanged.
+    CGFloat scale = MIN((CGFloat)1.0, diameter / HAClockAnalogDiameter(self.clockSize));
+
     // .dial-border is a 2px border with box-sizing: border-box; ticks are
     // absolutely positioned inside it.
-    CGFloat inset = self.showsBorder ? 2.0 : 0.0;
+    CGFloat borderWidth = 2.0 * scale;
+    CGFloat inset = self.showsBorder ? borderWidth : 0.0;
     CGFloat outerRadius = diameter / 2.0 - inset;
 
     _borderLayer.hidden = !self.showsBorder;
+    _borderLayer.lineWidth = borderWidth;
     _borderLayer.path = [UIBezierPath bezierPathWithOvalInRect:
-                         CGRectMake(center.x - diameter / 2.0 + 1.0, center.y - diameter / 2.0 + 1.0,
-                                    diameter - 2.0, diameter - 2.0)].CGPath;
+                         CGRectMake(center.x - diameter / 2.0 + borderWidth / 2.0, center.y - diameter / 2.0 + borderWidth / 2.0,
+                                    diameter - borderWidth, diameter - borderWidth)].CGPath;
+    _hourTickLayer.lineWidth = 2.0 * scale;
+    _minuteTickLayer.lineWidth = 1.0 * scale;
 
     NSInteger tickCount = 0;
     switch (self.ticks) {
@@ -361,11 +380,11 @@ static NSString *HAClockRomanNumeral(NSInteger number) {
     _hourTickLayer.path = hourPath.CGPath;
     _minuteTickLayer.path = minutePath.CGPath;
 
-    // Numbers: centred on the tick's radial line, 35% of their own line box
-    // below the dial edge (translate(-50%, 35%)), upright or rotated with the
-    // tick (roman).
-    CGFloat numberFontSize = (self.clockSize == HAClockSizeLarge) ? 16.0
-                           : (self.clockSize == HAClockSizeMedium) ? 14.0 : 12.0;
+    // Numbers: each sits at the top of its full-dial tick box, translated down
+    // 35% of its own line box (translate(-50%, 35%)), so its centre is 0.85 of
+    // the line box inside the dial edge; upright or rotated with the tick.
+    CGFloat numberFontSize = ((self.clockSize == HAClockSizeLarge) ? 16.0
+                           : (self.clockSize == HAClockSizeMedium) ? 14.0 : 12.0) * scale;
     UIFont *numberFont = [UIFont systemFontOfSize:numberFontSize weight:UIFontWeightMedium];
     CGFloat numberBoxHeight = ceil(numberFontSize * kTitleLineHeight);
     CGFloat numberRadius = outerRadius - numberBoxHeight * 0.85;
@@ -396,9 +415,9 @@ static NSString *HAClockRomanNumeral(NSInteger number) {
     // Date: centred at 68% of the dial (66% and 45% wide for a long date on a
     // small dial).
     BOOL compactLongDate = self.longDate && !HAClockSizeIsRoomy(self.clockSize);
-    CGFloat dateFontSize = (self.clockSize == HAClockSizeLarge) ? 20.0
+    CGFloat dateFontSize = ((self.clockSize == HAClockSizeLarge) ? 20.0
                          : (self.clockSize == HAClockSizeMedium) ? 16.0
-                         : (compactLongDate ? 10.0 : 12.0);
+                         : (compactLongDate ? 10.0 : 12.0)) * scale;
     _dateLabel.font = [UIFont systemFontOfSize:dateFontSize weight:UIFontWeightMedium];
     NSUInteger lines = MAX(self.dateLineCount, (NSUInteger)1);
     _dateLabel.numberOfLines = lines;
@@ -408,16 +427,20 @@ static NSString *HAClockRomanNumeral(NSInteger number) {
     _dateLabel.frame = CGRectMake(center.x - dateWidth / 2.0, dateCenterY - dateHeight / 2.0, dateWidth, dateHeight);
 
     // Hands grow outward from the centre: hour 25%, minute 35%, second 42%.
-    _hourHand.bounds = CGRectMake(0, 0, 4.0, diameter * 0.25);
-    _minuteHand.bounds = CGRectMake(0, 0, 3.0, diameter * 0.35);
-    _secondHand.bounds = CGRectMake(0, 0, 2.0, diameter * 0.42);
+    _hourHand.bounds = CGRectMake(0, 0, 4.0 * scale, diameter * 0.25);
+    _minuteHand.bounds = CGRectMake(0, 0, 3.0 * scale, diameter * 0.35);
+    _secondHand.bounds = CGRectMake(0, 0, 2.0 * scale, diameter * 0.42);
     for (CALayer *hand in @[_hourHand, _minuteHand, _secondHand]) {
         hand.position = center;
+        hand.cornerRadius = 2.0 * scale;
         if (hand.shadowOpacity > 0) {
-            hand.shadowPath = [UIBezierPath bezierPathWithRoundedRect:hand.bounds cornerRadius:2.0].CGPath;
+            hand.shadowRadius = 3.0 * scale;
+            hand.shadowPath = [UIBezierPath bezierPathWithRoundedRect:hand.bounds cornerRadius:2.0 * scale].CGPath;
         }
     }
     _secondHand.hidden = !self.showsSeconds;
+    _centerDot.bounds = CGRectMake(0, 0, 8.0 * scale, 8.0 * scale);
+    _centerDot.cornerRadius = 4.0 * scale;
     _centerDot.position = center;
 }
 
@@ -517,6 +540,8 @@ static NSString *HAClockRomanNumeral(NSInteger number) {
 @property (nonatomic, strong) HAClockTickProxy *tickProxy;
 @property (nonatomic, assign) BOOL tickRequested;
 @property (nonatomic, assign) BOOL configured;
+@property (nonatomic, readwrite, assign) CGFloat timeScale;
+@property (nonatomic, assign) CGFloat dateScale;
 @property (nonatomic, assign) long long lastDateMinute;
 
 @property (nonatomic, readwrite, copy) NSString *renderedTimeText;
@@ -574,8 +599,9 @@ static NSString *HAClockRomanNumeral(NSInteger number) {
 
     self.timeLabel = [[UILabel alloc] init];
     self.timeLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    self.timeLabel.adjustsFontSizeToFitWidth = YES;
-    self.timeLabel.minimumScaleFactor = 0.4;
+    // Never truncate or independently shrink the time: the whole group is
+    // scaled uniformly in -layoutSubviews (see -fitDigitalContentToWidth).
+    self.timeLabel.lineBreakMode = NSLineBreakByClipping;
     self.timeLabel.baselineAdjustment = UIBaselineAdjustmentAlignCenters;
     [self.timeLabel setContentCompressionResistancePriority:UILayoutPriorityDefaultLow forAxis:UILayoutConstraintAxisHorizontal];
     [self.timeRow addSubview:self.timeLabel];
@@ -593,8 +619,8 @@ static NSString *HAClockRomanNumeral(NSInteger number) {
     self.dateLabel = [[UILabel alloc] init];
     self.dateLabel.textAlignment = NSTextAlignmentCenter;
     self.dateLabel.alpha = 0.8;
-    self.dateLabel.adjustsFontSizeToFitWidth = YES;
-    self.dateLabel.minimumScaleFactor = 0.5;
+    // Shrunk explicitly in -fitDigitalContentToWidth (UILabel's own
+    // adjustsFontSizeToFitWidth under-shrinks inside the stack view).
     [self.dateLabel setContentCompressionResistancePriority:UILayoutPriorityDefaultLow forAxis:UILayoutConstraintAxisHorizontal];
 
     self.digitalStack = [[UIStackView alloc] initWithArrangedSubviews:@[self.timeRow, self.dateLabel]];
@@ -737,18 +763,9 @@ static NSString *HAClockRomanNumeral(NSInteger number) {
     self.mainStack.spacing = HAClockRowGap(size);
     self.titleLabel.font = HAClockTitleFont(size);
 
-    // Digital
-    CGFloat timeFontSize = HAClockDigitalTimeFontSize(size);
-    CGFloat suffixFontSize = HAClockDigitalSuffixFontSize(size);
-    CGFloat rowHeight = HAClockTimeRowHeight(size);
-    self.timeLabel.font = [UIFont monospacedDigitSystemFontOfSize:timeFontSize weight:UIFontWeightMedium];
-    UIFont *suffixFont = [UIFont monospacedDigitSystemFontOfSize:suffixFontSize weight:UIFontWeightMedium];
-    self.secondsLabel.font = suffixFont;
-    self.amPmLabel.font = suffixFont;
-    self.timeRowHeightConstraint.constant = rowHeight;
-    CGFloat margin = HAClockDigitalSuffixMargin(size);
-    self.secondsLeadingConstraint.constant = margin;
-    self.amPmLeadingConstraint.constant = margin;
+    // Digital (full HA size; -layoutSubviews scales down if it doesn't fit)
+    [self applyDigitalTimeScale:1.0];
+    self.dateScale = 1.0;
     self.dateLabel.font = HAClockDigitalDateFont(size);
     self.dateLabel.numberOfLines = HAClockLineCount(self.dateParts);
 
@@ -916,6 +933,7 @@ static NSString *HAClockRomanNumeral(NSInteger number) {
             self.analogView.dateLabel.text = date;
         } else {
             self.dateLabel.text = date;
+            [self setNeedsLayout]; // re-fit the new date's width
         }
     }
 
@@ -956,6 +974,7 @@ static NSString *HAClockRomanNumeral(NSInteger number) {
                 [attributed addAttribute:NSKernAttributeName value:@2.0 range:NSMakeRange(hour.length - 1, 2)];
             }
             self.timeLabel.attributedText = attributed;
+            [self setNeedsLayout]; // re-fit: the width can change ("9:59" → "10:00")
         }
 
         NSString *amPm = nil;
@@ -967,6 +986,7 @@ static NSString *HAClockRomanNumeral(NSInteger number) {
             self.renderedAmPmText = amPm;
             self.amPmLabel.text = amPm;
             [self updateSuffixLayout];
+            [self setNeedsLayout];
         }
     }
 
@@ -977,7 +997,10 @@ static NSString *HAClockRomanNumeral(NSInteger number) {
         BOOL presenceChanged = (seconds == nil) != (self.renderedSecondsText == nil);
         self.renderedSecondsText = seconds;
         self.secondsLabel.text = seconds;
-        if (presenceChanged) [self updateSuffixLayout];
+        if (presenceChanged) {
+            [self updateSuffixLayout];
+            [self setNeedsLayout];
+        }
     }
 }
 
@@ -988,8 +1011,9 @@ static NSString *HAClockRomanNumeral(NSInteger number) {
 - (void)updateSuffixLayout {
     BOOL hasSeconds = self.renderedSecondsText != nil;
     BOOL hasAmPm = self.renderedAmPmText != nil;
-    CGFloat rowHeight = HAClockTimeRowHeight(self.clockSize);
-    CGFloat suffixLine = HAClockDigitalSuffixFontSize(self.clockSize) * 0.9;
+    CGFloat scale = self.timeScale > 0 ? self.timeScale : 1.0;
+    CGFloat rowHeight = HAClockScaledTimeRowHeight(self.clockSize, scale);
+    CGFloat suffixLine = HAClockDigitalSuffixFontSize(self.clockSize) * scale * 0.9;
 
     CGFloat secondsRow, amPmRow;
     if (hasSeconds && hasAmPm) {
@@ -1005,8 +1029,119 @@ static NSString *HAClockRomanNumeral(NSInteger number) {
     for (NSLayoutConstraint *c in self.suffixConstraints) c.active = (hasSeconds || hasAmPm);
     self.secondsLabel.hidden = !hasSeconds;
     self.amPmLabel.hidden = !hasAmPm;
-    self.secondsLeadingConstraint.constant = hasSeconds ? HAClockDigitalSuffixMargin(self.clockSize) : 0;
-    self.amPmLeadingConstraint.constant = hasAmPm ? HAClockDigitalSuffixMargin(self.clockSize) : 0;
+    self.secondsLeadingConstraint.constant = hasSeconds ? HAClockDigitalSuffixMargin(self.clockSize) * scale : 0;
+    self.amPmLeadingConstraint.constant = hasAmPm ? HAClockDigitalSuffixMargin(self.clockSize) * scale : 0;
+}
+
+#pragma mark - Narrow-width fitting
+
+/// Applies one scale factor to the hh:mm font, the seconds/AM-PM font, their
+/// gap and the row height. 1.0 is HA's full size.
+- (void)applyDigitalTimeScale:(CGFloat)scale {
+    self.timeScale = scale;
+    HAClockSize size = self.clockSize;
+    self.timeLabel.font = [UIFont monospacedDigitSystemFontOfSize:HAClockDigitalTimeFontSize(size) * scale
+                                                           weight:UIFontWeightMedium];
+    UIFont *suffixFont = [UIFont monospacedDigitSystemFontOfSize:HAClockDigitalSuffixFontSize(size) * scale
+                                                          weight:UIFontWeightMedium];
+    self.secondsLabel.font = suffixFont;
+    self.amPmLabel.font = suffixFont;
+    self.timeRowHeightConstraint.constant = HAClockScaledTimeRowHeight(size, scale);
+    [self updateSuffixLayout];
+}
+
+/// Width of the time group at `scale` × HA's size: hh:mm (with the colon's
+/// 2pt side margins), plus the gap and the wider of seconds / AM-PM.
+- (CGFloat)digitalTimeWidthAtScale:(CGFloat)scale {
+    HAClockSize size = self.clockSize;
+    CGFloat width = 0;
+    if (self.timeLabel.attributedText.length > 0) {
+        NSMutableAttributedString *time = [self.timeLabel.attributedText mutableCopy];
+        [time addAttribute:NSFontAttributeName
+                     value:[UIFont monospacedDigitSystemFontOfSize:HAClockDigitalTimeFontSize(size) * scale weight:UIFontWeightMedium]
+                     range:NSMakeRange(0, time.length)];
+        width = ceil([time boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)
+                                        options:NSStringDrawingUsesLineFragmentOrigin
+                                        context:nil].size.width);
+    }
+    UIFont *suffixFont = [UIFont monospacedDigitSystemFontOfSize:HAClockDigitalSuffixFontSize(size) * scale weight:UIFontWeightMedium];
+    CGFloat suffix = 0;
+    for (NSString *text in @[self.renderedSecondsText ?: @"", self.renderedAmPmText ?: @""]) {
+        if (text.length == 0) continue;
+        suffix = MAX(suffix, ceil([text sizeWithAttributes:@{NSFontAttributeName: suffixFont}].width));
+    }
+    if (suffix > 0) width += HAClockDigitalSuffixMargin(size) * scale + suffix;
+    return width;
+}
+
+/// Widest line of the date at `scale` × HA's date font size.
+- (CGFloat)digitalDateWidthAtScale:(CGFloat)scale {
+    UIFont *font = [UIFont systemFontOfSize:HAClockDigitalDateFontSize(self.clockSize) * scale];
+    CGFloat width = 0;
+    for (NSString *line in [self.renderedDateText componentsSeparatedByString:@"\n"]) {
+        width = MAX(width, ceil([line sizeWithAttributes:@{NSFontAttributeName: font}].width));
+    }
+    return width;
+}
+
+/// Largest scale (in 1/100 steps, floored at kMinimumTimeScale) at which
+/// `widthAtScale` fits `available`. Measured rather than linearly estimated:
+/// system text gets relatively wider at small sizes (optical sizing).
+static CGFloat HAClockFitScale(CGFloat available, CGFloat (^widthAtScale)(CGFloat)) {
+    CGFloat full = widthAtScale(1.0);
+    if (full <= available) return 1.0;
+    CGFloat scale = MAX(kMinimumTimeScale, floor(available / full * 100.0) / 100.0);
+    while (scale > kMinimumTimeScale + 0.001 && widthAtScale(scale) > available) {
+        scale = MAX(kMinimumTimeScale, scale - 0.01);
+    }
+    return scale;
+}
+
+/// Scales the time group down uniformly (never below kMinimumTimeScale) when
+/// its full-size width exceeds the card's content width, and shrinks the date
+/// line the same way independently; a date that still doesn't fit at the
+/// floor word-wraps rather than truncating. Returns YES if anything changed.
+- (BOOL)fitDigitalContentToWidth {
+    if (self.analog || !self.configured) return NO;
+    CGFloat available = floor(self.contentView.bounds.size.width - 2.0 * HAClockHorizontalPadding(self.clockSize));
+    if (available <= 0) return NO;
+    BOOL changed = NO;
+    __weak typeof(self) weakSelf = self;
+
+    if (self.timeLabel.attributedText.length > 0) {
+        CGFloat scale = HAClockFitScale(available, ^CGFloat(CGFloat s) { return [weakSelf digitalTimeWidthAtScale:s]; });
+        if (fabs(scale - self.timeScale) >= 0.001) {
+            [self applyDigitalTimeScale:scale];
+            changed = YES;
+        }
+    }
+
+    CGFloat dateScale = 1.0;
+    BOOL wrapDate = NO;
+    if (!self.dateLabel.hidden && self.renderedDateText.length > 0) {
+        dateScale = HAClockFitScale(available, ^CGFloat(CGFloat s) { return [weakSelf digitalDateWidthAtScale:s]; });
+        wrapDate = [self digitalDateWidthAtScale:dateScale] > available;
+    }
+    if (fabs(dateScale - self.dateScale) >= 0.001) {
+        self.dateScale = dateScale;
+        self.dateLabel.font = [UIFont systemFontOfSize:HAClockDigitalDateFontSize(self.clockSize) * dateScale];
+        changed = YES;
+    }
+    NSInteger lines = wrapDate ? 0 : (NSInteger)HAClockLineCount(self.dateParts);
+    if (self.dateLabel.numberOfLines != lines) {
+        self.dateLabel.numberOfLines = lines;
+        self.dateLabel.lineBreakMode = wrapDate ? NSLineBreakByWordWrapping : NSLineBreakByTruncatingTail;
+        changed = YES;
+    }
+    return changed;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if ([self fitDigitalContentToWidth]) {
+        [self.contentView setNeedsLayout];
+        [self.contentView layoutIfNeeded];
+    }
 }
 
 - (void)refreshAnalogForDate:(NSDate *)now animated:(BOOL)animated {

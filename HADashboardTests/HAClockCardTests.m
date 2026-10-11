@@ -274,6 +274,68 @@ static NSDate *HAFixedClockDate(void) {
     XCTAssertNil(cell.renderedDateText);
 }
 
+#pragma mark - Narrow widths
+
+- (HAClockCardCell *)laidOutCellForCard:(NSDictionary *)card language:(NSString *)language width:(CGFloat)width {
+    HAClockCardCell *cell = [self configuredCellForCard:card language:language];
+    cell.frame = CGRectMake(0, 0, width, 120);
+    [cell setNeedsLayout];
+    [cell layoutIfNeeded];
+    return cell;
+}
+
+/// YES if every visible label in `view`'s subtree shows its full text.
+- (void)assertNoTruncatedTimeIn:(HAClockCardCell *)cell {
+    for (UIView *row in cell.contentView.subviews) {
+        NSMutableArray *stack = [NSMutableArray arrayWithObject:row];
+        while (stack.count) {
+            UIView *v = stack.lastObject; [stack removeLastObject];
+            [stack addObjectsFromArray:v.subviews];
+            if (![v isKindOfClass:[UILabel class]] || v.hidden) continue;
+            UILabel *label = (UILabel *)v;
+            if (label.numberOfLines != 1 || label.adjustsFontSizeToFitWidth || label.text.length == 0) continue;
+            CGFloat needed = [label sizeThatFits:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)].width;
+            XCTAssertLessThanOrEqual(needed, ceil(label.bounds.size.width) + 0.5, @"'%@' is truncated", label.text);
+        }
+    }
+}
+
+- (void)testNarrow_digitalLarge12h_scalesTimeGroupUniformly {
+    HAClockCardCell *cell = [self laidOutCellForCard:@{
+        @"type": @"clock", @"clock_size": @"large", @"show_seconds": @YES, @"time_format": @"12",
+        @"date_format": @[@"weekday-long", @"day-numeric", @"month-long"],
+    } language:@"en" width:115];
+    XCTAssertLessThan(cell.timeScale, 1.0);
+    XCTAssertGreaterThanOrEqual(cell.timeScale, 0.4);
+    [self assertNoTruncatedTimeIn:cell];
+}
+
+- (void)testReporterLayout_rendersAtFullSizeWhenItFits {
+    // GitHub #21 config: 24h "20:06" + "47" at HA's full large size is ~216pt
+    // wide in SF; with 16pt padding each side it fits a 260pt cell unscaled.
+    HAClockCardCell *cell = [self laidOutCellForCard:HAReporterClockCard() language:@"fr" width:260];
+    XCTAssertEqual(cell.timeScale, 1.0, @"Fits at HA's full size, so no scaling");
+    [self assertNoTruncatedTimeIn:cell];
+}
+
+- (void)testReporterLayout_210pt_shrinksSlightlyWithoutTruncation {
+    // A ~210pt cell leaves 178pt: too narrow for the full-size group, so it
+    // scales uniformly (just under 0.85) instead of truncating.
+    HAClockCardCell *cell = [self laidOutCellForCard:HAReporterClockCard() language:@"fr" width:210];
+    XCTAssertLessThan(cell.timeScale, 1.0);
+    XCTAssertGreaterThan(cell.timeScale, 0.75);
+    [self assertNoTruncatedTimeIn:cell];
+}
+
+- (void)testNarrow_scaleRecoversWhenWidened {
+    HAClockCardCell *cell = [self laidOutCellForCard:HAReporterClockCard() language:@"en" width:115];
+    XCTAssertLessThan(cell.timeScale, 1.0);
+    cell.frame = CGRectMake(0, 0, 320, 120);
+    [cell setNeedsLayout];
+    [cell layoutIfNeeded];
+    XCTAssertEqual(cell.timeScale, 1.0);
+}
+
 - (void)testPreferredHeight {
     HADashboardConfigItem *analogMedium = [[HADashboardConfigItem alloc] init];
     analogMedium.customProperties = @{@"clock_style": @"analog", @"clock_size": @"medium"};

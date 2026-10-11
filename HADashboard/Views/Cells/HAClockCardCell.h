@@ -46,6 +46,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly, nullable) NSString *renderedAmPmText;
 @property (nonatomic, readonly, nullable) NSString *renderedDateText;
 
+/// Uniform scale currently applied to the digital time group (1 = HA's full
+/// size; shrinks, never below 0.4, when the cell is too narrow). Exposed for tests.
+@property (nonatomic, readonly) CGFloat timeScale;
+
 @end
 
 NS_ASSUME_NONNULL_END
