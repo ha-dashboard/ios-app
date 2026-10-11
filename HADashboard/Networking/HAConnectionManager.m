@@ -13,6 +13,7 @@
 #import "HALog.h"
 #import "HAStateLocalizer.h"
 #import "HAStrings.h"
+#import <SystemConfiguration/SCNetworkReachability.h>
 
 NSString *const HAConnectionManagerDidConnectNotification           = @"HAConnectionManagerDidConnect";
 NSString *const HAConnectionManagerDidDisconnectNotification        = @"HAConnectionManagerDidDisconnect";
@@ -23,7 +24,12 @@ NSString *const HAConnectionManagerDidReceiveDashboardListNotification = @"HACon
 NSString *const HAConnectionManagerDidReceiveRegistriesNotification    = @"HAConnectionManagerDidReceiveRegistries";
 NSString *const HAConnectionManagerHADidStartNotification             = @"HAConnectionManagerHADidStart";
 
+// Reconnect backoff: delay doubles each attempt (2, 4, 8, 16s...) until it
+// reaches kReconnectCapInterval, then settles into a jittered steady state
+// between kReconnectCapInterval and kReconnectMaxInterval so a fleet of
+// kiosk iPads doesn't all reconnect in lockstep after an HA restart.
 static const NSTimeInterval kReconnectBaseInterval = 2.0;
+static const NSTimeInterval kReconnectCapInterval  = 30.0;
 static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 
 @interface HAConnectionManager () <HAWebSocketClientDelegate>
@@ -34,6 +40,10 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 @property (nonatomic, assign) NSInteger reconnectAttempt;
 @property (nonatomic, strong) NSTimer *reconnectTimer;
 @property (nonatomic, assign) BOOL intentionalDisconnect;
+/// Returns a value in [0, 1). Isolated so tests can inject a deterministic
+/// sequence via the TestAccess category instead of real randomness.
+@property (nonatomic, copy) double (^reconnectJitterProvider)(void);
+@property (nonatomic, assign) SCNetworkReachabilityRef reachabilityRef;
 @property (nonatomic, strong, readwrite) HALovelaceDashboard *lovelaceDashboard;
 @property (nonatomic, copy) NSDictionary *pendingStrategyConfig; // stored for re-resolution after states/registries load
 @property (nonatomic, copy, readwrite) NSArray<NSDictionary *> *availableDashboards;
@@ -64,7 +74,26 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, void (^)(NSDictionary *)> *eventHandlers; // subscriptionId -> handler
 @property (nonatomic, assign, readwrite) BOOL showingCachedData;
 @property (nonatomic, copy) NSString *lastConnectedServerURL; // detect server URL change
+
+- (void)openWebSocketConnection;
+- (NSTimeInterval)reconnectDelayForAttempt:(NSInteger)attempt;
+- (void)startReachabilityMonitoring;
+- (void)stopReachabilityMonitoring;
+- (void)reachabilityBecameReachable;
 @end
+
+static void HAConnectionManagerReachabilityCallback(SCNetworkReachabilityRef target,
+                                                      SCNetworkReachabilityFlags flags,
+                                                      void *info) {
+    BOOL reachable = (flags & kSCNetworkReachabilityFlagsReachable) != 0 &&
+                      (flags & kSCNetworkReachabilityFlagsConnectionRequired) == 0;
+    if (!reachable) return;
+
+    HAConnectionManager *manager = (__bridge HAConnectionManager *)info;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [manager reachabilityBecameReachable];
+    });
+}
 
 @implementation HAConnectionManager
 
@@ -83,8 +112,16 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
         _entityStore = [NSMutableDictionary dictionary];
         _pendingCompletions = [NSMutableDictionary dictionary];
         _eventHandlers = [NSMutableDictionary dictionary];
+        _reconnectJitterProvider = ^double {
+            return (double)arc4random() / (double)UINT32_MAX;
+        };
     }
     return self;
+}
+
+- (void)dealloc {
+    [self.reconnectTimer invalidate];
+    [self stopReachabilityMonitoring];
 }
 
 #pragma mark - Connection
@@ -103,6 +140,31 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
         return;
     }
 
+    // -connect is the explicit entry point: a user action (tap retry, pull
+    // to refresh) or the app/scene becoming active. Any of those means the
+    // outage situation may have changed, so cancel a pending backoff timer
+    // and start a fresh attempt sequence. The timer-driven path
+    // (-reconnectTimerFired) calls -openWebSocketConnection directly and
+    // does NOT go through here, so it does not reset reconnectAttempt —
+    // that was the bug: every timer-driven retry routed through -connect,
+    // which reset the counter back to 0 before scheduleReconnect could
+    // compute a grown delay from it.
+    [self cancelReconnect];
+    self.intentionalDisconnect = NO;
+    self.reconnectAttempt = 0;
+
+    [self startReachabilityMonitoring];
+
+    [self openWebSocketConnection];
+}
+
+/// Opens the REST/WebSocket clients without touching reconnectAttempt or
+/// intentionalDisconnect. Called by the public -connect (after it resets
+/// the backoff state) and by -reconnectTimerFired (which must preserve the
+/// attempt counter across retries).
+- (void)openWebSocketConnection {
+    HAAuthManager *auth = [HAAuthManager sharedManager];
+
     // Configure cache manager with current server URL
     NSString *serverURL = auth.serverURL;
     if (serverURL) {
@@ -117,9 +179,6 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
         self.lastConnectedServerURL = serverURL;
         [HACacheManager sharedManager].serverURL = serverURL;
     }
-
-    self.intentionalDisconnect = NO;
-    self.reconnectAttempt = 0;
 
     // Set up REST client
     self.apiClient = [[HAAPIClient alloc] initWithBaseURL:auth.restBaseURL token:auth.accessToken];
@@ -255,6 +314,7 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 
     self.intentionalDisconnect = YES;
     [self cancelReconnect];
+    [self stopReachabilityMonitoring];
     [self.wsClient disconnect];
 
     // Clear event subscription handlers (subscriptions invalidated on disconnect)
@@ -1011,9 +1071,9 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
     [self cancelReconnect];
 
     self.reconnectAttempt++;
-    NSTimeInterval delay = MIN(kReconnectBaseInterval * pow(2.0, self.reconnectAttempt - 1), kReconnectMaxInterval);
+    NSTimeInterval delay = [self reconnectDelayForAttempt:self.reconnectAttempt];
 
-    HALogI(@"conn", @"Reconnecting in %.0fs (attempt %ld)", delay, (long)self.reconnectAttempt);
+    HALogI(@"conn", @"Reconnecting in %.1fs (attempt %ld)", delay, (long)self.reconnectAttempt);
 
     self.reconnectTimer = [NSTimer scheduledTimerWithTimeInterval:delay
                                                           target:self
@@ -1022,13 +1082,74 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
                                                          repeats:NO];
 }
 
+/// Pure backoff-delay computation: exponential growth (2, 4, 8, 16s...)
+/// until it reaches kReconnectCapInterval, then a jittered steady state in
+/// [kReconnectCapInterval, kReconnectMaxInterval]. Small jitter is applied
+/// while ramping up too, so a fleet of devices that all lost the connection
+/// at the same moment doesn't retry in lockstep.
+- (NSTimeInterval)reconnectDelayForAttempt:(NSInteger)attempt {
+    if (attempt < 1) attempt = 1;
+    double jitter = self.reconnectJitterProvider ? self.reconnectJitterProvider() : 0.0;
+    if (jitter < 0.0) jitter = 0.0;
+    if (jitter >= 1.0) jitter = 0.999999;
+
+    NSTimeInterval uncapped = kReconnectBaseInterval * pow(2.0, (double)(attempt - 1));
+    if (uncapped >= kReconnectCapInterval) {
+        return kReconnectCapInterval + jitter * (kReconnectMaxInterval - kReconnectCapInterval);
+    }
+
+    NSTimeInterval jitterFactor = 0.85 + jitter * 0.30; // ±15%
+    return uncapped * jitterFactor;
+}
+
 - (void)reconnectTimerFired {
-    [self connect];
+    if (self.intentionalDisconnect) return;
+    [self openWebSocketConnection];
 }
 
 - (void)cancelReconnect {
     [self.reconnectTimer invalidate];
     self.reconnectTimer = nil;
+}
+
+#pragma mark - Reachability
+
+/// Starts monitoring the configured HA server's reachability so a
+/// WiFi/network drop that recovers reconnects immediately instead of
+/// waiting out whatever backoff delay happens to be pending.
+- (void)startReachabilityMonitoring {
+    if (self.reachabilityRef) return;
+
+    NSString *host = [[HAAuthManager sharedManager] restBaseURL].host;
+    if (host.length == 0) return;
+
+    SCNetworkReachabilityRef ref = SCNetworkReachabilityCreateWithName(NULL, host.UTF8String);
+    if (!ref) return;
+
+    SCNetworkReachabilityContext context = {0, (__bridge void *)self, NULL, NULL, NULL};
+    if (SCNetworkReachabilitySetCallback(ref, HAConnectionManagerReachabilityCallback, &context) &&
+        SCNetworkReachabilityScheduleWithRunLoop(ref, CFRunLoopGetMain(), kCFRunLoopDefaultMode)) {
+        self.reachabilityRef = ref;
+    } else {
+        CFRelease(ref);
+    }
+}
+
+- (void)stopReachabilityMonitoring {
+    if (!self.reachabilityRef) return;
+    SCNetworkReachabilityUnscheduleFromRunLoop(self.reachabilityRef, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
+    CFRelease(self.reachabilityRef);
+    self.reachabilityRef = NULL;
+}
+
+/// Called (on the main queue) when the server's host becomes reachable
+/// again. Only acts while we're disconnected and not intentionally so —
+/// i.e. mid-outage — in which case it resets the backoff and reconnects
+/// right away via the public -connect path.
+- (void)reachabilityBecameReachable {
+    if (self.connected || self.intentionalDisconnect) return;
+    HALogI(@"conn", @"Network reachable again — reconnecting immediately");
+    [self connect];
 }
 
 #pragma mark - State Localizer (Phase 2 i18n — docs/plans/i18n-plan.md §2)
@@ -1131,6 +1252,7 @@ static const NSTimeInterval kReconnectMaxInterval  = 60.0;
 
     self.connected = YES;
     self.reconnectAttempt = 0;
+    [self cancelReconnect]; // a successful connect means any pending backoff timer is now stale
 
     // Subscribe to state changes
     [client subscribeToStateChanges];
