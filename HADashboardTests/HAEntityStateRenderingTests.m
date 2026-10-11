@@ -8,6 +8,8 @@
 #import "HAEntityRowView.h"
 #import "HABadgeRowCell.h"
 #import "HABaseEntityCell.h"
+#import "HAEntityDisplayHelper.h"
+#import "HALovelaceParser.h"
 
 // -----------------------------------------------------------------------
 // Regression coverage for the gap the coordinator flagged after the Phase 2
@@ -205,6 +207,142 @@
     [cell layoutIfNeeded];
 
     XCTAssertTrue(cell.fallbackBadgeLabel.hidden, @"A reused cell must not keep showing a stale fallback badge");
+}
+
+#pragma mark - Timestamp states (issue #22)
+
+/// ISO 8601 string `seconds` from now, in UTC with a +00:00 offset as HA sends it.
+- (NSString *)isoStringOffsetBySeconds:(NSTimeInterval)seconds date:(NSDate **)outDate {
+    NSDate *date = [NSDate dateWithTimeIntervalSinceNow:seconds];
+    // Drop sub-second precision so the parsed date round-trips exactly
+    date = [NSDate dateWithTimeIntervalSince1970:floor(date.timeIntervalSince1970)];
+    if (outDate) *outDate = date;
+    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+    formatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+    formatter.timeZone = [NSTimeZone timeZoneForSecondsFromGMT:0];
+    formatter.dateFormat = @"yyyy-MM-dd'T'HH:mm:ss'+00:00'";
+    return [formatter stringFromDate:date];
+}
+
+- (HAEntity *)sunNextRisingInSeconds:(NSTimeInterval)seconds date:(NSDate **)outDate {
+    NSString *state = [self isoStringOffsetBySeconds:seconds date:outDate];
+    return [HASnapshotTestHelpers entityWithId:@"sensor.sun_next_rising"
+                                         state:state
+                                    attributes:@{@"device_class": @"timestamp",
+                                                 @"friendly_name": @"Sun Next rising"}];
+}
+
+- (NSString *)timeStringWithStyle:(NSDateFormatterStyle)style fromDate:(NSDate *)date {
+    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+    formatter.dateStyle = NSDateFormatterNoStyle;
+    formatter.timeStyle = style;
+    return [formatter stringFromDate:date];
+}
+
+- (void)testTimestampStateIsNotFormattedAsTheLeadingYear {
+    HAEntity *entity = [self sunNextRisingInSeconds:10 * 3600 + 120 date:NULL];
+    NSString *state = [HAEntityDisplayHelper formattedStateForEntity:entity decimals:2];
+    XCTAssertFalse([state containsString:@"026"], @"Timestamp parsed as the number 2026: %@", state);
+    XCTAssertEqualObjects(state, @"In 10 hours");
+}
+
+- (void)testIsoShapedStateWithoutDeviceClassStillRendersRelative {
+    NSString *iso = [self isoStringOffsetBySeconds:-(3 * 3600 + 60) date:NULL];
+    HAEntity *entity = [HASnapshotTestHelpers entityWithId:@"sensor.last_boot" state:iso attributes:@{}];
+    XCTAssertEqualObjects([HAEntityDisplayHelper formattedStateForEntity:entity decimals:2], @"3 hours ago");
+}
+
+- (void)testUnknownTimestampStateFallsThroughToLocalizedState {
+    HAEntity *entity = [HASnapshotTestHelpers entityWithId:@"sensor.sun_next_rising"
+                                                     state:@"unknown"
+                                                attributes:@{@"device_class": @"timestamp"}];
+    NSString *state = [HAEntityDisplayHelper formattedStateForEntity:entity decimals:2];
+    XCTAssertFalse([state isEqualToString:@"0"]);
+    XCTAssertTrue(state.length > 0);
+}
+
+- (void)testTimeFormatObjectTimeLongIncludesSeconds {
+    NSDate *date = nil;
+    HAEntity *entity = [self sunNextRisingInSeconds:10 * 3600 date:&date];
+    NSString *state = [HAEntityDisplayHelper formattedStateForEntity:entity
+                                                            decimals:2
+                                                          timeFormat:@{@"type": @"time", @"style": @"long"}];
+    XCTAssertEqualObjects(state, [self timeStringWithStyle:NSDateFormatterMediumStyle fromDate:date]);
+}
+
+- (void)testTimeFormatStringTimeOmitsSeconds {
+    NSDate *date = nil;
+    HAEntity *entity = [self sunNextRisingInSeconds:10 * 3600 date:&date];
+    NSString *state = [HAEntityDisplayHelper formattedStateForEntity:entity decimals:2 timeFormat:@"time"];
+    XCTAssertEqualObjects(state, [self timeStringWithStyle:NSDateFormatterShortStyle fromDate:date]);
+}
+
+- (void)testTimeFormatDateShortIsNumeric {
+    NSDate *date = nil;
+    HAEntity *entity = [self sunNextRisingInSeconds:10 * 3600 date:&date];
+    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+    formatter.dateStyle = NSDateFormatterShortStyle;
+    formatter.timeStyle = NSDateFormatterNoStyle;
+    NSString *state = [HAEntityDisplayHelper formattedStateForEntity:entity
+                                                            decimals:2
+                                                          timeFormat:@{@"type": @"date", @"style": @"short"}];
+    XCTAssertEqualObjects(state, [formatter stringFromDate:date]);
+}
+
+- (void)testUptimeDefaultsToTotalDuration {
+    NSString *iso = [self isoStringOffsetBySeconds:-(2 * 86400 + 5 * 3600 + 30) date:NULL];
+    HAEntity *entity = [HASnapshotTestHelpers entityWithId:@"sensor.uptime"
+                                                     state:iso
+                                                attributes:@{@"device_class": @"uptime"}];
+    NSString *state = [HAEntityDisplayHelper formattedStateForEntity:entity decimals:2];
+    NSString *expected = [HAEntityDisplayHelper formattedDurationFromValue:(2 * 86400 + 5 * 3600 + 30) unit:@"s"];
+    XCTAssertEqualObjects(state, expected);
+}
+
+- (void)testTileRendersReporterConfigWithBlankNameAndLongTime {
+    // ha-dashboard/ios-app#22: name ' ' plus time_format {type: time, style: long}
+    NSDictionary *card = @{@"type": @"tile",
+                           @"entity": @"sensor.sun_next_rising",
+                           @"name": @" ",
+                           @"icon": @"mdi:weather-sunset-up",
+                           @"show_entity_picture": @NO,
+                           @"hide_state": @NO,
+                           @"vertical": @NO,
+                           @"features_position": @"bottom",
+                           @"time_format": @{@"type": @"time", @"style": @"long"}};
+    NSDictionary *dashDict = @{@"views": @[@{@"title": @"Test", @"cards": @[card]}]};
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dashDict];
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:3];
+    HADashboardConfigItem *item = nil;
+    for (HADashboardConfigItem *candidate in config.items) {
+        if ([candidate.entityId isEqualToString:@"sensor.sun_next_rising"]) item = candidate;
+    }
+    XCTAssertNotNil(item);
+    XCTAssertEqualObjects(item.customProperties[@"name_blank"], @YES);
+    XCTAssertEqualObjects(item.customProperties[@"time_format"], (@{@"type": @"time", @"style": @"long"}));
+
+    NSDate *date = nil;
+    HAEntity *entity = [self sunNextRisingInSeconds:10 * 3600 date:&date];
+    HATileEntityCell *cell = [[HATileEntityCell alloc] initWithFrame:CGRectMake(0, 0, 200, 72)];
+    [cell configureWithEntity:entity configItem:item];
+    [cell layoutIfNeeded];
+
+    NSString *expected = [self timeStringWithStyle:NSDateFormatterMediumStyle fromDate:date];
+    XCTAssertNotNil([self findLabelWithText:expected inView:cell.contentView],
+                    @"Tile must render the timestamp as %@", expected);
+    UILabel *nameLabel = [self findLabelWithText:@"Sun Next rising" inView:cell.contentView];
+    XCTAssertTrue(nameLabel == nil || nameLabel.hidden,
+                  @"A blank configured name must not fall back to a visible friendly name");
+}
+
+- (void)testTileNonBlankNameIsUnaffected {
+    NSDictionary *card = @{@"type": @"tile", @"entity": @"sensor.sun_next_rising", @"name": @"Sunrise"};
+    NSDictionary *dashDict = @{@"views": @[@{@"title": @"Test", @"cards": @[card]}]};
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dashDict];
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:3];
+    HADashboardConfigItem *item = config.items.firstObject;
+    XCTAssertNil(item.customProperties[@"name_blank"]);
+    XCTAssertEqualObjects(item.displayName, @"Sunrise");
 }
 
 @end

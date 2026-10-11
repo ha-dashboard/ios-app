@@ -1274,6 +1274,16 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             // Tile card: state_content (string or array of strings)
             id stateContent = card[@"state_content"];
             if (stateContent) props[@"state_content"] = stateContent;
+            // Timestamp rendering (HA TimestampRenderingFormat: string or {type, style})
+            if (card[@"time_format"]) props[@"time_format"] = card[@"time_format"];
+            // HA renders a configured string name verbatim, so a blank one
+            // (e.g. name: ' ') hides the name instead of falling back to the
+            // friendly name the resolver returns for it (issue #22).
+            id rawName = entry[@"name"] ?: card[@"name"];
+            if ([rawName isKindOfClass:[NSString class]] &&
+                [(NSString *)rawName stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]].length == 0) {
+                props[@"name_blank"] = @YES;
+            }
             // Tile/entity card: attribute display override
             if ([card[@"attribute"] isKindOfClass:[NSString class]]) props[@"attribute"] = card[@"attribute"];
             // Entity/statistic card: state_color, unit, stat_type

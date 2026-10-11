@@ -13,6 +13,7 @@
 @interface HATileEntityCell ()
 @property (nonatomic, strong) UILabel *tileIconLabel;
 @property (nonatomic, strong) UILabel *tileNameLabel;
+@property (nonatomic, strong) NSLayoutConstraint *tileStateTopConstraint;
 @property (nonatomic, strong) UILabel *tileStateLabel;
 @property (nonatomic, strong) UIStackView *compactStack;
 /// Normal (tile) layout constraints
@@ -101,6 +102,7 @@
     // Pin to a fixed 72px top area so features below don't shift the content.
     CGFloat iconWidth = 32.0;
     CGFloat tileAreaCenterY = 72.0 / 2.0; // Center of the 72px tile content area
+    self.tileStateTopConstraint = [self.tileStateLabel.topAnchor constraintEqualToAnchor:self.tileNameLabel.bottomAnchor constant:2];
     self.normalConstraints = @[
         [self.tileIconLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:12],
         [self.tileIconLabel.centerYAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:tileAreaCenterY],
@@ -110,7 +112,7 @@
         [self.tileNameLabel.bottomAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:tileAreaCenterY - 1],
         [self.tileStateLabel.leadingAnchor constraintEqualToAnchor:self.tileNameLabel.leadingAnchor],
         [self.tileStateLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
-        [self.tileStateLabel.topAnchor constraintEqualToAnchor:self.tileNameLabel.bottomAnchor constant:2],
+        self.tileStateTopConstraint,
     ];
 
     // Compact layout: vertically centered stack (icon above name above state).
@@ -272,8 +274,12 @@
         displayState = (attrVal && attrVal != [NSNull null]) ? [NSString stringWithFormat:@"%@", attrVal] : @"—";
     } else {
         // State: formatted state with human-readable text + unit
-        NSString *formattedState = [HAEntityDisplayHelper formattedStateForEntity:entity decimals:2];
-        displayState = [HAEntityDisplayHelper humanReadableState:formattedState];
+        NSString *formattedState = [HAEntityDisplayHelper formattedStateForEntity:entity
+                                                                         decimals:2
+                                                                       timeFormat:configItem.customProperties[@"time_format"]];
+        // Timestamps are already display-ready; title-casing would mangle them
+        BOOL isTimestamp = [HAEntityDisplayHelper isTimestampState:entity.state deviceClass:[entity deviceClass]];
+        displayState = isTimestamp ? formattedState : [HAEntityDisplayHelper humanReadableState:formattedState];
         NSString *unit = entity.unitOfMeasurement;
         // Append unit unless binary_sensor or duration (already includes units)
         if (unit.length > 0 &&
@@ -378,9 +384,15 @@
     BOOL showState = hideState ? NO : (props[@"show_state"] ? [props[@"show_state"] boolValue] : defaultShowState);
     BOOL showName  = props[@"show_name"]  ? [props[@"show_name"] boolValue]  : YES;
     BOOL showIcon  = props[@"show_icon"]  ? [props[@"show_icon"] boolValue]  : YES;
+    // A blank configured name (name: ' ') leaves no name line in HA, so the
+    // state sits centred on the icon. Compact/vertical stacks collapse the
+    // hidden name themselves; the normal layout needs the state re-anchored.
+    BOOL nameBlank = [props[@"name_blank"] boolValue];
     self.tileStateLabel.text = showState ? displayState : nil;
     self.tileStateLabel.hidden = !showState;
-    self.tileNameLabel.hidden = !showName;
+    self.tileNameLabel.hidden = !showName || nameBlank;
+    if (nameBlank) self.tileNameLabel.text = nil;
+    self.tileStateTopConstraint.constant = nameBlank ? -(ceil(self.tileStateLabel.font.lineHeight / 2.0) + 1) : 2;
     self.tileIconLabel.hidden = !showIcon;
 
     // Icon: from card config override, else centralized entity icon resolution
