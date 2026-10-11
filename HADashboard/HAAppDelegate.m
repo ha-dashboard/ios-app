@@ -310,7 +310,12 @@
 
 - (void)suspendForegroundServices {
     [[HAPerfMonitor sharedMonitor] stop];
-    // Flush entity state cache to disk synchronously before disconnect
+    // Flush entity state cache to disk synchronously before disconnect. This
+    // is also triggered automatically by HAEntityStateCache's own
+    // UIApplicationWillResignActive/DidEnterBackground/WillTerminate/
+    // DidReceiveMemoryWarning observers; calling it explicitly here too is a
+    // harmless no-op when there's nothing pending and guarantees ordering
+    // relative to disconnect below.
     [[HADeviceIntegrationManager sharedManager] stop];
     [[HAEntityStateCache sharedCache] flushToDisk];
     [[HAConnectionManager sharedManager] disconnect];
