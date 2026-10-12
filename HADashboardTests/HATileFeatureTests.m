@@ -9,6 +9,8 @@
 #import "HAEntity+Climate.h"
 #import "HADashboardConfig.h"
 #import "HASnapshotTestHelpers.h"
+#import "HADashboardViewController.h"
+#import "HALightEntityCell.h"
 
 #pragma mark - Test Helpers
 
@@ -625,6 +627,63 @@ static HADashboardConfigItem *makeConfigItem(NSString *entityId, NSArray *featur
     CGFloat expectedWithOne = 72.0 + 44.0 + 4.0 + 4.0;
     XCTAssertEqualWithAccuracy(height, expectedWithOne, 1.0,
         @"Unknown feature types should not contribute to height");
+}
+
+@end
+
+#pragma mark - Dashboard item height (tile vs domain fallbacks)
+
+@interface HATileItemHeightTests : XCTestCase
+@end
+
+@implementation HATileItemHeightTests
+
+- (CGFloat)heightForItem:(HADashboardConfigItem *)item entity:(HAEntity *)entity {
+    return [HADashboardViewController heightForItem:item entity:entity section:nil itemWidth:300];
+}
+
+- (void)testLightTileWithoutFeaturesIsSizedLikeOtherTiles {
+    HAEntity *light = [HASnapshotTestHelpers lightEntityOnBrightness];
+    HAEntity *sw = [HASnapshotTestHelpers switchEntityOn];
+    CGFloat lightTile = [self heightForItem:makeConfigItem(light.entityId, nil) entity:light];
+    CGFloat switchTile = [self heightForItem:makeConfigItem(sw.entityId, nil) entity:sw];
+    XCTAssertEqualWithAccuracy(lightTile, switchTile, 0.01, @"A light tile without features must be one tile row, like a switch tile");
+    XCTAssertEqualWithAccuracy(lightTile, [HATileEntityCell preferredHeightForConfigItem:makeConfigItem(light.entityId, nil)], 0.01);
+}
+
+- (void)testLightTileWithBrightnessFeatureIsTaller {
+    HAEntity *light = [HASnapshotTestHelpers lightEntityOnBrightness];
+    CGFloat plain = [self heightForItem:makeConfigItem(light.entityId, nil) entity:light];
+    CGFloat withFeature = [self heightForItem:makeConfigItem(light.entityId, @[@{@"type": @"light-brightness"}]) entity:light];
+    XCTAssertGreaterThan(withFeature, plain);
+}
+
+- (void)testNonTileLightCardKeepsLightCellHeight {
+    HAEntity *light = [HASnapshotTestHelpers lightEntityOnBrightness];
+    HADashboardConfigItem *item = [HASnapshotTestHelpers itemWithEntityId:light.entityId
+                                                                cardType:@"light"
+                                                              columnSpan:6
+                                                             headingIcon:nil
+                                                             displayName:nil];
+    CGFloat expected = [HALightEntityCell preferredHeightForEntity:light configItem:item];
+    XCTAssertEqualWithAccuracy([self heightForItem:item entity:light], expected, 0.01);
+}
+
+- (void)testDomainTilesUseTileHeight {
+    // Every domain with its own height fallback must still size a `tile` card as a tile.
+    NSArray<HAEntity *> *entities = @[
+        makeEntity(@"camera.porch", @"idle", @{}),
+        makeEntity(@"vacuum.ribbit", @"docked", @{}),
+        makeEntity(@"weather.home", @"sunny", @{@"temperature": @12}),
+        makeEntity(@"alarm_control_panel.home", @"disarmed", @{@"code_format": @"number"}),
+        makeEntity(@"media_player.tv", @"playing", @{}),
+    ];
+    for (HAEntity *entity in entities) {
+        HADashboardConfigItem *item = makeConfigItem(entity.entityId, nil);
+        XCTAssertEqualWithAccuracy([self heightForItem:item entity:entity],
+                                   [HATileEntityCell preferredHeightForConfigItem:item], 0.01,
+                                   @"%@ tile must use the tile height", entity.entityId);
+    }
 }
 
 @end
