@@ -21,4 +21,11 @@
 /// Called when a badge is tapped. Used to open entity detail.
 @property (nonatomic, copy) void(^entityTapBlock)(HAEntity *entity);
 
+/// View-level badges: when the section carries customProperties[@"badgeConfigs"]
+/// (normalized HA entity badge configs, one per entityIds entry — see
+/// +[HALovelaceParser normalizedViewBadgeConfigs:]), each badge honours its
+/// show_name/show_state/show_icon/icon/color/state_content, and a tap calls
+/// this block (when set) with that badge's config instead of entityTapBlock.
+@property (nonatomic, copy) void(^badgeTapBlock)(HAEntity *entity, NSDictionary *badgeConfig);
+
 @end

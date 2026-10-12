@@ -25,6 +25,13 @@ heightForHeaderInSection:(NSInteger)section;
                  layout:(UICollectionViewLayout *)layout
   isHeadingItemAtIndexPath:(NSIndexPath *)indexPath;
 
+/// Return YES for a leading section (e.g. the view's badge row) that spans the
+/// full content width above the columns instead of occupying a column. Only
+/// consulted for the first sections; laid out stacked, items at full width.
+- (BOOL)collectionView:(UICollectionView *)collectionView
+                layout:(UICollectionViewLayout *)layout
+    isFullWidthSection:(NSInteger)section;
+
 @end
 
 /// A multi-column collection view layout where each section is a vertical column.

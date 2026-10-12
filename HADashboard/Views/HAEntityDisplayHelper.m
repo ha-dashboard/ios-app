@@ -243,6 +243,39 @@
 
 #pragma mark - Relative Time
 
++ (NSString *)stateContentText:(id)stateContent
+                     forEntity:(HAEntity *)entity
+                     stateText:(NSString *)stateText
+                          name:(NSString *)name {
+    if (!stateContent) return nil;
+    NSArray *contentItems = [stateContent isKindOfClass:[NSArray class]]
+        ? (NSArray *)stateContent
+        : @[stateContent];
+    NSMutableArray *parts = [NSMutableArray arrayWithCapacity:contentItems.count];
+    for (id item in contentItems) {
+        NSString *key = [item isKindOfClass:[NSString class]] ? (NSString *)item : nil;
+        if (!key) continue;
+        NSString *value = nil;
+        if ([key isEqualToString:@"last_changed"] || [key isEqualToString:@"last-changed"]) {
+            value = [self relativeTimeFromISO8601:entity.lastChanged];
+        } else if ([key isEqualToString:@"last_updated"] || [key isEqualToString:@"last-updated"]) {
+            value = [self relativeTimeFromISO8601:entity.lastUpdated];
+        } else if ([key isEqualToString:@"state"]) {
+            value = stateText;
+        } else if (name && [key isEqualToString:@"name"]) {
+            value = name;
+        } else {
+            // Attribute name lookup
+            id attrVal = entity.attributes[key];
+            if (attrVal && attrVal != [NSNull null]) {
+                value = [NSString stringWithFormat:@"%@", attrVal];
+            }
+        }
+        if (value.length > 0) [parts addObject:value];
+    }
+    return parts.count > 0 ? [parts componentsJoinedByString:@" · "] : nil;
+}
+
 + (NSString *)relativeTimeFromISO8601:(NSString *)isoString {
     if (!isoString || isoString.length < 19) return nil;
 
@@ -515,6 +548,10 @@
     // Input Boolean: toggle-switch vs toggle-switch-off
     if ([domain isEqualToString:HAEntityDomainInputBoolean]) {
         return [HAIconMapper glyphForIconName:isOn ? @"toggle-switch" : @"toggle-switch-off"];
+    }
+    // Sun: HA's sun domain icon (white-balance-sunny / weather-night)
+    if ([domain isEqualToString:@"sun"]) {
+        return [HAIconMapper glyphForIconName:[entity.state isEqualToString:@"below_horizon"] ? @"weather-night" : @"white-balance-sunny"];
     }
     // Lock: lock vs lock-open
     if ([domain isEqualToString:HAEntityDomainLock]) {

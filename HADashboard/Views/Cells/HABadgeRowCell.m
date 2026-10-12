@@ -27,7 +27,49 @@ static const CGFloat kArcNameLabelHeight = 16.0;
 @property (nonatomic, strong) HADashboardConfigSection *lastSection;
 @property (nonatomic, strong) NSDictionary *lastEntities;
 @property (nonatomic, assign) CGFloat lastLayoutWidth;
+/// View-badge path only: config of each badge, parallel to badgeEntities
+@property (nonatomic, strong) NSMutableArray<NSDictionary *> *badgeConfigs;
 @end
+
+/// Rows for centred, wrapping badge packing: each NSValue holds the NSRange of
+/// badge indices on that row. Same greedy algorithm as the pill style.
+static NSArray<NSValue *> *HABadgeRowRanges(NSArray<NSNumber *> *widths, CGFloat maxWidth, CGFloat spacing) {
+    NSMutableArray<NSValue *> *rows = [NSMutableArray array];
+    NSUInteger idx = 0;
+    NSUInteger total = widths.count;
+    while (idx < total) {
+        CGFloat rowWidth = 0;
+        NSUInteger rowStart = idx;
+        while (idx < total) {
+            CGFloat w = [widths[idx] floatValue];
+            CGFloat needed = (idx == rowStart) ? w : rowWidth + spacing + w;
+            if (needed > maxWidth && idx > rowStart) break;
+            rowWidth = needed;
+            idx++;
+        }
+        [rows addObject:[NSValue valueWithRange:NSMakeRange(rowStart, idx - rowStart)]];
+    }
+    return rows;
+}
+
+/// Approximation of HA's stateActive(): whether a badge's custom "color"
+/// applies (hui-entity-badge only uses it while the entity is active).
+static BOOL HABadgeEntityIsActive(HAEntity *entity) {
+    NSString *state = entity.state;
+    if (state.length == 0 || [state isEqualToString:@"unavailable"] ||
+        [state isEqualToString:@"unknown"] || [state isEqualToString:@"off"]) {
+        return NO;
+    }
+    NSString *domain = [entity domain];
+    if ([domain isEqualToString:@"cover"] || [domain isEqualToString:@"valve"]) return ![state isEqualToString:@"closed"];
+    if ([domain isEqualToString:@"lock"]) return ![state isEqualToString:@"locked"];
+    if ([domain isEqualToString:@"person"] || [domain isEqualToString:@"device_tracker"]) return ![state isEqualToString:@"not_home"];
+    if ([domain isEqualToString:@"media_player"]) return ![state isEqualToString:@"standby"] && ![state isEqualToString:@"idle"];
+    if ([domain isEqualToString:@"vacuum"]) return ![state isEqualToString:@"docked"];
+    if ([domain isEqualToString:@"alarm_control_panel"]) return ![state isEqualToString:@"disarmed"];
+    if ([domain isEqualToString:@"timer"]) return ![state isEqualToString:@"idle"];
+    return YES;
+}
 
 @implementation HABadgeRowCell
 
@@ -39,6 +81,7 @@ static const CGFloat kArcNameLabelHeight = 16.0;
         self.backgroundColor = [UIColor clearColor];
         self.badgeViews = [NSMutableArray array];
         self.badgeEntities = [NSMutableArray array];
+        self.badgeConfigs = [NSMutableArray array];
     }
     return self;
 }
@@ -66,6 +109,17 @@ static const CGFloat kArcNameLabelHeight = 16.0;
                                width:(CGFloat)width {
     if (!section.entityIds || section.entityIds.count == 0) {
         return kBadgeHeight + 8.0;
+    }
+
+    if ([self isViewBadgeSection:section]) {
+        CGFloat padding = 4.0;
+        CGFloat spacing = 8.0;
+        CGFloat maxWidth = width - padding * 2;
+        if (maxWidth <= 0) maxWidth = 300;
+        NSArray<NSDictionary *> *models = [self viewBadgeModelsForSection:section entities:entityDict maxWidth:maxWidth];
+        if (models.count == 0) return kBadgeHeight + 8.0;
+        NSUInteger rows = HABadgeRowRanges([models valueForKey:@"width"], maxWidth, spacing).count;
+        return padding * 2 + rows * kBadgeHeight + MAX(0, (NSInteger)rows - 1) * spacing;
     }
 
     CGFloat padding = 4.0;
@@ -136,7 +190,9 @@ static const CGFloat kArcNameLabelHeight = 16.0;
     // width change and calls us again. Without the width check, the second call would take
     // the updateInPlace path (same section pointer) and skip re-layout.
     CGFloat currentWidth = self.contentView.bounds.size.width;
-    BOOL canUpdateInPlace = (self.lastSection == section &&
+    BOOL isViewBadges = [HABadgeRowCell isViewBadgeSection:section];
+    BOOL canUpdateInPlace = (!isViewBadges &&
+                             self.lastSection == section &&
                              self.badgeViews.count == section.entityIds.count &&
                              self.badgeViews.count > 0 &&
                              fabs(currentWidth - self.lastLayoutWidth) <= 1.0);
@@ -154,8 +210,15 @@ static const CGFloat kArcNameLabelHeight = 16.0;
     }
     [self.badgeViews removeAllObjects];
     [self.badgeEntities removeAllObjects];
+    [self.badgeConfigs removeAllObjects];
 
     if (!section.entityIds || section.entityIds.count == 0) return;
+
+    if (isViewBadges) {
+        [self configureViewBadgesWithSection:section entities:entityDict];
+        self.lastLayoutWidth = self.contentView.bounds.size.width;
+        return;
+    }
 
     // Mushroom-chips-card and standard badge cards now use the same pill layout.
     // chipStyle flag is only used for height estimation.
@@ -326,6 +389,208 @@ static const CGFloat kArcNameLabelHeight = 16.0;
 
         y += badgeH + spacing;
     }
+}
+
+#pragma mark - View Badges (HA entity badges)
+
++ (BOOL)isViewBadgeSection:(HADashboardConfigSection *)section {
+    return [section.customProperties[@"badgeConfigs"] isKindOfClass:[NSArray class]];
+}
+
+static BOOL HABadgeConfigBool(NSDictionary *config, NSString *key, BOOL fallback) {
+    id value = config[key];
+    return [value isKindOfClass:[NSNumber class]] ? [value boolValue] : fallback;
+}
+
+/// One model per rendered badge (entities missing from entityDict are skipped,
+/// as in the pill style): entity, config, optional label/content/glyph,
+/// iconColor and the measured badge width. Mirrors hui-entity-badge: the
+/// label (name) sits above the content only when both name and state are
+/// shown; content is the state, else the name; no content = icon-only badge.
++ (NSArray<NSDictionary *> *)viewBadgeModelsForSection:(HADashboardConfigSection *)section
+                                              entities:(NSDictionary *)entityDict
+                                              maxWidth:(CGFloat)maxWidth {
+    NSArray *configs = section.customProperties[@"badgeConfigs"];
+    UIFont *labelFont = [UIFont systemFontOfSize:10 weight:UIFontWeightMedium];
+    UIFont *contentFont = [UIFont monospacedDigitSystemFontOfSize:12 weight:UIFontWeightMedium];
+    NSMutableArray<NSDictionary *> *models = [NSMutableArray array];
+    for (NSUInteger i = 0; i < section.entityIds.count; i++) {
+        NSString *entityId = section.entityIds[i];
+        HAEntity *entity = entityDict[entityId];
+        if (!entity) continue;
+        NSDictionary *config = (i < configs.count && [configs[i] isKindOfClass:[NSDictionary class]]) ? configs[i] : @{};
+
+        BOOL showName = HABadgeConfigBool(config, @"show_name", NO);
+        BOOL showState = HABadgeConfigBool(config, @"show_state", YES);
+        BOOL showIcon = HABadgeConfigBool(config, @"show_icon", YES);
+
+        NSString *name = section.nameOverrides[entityId];
+        if (name.length == 0) name = [HAEntityDisplayHelper displayNameForEntity:entity entityId:entityId section:section];
+        NSString *stateText = [HAEntityDisplayHelper stateWithUnitForEntity:entity decimals:1];
+        NSString *contentText = [HAEntityDisplayHelper stateContentText:config[@"state_content"]
+                                                              forEntity:entity
+                                                              stateText:stateText
+                                                                   name:name];
+        if (contentText) stateText = contentText;
+
+        NSString *label = (showState && showName && name.length > 0) ? name : nil;
+        NSString *content = showState ? stateText : (showName ? name : nil);
+
+        NSString *glyph = nil;
+        if (showIcon) {
+            NSString *iconName = [config[@"icon"] isKindOfClass:[NSString class]] ? config[@"icon"] : nil;
+            if ([iconName hasPrefix:@"mdi:"]) iconName = [iconName substringFromIndex:4];
+            if (iconName.length > 0) glyph = [HAIconMapper glyphForIconName:iconName];
+            if (glyph.length == 0) glyph = [HAEntityDisplayHelper iconGlyphForEntity:entity];
+        }
+
+        UIColor *iconColor = nil;
+        NSString *colorName = [config[@"color"] isKindOfClass:[NSString class]] ? config[@"color"] : nil;
+        if (colorName.length > 0 && HABadgeEntityIsActive(entity)) iconColor = [HATheme colorFromString:colorName];
+        if (!iconColor) iconColor = [HAEntityDisplayHelper iconColorForEntity:entity];
+
+        CGFloat width = kBadgeHeight; // icon-only: a circle
+        if (content.length > 0) {
+            CGFloat labelWidth = label.length > 0 ? ceil([label sizeWithAttributes:@{NSFontAttributeName: labelFont}].width) : 0;
+            CGFloat contentWidth = ceil([content sizeWithAttributes:@{NSFontAttributeName: contentFont}].width);
+            CGFloat infoWidth = MAX(labelWidth, contentWidth) + 4.0;
+            CGFloat leading = glyph.length > 0 ? (kBadgeHPad - 4) + kBadgeIconSize + kBadgeGap : kBadgeHPad;
+            width = MAX(leading + infoWidth + kBadgeHPad, kBadgeHeight);
+        }
+        width = MIN(width, maxWidth);
+
+        NSMutableDictionary *model = [NSMutableDictionary dictionary];
+        model[@"entity"] = entity;
+        model[@"config"] = config;
+        model[@"width"] = @(width);
+        model[@"iconColor"] = iconColor;
+        if (label.length > 0) model[@"label"] = label;
+        if (content.length > 0) model[@"content"] = content;
+        if (glyph.length > 0) model[@"glyph"] = glyph;
+        [models addObject:[model copy]];
+    }
+    return [models copy];
+}
+
+- (void)configureViewBadgesWithSection:(HADashboardConfigSection *)section entities:(NSDictionary *)entityDict {
+    CGFloat spacing = 8.0;
+    CGFloat padding = 4.0;
+    CGFloat maxWidth = self.contentView.bounds.size.width - padding * 2;
+    if (maxWidth <= 0) maxWidth = 300;
+
+    NSArray<NSDictionary *> *models = [HABadgeRowCell viewBadgeModelsForSection:section entities:entityDict maxWidth:maxWidth];
+    NSArray<NSValue *> *rows = HABadgeRowRanges([models valueForKey:@"width"], maxWidth, spacing);
+
+    CGFloat y = padding;
+    for (NSValue *rowValue in rows) {
+        NSRange row = rowValue.rangeValue;
+        CGFloat rowContentWidth = (row.length - 1) * spacing;
+        for (NSUInteger j = row.location; j < NSMaxRange(row); j++) {
+            rowContentWidth += [models[j][@"width"] floatValue];
+        }
+        // Whole-point origin: a fractional x makes the blurred pill edges antialias unpredictably
+        CGFloat x = round(padding + (maxWidth - rowContentWidth) / 2.0);
+        for (NSUInteger j = row.location; j < NSMaxRange(row); j++) {
+            NSDictionary *model = models[j];
+            CGFloat w = [model[@"width"] floatValue];
+            UIView *badge = [self viewBadgeForModel:model];
+            badge.frame = CGRectMake(x, y, w, kBadgeHeight);
+            badge.tag = (NSInteger)self.badgeEntities.count; // index into badgeEntities/badgeConfigs
+            [self.badgeEntities addObject:model[@"entity"]];
+            [self.badgeConfigs addObject:model[@"config"]];
+            UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(badgeTapped:)];
+            [badge addGestureRecognizer:tap];
+            [self.contentView addSubview:badge];
+            [self.badgeViews addObject:badge];
+            x += w + spacing;
+        }
+        y += kBadgeHeight + spacing;
+    }
+}
+
+- (UIView *)viewBadgeForModel:(NSDictionary *)model {
+    UIView *badge = [[UIView alloc] init];
+    badge.backgroundColor = [UIColor clearColor];
+    badge.layer.cornerRadius = kBadgeHeight / 2.0;
+    badge.layer.borderWidth = kBadgeBorderWidth;
+    badge.layer.borderColor = [self resolvedBorderColor];
+    badge.clipsToBounds = YES;
+    badge.userInteractionEnabled = YES;
+    [self insertBlurInBadge:badge];
+
+    NSString *glyph = model[@"glyph"];
+    NSString *label = model[@"label"];
+    NSString *content = model[@"content"];
+
+    UILabel *iconLabel = nil;
+    if (glyph) {
+        iconLabel = [[UILabel alloc] init];
+        iconLabel.text = glyph;
+        iconLabel.font = [HAIconMapper mdiFontOfSize:kBadgeIconSize];
+        iconLabel.textColor = model[@"iconColor"];
+        iconLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        [badge addSubview:iconLabel];
+        if (!content) {
+            [NSLayoutConstraint activateConstraints:@[
+                [iconLabel.centerXAnchor constraintEqualToAnchor:badge.centerXAnchor],
+                [iconLabel.centerYAnchor constraintEqualToAnchor:badge.centerYAnchor],
+            ]];
+        } else {
+            [NSLayoutConstraint activateConstraints:@[
+                [iconLabel.leadingAnchor constraintEqualToAnchor:badge.leadingAnchor constant:kBadgeHPad - 4],
+                [iconLabel.centerYAnchor constraintEqualToAnchor:badge.centerYAnchor],
+            ]];
+        }
+    }
+
+    if (content) {
+        NSLayoutXAxisAnchor *infoLeading = iconLabel ? iconLabel.trailingAnchor : badge.leadingAnchor;
+        CGFloat infoInset = iconLabel ? kBadgeGap : kBadgeHPad;
+
+        UILabel *contentLabel = [[UILabel alloc] init];
+        contentLabel.text = content;
+        contentLabel.font = [UIFont monospacedDigitSystemFontOfSize:12 weight:UIFontWeightMedium];
+        contentLabel.textColor = [HATheme primaryTextColor];
+        contentLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+        contentLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        [badge addSubview:contentLabel];
+
+        if (label) {
+            UILabel *nameLabel = [[UILabel alloc] init];
+            nameLabel.text = label;
+            nameLabel.font = [UIFont systemFontOfSize:10 weight:UIFontWeightMedium];
+            nameLabel.textColor = [HATheme secondaryTextColor];
+            nameLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+            nameLabel.translatesAutoresizingMaskIntoConstraints = NO;
+            [badge addSubview:nameLabel];
+            [NSLayoutConstraint activateConstraints:@[
+                [nameLabel.leadingAnchor constraintEqualToAnchor:infoLeading constant:infoInset],
+                [nameLabel.bottomAnchor constraintEqualToAnchor:badge.centerYAnchor constant:-1],
+                [nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:badge.trailingAnchor constant:-kBadgeHPad],
+                [contentLabel.leadingAnchor constraintEqualToAnchor:nameLabel.leadingAnchor],
+                [contentLabel.topAnchor constraintEqualToAnchor:badge.centerYAnchor constant:1],
+            ]];
+        } else {
+            [NSLayoutConstraint activateConstraints:@[
+                [contentLabel.leadingAnchor constraintEqualToAnchor:infoLeading constant:infoInset],
+                [contentLabel.centerYAnchor constraintEqualToAnchor:badge.centerYAnchor],
+            ]];
+        }
+        [contentLabel.trailingAnchor constraintLessThanOrEqualToAnchor:badge.trailingAnchor constant:-kBadgeHPad].active = YES;
+    }
+
+    badge.isAccessibilityElement = YES;
+    badge.accessibilityTraits = UIAccessibilityTraitButton;
+    NSMutableArray<NSString *> *spoken = [NSMutableArray array];
+    if (label) [spoken addObject:label];
+    if (content) [spoken addObject:content];
+    if (spoken.count == 0) {
+        HAEntity *entity = model[@"entity"];
+        NSString *name = [HAEntityDisplayHelper displayNameForEntity:entity entityId:entity.entityId section:nil];
+        if (name) [spoken addObject:name];
+    }
+    badge.accessibilityLabel = [spoken componentsJoinedByString:@", "];
+    return badge;
 }
 
 #pragma mark - Arc Gauge Style
@@ -680,7 +945,10 @@ static const CGFloat kArcNameLabelHeight = 16.0;
 
 - (void)badgeTapped:(UITapGestureRecognizer *)gesture {
     NSInteger idx = gesture.view.tag;
-    if (idx >= 0 && idx < (NSInteger)self.badgeEntities.count && self.entityTapBlock) {
+    if (idx < 0 || idx >= (NSInteger)self.badgeEntities.count) return;
+    if (self.badgeTapBlock && idx < (NSInteger)self.badgeConfigs.count) {
+        self.badgeTapBlock(self.badgeEntities[idx], self.badgeConfigs[idx]);
+    } else if (self.entityTapBlock) {
         self.entityTapBlock(self.badgeEntities[idx]);
     }
 }
@@ -720,6 +988,7 @@ static const CGFloat kArcNameLabelHeight = 16.0;
     }
     [self.badgeViews removeAllObjects];
     [self.badgeEntities removeAllObjects];
+    [self.badgeConfigs removeAllObjects];
     self.lastSection = nil;
     self.lastEntities = nil;
     self.lastLayoutWidth = 0;

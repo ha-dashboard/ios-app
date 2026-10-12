@@ -1,5 +1,6 @@
 #import <XCTest/XCTest.h>
 #import "HAMasonryLayout.h"
+#import "HAColumnarLayout.h"
 #import "HAPanelLayout.h"
 #import "HASidebarLayout.h"
 #import "HALovelaceParser.h"
@@ -10,12 +11,14 @@
 #pragma mark - Mock Data Source
 
 /// Minimal data source for testing layout engines without a real view controller.
-@interface HALayoutTestDataSource : NSObject <UICollectionViewDataSource, HAMasonryLayoutDelegate, HAPanelLayoutDelegate, HASidebarLayoutDelegate>
+@interface HALayoutTestDataSource : NSObject <UICollectionViewDataSource, HAMasonryLayoutDelegate, HAPanelLayoutDelegate, HASidebarLayoutDelegate, HAColumnarLayoutDelegate>
 @property (nonatomic, assign) NSInteger sectionCount;
 @property (nonatomic, strong) NSArray<NSNumber *> *itemCounts; // items per section
 @property (nonatomic, strong) NSArray<NSString *> *cardTypes;  // card type per item (flat)
 @property (nonatomic, strong) NSArray<NSNumber *> *entityCounts; // entity count per item (flat)
 @property (nonatomic, strong) NSArray<NSNumber *> *itemHeights;  // height per item (flat)
+/// Leading full-width items (masonry, section 0) / sections (columnar)
+@property (nonatomic, assign) NSInteger fullWidthCount;
 @end
 
 @implementation HALayoutTestDataSource
@@ -74,6 +77,32 @@
         return self.entityCounts[flatIndex].integerValue;
     }
     return 0;
+}
+
+- (BOOL)collectionView:(UICollectionView *)collectionView
+                layout:(UICollectionViewLayout *)layout
+isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
+    return indexPath.section == 0 && indexPath.item < self.fullWidthCount;
+}
+
+#pragma mark - HAColumnarLayoutDelegate
+
+- (CGFloat)collectionView:(UICollectionView *)collectionView
+                   layout:(UICollectionViewLayout *)layout
+ heightForHeaderInSection:(NSInteger)section {
+    return 0;
+}
+
+- (NSInteger)collectionView:(UICollectionView *)collectionView
+                     layout:(UICollectionViewLayout *)layout
+  gridColumnsForItemAtIndexPath:(NSIndexPath *)indexPath {
+    return 12;
+}
+
+- (BOOL)collectionView:(UICollectionView *)collectionView
+                layout:(UICollectionViewLayout *)layout
+    isFullWidthSection:(NSInteger)section {
+    return section < self.fullWidthCount;
 }
 
 @end
@@ -796,6 +825,230 @@
     // light.b: nested-array slot resolves to "", area slot resolves — single
     // non-empty part survives the join.
     XCTAssertEqualObjects(config.sections.firstObject.nameOverrides[@"light.b"], @"Office");
+}
+
+#pragma mark - Sections view headings (GitHub #23)
+
+- (HADashboardConfig *)sectionsConfigWithCards:(NSArray *)cards {
+    NSDictionary *dict = @{@"views": @[@{@"title": @"Test", @"sections": @[@{@"type": @"grid", @"cards": cards}]}]};
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
+    return [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:3];
+}
+
+/// The reporter's section: the first heading is the section header, the second
+/// is a full-width heading item between the two tiles, in card order.
+- (void)testSectionsView_twoHeadings_secondIsStandaloneHeadingBetweenTiles {
+    HADashboardConfig *config = [self sectionsConfigWithCards:@[
+        @{@"type": @"heading", @"heading": @"Heading 1", @"icon": @"mdi:numeric-1"},
+        @{@"type": @"tile", @"entity": @"sensor.backup_backup_manager_state"},
+        @{@"type": @"heading", @"heading": @"Heading 2", @"icon": @"mdi:numeric-2"},
+        @{@"type": @"tile", @"entity": @"sensor.backup_last_successful_automatic_backup"},
+    ]];
+    XCTAssertEqual(config.sections.count, 1u);
+    HADashboardConfigSection *section = config.sections.firstObject;
+    XCTAssertEqualObjects(section.title, @"Heading 1");
+    XCTAssertEqualObjects(section.icon, @"mdi:numeric-1");
+
+    NSArray<HADashboardConfigItem *> *items = section.items;
+    XCTAssertEqual(items.count, 3u, @"tile, heading, tile — got %@", [items valueForKey:@"cardType"]);
+    XCTAssertEqualObjects(items[0].cardType, @"tile");
+    XCTAssertEqualObjects(items[0].entityId, @"sensor.backup_backup_manager_state");
+    XCTAssertEqual(items[0].columnSpan, 6, @"HA tile default in sections is 6 of 12 columns");
+    XCTAssertEqualObjects(items[1].cardType, @"heading");
+    XCTAssertEqualObjects(items[1].displayName, @"Heading 2");
+    XCTAssertEqualObjects(items[1].customProperties[@"icon"], @"mdi:numeric-2");
+    XCTAssertEqual(items[1].columnSpan, 12, @"A heading spans the full section so the next tile starts a new row");
+    XCTAssertEqualObjects(items[2].cardType, @"tile");
+    XCTAssertEqualObjects(items[2].entityId, @"sensor.backup_last_successful_automatic_backup");
+    XCTAssertEqual(items[2].columnSpan, 6);
+    XCTAssertEqualObjects([config.items valueForKey:@"cardType"], (@[@"tile", @"heading", @"tile"]));
+}
+
+/// A heading that isn't the section's first card is not the section title — it renders in place.
+- (void)testSectionsView_headingNotFirst_isStandaloneInPlace {
+    HADashboardConfig *config = [self sectionsConfigWithCards:@[
+        @{@"type": @"tile", @"entity": @"light.a"},
+        @{@"type": @"heading", @"heading": @"Later", @"heading_style": @"subtitle"},
+        @{@"type": @"tile", @"entity": @"light.b"},
+    ]];
+    HADashboardConfigSection *section = config.sections.firstObject;
+    XCTAssertNil(section.title, @"Only a heading that opens the section becomes its header");
+    XCTAssertEqualObjects([section.items valueForKey:@"cardType"], (@[@"tile", @"heading", @"tile"]));
+    HADashboardConfigItem *heading = section.items[1];
+    XCTAssertEqualObjects(heading.displayName, @"Later");
+    XCTAssertEqualObjects(heading.customProperties[@"heading_style"], @"subtitle");
+    XCTAssertNil(heading.customProperties[@"icon"]);
+}
+
+/// A standalone heading with the same text as the section header keeps its text,
+/// and carries its own visibility conditions.
+- (void)testSectionsView_standaloneHeading_keepsTextAndVisibility {
+    NSArray *visibility = @[@{@"condition": @"state", @"entity": @"input_boolean.show", @"state": @"on"}];
+    HADashboardConfig *config = [self sectionsConfigWithCards:@[
+        @{@"type": @"heading", @"heading": @"Lights"},
+        @{@"type": @"tile", @"entity": @"light.a"},
+        @{@"type": @"heading", @"heading": @"Lights", @"visibility": visibility},
+        @{@"type": @"tile", @"entity": @"light.b"},
+    ]];
+    HADashboardConfigSection *section = config.sections.firstObject;
+    XCTAssertEqualObjects(section.title, @"Lights");
+    HADashboardConfigItem *heading = section.items[1];
+    XCTAssertEqualObjects(heading.cardType, @"heading");
+    XCTAssertEqualObjects(heading.displayName, @"Lights");
+    XCTAssertEqualObjects(heading.visibilityConditions, visibility);
+    XCTAssertNil(section.items[2].visibilityConditions, @"The heading's visibility must not leak onto the next card");
+}
+
+/// Regression guard (CLAUDE.md "Grid headings"): a heading nested in a grid
+/// card with explicit columns stays embedded in its first content item.
+- (void)testSectionsView_gridHeading_staysEmbeddedHeadingIcon {
+    HADashboardConfig *config = [self sectionsConfigWithCards:@[
+        @{@"type": @"grid", @"grid_options": @{@"columns": @9}, @"cards": @[
+            @{@"type": @"heading", @"heading": @"House Climate", @"icon": @"mdi:hvac"},
+            @{@"type": @"thermostat", @"entity": @"climate.aidoo"},
+        ]},
+        @{@"type": @"grid", @"grid_options": @{@"columns": @3}, @"cards": @[
+            @{@"type": @"heading", @"heading": @"Ribbit", @"icon": @"mdi:robot-vacuum"},
+            @{@"type": @"tile", @"entity": @"vacuum.saros_10"},
+        ]},
+    ]];
+    NSArray<HADashboardConfigItem *> *items = config.sections.firstObject.items;
+    XCTAssertEqualObjects([items valueForKey:@"cardType"], (@[@"thermostat", @"tile"]));
+    XCTAssertEqualObjects(items[0].displayName, @"House Climate");
+    XCTAssertEqualObjects(items[0].customProperties[@"headingIcon"], @"mdi:hvac");
+    XCTAssertEqualObjects(items[1].displayName, @"Ribbit");
+    XCTAssertEqualObjects(items[1].customProperties[@"headingIcon"], @"mdi:robot-vacuum");
+}
+
+#pragma mark - View badges (GitHub #23)
+
+- (NSArray *)mixedBadges {
+    return @[
+        @"sun.sun",                                                       // legacy string → show_name YES
+        @{@"entity": @"sensor.a"},                                         // legacy dict → entity badge, show_name NO
+        @{@"type": @"entity", @"entity": @"sensor.b", @"name": @"Bee",
+          @"show_name": @YES, @"icon": @"mdi:bee", @"color": @"red",
+          @"state_content": @"last_changed", @"tap_action": @{@"action": @"toggle"}},
+        @{@"type": @"state-label", @"entity": @"sensor.c", @"name": @"dropped"},
+        @{@"type": @"entity", @"entity": @"sensor.d", @"display_type": @"minimal"},
+        @{@"type": @"entity", @"entity": @"sensor.e", @"display_type": @"complete",
+          @"visibility": @[@{@"condition": @"state", @"entity": @"sun.sun", @"state": @"above_horizon"}]},
+        @{@"type": @"custom:mushroom-chip", @"entity": @"sensor.x"},       // unknown type → skipped
+        @{@"type": @"entity-filter", @"entities": @[@"sensor.y"]},         // unsupported → skipped
+        @{@"type": @"entity"},                                             // no entity → skipped
+        @42,                                                               // malformed → skipped
+    ];
+}
+
+- (void)assertMixedBadgesSection:(HADashboardConfigSection *)badges {
+    XCTAssertNotNil(badges);
+    XCTAssertEqualObjects(badges.cardType, @"badges");
+    XCTAssertEqualObjects(badges.entityIds, (@[@"sun.sun", @"sensor.a", @"sensor.b", @"sensor.c", @"sensor.d", @"sensor.e"]));
+    NSArray<NSDictionary *> *configs = badges.customProperties[@"badgeConfigs"];
+    XCTAssertEqual(configs.count, 6u);
+    XCTAssertEqualObjects([configs valueForKey:@"type"], (@[@"entity", @"entity", @"entity", @"entity", @"entity", @"entity"]));
+    XCTAssertEqualObjects([configs valueForKey:@"show_name"], (@[@YES, @NO, @YES, @YES, @NO, @YES]));
+    XCTAssertEqualObjects([configs valueForKey:@"show_state"], (@[@YES, @YES, @YES, @YES, @NO, @YES]));
+    XCTAssertEqualObjects([configs valueForKey:@"show_icon"], (@[@YES, @YES, @YES, @YES, @YES, @YES]));
+    XCTAssertEqualObjects(configs[2][@"icon"], @"mdi:bee");
+    XCTAssertEqualObjects(configs[2][@"color"], @"red");
+    XCTAssertEqualObjects(configs[2][@"state_content"], @"last_changed");
+    XCTAssertEqualObjects(configs[2][@"tap_action"], (@{@"action": @"toggle"}));
+    XCTAssertNil(configs[3][@"name"], @"state-label badges ignore name, like HA's hui-state-label-badge");
+    XCTAssertNil(configs[4][@"display_type"], @"display_type is migrated away");
+    XCTAssertNotNil(configs[5][@"visibility"]);
+    XCTAssertEqualObjects(badges.nameOverrides, (@{@"sensor.b": @"Bee"}));
+}
+
+- (void)testViewBadges_sectionsView_parsesLegacyAndCurrentFormats {
+    NSDictionary *dict = @{@"views": @[@{@"title": @"S", @"badges": [self mixedBadges],
+                                         @"sections": @[@{@"type": @"grid", @"cards": @[@{@"type": @"tile", @"entity": @"light.a"}]}]}]};
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
+    HALovelaceView *view = dashboard.views.firstObject;
+    XCTAssertEqualObjects(view.viewType, @"sections");
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:view columns:3];
+    [self assertMixedBadgesSection:config.viewBadges];
+    XCTAssertEqual(config.sections.count, 1u, @"The badge row is not one of the sections/columns");
+}
+
+- (void)testViewBadges_masonryView_parsesLegacyAndCurrentFormats {
+    NSDictionary *dict = @{@"views": @[@{@"title": @"M", @"badges": [self mixedBadges],
+                                         @"cards": @[@{@"type": @"entities", @"entities": @[@"light.a"]}]}]};
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
+    HALovelaceView *view = dashboard.views.firstObject;
+    XCTAssertEqualObjects(view.viewType, @"masonry");
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:view columns:3];
+    [self assertMixedBadgesSection:config.viewBadges];
+}
+
+- (void)testViewBadges_absentOrPanel_isNil {
+    NSDictionary *noBadges = @{@"views": @[@{@"title": @"M", @"cards": @[@{@"type": @"entities", @"entities": @[@"light.a"]}]}]};
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:noBadges];
+    XCTAssertNil([HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:3].viewBadges);
+
+    NSDictionary *onlyUnsupported = @{@"views": @[@{@"title": @"M", @"badges": @[@{@"type": @"custom:x"}],
+                                                @"cards": @[@{@"type": @"entities", @"entities": @[@"light.a"]}]}]};
+    dashboard = [HALovelaceParser parseDashboardFromDictionary:onlyUnsupported];
+    XCTAssertNil(dashboard.views.firstObject.rawBadges);
+    XCTAssertNil([HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:3].viewBadges);
+
+    NSDictionary *panel = @{@"views": @[@{@"title": @"P", @"type": @"panel", @"badges": @[@"sun.sun"],
+                                          @"cards": @[@{@"type": @"entities", @"entities": @[@"light.a"]}]}]};
+    dashboard = [HALovelaceParser parseDashboardFromDictionary:panel];
+    XCTAssertNil([HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:3].viewBadges,
+                 @"HA's panel view renders no badges");
+}
+
+/// Columnar layout: a leading full-width section spans the content width above the columns.
+- (void)testColumnarLayout_fullWidthLeadingSection_spansAboveColumns {
+    HAColumnarLayout *layout = [[HAColumnarLayout alloc] init];
+    layout.contentInsets = UIEdgeInsetsMake(4, 8, 8, 8);
+    HALayoutTestDataSource *ds = [[HALayoutTestDataSource alloc] init];
+    ds.sectionCount = 3;
+    ds.itemCounts = @[@1, @1, @1];
+    ds.itemHeights = @[@44, @100, @100];
+    ds.fullWidthCount = 1;
+    layout.delegate = ds;
+
+    (void)[self collectionViewWithLayout:layout dataSource:ds width:1024 height:768];
+
+    CGRect badges = [layout layoutAttributesForItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:0]].frame;
+    CGRect col1 = [layout layoutAttributesForItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:1]].frame;
+    CGRect col2 = [layout layoutAttributesForItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:2]].frame;
+    XCTAssertEqualWithAccuracy(CGRectGetMinX(badges), 8.0, 0.5);
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(badges), 1024.0 - 16.0, 0.5);
+    XCTAssertEqualWithAccuracy(CGRectGetMinY(badges), 4.0, 0.5);
+    XCTAssertGreaterThanOrEqual(CGRectGetMinY(col1), CGRectGetMaxY(badges), @"Columns start below the badge row");
+    XCTAssertEqualWithAccuracy(CGRectGetMinY(col1), CGRectGetMinY(col2), 0.5, @"Remaining sections share one row");
+    XCTAssertLessThan(CGRectGetMaxX(col1), CGRectGetMinX(col2), @"Remaining sections are side-by-side columns");
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(col1), (1024.0 - 16.0 - 6.0) / 2.0, 1.0,
+                               @"The badge section must not take a column");
+}
+
+/// Masonry layout: a leading full-width item spans the viewport above the columns.
+- (void)testMasonryLayout_fullWidthLeadingItem_spansAboveColumns {
+    HAMasonryLayout *layout = [[HAMasonryLayout alloc] init];
+    HALayoutTestDataSource *ds = [[HALayoutTestDataSource alloc] init];
+    ds.sectionCount = 1;
+    ds.itemCounts = @[@4];
+    ds.cardTypes = @[@"badges", @"sensor", @"sensor", @"sensor"];
+    ds.entityCounts = @[@0, @0, @0, @0];
+    ds.itemHeights = @[@44, @100, @100, @100];
+    ds.fullWidthCount = 1;
+    layout.delegate = ds;
+
+    (void)[self collectionViewWithLayout:layout dataSource:ds width:1024 height:768];
+
+    CGRect badges = [layout layoutAttributesForItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:0]].frame;
+    XCTAssertEqualWithAccuracy(CGRectGetMinX(badges), 8.0, 0.5);
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(badges), 1024.0 - 16.0, 0.5);
+    NSMutableSet *xOrigins = [NSMutableSet set];
+    for (NSInteger i = 1; i < 4; i++) {
+        CGRect frame = [layout layoutAttributesForItemAtIndexPath:[NSIndexPath indexPathForItem:i inSection:0]].frame;
+        XCTAssertGreaterThanOrEqual(CGRectGetMinY(frame), CGRectGetMaxY(badges));
+        [xOrigins addObject:@(round(CGRectGetMinX(frame)))];
+    }
+    XCTAssertEqual(xOrigins.count, 3u, @"The 3 cards still fill 3 columns at 1024pt");
 }
 
 @end

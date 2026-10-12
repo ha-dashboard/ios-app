@@ -1146,6 +1146,67 @@ static inline NSString *HANormalizeState(id val) {
     return YES;
 }
 
+/// Insert the view's badge row (dashboardConfig.viewBadges) ahead of the cards,
+/// keeping only badges whose own "visibility" conditions are met. It becomes a
+/// leading full-width section for the sections layouts (columnar/flow), or the
+/// first, full-width item of the main section for masonry/sidebar views.
+- (void)insertViewBadgeRowWithEntities:(NSDictionary<NSString *, HAEntity *> *)entities {
+    HADashboardConfigSection *badges = self.dashboardConfig.viewBadges;
+    if (badges.entityIds.count == 0) return; // also nil for panel views (the parser omits them, as HA does)
+
+    NSArray *configs = badges.customProperties[@"badgeConfigs"];
+    NSMutableSet<NSString *> *condIds = self.conditionEntityIds ? [self.conditionEntityIds mutableCopy] : [NSMutableSet set];
+    NSMutableArray<NSString *> *visibleIds = [NSMutableArray array];
+    NSMutableArray<NSDictionary *> *visibleConfigs = [NSMutableArray array];
+    for (NSUInteger i = 0; i < badges.entityIds.count; i++) {
+        NSDictionary *config = (i < configs.count && [configs[i] isKindOfClass:[NSDictionary class]]) ? configs[i] : @{};
+        BOOL visible = YES;
+        NSArray *visibility = config[@"visibility"];
+        if ([visibility isKindOfClass:[NSArray class]]) {
+            for (NSDictionary *condition in visibility) {
+                [self collectEntityIdsFromCondition:condition intoSet:condIds];
+                if (visible && ![self meetsCondition:condition entities:entities]) visible = NO;
+            }
+        }
+        if (!visible) continue;
+        [visibleIds addObject:badges.entityIds[i]];
+        [visibleConfigs addObject:config];
+    }
+    self.conditionEntityIds = [condIds copy];
+    if (visibleIds.count == 0) return;
+
+    HADashboardConfigSection *rowSection = [[HADashboardConfigSection alloc] init];
+    rowSection.cardType = @"badges";
+    rowSection.entityIds = [visibleIds copy];
+    rowSection.nameOverrides = badges.nameOverrides;
+    NSMutableDictionary *props = [badges.customProperties mutableCopy] ?: [NSMutableDictionary dictionary];
+    props[@"badgeConfigs"] = [visibleConfigs copy];
+    props[@"viewBadges"] = @YES;
+    rowSection.customProperties = [props copy];
+
+    HADashboardConfigItem *item = [[HADashboardConfigItem alloc] init];
+    item.cardType = @"badges";
+    item.entityId = visibleIds.firstObject;
+    item.columnSpan = 12;
+    item.rowSpan = 1;
+    item.entitiesSection = rowSection;
+    item.customProperties = @{@"viewBadges": @YES};
+    rowSection.items = @[item];
+
+    NSMutableArray<HADashboardConfigSection *> *sections = [self.dashboardConfig.sections mutableCopy] ?: [NSMutableArray array];
+    UICollectionViewLayout *layout = self.collectionView.collectionViewLayout;
+    if ([layout isKindOfClass:[HAMasonryLayout class]] || [layout isKindOfClass:[HASidebarLayout class]]) {
+        // Single main section: the badge row leads it (masonry spans it across the viewport)
+        if (sections.count == 0) [sections addObject:[[HADashboardConfigSection alloc] init]];
+        HADashboardConfigSection *main = sections.firstObject;
+        main.items = [@[item] arrayByAddingObjectsFromArray:main.items ?: @[]];
+    } else {
+        [sections insertObject:rowSection atIndex:0];
+    }
+    self.dashboardConfig.sections = [sections copy];
+    self.dashboardConfig.items = [@[item] arrayByAddingObjectsFromArray:self.dashboardConfig.items ?: @[]];
+}
+
 /// Check if item's visibilityConditions are all met. nil conditions = always visible.
 - (BOOL)item:(HADashboardConfigItem *)item meetsConditions:(NSDictionary<NSString *, HAEntity *> *)entities {
     NSArray<NSDictionary *> *conditions = item.visibilityConditions;
@@ -1197,6 +1258,9 @@ static inline NSString *HANormalizeState(id val) {
 
     // Filter out items whose visibility conditions aren't met
     [self filterConditionalItems:entities];
+
+    // View-level badge row above the cards (after filtering: it applies its own per-badge visibility)
+    [self insertViewBadgeRowWithEntities:entities];
 
     // Build reverse lookup map: entityId -> [NSIndexPath, ...]
     [self buildEntityToIndexPathMap];
@@ -1854,6 +1918,19 @@ static inline NSString *HANormalizeState(id val) {
             // Badges default to more-info (no per-badge action config yet)
             [weakSelf executeActionType:@"tap_action" forEntity:tappedEntity configProperties:item.customProperties];
         };
+        // View badges carry per-badge configs: run that badge's tap_action,
+        // defaulting to more-info like HA (handleAction's tap default).
+        ((HABadgeRowCell *)cell).badgeTapBlock = [entSection.customProperties[@"viewBadges"] boolValue]
+            ? ^(HAEntity *tappedEntity, NSDictionary *badgeConfig) {
+                NSDictionary *props = badgeConfig;
+                if (!props[@"tap_action"]) {
+                    NSMutableDictionary *withDefault = [props mutableCopy] ?: [NSMutableDictionary dictionary];
+                    withDefault[@"tap_action"] = @{@"action": HAActionTypeMoreInfo};
+                    props = withDefault;
+                }
+                [weakSelf executeActionType:@"tap_action" forEntity:tappedEntity configProperties:props];
+            }
+            : nil;
     } else if ([cell isKindOfClass:[HAGlanceCardCell class]]) {
         HADashboardConfigSection *entSection = item.entitiesSection ?: section;
         [(HAGlanceCardCell *)cell configureWithSection:entSection entities:allEntities configItem:item];
@@ -2011,7 +2088,21 @@ heightForHeaderInSection:(NSInteger)section {
     return [item.cardType isEqualToString:@"heading"];
 }
 
+- (BOOL)collectionView:(UICollectionView *)collectionView
+                layout:(UICollectionViewLayout *)layout
+    isFullWidthSection:(NSInteger)section {
+    HADashboardConfigSection *configSection = [self sectionAtIndex:section];
+    return [configSection.customProperties[@"viewBadges"] boolValue];
+}
+
 #pragma mark - HAMasonryLayoutDelegate
+
+- (BOOL)collectionView:(UICollectionView *)collectionView
+                layout:(UICollectionViewLayout *)layout
+isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
+    HADashboardConfigItem *item = [self itemAtIndexPath:indexPath];
+    return [item.customProperties[@"viewBadges"] boolValue];
+}
 
 - (NSString *)collectionView:(UICollectionView *)collectionView
                       layout:(UICollectionViewLayout *)layout

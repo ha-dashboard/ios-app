@@ -35,9 +35,42 @@
     UICollectionView *cv = self.collectionView;
     if (!cv) return;
 
-    NSInteger sectionCount = [cv numberOfSections];
-    if (sectionCount == 0) {
+    NSInteger totalSectionCount = [cv numberOfSections];
+    if (totalSectionCount == 0) {
         self.cachedContentSize = CGSizeZero;
+        return;
+    }
+
+    CGFloat totalWidth = cv.bounds.size.width - self.contentInsets.left - self.contentInsets.right;
+
+    // Leading full-width sections (the view badge row) sit above the columns
+    // and don't take a column; the rest are laid out as before, offset below.
+    NSInteger firstColumnSection = 0;
+    CGFloat sectionRowStartY = self.contentInsets.top;
+    if ([self.delegate respondsToSelector:@selector(collectionView:layout:isFullWidthSection:)]) {
+        while (firstColumnSection < totalSectionCount &&
+               [self.delegate collectionView:cv layout:self isFullWidthSection:firstColumnSection]) {
+            NSInteger itemCount = [cv numberOfItemsInSection:firstColumnSection];
+            for (NSInteger item = 0; item < itemCount; item++) {
+                NSIndexPath *indexPath = [NSIndexPath indexPathForItem:item inSection:firstColumnSection];
+                CGFloat itemHeight = 100.0;
+                if ([self.delegate respondsToSelector:@selector(collectionView:layout:heightForItemAtIndexPath:itemWidth:)]) {
+                    itemHeight = [self.delegate collectionView:cv layout:self heightForItemAtIndexPath:indexPath itemWidth:totalWidth];
+                }
+                UICollectionViewLayoutAttributes *attr =
+                    [UICollectionViewLayoutAttributes layoutAttributesForCellWithIndexPath:indexPath];
+                attr.frame = CGRectMake(self.contentInsets.left, sectionRowStartY, totalWidth, itemHeight);
+                [self.itemAttributes addObject:attr];
+                self.itemAttributesByIndexPath[indexPath] = attr;
+                sectionRowStartY += itemHeight + self.interItemSpacing;
+            }
+            firstColumnSection++;
+        }
+    }
+
+    NSInteger sectionCount = totalSectionCount - firstColumnSection;
+    if (sectionCount == 0) {
+        self.cachedContentSize = CGSizeMake(cv.bounds.size.width, sectionRowStartY + self.contentInsets.bottom);
         return;
     }
 
@@ -45,8 +78,6 @@
     // Sections beyond maxColumns wrap into additional rows below.
     NSInteger maxCols = self.maxColumns > 0 ? self.maxColumns : 4; // HA default is 4
     NSInteger effectiveCols = MIN(sectionCount, maxCols);
-
-    CGFloat totalWidth = cv.bounds.size.width - self.contentInsets.left - self.contentInsets.right;
 
     // Enforce minimum column width: if columns would be narrower than ~180pt,
     // reduce the column count so content remains readable. This handles dashboards
@@ -63,12 +94,10 @@
     // Number of section rows needed
     NSInteger sectionRowCount = (sectionCount + effectiveCols - 1) / effectiveCols;
 
-    // Track Y offset across section rows
-    CGFloat sectionRowStartY = self.contentInsets.top;
-
+    // Track Y offset across section rows (sectionRowStartY starts below any full-width sections)
     for (NSInteger sectionRow = 0; sectionRow < sectionRowCount; sectionRow++) {
-        NSInteger firstSection = sectionRow * effectiveCols;
-        NSInteger lastSection = MIN(firstSection + effectiveCols, sectionCount);
+        NSInteger firstSection = firstColumnSection + sectionRow * effectiveCols;
+        NSInteger lastSection = MIN(firstSection + effectiveCols, totalSectionCount);
         NSInteger colsInRow = lastSection - firstSection;
 
         // Track the Y offset for each column within this section row

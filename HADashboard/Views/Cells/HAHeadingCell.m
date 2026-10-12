@@ -44,6 +44,14 @@
 - (void)configureWithItem:(HADashboardConfigItem *)item {
     self.titleLabel.text = item.displayName;
 
+    // HA heading card "heading_style: subtitle": smaller, secondary-coloured
+    // text (hui-heading-card .content.subtitle). The default "title" style
+    // keeps the section-header look.
+    BOOL subtitle = [item.customProperties[@"heading_style"] isEqual:@"subtitle"];
+    self.titleLabel.font = subtitle ? [UIFont systemFontOfSize:14 weight:UIFontWeightMedium]
+                                    : [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
+    self.titleLabel.textColor = subtitle ? [HATheme secondaryTextColor] : [HATheme sectionHeaderColor];
+
     // Try to get icon from customProperties or default
     NSString *icon = item.customProperties[@"icon"];
     if ([icon isKindOfClass:[NSString class]]) {
