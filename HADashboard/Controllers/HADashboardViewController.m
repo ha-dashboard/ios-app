@@ -803,7 +803,13 @@ static const CGFloat kRowUnitHeight = 56.0;
     HADashboardConfigItem *item = [self itemAtIndexPath:indexPath];
     HADashboardConfigSection *section = [self sectionAtIndex:indexPath.section];
     HAEntity *entity = [[HAConnectionManager sharedManager] entityForId:item.entityId];
+    return [[self class] heightForItem:item entity:entity section:section itemWidth:itemWidth];
+}
 
++ (CGFloat)heightForItem:(HADashboardConfigItem *)item
+                  entity:(HAEntity *)entity
+                 section:(HADashboardConfigSection *)section
+               itemWidth:(CGFloat)itemWidth {
     // Extra height for items that have a heading above the card
     BOOL hasHeading = (item.customProperties[@"headingIcon"] != nil && item.displayName.length > 0);
     CGFloat headingExtra = hasHeading ? [HABaseEntityCell headingHeight] : 0;
@@ -862,6 +868,12 @@ static const CGFloat kRowUnitHeight = 56.0;
         NSNumber *rows = item.customProperties[@"forecast_rows"];
         NSInteger forecastRows = rows ? [rows integerValue] : 5;
         height = [HAClockWeatherCell preferredHeightForForecastRows:forecastRows] + headingExtra;
+    } else if ([item.cardType isEqualToString:@"tile"]) {
+        // Tile cards always render in HATileEntityCell (HAEntityCellFactory routes
+        // by card type first), so they must be sized as tiles before any of the
+        // domain-based fallbacks below — otherwise e.g. a light tile without
+        // features got the full light-card height.
+        height = [HATileEntityCell preferredHeightForConfigItem:item] + headingExtra;
     } else if ([[entity domain] isEqualToString:HAEntityDomainCamera]) {
         NSNumber *customHeight = item.customProperties[@"height"];
         height = customHeight ? [customHeight floatValue] + headingExtra : itemWidth * 0.75 + headingExtra;
@@ -874,15 +886,10 @@ static const CGFloat kRowUnitHeight = 56.0;
         height = (hasKeypad ? [HAAlarmEntityCell preferredHeightWithKeypad]
                             : [HAAlarmEntityCell preferredHeightWithoutKeypad]) + headingExtra;
     } else if ([[entity domain] isEqualToString:HAEntityDomainLight]) {
-        // Matches the alarm branch above: domain-based, consistent with how
-        // the other domain fallbacks here are positioned ahead of the later
-        // cardType-specific checks (tile, logbook).
+        // Domain-based fallback for non-tile light cards (tiles are sized above).
         height = [HALightEntityCell preferredHeightForEntity:entity configItem:item] + headingExtra;
     } else if ([[entity domain] isEqualToString:HAEntityDomainMediaPlayer]) {
         height = [HAMediaPlayerEntityCell preferredHeight] + headingExtra;
-    } else if ([item.cardType isEqualToString:@"tile"]) {
-        BOOL isCompact = [item.customProperties[@"compact"] boolValue];
-        height = (isCompact ? [HATileEntityCell compactHeight] : [HATileEntityCell preferredHeightForConfigItem:item]) + headingExtra;
     } else if ([item.cardType isEqualToString:@"logbook"]) {
         NSInteger hours = 24;
         if ([item.customProperties[@"hours_to_show"] isKindOfClass:[NSNumber class]]) {
