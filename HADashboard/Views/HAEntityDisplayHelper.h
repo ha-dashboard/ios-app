@@ -65,6 +65,17 @@
 /// E.g. "2026-02-11T10:15:30+00:00" → "5 minutes ago"
 + (NSString *)relativeTimeFromISO8601:(NSString *)isoString;
 
+/// Text for a Lovelace "state_content" option (a string or array of strings,
+/// as on tile cards and entity badges): each part is "state" (→ stateText),
+/// "name" (→ name, when non-nil), "last_changed"/"last-changed",
+/// "last_updated"/"last-updated" (relative time), or an attribute name.
+/// Non-empty parts are joined with " · ". Returns nil when nothing resolves,
+/// so the caller keeps its default state text.
++ (NSString *)stateContentText:(id)stateContent
+                     forEntity:(HAEntity *)entity
+                     stateText:(NSString *)stateText
+                          name:(NSString *)name;
+
 /// Check whether a string represents a numeric value.
 /// Returns NO for nil, empty, "unavailable", "unknown", "on", "off".
 + (BOOL)isNumericString:(NSString *)string;

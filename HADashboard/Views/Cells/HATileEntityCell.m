@@ -344,35 +344,11 @@
     }
 
     // state_content override: display last_changed, last_updated, or attribute values
-    id stateContent = configItem.customProperties[@"state_content"];
-    if (stateContent) {
-        NSArray *contentItems = [stateContent isKindOfClass:[NSArray class]]
-            ? (NSArray *)stateContent
-            : @[stateContent];
-        NSMutableArray *parts = [NSMutableArray arrayWithCapacity:contentItems.count];
-        for (id item in contentItems) {
-            NSString *key = [item isKindOfClass:[NSString class]] ? (NSString *)item : nil;
-            if (!key) continue;
-            NSString *value = nil;
-            if ([key isEqualToString:@"last_changed"] || [key isEqualToString:@"last-changed"]) {
-                value = [HAEntityDisplayHelper relativeTimeFromISO8601:entity.lastChanged];
-            } else if ([key isEqualToString:@"last_updated"] || [key isEqualToString:@"last-updated"]) {
-                value = [HAEntityDisplayHelper relativeTimeFromISO8601:entity.lastUpdated];
-            } else if ([key isEqualToString:@"state"]) {
-                value = displayState;
-            } else {
-                // Attribute name lookup
-                id attrVal = entity.attributes[key];
-                if (attrVal && attrVal != [NSNull null]) {
-                    value = [NSString stringWithFormat:@"%@", attrVal];
-                }
-            }
-            if (value.length > 0) [parts addObject:value];
-        }
-        if (parts.count > 0) {
-            displayState = [parts componentsJoinedByString:@" · "];
-        }
-    }
+    NSString *stateContentText = [HAEntityDisplayHelper stateContentText:configItem.customProperties[@"state_content"]
+                                                               forEntity:entity
+                                                               stateText:displayState
+                                                                    name:nil];
+    if (stateContentText) displayState = stateContentText;
 
     // Respect show_state / show_name / show_icon from card config.
     // HA button card defaults: show_name=YES, show_icon=YES, show_state=NO.

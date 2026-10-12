@@ -34,6 +34,9 @@ extern NSString *const HAUnsupportedCardTypeKey;
 @property (nonatomic, assign) NSInteger maxColumns;
 /// View layout type: "masonry" (default classic), "panel", "sidebar", or "sections".
 @property (nonatomic, copy) NSString *viewType;
+/// View-level badges (the view config's "badges" array), normalized by
+/// +[HALovelaceParser normalizedViewBadgeConfigs:]. nil when the view has none.
+@property (nonatomic, copy) NSArray<NSDictionary *> *rawBadges;
 @end
 
 
@@ -99,6 +102,18 @@ extern NSString *const HAUnsupportedCardTypeKey;
                                    deviceNames:(NSDictionary<NSString *, NSString *> *)deviceNames
                             floorNamesByAreaId:(NSDictionary<NSString *, NSString *> *)floorNamesByAreaId
                            entityRegistryNames:(NSDictionary<NSString *, NSString *> *)entityRegistryNames;
+
+/// Normalize a Lovelace view's "badges" array the way HA's ensureBadgeConfig()
+/// and the entity/state-label badge classes do, returning only badges this app
+/// renders (entity badges), each a dictionary with "type" = "entity", a
+/// non-empty "entity", and explicit show_name/show_state/show_icon NSNumbers:
+/// - a plain entity-id string becomes an entity badge with show_name YES;
+/// - a dictionary without "type" becomes an entity badge (show_name default NO);
+/// - "state-label" keeps only entity/color/show_name (default YES)/visibility;
+/// - "entity" applies HA's defaults and migrates the deprecated display_type.
+/// Unknown types (custom:*, entity-filter, shortcut, energy totals) and
+/// malformed entries are skipped.
++ (NSArray<NSDictionary *> *)normalizedViewBadgeConfigs:(NSArray *)rawBadges;
 
 /// Extract all entity IDs from a Lovelace card dictionary (recursively handles stacks)
 + (NSArray<NSDictionary *> *)extractEntitiesFromCard:(NSDictionary *)card;

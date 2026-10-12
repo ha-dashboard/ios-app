@@ -7,6 +7,8 @@ static const CGFloat kCardMarginTop = 4.0;
 static const CGFloat kCardMarginLR = 4.0;      // card left/right within column
 static const CGFloat kCardMarginBottom = 8.0;
 static const CGFloat kMaxColumnWidth = 500.0;
+static const CGFloat kBadgesMarginLR = 8.0;    // hui-view-badges margin: 4px 8px
+static const CGFloat kBadgesMarginTB = 4.0;
 
 @interface HAMasonryLayout ()
 @property (nonatomic, strong) NSMutableArray<UICollectionViewLayoutAttributes *> *itemAttributes;
@@ -113,13 +115,34 @@ static const CGFloat kMaxColumnWidth = 500.0;
     if (leftOffset < 0) leftOffset = 0;
 
     // Column heights (abstract units for assignment) and Y offsets (pixels for placement)
+    // Leading full-width items (the view badge row) span the viewport above the columns
+    CGFloat columnsTop = kContainerPaddingTop;
+    NSInteger firstColumnItem = 0;
+    if ([self.delegate respondsToSelector:@selector(collectionView:layout:isFullWidthItemAtIndexPath:)]) {
+        CGFloat fullWidth = MAX(0, viewportWidth - 2.0 * kBadgesMarginLR);
+        while (firstColumnItem < itemCount) {
+            NSIndexPath *indexPath = [NSIndexPath indexPathForItem:firstColumnItem inSection:0];
+            if (![self.delegate collectionView:cv layout:self isFullWidthItemAtIndexPath:indexPath]) break;
+            CGFloat itemHeight = 100.0;
+            if ([self.delegate respondsToSelector:@selector(collectionView:layout:heightForItemAtIndexPath:itemWidth:)]) {
+                itemHeight = [self.delegate collectionView:cv layout:self heightForItemAtIndexPath:indexPath itemWidth:fullWidth];
+            }
+            UICollectionViewLayoutAttributes *attr =
+                [UICollectionViewLayoutAttributes layoutAttributesForCellWithIndexPath:indexPath];
+            attr.frame = CGRectMake(kBadgesMarginLR, columnsTop + kBadgesMarginTB, fullWidth, itemHeight);
+            [self.itemAttributes addObject:attr];
+            columnsTop += kBadgesMarginTB + itemHeight + kBadgesMarginTB;
+            firstColumnItem++;
+        }
+    }
+
     NSInteger *columnUnits = calloc(columnCount, sizeof(NSInteger));
     CGFloat *columnY = calloc(columnCount, sizeof(CGFloat));
     for (NSInteger i = 0; i < columnCount; i++) {
-        columnY[i] = kContainerPaddingTop;
+        columnY[i] = columnsTop;
     }
 
-    for (NSInteger item = 0; item < itemCount; item++) {
+    for (NSInteger item = firstColumnItem; item < itemCount; item++) {
         NSIndexPath *indexPath = [NSIndexPath indexPathForItem:item inSection:0];
 
         // Compute abstract size units for this card

@@ -59,6 +59,12 @@ NSString *const HAUnsupportedCardTypeKey = @"unsupportedCardType";
                     view.rawSections = [parsedSections copy];
                 }
                 view.rawCards = [allCards copy];
+                // View-level badges (shown above the cards/sections in HA)
+                NSArray *rawBadges = HASafeDictArrayOrNil(vd, @"badges");
+                if (rawBadges.count > 0) {
+                    NSArray *badges = [HALovelaceParser normalizedViewBadgeConfigs:rawBadges];
+                    if (badges.count > 0) view.rawBadges = badges;
+                }
                 // Parse max_columns from HA view config (sections layout column cap)
                 NSNumber *maxColsNum = HASafeDictNumberOrNil(vd, @"max_columns");
                 if (maxColsNum) {
@@ -203,12 +209,24 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             if (haSectionTitle.length == 0) haSectionTitle = nil;
             // Icon from section-level config (HA 2024.12+)
             NSString *haSectionIcon = HASafeDictStringOrNil(rawSection, @"icon");
+            if (haSectionIcon.length == 0) haSectionIcon = nil; // stored as @"" when absent
             NSArray *sectionCards = rawSection[@"cards"];
 
-            // Look for heading cards to extract section title/icon (fallback)
-            for (NSDictionary *card in sectionCards) {
+            // A heading card that opens the section supplies the section
+            // header (title/icon fallback). Every other heading card is
+            // rendered in place as a full-width standalone heading item, so
+            // the cards after it start on a new row beneath it — HA lays a
+            // section's cards out in order on its grid and a heading card
+            // spans the full width ("columns": "full"). Previously every
+            // heading was consumed here: the first became the title and any
+            // later heading was dropped, leaving its neighbours packed side by
+            // side (GitHub #23).
+            NSUInteger titleHeadingIdx = NSNotFound;
+            for (NSUInteger i = 0; i < sectionCards.count; i++) {
+                NSDictionary *card = sectionCards[i];
                 if (![card isKindOfClass:[NSDictionary class]]) continue;
                 if ([HASafeDictStringOrNil(card, @"type") isEqualToString:@"heading"]) {
+                    titleHeadingIdx = i;
                     if (!haSectionTitle && [card[@"heading"] isKindOfClass:[NSString class]]) {
                         haSectionTitle = card[@"heading"];
                     }
@@ -216,6 +234,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                         haSectionIcon = card[@"icon"];
                     }
                 }
+                break; // only the first card can be the section header
             }
 
             // Collect all items from all cards in this HA section into a single config section
@@ -224,7 +243,19 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             for (NSUInteger cardIdx = 0; cardIdx < sectionCards.count; cardIdx++) {
                 NSDictionary *card = sectionCards[cardIdx];
                 if (![card isKindOfClass:[NSDictionary class]]) continue;
-                if ([HASafeDictStringOrNil(card, @"type") isEqualToString:@"heading"]) continue;
+                if ([HASafeDictStringOrNil(card, @"type") isEqualToString:@"heading"]) {
+                    if (cardIdx != titleHeadingIdx) {
+                        NSInteger startSectionCount = cardSections.count;
+                        NSInteger startItemCount = cardItems.count;
+                        [self _appendStandaloneHeadingForCard:card sections:cardSections allItems:cardItems];
+                        [self _applyVisibilityOfCard:card
+                                          toSections:cardSections
+                                    fromSectionIndex:startSectionCount
+                                            allItems:cardItems
+                                       fromItemIndex:startItemCount];
+                    }
+                    continue;
+                }
 
                 // Sections view: scale grid_options.columns from HA's section grid to our 12-col sub-grid
                 NSInteger sectionGridMax = (view.maxColumns > 0) ? view.maxColumns : 4;
@@ -301,6 +332,8 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             // (prevents "House Climate" appearing as both section header AND inline heading)
             if (haSectionTitle.length > 0) {
                 for (HADashboardConfigItem *item in mergedItems) {
+                    // A standalone heading item is a heading in its own right, never an inline duplicate
+                    if ([item.cardType isEqualToString:@"heading"]) continue;
                     if (item.displayName.length > 0 && [item.displayName isEqualToString:haSectionTitle]) {
                         if (item.customProperties[@"headingIcon"]) {
                             NSMutableDictionary *props = [item.customProperties mutableCopy];
@@ -348,7 +381,116 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
     config.sections = [sections copy];
     config.items = [allItems copy];
 
+    // HA's panel view renders a single card and no badges; every other view
+    // type shows the view's badges in a centred row above its content.
+    if (view.rawBadges.count > 0 && ![view.viewType isEqualToString:@"panel"]) {
+        config.viewBadges = [self _viewBadgeSectionForBadges:view.rawBadges nameContext:nameContext];
+    }
+
     return config;
+}
+
+#pragma mark - View badges
+
++ (NSArray<NSDictionary *> *)normalizedViewBadgeConfigs:(NSArray *)rawBadges {
+    if (![rawBadges isKindOfClass:[NSArray class]]) return @[];
+    NSMutableArray<NSDictionary *> *result = [NSMutableArray arrayWithCapacity:rawBadges.count];
+    for (id raw in rawBadges) {
+        NSMutableDictionary *cfg = nil;
+        if ([raw isKindOfClass:[NSString class]]) {
+            // Legacy form: a bare entity id (HA ensureBadgeConfig: show_name true)
+            cfg = [@{@"type": @"entity", @"entity": raw, @"show_name": @YES} mutableCopy];
+        } else if ([raw isKindOfClass:[NSDictionary class]]) {
+            NSDictionary *dict = raw;
+            NSString *type = HASafeDictStringOrNil(dict, @"type");
+            if (type.length == 0 || [type isEqualToString:@"entity"]) {
+                cfg = [dict mutableCopy];
+                cfg[@"type"] = @"entity";
+                // Migrate the deprecated display_type (hui-entity-badge migrateLegacyEntityBadgeConfig)
+                NSString *displayType = HASafeDictStringOrNil(dict, @"display_type");
+                if (displayType) {
+                    if (!cfg[@"show_name"] && [displayType isEqualToString:@"complete"]) cfg[@"show_name"] = @YES;
+                    if (!cfg[@"show_state"] && [displayType isEqualToString:@"minimal"]) cfg[@"show_state"] = @NO;
+                    [cfg removeObjectForKey:@"display_type"];
+                }
+            } else if ([type isEqualToString:@"state-label"]) {
+                // hui-state-label-badge maps to an entity badge with only these keys
+                cfg = [NSMutableDictionary dictionary];
+                cfg[@"type"] = @"entity";
+                if (dict[@"entity"]) cfg[@"entity"] = dict[@"entity"];
+                if (dict[@"color"]) cfg[@"color"] = dict[@"color"];
+                cfg[@"show_name"] = [dict[@"show_name"] isKindOfClass:[NSNumber class]] ? dict[@"show_name"] : @YES;
+                if (dict[@"visibility"]) cfg[@"visibility"] = dict[@"visibility"];
+            } else {
+                if ([self _logUnsupportedCardTypeOnce:[@"badge:" stringByAppendingString:type]]) {
+                    HALogW(@"parser", @"Unsupported view badge type \"%@\" — skipped", type);
+                }
+                continue;
+            }
+        }
+        NSString *entityId = HASafeDictStringOrNil(cfg, @"entity");
+        if (entityId.length == 0) continue;
+        // HA entity badge defaults (hui-entity-badge DEFAULT_CONFIG)
+        for (NSString *key in @[@"show_name", @"show_state", @"show_icon"]) {
+            if (![cfg[key] isKindOfClass:[NSNumber class]]) {
+                cfg[key] = [key isEqualToString:@"show_name"] ? @NO : @YES;
+            }
+        }
+        [result addObject:[cfg copy]];
+    }
+    return [result copy];
+}
+
++ (HADashboardConfigSection *)_viewBadgeSectionForBadges:(NSArray<NSDictionary *> *)badges
+                                             nameContext:(HAEntityNameRegistryContext *)nameContext {
+    NSMutableArray<NSString *> *entityIds = [NSMutableArray arrayWithCapacity:badges.count];
+    NSMutableDictionary<NSString *, NSString *> *nameOverrides = [NSMutableDictionary dictionary];
+    for (NSDictionary *badge in badges) {
+        NSString *entityId = badge[@"entity"];
+        [entityIds addObject:entityId];
+        NSString *name = [HAEntityNameResolver resolveNameValue:badge[@"name"]
+                                                    forEntityId:entityId
+                                                        context:nameContext];
+        if (name.length > 0) nameOverrides[entityId] = name;
+    }
+    HADashboardConfigSection *section = [[HADashboardConfigSection alloc] init];
+    section.cardType = @"badges";
+    section.entityIds = [entityIds copy];
+    if (nameOverrides.count > 0) section.nameOverrides = [nameOverrides copy];
+    section.customProperties = @{@"badgeConfigs": badges, @"viewBadges": @YES};
+    return section;
+}
+
+#pragma mark - Standalone headings
+
+/// Emit a heading card as a full-width standalone heading item (rendered by
+/// HAHeadingCell), in its own heading-typed config section. Used for every
+/// heading card in a sections-view section except the one that opens it (that
+/// one becomes the section header). Never used for headings nested in grid
+/// cards — those keep the embedded headingIcon mechanism (see CLAUDE.md).
++ (void)_appendStandaloneHeadingForCard:(NSDictionary *)card
+                               sections:(NSMutableArray<HADashboardConfigSection *> *)sections
+                               allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems {
+    NSString *heading = HASafeDictStringOrNil(card, @"heading");
+    NSString *icon = HASafeDictStringOrNil(card, @"icon");
+    if (heading.length == 0 && icon.length == 0) return;
+
+    HADashboardConfigItem *headingItem = [[HADashboardConfigItem alloc] init];
+    headingItem.cardType = @"heading";
+    headingItem.columnSpan = 12;
+    headingItem.rowSpan = 1;
+    headingItem.displayName = heading;
+    NSMutableDictionary *props = [NSMutableDictionary dictionary];
+    if (icon.length > 0) props[@"icon"] = icon;
+    NSString *style = HASafeDictStringOrNil(card, @"heading_style");
+    if ([style isEqualToString:@"subtitle"]) props[@"heading_style"] = style;
+    if (props.count > 0) headingItem.customProperties = [props copy];
+
+    HADashboardConfigSection *headingSection = [[HADashboardConfigSection alloc] init];
+    headingSection.cardType = @"heading";
+    headingSection.items = @[headingItem];
+    [sections addObject:headingSection];
+    [allItems addObject:headingItem];
 }
 
 + (BOOL)_markdownContentContainsTemplate:(NSString *)content {
@@ -405,6 +547,21 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
            nameContext:nameContext
               cardPath:cardPath];
 
+    [self _applyVisibilityOfCard:card
+                      toSections:sections
+                fromSectionIndex:startSectionCount
+                        allItems:allItems
+                   fromItemIndex:startItemCount];
+}
+
+/// Attach a card's "visibility" (or a conditional card's "conditions") to
+/// every item the card produced: the items added to `allItems` / `sections`
+/// at or after the given start indices.
++ (void)_applyVisibilityOfCard:(NSDictionary *)card
+                    toSections:(NSMutableArray<HADashboardConfigSection *> *)sections
+              fromSectionIndex:(NSInteger)startSectionCount
+                      allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems
+                 fromItemIndex:(NSInteger)startItemCount {
     NSArray *visibility = card[@"visibility"];
     if ([HASafeDictStringOrNil(card, @"type") isEqualToString:@"conditional"] && !visibility) {
         visibility = card[@"conditions"];
