@@ -153,13 +153,6 @@
 /// The reporter's row: a single legacy sun.sun badge (name above state), centred in the row.
 - (void)testViewBadgeRowSingleSun {
     UIView *row = [self viewBadgeRowForBadges:@[@"sun.sun"] width:kColumnWidth];
-    // Warm-up render: the first UIVisualEffectView drawn in a test process
-    // antialiases the pill's outermost edge pixels slightly differently (2px,
-    // 2/255), so without this the result depends on whether this test runs
-    // alone or after other snapshot tests.
-    UIGraphicsBeginImageContextWithOptions(row.bounds.size, NO, 0);
-    [row drawViewHierarchyInRect:row.bounds afterScreenUpdates:YES];
-    UIGraphicsEndImageContext();
     [self verifyView:row identifier:nil];
 }
 
