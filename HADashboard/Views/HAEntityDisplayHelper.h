@@ -68,6 +68,10 @@
                      stateText:(NSString *)stateText
                           name:(NSString *)name;
 
+/// Approximation of HA's stateActive(): whether a badge's custom "color"
+/// applies (entity and heading badges only use it while the entity is active).
++ (BOOL)isEntityStateActive:(HAEntity *)entity;
+
 /// Check whether a string represents a numeric value.
 /// Returns NO for nil, empty, "unavailable", "unknown", "on", "off".
 + (BOOL)isNumericString:(NSString *)string;

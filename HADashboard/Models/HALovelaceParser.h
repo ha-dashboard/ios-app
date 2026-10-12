@@ -115,6 +115,25 @@ extern NSString *const HAUnsupportedCardTypeKey;
 /// malformed entries are skipped.
 + (NSArray<NSDictionary *> *)normalizedViewBadgeConfigs:(NSArray *)rawBadges;
 
+/// Normalize a heading card's badges the way hui-heading-card and
+/// hui-entity-heading-badge do: the legacy "entities" list is appended to
+/// "badges" (migrateHeadingCardConfig); entries without a type, or of type
+/// "entity", become entity badges with explicit show_state/show_icon
+/// NSNumbers (default YES) and tap_action/hold_action/double_tap_action
+/// defaulting to {"action": "none"}; a plain entity-id string is accepted as
+/// an entity badge. Button badges, other types and entries without an entity
+/// are skipped. Returns an empty array when the card has none.
++ (NSArray<NSDictionary *> *)normalizedHeadingBadgeConfigs:(NSDictionary *)headingCard;
+
+/// Keys the parser stores a heading card's extras under, on the heading's
+/// item customProperties (standalone heading items and grid items carrying an
+/// embedded headingIcon heading) or on its section's customProperties (the
+/// heading that becomes a sections-view section header):
+/// HAHeadingBadgesKey → normalized badge configs (non-empty array);
+/// HAHeadingTapActionKey → the heading's own tap_action, when actionable.
+extern NSString *const HAHeadingBadgesKey;
+extern NSString *const HAHeadingTapActionKey;
+
 /// Extract all entity IDs from a Lovelace card dictionary (recursively handles stacks)
 + (NSArray<NSDictionary *> *)extractEntitiesFromCard:(NSDictionary *)card;
 

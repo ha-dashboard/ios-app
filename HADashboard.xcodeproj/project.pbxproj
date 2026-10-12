@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		60CE84C5385CDC3F9BAA3E08 /* HAHeadingBadgesView.m in Sources */ = {isa = PBXBuildFile; fileRef = 54A5BFFF6275D9902B531DE2 /* HAHeadingBadgesView.m */; };
+		12B160218CA140D5996B0FF1 /* HABadgeActionTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 1E5562E960A08D109904CF82 /* HABadgeActionTests.m */; };
 		00038949C342C959E2F667B0 /* testTimerSectionPaused_timerSectionPaused_light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = D407B92D07874BD95496B151 /* testTimerSectionPaused_timerSectionPaused_light@2x.png */; };
 		001778B7ED749DFF94C6C9E2 /* testLightButton_showNameFalse__dark_gradient@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 98224A06BD15296D69976A26 /* testLightButton_showNameFalse__dark_gradient@2x.png */; };
 		001AE9A431062052A8847D1B /* testWaterHeaterTile_default__light@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = E552F82D7EDFBEB60C5A0CF7 /* testWaterHeaterTile_default__light@2x.png */; };
@@ -1393,6 +1395,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		2F5A45C0C1749B83D971CC53 /* HAHeadingBadgesView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HAHeadingBadgesView.h; sourceTree = "<group>"; };
+		54A5BFFF6275D9902B531DE2 /* HAHeadingBadgesView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HAHeadingBadgesView.m; sourceTree = "<group>"; };
+		1E5562E960A08D109904CF82 /* HABadgeActionTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HABadgeActionTests.m; sourceTree = "<group>"; };
 		000F4A3D464DFD6E048297AD /* testSwitchTile_nameOverride__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testSwitchTile_nameOverride__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		002D5AB7591D7457BC6A1807 /* testHumidifierTile_modes__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testHumidifierTile_modes__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		003CB58637360AC680F25FFB /* HATopAlignedFlowLayout.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HATopAlignedFlowLayout.m; sourceTree = "<group>"; };
@@ -3311,6 +3316,8 @@
 				775DAD217A93BE62D88FA5E6 /* HAPerfMonitor.m */,
 				18222140D67D21338AB55007 /* HASectionHeaderView.h */,
 				13F6CB7F661D7E1ABE0FC3D5 /* HASectionHeaderView.m */,
+				2F5A45C0C1749B83D971CC53 /* HAHeadingBadgesView.h */,
+				54A5BFFF6275D9902B531DE2 /* HAHeadingBadgesView.m */,
 				8049DF6CABEEC10A2C107A26 /* HASidebarLayout.h */,
 				FA47B65F4D991F7F5DC8BC96 /* HASidebarLayout.m */,
 				B948459191CA9574F1BCE2AE /* HASkeletonView.h */,
@@ -4597,6 +4604,7 @@
 				2943BB830FEC55FCCEDF66F3 /* HAClassicLayoutTests.m */,
 				A8072BB3C22561E6A2C4170E /* HAClimateSnapshotTests.m */,
 				6F1BA5152B815D413B721C0B /* HACompositeSnapshotTests.m */,
+				1E5562E960A08D109904CF82 /* HABadgeActionTests.m */,
 				0474EF4CC8D7F02953AE98C9 /* HAControlSnapshotTests.m */,
 				52E2153FB4F52AFA0E654A77 /* HADashboardRaceConditionTests.m */,
 				8BEF8A8DF5775ED64EFBC309 /* HADateFormattingTests.m */,
@@ -6089,6 +6097,7 @@
 				FA122B7377AC4AB4AEDD115C /* HAUnsupportedCardTests.m in Sources */,
 				A324B257636E2DBD3E48BBCA /* HAClimateSnapshotTests.m in Sources */,
 				10EF3E7F400D8073D7E48296 /* HACompositeSnapshotTests.m in Sources */,
+				12B160218CA140D5996B0FF1 /* HABadgeActionTests.m in Sources */,
 				BDA7BCA55F4007220732D48A /* HAControlSnapshotTests.m in Sources */,
 				AAA03063331A727638DC0778 /* HADashboardRaceConditionTests.m in Sources */,
 				83B4660D189333BDE3BB24B7 /* HADateFormattingTests.m in Sources */,
@@ -6247,6 +6256,7 @@
 				1B67362D07BD8992BBA9EF37 /* HARemoteEntityCell.m in Sources */,
 				82BFD7ACD06BDDC9A662B2EE /* HASceneEntityCell.m in Sources */,
 				F56F285B6236417E142F8670 /* HASectionHeaderView.m in Sources */,
+				60CE84C5385CDC3F9BAA3E08 /* HAHeadingBadgesView.m in Sources */,
 				F8A3E1EE39BD809E079669BB /* HASensorEntityCell.m in Sources */,
 				44999F9C018DC8F9DD729D0C /* HASensorReporter.m in Sources */,
 				AFAB9EA86E4781A32E2D24FD /* HASettingsViewController.m in Sources */,

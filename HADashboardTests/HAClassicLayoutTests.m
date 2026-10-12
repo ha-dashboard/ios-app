@@ -920,6 +920,95 @@ isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
     XCTAssertEqualObjects(items[1].customProperties[@"headingIcon"], @"mdi:robot-vacuum");
 }
 
+#pragma mark - Heading badges
+
+/// The section's opening heading (→ section header) and a later heading
+/// (→ standalone heading item) each keep their badges, normalized like
+/// hui-entity-heading-badge, and an actionable heading tap_action.
+- (void)testSectionsView_headingBadges_sectionHeaderAndStandalone {
+    NSDictionary *navigate = @{@"action": @"navigate", @"navigation_path": @"/climate"};
+    HADashboardConfig *config = [self sectionsConfigWithCards:@[
+        @{@"type": @"heading", @"heading": @"Climate", @"icon": @"mdi:thermostat", @"tap_action": navigate,
+          @"badges": @[
+              @{@"type": @"entity", @"entity": @"sensor.a", @"color": @"red", @"state_content": @"last_changed"},
+              @"sensor.b",                                                                  // bare entity id
+              @{@"entity": @"sensor.c", @"show_state": @NO, @"hold_action": navigate,       // typeless → entity
+                @"visibility": @[@{@"condition": @"state", @"entity": @"sun.sun", @"state": @"above_horizon"}]},
+              @{@"type": @"button", @"icon": @"mdi:plus"},                                  // button badge → skipped
+              @{@"type": @"entity"},                                                        // no entity → skipped
+          ]},
+        @{@"type": @"tile", @"entity": @"climate.a"},
+        @{@"type": @"heading", @"heading": @"Later", @"tap_action": @{@"action": @"none"},
+          @"badges": @[@{@"entity": @"sensor.d", @"show_icon": @NO}],
+          @"entities": @[@"sensor.e"]},                                                     // legacy, appended
+        @{@"type": @"tile", @"entity": @"climate.b"},
+    ]];
+    HADashboardConfigSection *section = config.sections.firstObject;
+    XCTAssertEqualObjects(section.title, @"Climate");
+
+    NSArray<NSDictionary *> *header = section.customProperties[HAHeadingBadgesKey];
+    XCTAssertEqualObjects([header valueForKey:@"entity"], (@[@"sensor.a", @"sensor.b", @"sensor.c"]));
+    XCTAssertEqualObjects([header valueForKey:@"type"], (@[@"entity", @"entity", @"entity"]));
+    XCTAssertEqualObjects([header valueForKey:@"show_state"], (@[@YES, @YES, @NO]));
+    XCTAssertEqualObjects([header valueForKey:@"show_icon"], (@[@YES, @YES, @YES]));
+    XCTAssertEqualObjects(header[0][@"color"], @"red");
+    XCTAssertEqualObjects(header[0][@"state_content"], @"last_changed");
+    XCTAssertEqualObjects(header[1][@"tap_action"], (@{@"action": @"none"}), @"HA heading badge actions default to none");
+    XCTAssertEqualObjects(header[1][@"double_tap_action"], (@{@"action": @"none"}));
+    XCTAssertEqualObjects(header[2][@"hold_action"], navigate);
+    XCTAssertNotNil(header[2][@"visibility"]);
+    XCTAssertEqualObjects(section.customProperties[HAHeadingTapActionKey], navigate);
+
+    XCTAssertEqualObjects([section.items valueForKey:@"cardType"], (@[@"tile", @"heading", @"tile"]));
+    HADashboardConfigItem *later = section.items[1];
+    NSArray<NSDictionary *> *laterBadges = later.customProperties[HAHeadingBadgesKey];
+    XCTAssertEqualObjects([laterBadges valueForKey:@"entity"], (@[@"sensor.d", @"sensor.e"]),
+                          @"Legacy heading \"entities\" are appended after \"badges\"");
+    XCTAssertEqualObjects([laterBadges valueForKey:@"show_icon"], (@[@NO, @YES]));
+    XCTAssertNil(later.customProperties[HAHeadingTapActionKey], @"tap_action none is not actionable");
+    XCTAssertNil(section.items[0].customProperties[HAHeadingBadgesKey]);
+}
+
+/// A heading with only badges still renders (as HA does), and a heading
+/// without badges carries no badge key.
+- (void)testSectionsView_headingBadges_badgesOnlyHeadingAndNone {
+    HADashboardConfig *config = [self sectionsConfigWithCards:@[
+        @{@"type": @"heading", @"heading": @"Plain"},
+        @{@"type": @"tile", @"entity": @"light.a"},
+        @{@"type": @"heading", @"badges": @[@"sensor.only"]},
+        @{@"type": @"tile", @"entity": @"light.b"},
+    ]];
+    HADashboardConfigSection *section = config.sections.firstObject;
+    XCTAssertNil(section.customProperties[HAHeadingBadgesKey]);
+    XCTAssertEqualObjects([section.items valueForKey:@"cardType"], (@[@"tile", @"heading", @"tile"]));
+    XCTAssertNil(section.items[1].displayName);
+    XCTAssertEqualObjects([section.items[1].customProperties[HAHeadingBadgesKey] valueForKey:@"entity"], (@[@"sensor.only"]));
+}
+
+/// A heading embedded above a grid's first card (headingIcon mechanism, never a
+/// standalone item) keeps its badges on that card's item; packing is unchanged.
+- (void)testSectionsView_gridHeadingBadges_rideOnEmbeddedHeadingItem {
+    HADashboardConfig *config = [self sectionsConfigWithCards:@[
+        @{@"type": @"grid", @"grid_options": @{@"columns": @9}, @"cards": @[
+            @{@"type": @"heading", @"heading": @"House Climate", @"icon": @"mdi:hvac",
+              @"badges": @[@"sensor.outdoor_temperature"]},
+            @{@"type": @"thermostat", @"entity": @"climate.aidoo"},
+            @{@"type": @"tile", @"entity": @"light.a"},
+        ]},
+        @{@"type": @"grid", @"grid_options": @{@"columns": @3}, @"cards": @[
+            @{@"type": @"heading", @"heading": @"Ribbit", @"icon": @"mdi:robot-vacuum"},
+            @{@"type": @"tile", @"entity": @"vacuum.saros_10"},
+        ]},
+    ]];
+    NSArray<HADashboardConfigItem *> *items = config.sections.firstObject.items;
+    XCTAssertEqualObjects([items valueForKey:@"cardType"], (@[@"thermostat", @"tile", @"tile"]));
+    XCTAssertEqualObjects(items[0].customProperties[@"headingIcon"], @"mdi:hvac");
+    XCTAssertEqualObjects([items[0].customProperties[HAHeadingBadgesKey] valueForKey:@"entity"], (@[@"sensor.outdoor_temperature"]));
+    XCTAssertNil(items[1].customProperties[HAHeadingBadgesKey], @"Only the item carrying the heading gets its badges");
+    XCTAssertNil(items[2].customProperties[HAHeadingBadgesKey]);
+    XCTAssertEqualObjects(items[2].customProperties[@"headingIcon"], @"mdi:robot-vacuum");
+}
+
 #pragma mark - View badges (GitHub #23)
 
 - (NSArray *)mixedBadges {

@@ -9,6 +9,7 @@
 #import "HAConnectionManager.h"
 #import "HAHaptics.h"
 #import "UIView+HAUtilities.h"
+#import "HAHeadingBadgesView.h"
 
 static const CGFloat kHeadingHeight = 28.0;
 static const CGFloat kHeadingGap = 2.0;
@@ -21,6 +22,8 @@ static const CGFloat kFallbackBadgeGap = 4.0;
 
 @interface HABaseEntityCell ()
 @property (nonatomic, assign) BOOL showsHeading;
+/// Created on first use: most cells never carry heading badges
+@property (nonatomic, strong) HAHeadingBadgesView *headingBadgesView;
 @end
 
 @implementation HABaseEntityCell
@@ -110,7 +113,16 @@ static const CGFloat kFallbackBadgeGap = 4.0;
     if (self.showsHeading) {
         CGFloat headingH = kHeadingHeight + kHeadingGap;
         // Heading sits at top of cell bounds, no card background
-        self.headingLabel.frame = CGRectMake(4, 0, self.bounds.size.width - 8, kHeadingHeight);
+        CGFloat headingWidth = self.bounds.size.width - 8;
+        CGFloat badgesWidth = 0;
+        if (self.headingBadgesView && !self.headingBadgesView.hidden) {
+            // Badges end at the heading's trailing inset; the heading keeps up to
+            // 150pt (hui-heading-card) before the leading badges are clipped.
+            CGFloat minHeading = MIN(ceil([self.headingLabel sizeThatFits:CGSizeMake(CGFLOAT_MAX, kHeadingHeight)].width), 150.0);
+            badgesWidth = MAX(0, MIN(self.headingBadgesView.contentWidth, headingWidth - minHeading - 8));
+            self.headingBadgesView.frame = CGRectMake(4 + headingWidth - badgesWidth, 0, badgesWidth, kHeadingHeight);
+        }
+        self.headingLabel.frame = CGRectMake(4, 0, headingWidth - (badgesWidth > 0 ? badgesWidth + 8 : 0), kHeadingHeight);
         // Push contentView below the heading
         self.contentView.frame = CGRectMake(0, headingH,
             self.bounds.size.width, self.bounds.size.height - headingH);
@@ -205,6 +217,31 @@ static const CGFloat kFallbackBadgeGap = 4.0;
     return [HAEntityDisplayHelper formattedStateForEntity:self.entity decimals:1];
 }
 
+- (void)configureHeadingBadges:(NSArray<NSDictionary *> *)badgeConfigs
+                      entities:(NSDictionary<NSString *, HAEntity *> *)entities {
+    if (!self.showsHeading || badgeConfigs.count == 0) {
+        if (self.headingBadgesView) {
+            [self.headingBadgesView configureWithBadgeConfigs:nil entities:nil];
+            self.headingBadgesView.hidden = YES;
+            [self setNeedsLayout];
+        }
+        return;
+    }
+    if (!self.headingBadgesView) {
+        self.headingBadgesView = [[HAHeadingBadgesView alloc] init];
+        self.headingBadgesView.badgeActionBlock = self.headingBadgeActionBlock;
+        [self addSubview:self.headingBadgesView]; // on the cell, beside headingLabel
+    }
+    [self.headingBadgesView configureWithBadgeConfigs:badgeConfigs entities:entities];
+    self.headingBadgesView.hidden = (self.headingBadgesView.contentWidth <= 0);
+    [self setNeedsLayout];
+}
+
+- (void)setHeadingBadgeActionBlock:(void (^)(HAEntity *, NSDictionary *, NSString *))block {
+    _headingBadgeActionBlock = [block copy];
+    self.headingBadgesView.badgeActionBlock = _headingBadgeActionBlock;
+}
+
 + (CGFloat)headingHeight {
     return kHeadingHeight + kHeadingGap;
 }
@@ -229,6 +266,11 @@ static const CGFloat kFallbackBadgeGap = 4.0;
     self.headingLabel.text = nil;
     self.headingLabel.hidden = YES;
     self.showsHeading = NO;
+    if (self.headingBadgesView) {
+        [self.headingBadgesView configureWithBadgeConfigs:nil entities:nil];
+        self.headingBadgesView.hidden = YES;
+    }
+    self.headingBadgeActionBlock = nil;
     self.contentView.alpha = 1.0;
     self.fallbackBadgeLabel.text = nil;
     self.fallbackBadgeLabel.hidden = YES;

@@ -181,20 +181,31 @@
 /// a full-width heading row between the tiles; each tile keeps HA's default
 /// 6/12 span and sits alone on its row.
 - (void)testSectionWithTwoHeadings {
-    NSDictionary *dict = @{@"views": @[@{@"title": @"Backup", @"sections": @[@{@"type": @"grid", @"cards": @[
+    HADashboardConfig *config = [self sectionsConfigWithCards:@[
         @{@"type": @"heading", @"heading": @"Heading 1", @"icon": @"mdi:backup-restore"},
         @{@"type": @"tile", @"entity": @"sensor.backup_backup_manager_state"},
         @{@"type": @"heading", @"heading": @"Heading 2", @"icon": @"mdi:clock-outline"},
         @{@"type": @"tile", @"entity": @"sensor.living_room_temperature"},
-    ]}]}]};
-    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
-    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:3];
+    ]];
     NSDictionary *entities = @{
         @"sensor.backup_backup_manager_state": [HASnapshotTestHelpers entityWithId:@"sensor.backup_backup_manager_state"
             state:@"idle" attributes:@{@"friendly_name": @"Backup Backup Manager state", @"icon": @"mdi:backup-restore"}],
         @"sensor.living_room_temperature": [HASnapshotTestHelpers sensorTemperature],
     };
+    [self verifySectionsColumn:config entities:entities];
+}
 
+/// A single-section sections view ("Backup") with the given cards, parsed.
+- (HADashboardConfig *)sectionsConfigWithCards:(NSArray *)cards {
+    NSDictionary *dict = @{@"views": @[@{@"title": @"Backup", @"sections": @[@{@"type": @"grid", @"cards": cards}]}]};
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dict];
+    return [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:3];
+}
+
+/// Snapshot the first section of `config` as HAColumnarLayout places it: the
+/// section header (with its heading badges), heading rows (with theirs) and
+/// tiles at their computed frames.
+- (void)verifySectionsColumn:(HADashboardConfig *)config entities:(NSDictionary<NSString *, HAEntity *> *)entities {
     HACompositeColumnarSource *source = [[HACompositeColumnarSource alloc] init];
     source.config = config;
     HAColumnarLayout *layout = [[HAColumnarLayout alloc] init];
@@ -214,7 +225,8 @@
                                                atIndexPath:[NSIndexPath indexPathForItem:0 inSection:0]];
     XCTAssertNotNil(headerAttr, @"Heading 1 must render as the section header");
     HASectionHeaderView *header = [[HASectionHeaderView alloc] initWithFrame:headerAttr.frame];
-    [header configureWithSection:config.sections.firstObject];
+    HADashboardConfigSection *section = config.sections.firstObject;
+    [header configureWithSection:section badgeConfigs:section.customProperties[HAHeadingBadgesKey] entities:entities];
     [container addSubview:header];
 
     NSArray<HADashboardConfigItem *> *items = config.sections.firstObject.items;
@@ -224,7 +236,7 @@
         UIView *cell;
         if ([item.cardType isEqualToString:@"heading"]) {
             HAHeadingCell *headingCell = [[HAHeadingCell alloc] initWithFrame:frame];
-            [headingCell configureWithItem:item];
+            [headingCell configureWithItem:item badgeConfigs:item.customProperties[HAHeadingBadgesKey] entities:entities];
             cell = headingCell;
         } else {
             cell = [self cellForEntity:entities[item.entityId] cellClass:[HATileEntityCell class]
@@ -235,6 +247,55 @@
     }
     [container layoutIfNeeded];
     [self verifyView:container identifier:nil];
+}
+
+#pragma mark - Heading badges
+
+/// Entities shared by the heading-badge snapshots.
+- (NSDictionary<NSString *, HAEntity *> *)headingBadgeEntities {
+    return @{
+        @"sensor.living_room_temperature": [HASnapshotTestHelpers sensorTemperature],
+        @"sensor.living_room_humidity": [HASnapshotTestHelpers sensorHumidity],
+        @"light.kitchen": [HASnapshotTestHelpers lightEntityOnBrightness],
+        @"sensor.backup_backup_manager_state": [HASnapshotTestHelpers entityWithId:@"sensor.backup_backup_manager_state"
+            state:@"idle" attributes:@{@"friendly_name": @"Backup Backup Manager state", @"icon": @"mdi:backup-restore"}],
+    };
+}
+
+/// A standalone heading row with two badges at the end of the line: icon +
+/// state in secondary text, no pill; the light's icon takes its state colour.
+- (void)testHeadingWithTwoBadges {
+    HADashboardConfig *config = [self sectionsConfigWithCards:@[
+        @{@"type": @"tile", @"entity": @"sensor.living_room_temperature"},
+        @{@"type": @"heading", @"heading": @"Living Room", @"icon": @"mdi:sofa", @"badges": @[
+            @{@"type": @"entity", @"entity": @"sensor.living_room_temperature"},
+            @{@"type": @"entity", @"entity": @"light.kitchen", @"color": @"state"},
+        ]},
+    ]];
+    HADashboardConfigItem *item = config.sections.firstObject.items[1];
+    XCTAssertEqualObjects(item.cardType, @"heading");
+    HAHeadingCell *cell = [[HAHeadingCell alloc] initWithFrame:CGRectMake(0, 0, kColumnWidth, kHeadingCellHeight)];
+    [cell configureWithItem:item badgeConfigs:item.customProperties[HAHeadingBadgesKey] entities:[self headingBadgeEntities]];
+    [cell layoutIfNeeded];
+    [self verifyView:cell identifier:nil];
+}
+
+/// A section whose opening heading (the section header) has two badges and a
+/// later heading has one, laid out by HAColumnarLayout: the header's and the
+/// standalone heading's icons, titles and badges line up.
+- (void)testSectionHeadingsWithBadges {
+    HADashboardConfig *config = [self sectionsConfigWithCards:@[
+        @{@"type": @"heading", @"heading": @"Heading 1", @"icon": @"mdi:backup-restore", @"badges": @[
+            @"sensor.living_room_temperature",
+            @{@"entity": @"sensor.living_room_humidity", @"icon": @"mdi:water-percent"},
+        ]},
+        @{@"type": @"tile", @"entity": @"sensor.backup_backup_manager_state"},
+        @{@"type": @"heading", @"heading": @"Heading 2", @"icon": @"mdi:clock-outline", @"badges": @[
+            @{@"entity": @"light.kitchen", @"color": @"state", @"show_state": @NO},
+        ]},
+        @{@"type": @"tile", @"entity": @"sensor.living_room_temperature"},
+    ]];
+    [self verifySectionsColumn:config entities:[self headingBadgeEntities]];
 }
 
 #pragma mark - HAGaugeCardCell (4 tests)

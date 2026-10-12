@@ -4,6 +4,7 @@
 #import "HATheme.h"
 #import "HAIconMapper.h"
 #import "HAEntityDisplayHelper.h"
+#import "HAAction.h"
 
 // HA web badge constants (from ha-badge.ts)
 static const CGFloat kBadgeHeight = 36.0;   // --ha-badge-size: 36px
@@ -50,25 +51,6 @@ static NSArray<NSValue *> *HABadgeRowRanges(NSArray<NSNumber *> *widths, CGFloat
         [rows addObject:[NSValue valueWithRange:NSMakeRange(rowStart, idx - rowStart)]];
     }
     return rows;
-}
-
-/// Approximation of HA's stateActive(): whether a badge's custom "color"
-/// applies (hui-entity-badge only uses it while the entity is active).
-static BOOL HABadgeEntityIsActive(HAEntity *entity) {
-    NSString *state = entity.state;
-    if (state.length == 0 || [state isEqualToString:@"unavailable"] ||
-        [state isEqualToString:@"unknown"] || [state isEqualToString:@"off"]) {
-        return NO;
-    }
-    NSString *domain = [entity domain];
-    if ([domain isEqualToString:@"cover"] || [domain isEqualToString:@"valve"]) return ![state isEqualToString:@"closed"];
-    if ([domain isEqualToString:@"lock"]) return ![state isEqualToString:@"locked"];
-    if ([domain isEqualToString:@"person"] || [domain isEqualToString:@"device_tracker"]) return ![state isEqualToString:@"not_home"];
-    if ([domain isEqualToString:@"media_player"]) return ![state isEqualToString:@"standby"] && ![state isEqualToString:@"idle"];
-    if ([domain isEqualToString:@"vacuum"]) return ![state isEqualToString:@"docked"];
-    if ([domain isEqualToString:@"alarm_control_panel"]) return ![state isEqualToString:@"disarmed"];
-    if ([domain isEqualToString:@"timer"]) return ![state isEqualToString:@"idle"];
-    return YES;
 }
 
 @implementation HABadgeRowCell
@@ -446,7 +428,7 @@ static BOOL HABadgeConfigBool(NSDictionary *config, NSString *key, BOOL fallback
 
         UIColor *iconColor = nil;
         NSString *colorName = [config[@"color"] isKindOfClass:[NSString class]] ? config[@"color"] : nil;
-        if (colorName.length > 0 && HABadgeEntityIsActive(entity)) iconColor = [HATheme colorFromString:colorName];
+        if (colorName.length > 0 && [HAEntityDisplayHelper isEntityStateActive:entity]) iconColor = [HATheme colorFromString:colorName];
         if (!iconColor) iconColor = [HAEntityDisplayHelper iconColorForEntity:entity];
 
         CGFloat width = kBadgeHeight; // icon-only: a circle
@@ -498,13 +480,31 @@ static BOOL HABadgeConfigBool(NSDictionary *config, NSString *key, BOOL fallback
             badge.tag = (NSInteger)self.badgeEntities.count; // index into badgeEntities/badgeConfigs
             [self.badgeEntities addObject:model[@"entity"]];
             [self.badgeConfigs addObject:model[@"config"]];
-            UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(badgeTapped:)];
-            [badge addGestureRecognizer:tap];
+            [self addViewBadgeGesturesToBadge:badge config:model[@"config"]];
             [self.contentView addSubview:badge];
             [self.badgeViews addObject:badge];
             x += w + spacing;
         }
         y += kBadgeHeight + spacing;
+    }
+}
+
+/// A view badge always taps (default more-info); hold and double tap only get
+/// a recognizer when configured (hui-entity-badge actionHandler hasHold /
+/// hasDoubleClick), so an unconfigured badge's tap is never delayed.
+- (void)addViewBadgeGesturesToBadge:(UIView *)badge config:(NSDictionary *)config {
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(badgeTapped:)];
+    [badge addGestureRecognizer:tap];
+    if ([HAAction configHasAction:config[@"double_tap_action"]]) {
+        UITapGestureRecognizer *doubleTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(badgeDoubleTapped:)];
+        doubleTap.numberOfTapsRequired = 2;
+        [badge addGestureRecognizer:doubleTap];
+        [tap requireGestureRecognizerToFail:doubleTap];
+    }
+    if ([HAAction configHasAction:config[@"hold_action"]]) {
+        UILongPressGestureRecognizer *hold = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(badgeHeld:)];
+        hold.minimumPressDuration = 0.5;
+        [badge addGestureRecognizer:hold];
     }
 }
 
@@ -946,11 +946,27 @@ static BOOL HABadgeConfigBool(NSDictionary *config, NSString *key, BOOL fallback
 - (void)badgeTapped:(UITapGestureRecognizer *)gesture {
     NSInteger idx = gesture.view.tag;
     if (idx < 0 || idx >= (NSInteger)self.badgeEntities.count) return;
-    if (self.badgeTapBlock && idx < (NSInteger)self.badgeConfigs.count) {
-        self.badgeTapBlock(self.badgeEntities[idx], self.badgeConfigs[idx]);
+    if (self.badgeActionBlock && idx < (NSInteger)self.badgeConfigs.count) {
+        self.badgeActionBlock(self.badgeEntities[idx], self.badgeConfigs[idx], @"tap_action");
     } else if (self.entityTapBlock) {
         self.entityTapBlock(self.badgeEntities[idx]);
     }
+}
+
+- (void)badgeDoubleTapped:(UITapGestureRecognizer *)gesture {
+    [self fireViewBadgeAction:@"double_tap_action" fromView:gesture.view];
+}
+
+- (void)badgeHeld:(UILongPressGestureRecognizer *)gesture {
+    if (gesture.state != UIGestureRecognizerStateBegan) return;
+    [self fireViewBadgeAction:@"hold_action" fromView:gesture.view];
+}
+
+- (void)fireViewBadgeAction:(NSString *)actionType fromView:(UIView *)view {
+    NSInteger idx = view.tag;
+    if (idx < 0 || idx >= (NSInteger)self.badgeEntities.count || idx >= (NSInteger)self.badgeConfigs.count) return;
+    if (!self.badgeActionBlock) return;
+    self.badgeActionBlock(self.badgeEntities[idx], self.badgeConfigs[idx], actionType);
 }
 
 #pragma mark - Border Color
