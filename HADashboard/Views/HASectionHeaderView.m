@@ -8,6 +8,8 @@
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) NSLayoutConstraint *titleLeadingWithIcon;
 @property (nonatomic, strong) NSLayoutConstraint *titleLeadingNoIcon;
+@property (nonatomic, strong) NSLayoutConstraint *iconLeading;
+@property (nonatomic, strong) NSLayoutConstraint *titleTrailing;
 @end
 
 @implementation HASectionHeaderView
@@ -25,7 +27,6 @@
     self.iconLabel = [[UILabel alloc] init];
     self.iconLabel.font = [HAIconMapper mdiFontOfSize:16];
     self.iconLabel.textColor = [HATheme secondaryTextColor];
-    self.iconLabel.textAlignment = NSTextAlignmentCenter;
     self.iconLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:self.iconLabel];
 
@@ -39,19 +40,31 @@
     self.titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:self.titleLabel];
 
-    // Layout: icon (fixed 24pt width) | 4pt gap | title
+    // Layout: icon (fixed 24pt width, glyph leading-aligned) | 4pt gap | title —
+    // the same geometry as a standalone heading row (HAHeadingCell), so the
+    // section's first heading and any later heading line up.
     // Two title leading constraints: with-icon (after icon) and no-icon (flush left).
+    _contentInset = 8.0;
+    self.iconLeading = [self.iconLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:_contentInset];
+    self.titleTrailing = [self.titleLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-_contentInset];
     [NSLayoutConstraint activateConstraints:@[
-        [self.iconLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:16],
+        self.iconLeading,
         [self.iconLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
         [self.iconLabel.widthAnchor constraintEqualToConstant:24],
 
-        [self.titleLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-16],
+        self.titleTrailing,
         [self.titleLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor]
     ]];
     self.titleLeadingWithIcon = [self.titleLabel.leadingAnchor constraintEqualToAnchor:self.iconLabel.trailingAnchor constant:4];
-    self.titleLeadingNoIcon = [self.titleLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:16];
+    self.titleLeadingNoIcon = [self.titleLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:_contentInset];
     self.titleLeadingNoIcon.active = YES;
+}
+
+- (void)setContentInset:(CGFloat)contentInset {
+    _contentInset = contentInset;
+    self.iconLeading.constant = contentInset;
+    self.titleLeadingNoIcon.constant = contentInset;
+    self.titleTrailing.constant = -contentInset;
 }
 
 - (void)configureWithSection:(HADashboardConfigSection *)section {

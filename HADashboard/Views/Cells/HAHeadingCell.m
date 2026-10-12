@@ -26,9 +26,9 @@
         self.titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
         [self.contentView addSubview:self.titleLabel];
 
-        // Section headers (HASectionHeaderView) span full collection view width with 16pt
-        // internal padding = 16pt from screen edge. Heading cells are items inset by
-        // sectionInset.left (8pt), so use 8pt internal padding to match: 8 + 8 = 16pt.
+        // 8pt internal padding from the item's leading edge. HASectionHeaderView uses
+        // the same icon/title geometry (its contentInset), so a section's header and
+        // any later standalone heading line up.
         [NSLayoutConstraint activateConstraints:@[
             [self.iconLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:8],
             [self.iconLabel.widthAnchor constraintEqualToConstant:24],

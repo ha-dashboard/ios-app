@@ -1982,6 +1982,13 @@ static inline NSString *HANormalizeState(id val) {
 
         HADashboardConfigSection *configSection = [self sectionAtIndex:indexPath.section];
         [header configureWithSection:configSection];
+        // Line the header's icon/title up with a standalone heading row's: the
+        // columnar layout starts the header where the section's items start,
+        // while a flow-layout header spans the full width and items are inset.
+        UICollectionViewLayout *layout = collectionView.collectionViewLayout;
+        header.contentInset = [layout isKindOfClass:[UICollectionViewFlowLayout class]]
+            ? ((UICollectionViewFlowLayout *)layout).sectionInset.left + 8.0
+            : 8.0;
 
         return header;
     }
