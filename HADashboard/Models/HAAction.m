@@ -66,6 +66,12 @@ NSString *const HAActionTypeNone         = @"none";
     return action;
 }
 
++ (BOOL)configHasAction:(id)config {
+    if (![config isKindOfClass:[NSDictionary class]]) return NO;
+    id action = config[@"action"];
+    return [action isKindOfClass:[NSString class]] && [action length] > 0 && ![action isEqualToString:HAActionTypeNone];
+}
+
 - (BOOL)isNone {
     return [self.action isEqualToString:HAActionTypeNone];
 }

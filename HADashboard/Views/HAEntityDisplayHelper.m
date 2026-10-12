@@ -256,6 +256,23 @@
     }
 }
 
++ (BOOL)isEntityStateActive:(HAEntity *)entity {
+    NSString *state = entity.state;
+    if (state.length == 0 || [state isEqualToString:@"unavailable"] ||
+        [state isEqualToString:@"unknown"] || [state isEqualToString:@"off"]) {
+        return NO;
+    }
+    NSString *domain = [entity domain];
+    if ([domain isEqualToString:@"cover"] || [domain isEqualToString:@"valve"]) return ![state isEqualToString:@"closed"];
+    if ([domain isEqualToString:@"lock"]) return ![state isEqualToString:@"locked"];
+    if ([domain isEqualToString:@"person"] || [domain isEqualToString:@"device_tracker"]) return ![state isEqualToString:@"not_home"];
+    if ([domain isEqualToString:@"media_player"]) return ![state isEqualToString:@"standby"] && ![state isEqualToString:@"idle"];
+    if ([domain isEqualToString:@"vacuum"]) return ![state isEqualToString:@"docked"];
+    if ([domain isEqualToString:@"alarm_control_panel"]) return ![state isEqualToString:@"disarmed"];
+    if ([domain isEqualToString:@"timer"]) return ![state isEqualToString:@"idle"];
+    return YES;
+}
+
 #pragma mark - Relative Time
 
 + (NSString *)stateContentText:(id)stateContent

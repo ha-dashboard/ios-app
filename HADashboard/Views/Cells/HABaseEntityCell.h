@@ -24,6 +24,17 @@
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem;
 - (void)setupSubviews;
 
+/// Badges of the grid heading embedded above this card (the headingIcon
+/// mechanism): `badgeConfigs` (customProperties[HAHeadingBadgesKey] filtered
+/// by visibility) are drawn right-aligned on the heading line, which keeps
+/// its height, so side-by-side packing is unchanged. Call after
+/// configureWithEntity:configItem:; ignored while no heading shows.
+- (void)configureHeadingBadges:(NSArray<NSDictionary *> *)badgeConfigs
+                      entities:(NSDictionary<NSString *, HAEntity *> *)entities;
+
+/// Called when an embedded heading badge's configured action fires.
+@property (nonatomic, copy) void (^headingBadgeActionBlock)(HAEntity *entity, NSDictionary *badgeConfig, NSString *actionType);
+
 /// Returns the extra height needed for the heading area (0 if no heading).
 + (CGFloat)headingHeight;
 

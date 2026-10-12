@@ -90,6 +90,9 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 @property (nonatomic, strong) UIButton *titleButton;
 @property (nonatomic, strong) NSArray<NSDictionary *> *availableDashboards;
 @property (nonatomic, strong) NSDictionary<NSString *, NSArray<NSIndexPath *> *> *entityToIndexPaths;
+/// Heading-badge entity → sections whose header shows a badge for it
+@property (nonatomic, strong) NSDictionary<NSString *, NSIndexSet *> *entityToHeaderSections;
+@property (nonatomic, strong) NSMutableIndexSet *pendingHeaderSections;
 @property (nonatomic, strong) NSMutableSet<NSString *> *pendingMarkdownTemplateStrings;
 @property (nonatomic, assign) BOOL screenshotScheduled;
 @property (nonatomic, strong) HAToastView *kioskToast;
@@ -1211,6 +1214,114 @@ static inline NSString *HANormalizeState(id val) {
     self.dashboardConfig.items = [@[item] arrayByAddingObjectsFromArray:self.dashboardConfig.items ?: @[]];
 }
 
+#pragma mark - Heading badges
+
+/// The heading badges among `configs` whose "visibility" conditions are met
+/// (hui-heading-badge _updateVisibility).
+- (NSArray<NSDictionary *> *)visibleHeadingBadges:(NSArray<NSDictionary *> *)configs
+                                         entities:(NSDictionary<NSString *, HAEntity *> *)entities {
+    if (![configs isKindOfClass:[NSArray class]] || configs.count == 0) return nil;
+    NSMutableArray<NSDictionary *> *visible = [NSMutableArray arrayWithCapacity:configs.count];
+    for (NSDictionary *config in configs) {
+        BOOL shown = YES;
+        NSArray *visibility = config[@"visibility"];
+        if ([visibility isKindOfClass:[NSArray class]]) {
+            for (NSDictionary *condition in visibility) {
+                if (![self meetsCondition:condition entities:entities]) { shown = NO; break; }
+            }
+        }
+        if (shown) [visible addObject:config];
+    }
+    return visible;
+}
+
+- (void)collectHeadingBadgeConditionEntityIds {
+    NSMutableSet<NSString *> *condIds = self.conditionEntityIds ? [self.conditionEntityIds mutableCopy] : [NSMutableSet set];
+    void (^collect)(NSArray *) = ^(NSArray *configs) {
+        if (![configs isKindOfClass:[NSArray class]]) return;
+        for (NSDictionary *config in configs) {
+            NSArray *visibility = config[@"visibility"];
+            if (![visibility isKindOfClass:[NSArray class]]) continue;
+            for (NSDictionary *condition in visibility) [self collectEntityIdsFromCondition:condition intoSet:condIds];
+        }
+    };
+    for (HADashboardConfigSection *section in self.dashboardConfig.sections) {
+        collect(section.customProperties[HAHeadingBadgesKey]);
+        for (HADashboardConfigItem *item in section.items) collect(item.customProperties[HAHeadingBadgesKey]);
+    }
+    self.conditionEntityIds = [condIds copy];
+}
+
+/// Run a view badge's or heading badge's tap/hold/double-tap action through the
+/// shared action path (HAActionDispatcher, with its haptics). A view badge
+/// without tap_action opens more-info (HA handleAction's tap default); heading
+/// badges carry explicit "none" defaults from the parser, and the cells only
+/// report hold/double tap when those actions are configured.
+- (void)performBadgeAction:(NSString *)actionType
+                 forEntity:(HAEntity *)entity
+               badgeConfig:(NSDictionary *)badgeConfig {
+    NSDictionary *props = badgeConfig;
+    if ([actionType isEqualToString:@"tap_action"] && !props[@"tap_action"]) {
+        NSMutableDictionary *withDefault = [props mutableCopy] ?: [NSMutableDictionary dictionary];
+        withDefault[@"tap_action"] = @{@"action": HAActionTypeMoreInfo};
+        props = withDefault;
+    }
+    [self executeActionType:actionType forEntity:entity configProperties:props];
+}
+
+/// The heading card's own tap_action (navigate/url mostly; no entity).
+- (void)performHeadingTapAction:(NSDictionary *)tapAction {
+    if (![HAAction configHasAction:tapAction]) return;
+    [self executeActionType:@"tap_action" forEntity:nil configProperties:@{@"tap_action": tapAction}];
+}
+
+- (void)configureHeadingCell:(HAHeadingCell *)cell
+                        item:(HADashboardConfigItem *)item
+                    entities:(NSDictionary<NSString *, HAEntity *> *)entities {
+    [cell configureWithItem:item
+               badgeConfigs:[self visibleHeadingBadges:item.customProperties[HAHeadingBadgesKey] entities:entities]
+                   entities:entities];
+    __weak typeof(self) weakSelf = self;
+    cell.badgeActionBlock = ^(HAEntity *badgeEntity, NSDictionary *badgeConfig, NSString *actionType) {
+        [weakSelf performBadgeAction:actionType forEntity:badgeEntity badgeConfig:badgeConfig];
+    };
+}
+
+/// Badges of a grid heading embedded above an entity cell (headingIcon mechanism).
+- (void)configureEmbeddedHeadingBadgesForCell:(HABaseEntityCell *)cell
+                                         item:(HADashboardConfigItem *)item
+                                     entities:(NSDictionary<NSString *, HAEntity *> *)entities {
+    NSArray *configs = item.customProperties[HAHeadingBadgesKey];
+    if (configs.count == 0 && !cell.headingBadgeActionBlock) return; // common case: nothing to do
+    __weak typeof(self) weakSelf = self;
+    cell.headingBadgeActionBlock = configs.count == 0 ? nil
+        : ^(HAEntity *badgeEntity, NSDictionary *badgeConfig, NSString *actionType) {
+            [weakSelf performBadgeAction:actionType forEntity:badgeEntity badgeConfig:badgeConfig];
+        };
+    [cell configureHeadingBadges:[self visibleHeadingBadges:configs entities:entities] entities:entities];
+}
+
+- (void)configureSectionHeader:(HASectionHeaderView *)header
+                     forSection:(HADashboardConfigSection *)configSection
+                       entities:(NSDictionary<NSString *, HAEntity *> *)entities {
+    [header configureWithSection:configSection
+                    badgeConfigs:[self visibleHeadingBadges:configSection.customProperties[HAHeadingBadgesKey] entities:entities]
+                        entities:entities];
+    __weak typeof(self) weakSelf = self;
+    header.badgeActionBlock = ^(HAEntity *badgeEntity, NSDictionary *badgeConfig, NSString *actionType) {
+        [weakSelf performBadgeAction:actionType forEntity:badgeEntity badgeConfig:badgeConfig];
+    };
+    header.headingTapBlock = ^(NSDictionary *tapAction) {
+        [weakSelf performHeadingTapAction:tapAction];
+    };
+}
+
+/// A section shows its header for a title, or for heading badges alone.
+- (BOOL)sectionShowsHeader:(HADashboardConfigSection *)configSection {
+    NSArray *badges = configSection.customProperties[HAHeadingBadgesKey];
+    return configSection.title.length > 0 || ([badges isKindOfClass:[NSArray class]] && badges.count > 0);
+}
+
 /// Check if item's visibilityConditions are all met. nil conditions = always visible.
 - (BOOL)item:(HADashboardConfigItem *)item meetsConditions:(NSDictionary<NSString *, HAEntity *> *)entities {
     NSArray<NSDictionary *> *conditions = item.visibilityConditions;
@@ -1262,6 +1373,10 @@ static inline NSString *HANormalizeState(id val) {
 
     // Filter out items whose visibility conditions aren't met
     [self filterConditionalItems:entities];
+
+    // Heading badges are filtered by their own visibility when drawn; a change
+    // to an entity in those conditions rebuilds like any visibility condition.
+    [self collectHeadingBadgeConditionEntityIds];
 
     // View-level badge row above the cards (after filtering: it applies its own per-badge visibility)
     [self insertViewBadgeRowWithEntities:entities];
@@ -1319,6 +1434,7 @@ static inline NSString *HANormalizeState(id val) {
 
 - (void)buildEntityToIndexPathMap {
     NSMutableDictionary<NSString *, NSMutableArray<NSIndexPath *> *> *map = [NSMutableDictionary dictionary];
+    NSMutableDictionary<NSString *, NSMutableIndexSet *> *headerMap = [NSMutableDictionary dictionary];
 
     for (NSUInteger s = 0; s < self.dashboardConfig.sections.count; s++) {
         HADashboardConfigSection *section = self.dashboardConfig.sections[s];
@@ -1346,6 +1462,29 @@ static inline NSString *HANormalizeState(id val) {
             }
         }
 
+        // Heading badges: a standalone heading or an embedded grid heading
+        // (item), and the section header's own badges (header map)
+        for (NSUInteger i = 0; i < section.items.count; i++) {
+            NSArray *badges = section.items[i].customProperties[HAHeadingBadgesKey];
+            if (![badges isKindOfClass:[NSArray class]]) continue;
+            NSIndexPath *ip = [NSIndexPath indexPathForItem:i inSection:s];
+            for (NSDictionary *badge in badges) {
+                NSString *eid = badge[@"entity"];
+                if (![eid isKindOfClass:[NSString class]]) continue;
+                if (!map[eid]) map[eid] = [NSMutableArray array];
+                if (![map[eid] containsObject:ip]) [map[eid] addObject:ip];
+            }
+        }
+        NSArray *headerBadges = section.customProperties[HAHeadingBadgesKey];
+        if ([headerBadges isKindOfClass:[NSArray class]]) {
+            for (NSDictionary *badge in headerBadges) {
+                NSString *eid = badge[@"entity"];
+                if (![eid isKindOfClass:[NSString class]]) continue;
+                if (!headerMap[eid]) headerMap[eid] = [NSMutableIndexSet indexSet];
+                [headerMap[eid] addIndex:s];
+            }
+        }
+
         // Also map section-level entityIds (used by some layout paths)
         if (section.entityIds.count > 0) {
             NSIndexPath *compositeIP = [NSIndexPath indexPathForItem:0 inSection:s];
@@ -1364,6 +1503,9 @@ static inline NSString *HANormalizeState(id val) {
         immutable[key] = [map[key] copy];
     }
     self.entityToIndexPaths = [immutable copy];
+    NSMutableDictionary<NSString *, NSIndexSet *> *immutableHeaders = [NSMutableDictionary dictionaryWithCapacity:headerMap.count];
+    for (NSString *key in headerMap) immutableHeaders[key] = [headerMap[key] copy];
+    self.entityToHeaderSections = [immutableHeaders copy];
 }
 
 - (void)buildLovelaceDashboard:(NSDictionary<NSString *, HAEntity *> *)entities {
@@ -1911,7 +2053,7 @@ static inline NSString *HANormalizeState(id val) {
     if ([cell isKindOfClass:[HAGaugeCardCell class]]) {
         [(HAGaugeCardCell *)cell configureWithEntity:entity configItem:item];
     } else if ([cell isKindOfClass:[HAHeadingCell class]]) {
-        [(HAHeadingCell *)cell configureWithItem:item];
+        [self configureHeadingCell:(HAHeadingCell *)cell item:item entities:allEntities];
     } else if ([cell isKindOfClass:[HAMarkdownCardCell class]]) {
         [(HAMarkdownCardCell *)cell configureWithConfigItem:item];
     } else if ([cell isKindOfClass:[HABadgeRowCell class]]) {
@@ -1922,17 +2064,11 @@ static inline NSString *HANormalizeState(id val) {
             // Badges default to more-info (no per-badge action config yet)
             [weakSelf executeActionType:@"tap_action" forEntity:tappedEntity configProperties:item.customProperties];
         };
-        // View badges carry per-badge configs: run that badge's tap_action,
-        // defaulting to more-info like HA (handleAction's tap default).
-        ((HABadgeRowCell *)cell).badgeTapBlock = [entSection.customProperties[@"viewBadges"] boolValue]
-            ? ^(HAEntity *tappedEntity, NSDictionary *badgeConfig) {
-                NSDictionary *props = badgeConfig;
-                if (!props[@"tap_action"]) {
-                    NSMutableDictionary *withDefault = [props mutableCopy] ?: [NSMutableDictionary dictionary];
-                    withDefault[@"tap_action"] = @{@"action": HAActionTypeMoreInfo};
-                    props = withDefault;
-                }
-                [weakSelf executeActionType:@"tap_action" forEntity:tappedEntity configProperties:props];
+        // View badges carry per-badge configs: run that badge's tap/hold/
+        // double-tap action, tap defaulting to more-info like HA.
+        ((HABadgeRowCell *)cell).badgeActionBlock = [entSection.customProperties[@"viewBadges"] boolValue]
+            ? ^(HAEntity *badgeEntity, NSDictionary *badgeConfig, NSString *actionType) {
+                [weakSelf performBadgeAction:actionType forEntity:badgeEntity badgeConfig:badgeConfig];
             }
             : nil;
     } else if ([cell isKindOfClass:[HAGlanceCardCell class]]) {
@@ -1965,6 +2101,9 @@ static inline NSString *HANormalizeState(id val) {
     } else if ([cell isKindOfClass:[HABaseEntityCell class]]) {
         [(HABaseEntityCell *)cell configureWithEntity:entity configItem:item];
     }
+    if ([cell isKindOfClass:[HABaseEntityCell class]]) {
+        [self configureEmbeddedHeadingBadgesForCell:(HABaseEntityCell *)cell item:item entities:allEntities];
+    }
 
     // Apply blur background here for iOS 9 compatibility.
     // On iOS 9, willDisplayCell may not fire for initially visible cells.
@@ -1985,7 +2124,15 @@ static inline NSString *HANormalizeState(id val) {
                                      forIndexPath:indexPath];
 
         HADashboardConfigSection *configSection = [self sectionAtIndex:indexPath.section];
-        [header configureWithSection:configSection];
+        [self configureSectionHeader:header forSection:configSection
+                            entities:[[HAConnectionManager sharedManager] allEntities]];
+        // Line the header's icon/title up with a standalone heading row's: the
+        // columnar layout starts the header where the section's items start,
+        // while a flow-layout header spans the full width and items are inset.
+        UICollectionViewLayout *layout = collectionView.collectionViewLayout;
+        header.contentInset = [layout isKindOfClass:[UICollectionViewFlowLayout class]]
+            ? ((UICollectionViewFlowLayout *)layout).sectionInset.left + 8.0
+            : 8.0;
 
         return header;
     }
@@ -2089,7 +2236,7 @@ static inline NSString *HANormalizeState(id val) {
                    layout:(UICollectionViewLayout *)layout
 heightForHeaderInSection:(NSInteger)section {
     HADashboardConfigSection *configSection = [self sectionAtIndex:section];
-    return (configSection.title.length > 0) ? 36.0 : 0.0;
+    return [self sectionShowsHeader:configSection] ? 36.0 : 0.0;
 }
 
 - (BOOL)collectionView:(UICollectionView *)collectionView
@@ -2169,7 +2316,7 @@ isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
     referenceSizeForHeaderInSection:(NSInteger)section {
 
     HADashboardConfigSection *configSection = [self sectionAtIndex:section];
-    if (configSection.title.length > 0) {
+    if ([self sectionShowsHeader:configSection]) {
         return CGSizeMake(collectionView.bounds.size.width, 40);
     }
     return CGSizeZero;
@@ -2209,6 +2356,17 @@ isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
 
     // Badges: handled by HABadgeRowCell's own tap gestures
     if ([ct isEqualToString:@"badges"]) return;
+
+    // Heading: its own tap_action (default none), unless the tap was on a badge
+    if ([ct isEqualToString:@"heading"]) {
+        UICollectionViewCell *cell = [collectionView cellForItemAtIndexPath:indexPath];
+        if ([cell isKindOfClass:[HAHeadingCell class]] &&
+            [(HAHeadingCell *)cell badgesContainPoint:[collectionView convertPoint:self.lastTapPoint toView:cell]]) {
+            return;
+        }
+        [self performHeadingTapAction:item.customProperties[HAHeadingTapActionKey]];
+        return;
+    }
 
     // Glance: handled by HAGlanceCardCell's own tap gestures
     if ([ct isEqualToString:@"glance"]) return;
@@ -2617,9 +2775,15 @@ isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
         return;
     }
 
+    NSIndexSet *headerSections = self.entityToHeaderSections[entity.entityId];
+    if (headerSections.count > 0) {
+        if (!self.pendingHeaderSections) self.pendingHeaderSections = [NSMutableIndexSet indexSet];
+        [self.pendingHeaderSections addIndexes:headerSections];
+    }
+
     NSArray<NSIndexPath *> *indexPaths = self.entityToIndexPaths[entity.entityId];
-    if (indexPaths.count > 0) {
-        [self scheduleReloadForIndexPaths:indexPaths];
+    if (indexPaths.count > 0 || headerSections.count > 0) {
+        [self scheduleReloadForIndexPaths:indexPaths ?: @[]];
         return;
     }
 
@@ -2643,6 +2807,20 @@ isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
     }
 }
 
+/// Refresh the badges of visible section headers whose heading-badge entities changed.
+- (void)flushPendingHeaderReloads {
+    if (self.pendingHeaderSections.count == 0) return;
+    NSIndexSet *pending = [self.pendingHeaderSections copy];
+    [self.pendingHeaderSections removeAllIndexes];
+    NSDictionary *allEntities = [[HAConnectionManager sharedManager] allEntities];
+    for (NSIndexPath *ip in [self.collectionView indexPathsForVisibleSupplementaryElementsOfKind:UICollectionElementKindSectionHeader]) {
+        if (![pending containsIndex:(NSUInteger)ip.section]) continue;
+        UICollectionReusableView *view = [self.collectionView supplementaryViewForElementKind:UICollectionElementKindSectionHeader atIndexPath:ip];
+        if (![view isKindOfClass:[HASectionHeaderView class]]) continue;
+        [self configureSectionHeader:(HASectionHeaderView *)view forSection:[self sectionAtIndex:ip.section] entities:allEntities];
+    }
+}
+
 /// Coalesce multiple entity updates into a single batch reload
 - (void)scheduleReloadForIndexPaths:(NSArray<NSIndexPath *> *)paths {
     if (!self.pendingReloadPaths) {
@@ -2662,6 +2840,7 @@ isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (void)flushPendingReloads {
+    [self flushPendingHeaderReloads];
     if (self.pendingReloadPaths.count == 0) return;
 
     // Take a snapshot and clear before iterating
@@ -2708,6 +2887,11 @@ isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
         } else if ([cell isKindOfClass:[HABaseEntityCell class]]) {
             HAEntity *entity = [conn entityForId:item.entityId];
             [(HABaseEntityCell *)cell configureWithEntity:entity configItem:item];
+        } else if ([cell isKindOfClass:[HAHeadingCell class]]) {
+            [self configureHeadingCell:(HAHeadingCell *)cell item:item entities:allEntities];
+        }
+        if ([cell isKindOfClass:[HABaseEntityCell class]]) {
+            [self configureEmbeddedHeadingBadgesForCell:(HABaseEntityCell *)cell item:item entities:allEntities];
         }
     }
     [[HAPerfMonitor sharedMonitor] markRebuildEnd];

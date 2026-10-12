@@ -4,11 +4,14 @@
 #import "HASafeDict.h"
 #import "HAEntityNameResolver.h"
 #import "HALog.h"
+#import "HAAction.h"
 
 NSString *const HAShowUnsupportedCardsDefaultsKey = @"HAShowUnsupportedCardsEnabled";
 NSString *const HAShowUnsupportedCardsDidChangeNotification = @"HAShowUnsupportedCardsDidChangeNotification";
 NSString *const HAUnsupportedCardType = @"__unsupported__";
 NSString *const HAUnsupportedCardTypeKey = @"unsupportedCardType";
+NSString *const HAHeadingBadgesKey = @"headingBadges";
+NSString *const HAHeadingTapActionKey = @"headingTapAction";
 
 #pragma mark - HALovelaceView
 
@@ -277,6 +280,11 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             HADashboardConfigSection *columnSection = [[HADashboardConfigSection alloc] init];
             columnSection.title = haSectionTitle;
             columnSection.icon = haSectionIcon;
+            if (titleHeadingIdx != NSNotFound) {
+                // The opening heading's badges and tap_action ride on the section header
+                NSDictionary *extras = [self _headingExtrasForCard:sectionCards[titleHeadingIdx]];
+                if (extras.count > 0) columnSection.customProperties = extras;
+            }
 
             // Collect all items from sub-sections, preserving entities card structure
             NSMutableArray<HADashboardConfigItem *> *mergedItems = [NSMutableArray array];
@@ -461,6 +469,62 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
     return section;
 }
 
+#pragma mark - Heading badges
+
++ (NSArray<NSDictionary *> *)normalizedHeadingBadgeConfigs:(NSDictionary *)headingCard {
+    if (![headingCard isKindOfClass:[NSDictionary class]]) return @[];
+    // migrateHeadingCardConfig: legacy "entities" are appended to "badges"
+    NSMutableArray *rawBadges = [NSMutableArray array];
+    for (NSString *key in @[@"badges", @"entities"]) {
+        NSArray *list = headingCard[key];
+        if ([list isKindOfClass:[NSArray class]]) [rawBadges addObjectsFromArray:list];
+    }
+    NSMutableArray<NSDictionary *> *result = [NSMutableArray arrayWithCapacity:rawBadges.count];
+    for (id raw in rawBadges) {
+        NSMutableDictionary *cfg = nil;
+        if ([raw isKindOfClass:[NSString class]]) {
+            cfg = [@{@"type": @"entity", @"entity": raw} mutableCopy];
+        } else if ([raw isKindOfClass:[NSDictionary class]]) {
+            NSString *type = HASafeDictStringOrNil(raw, @"type");
+            if (type.length > 0 && ![type isEqualToString:@"entity"]) {
+                // "button" heading badges and custom types are not rendered
+                if ([self _logUnsupportedCardTypeOnce:[@"heading-badge:" stringByAppendingString:type]]) {
+                    HALogW(@"parser", @"Unsupported heading badge type \"%@\" — skipped", type);
+                }
+                continue;
+            }
+            cfg = [raw mutableCopy];
+            cfg[@"type"] = @"entity";
+        } else {
+            continue;
+        }
+        if (HASafeDictStringOrNil(cfg, @"entity").length == 0) continue;
+        // hui-entity-heading-badge DEFAULT_CONFIG + DEFAULT_ACTIONS
+        for (NSString *key in @[@"show_state", @"show_icon"]) {
+            if (![cfg[key] isKindOfClass:[NSNumber class]]) cfg[key] = @YES;
+        }
+        for (NSString *key in @[@"tap_action", @"hold_action", @"double_tap_action"]) {
+            if (![cfg[key] isKindOfClass:[NSDictionary class]]) cfg[key] = @{@"action": @"none"};
+        }
+        [result addObject:[cfg copy]];
+    }
+    return [result copy];
+}
+
+/// The heading card's badges (HAHeadingBadgesKey) and actionable tap_action
+/// (HAHeadingTapActionKey; hui-heading-card defaults it to "none"), or an
+/// empty dictionary.
++ (NSDictionary *)_headingExtrasForCard:(NSDictionary *)card {
+    NSMutableDictionary *extras = [NSMutableDictionary dictionary];
+    NSArray *badges = [self normalizedHeadingBadgeConfigs:card];
+    if (badges.count > 0) extras[HAHeadingBadgesKey] = badges;
+    NSDictionary *tap = card[@"tap_action"];
+    if ([tap isKindOfClass:[NSDictionary class]] && [HAAction configHasAction:tap]) {
+        extras[HAHeadingTapActionKey] = tap;
+    }
+    return [extras copy];
+}
+
 #pragma mark - Standalone headings
 
 /// Emit a heading card as a full-width standalone heading item (rendered by
@@ -473,14 +537,15 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                                allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems {
     NSString *heading = HASafeDictStringOrNil(card, @"heading");
     NSString *icon = HASafeDictStringOrNil(card, @"icon");
-    if (heading.length == 0 && icon.length == 0) return;
+    NSDictionary *extras = [self _headingExtrasForCard:card];
+    if (heading.length == 0 && icon.length == 0 && !extras[HAHeadingBadgesKey]) return;
 
     HADashboardConfigItem *headingItem = [[HADashboardConfigItem alloc] init];
     headingItem.cardType = @"heading";
     headingItem.columnSpan = 12;
     headingItem.rowSpan = 1;
     headingItem.displayName = heading;
-    NSMutableDictionary *props = [NSMutableDictionary dictionary];
+    NSMutableDictionary *props = [NSMutableDictionary dictionaryWithDictionary:extras];
     if (icon.length > 0) props[@"icon"] = icon;
     NSString *style = HASafeDictStringOrNil(card, @"heading_style");
     if ([style isEqualToString:@"subtitle"]) props[@"heading_style"] = style;
@@ -768,9 +833,9 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                 headingItem.columnSpan = 12;
                 headingItem.rowSpan = 1;
                 headingItem.displayName = gridTitle;
-                if (gridIcon) {
-                    headingItem.customProperties = @{@"icon": gridIcon};
-                }
+                NSMutableDictionary *headingProps = [NSMutableDictionary dictionaryWithDictionary:[self _headingExtrasForCard:first]];
+                if (gridIcon) headingProps[@"icon"] = gridIcon;
+                if (headingProps.count > 0) headingItem.customProperties = [headingProps copy];
                 HADashboardConfigSection *headingSection = [[HADashboardConfigSection alloc] init];
                 headingSection.cardType = @"heading";
                 headingSection.items = @[headingItem];
@@ -803,11 +868,17 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             // Track item count before recursion so we can flag new items from stacks
             NSUInteger itemCountBefore = allItems.count;
 
+            // Badges of a heading that stays embedded above the first content
+            // card (headingIcon mechanism) ride on that card's item.
+            NSArray *embeddedHeadingBadges = (startIdx > 0 && !emitHeadingAsItem && gridTitle)
+                ? [self _headingExtrasForCard:first][HAHeadingBadgesKey] : nil;
+
             for (NSUInteger i = startIdx; i < subCards.count; i++) {
                 NSDictionary *subCard = subCards[i];
                 if (![subCard isKindOfClass:[NSDictionary class]]) continue;
                 if ([HASafeDictStringOrNil(subCard, @"type") isEqualToString:@"heading"]) continue;
 
+                NSUInteger itemCountBeforeCard = allItems.count;
                 [self processCard:subCard
                      sectionTitle:emitHeadingAsItem ? nil : gridTitle
                       sectionIcon:emitHeadingAsItem ? nil : gridIcon
@@ -818,6 +889,17 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                          allItems:allItems
                       nameContext:nameContext
                          cardPath:[NSString stringWithFormat:@"%@/%@[%lu]", cardPath, cardType, (unsigned long)i]];
+                if (embeddedHeadingBadges) {
+                    for (NSUInteger idx = itemCountBeforeCard; idx < allItems.count; idx++) {
+                        HADashboardConfigItem *headed = allItems[idx];
+                        if (!headed.customProperties[@"headingIcon"]) continue;
+                        NSMutableDictionary *props = [headed.customProperties mutableCopy];
+                        props[HAHeadingBadgesKey] = embeddedHeadingBadges;
+                        headed.customProperties = [props copy];
+                        break;
+                    }
+                    embeddedHeadingBadges = nil;
+                }
                 // Only first sub-card gets the heading title
                 gridTitle = nil;
                 gridIcon = nil;
