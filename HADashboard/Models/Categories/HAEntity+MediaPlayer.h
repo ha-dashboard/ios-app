@@ -15,6 +15,7 @@ typedef NS_OPTIONS(NSInteger, HAMediaPlayerFeature) {
     HAMediaPlayerFeatureStop          = 4096,
     HAMediaPlayerFeaturePlay          = 16384,
     HAMediaPlayerFeatureShuffleSet    = 32768,
+    HAMediaPlayerFeatureSelectSoundMode = 65536,
     HAMediaPlayerFeatureBrowseMedia   = 131072,
     HAMediaPlayerFeatureRepeatSet     = 262144,
 };
@@ -37,6 +38,7 @@ extern NSString *const HAMediaControlVolumeDown;     // volume_down
 extern NSString *const HAMediaControlVolumeUp;       // volume_up
 extern NSString *const HAMediaControlVolumeSet;      // volume_set
 extern NSString *const HAMediaControlSelectSource;   // select_source
+extern NSString *const HAMediaControlSelectSoundMode; // select_sound_mode (more-info only)
 
 @interface HAEntity (MediaPlayer)
 
@@ -72,6 +74,18 @@ extern NSString *const HAMediaControlSelectSource;   // select_source
 
 /// +mediaControlsForState:supportedFeatures:attributes: for this entity.
 - (NSArray<NSString *> *)mediaControls;
+
+/// The controls HA's more-info dialog (more-info-media_player.ts) offers:
+/// the card's controls plus, in every state except unavailable (so also
+/// while off), source select (SELECT_SOURCE with a non-empty source_list)
+/// and sound mode (SELECT_SOUND_MODE with a non-empty sound_mode_list).
+/// Unavailable: nothing. Pure: depends only on its arguments.
++ (NSArray<NSString *> *)mediaMoreInfoControlsForState:(NSString *)state
+                                     supportedFeatures:(NSInteger)features
+                                            attributes:(NSDictionary *)attributes;
+
+/// +mediaMoreInfoControlsForState:supportedFeatures:attributes: for this entity.
+- (NSArray<NSString *> *)mediaMoreInfoControls;
 
 /// YES unless the player is off, standby, unavailable or unknown — HA's
 /// stateActive() for the media_player domain.

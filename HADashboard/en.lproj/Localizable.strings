@@ -577,6 +577,12 @@
 /* VoiceOver label for a media player's mute button while muted. */
 "accessibility.media_player.unmute" = "Unmute";
 
+/* VoiceOver label for a media player's shuffle button. */
+"accessibility.media_player.shuffle" = "Shuffle";
+
+/* VoiceOver label for a media player's repeat-mode button. */
+"accessibility.media_player.repeat" = "Repeat";
+
 
 /* Button in the calendar card header, jumps to today. Also used as a day-header label. Max ~8 chars. */
 "cell.calendar.today" = "Today";

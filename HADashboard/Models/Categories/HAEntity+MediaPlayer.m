@@ -15,6 +15,7 @@ NSString *const HAMediaControlVolumeDown    = @"volume_down";
 NSString *const HAMediaControlVolumeUp      = @"volume_up";
 NSString *const HAMediaControlVolumeSet     = @"volume_set";
 NSString *const HAMediaControlSelectSource  = @"select_source";
+NSString *const HAMediaControlSelectSoundMode = @"select_sound_mode";
 
 @implementation HAEntity (MediaPlayer)
 
@@ -123,6 +124,28 @@ NSString *const HAMediaControlSelectSource  = @"select_source";
     return [HAEntity mediaControlsForState:self.state
                          supportedFeatures:[self supportedFeatures]
                                 attributes:self.attributes];
+}
+
++ (NSArray<NSString *> *)mediaMoreInfoControlsForState:(NSString *)state
+                                     supportedFeatures:(NSInteger)features
+                                            attributes:(NSDictionary *)attributes {
+    if (state.length == 0 || [state isEqualToString:@"unavailable"]) return @[];
+    NSMutableArray<NSString *> *controls =
+        [[self mediaControlsForState:state supportedFeatures:features attributes:attributes] mutableCopy];
+    if (![controls containsObject:HAMediaControlSelectSource] &&
+        (features & HAMediaPlayerFeatureSelectSource) && HAAttrArray(attributes, @"source_list").count > 0) {
+        [controls addObject:HAMediaControlSelectSource];
+    }
+    if ((features & HAMediaPlayerFeatureSelectSoundMode) && HAAttrArray(attributes, HAAttrSoundModeList).count > 0) {
+        [controls addObject:HAMediaControlSelectSoundMode];
+    }
+    return [controls copy];
+}
+
+- (NSArray<NSString *> *)mediaMoreInfoControls {
+    return [HAEntity mediaMoreInfoControlsForState:self.state
+                                 supportedFeatures:[self supportedFeatures]
+                                        attributes:self.attributes];
 }
 
 @end

@@ -219,6 +219,104 @@ static const CGFloat kDetailSectionWidth = 320.0;
     XCTAssertGreaterThan(ink, 40u, @"power glyph should draw visible pixels");
 }
 
+#pragma mark - Media detail gating (HA more-info rules)
+
+- (HAEntity *)tvWithState:(NSString *)state extra:(NSDictionary *)extra {
+    NSMutableDictionary *attrs = [@{@"friendly_name": @"Sony TV", @"device_class": @"tv",
+                                    @"supported_features": @150969,
+                                    @"source_list": @[@"HDMI 1", @"HDMI 2", @"TV"]} mutableCopy];
+    [attrs addEntriesFromDictionary:extra ?: @{}];
+    return [HASnapshotTestHelpers entityWithId:@"media_player.sony_tv" state:state attributes:attrs];
+}
+
+/// Builds the media detail section, laid out at the detail width; returns the section.
+- (NSObject<HAEntityDetailSection> *)mediaSectionForEntity:(HAEntity *)entity view:(UIView **)outView {
+    HADetailServiceBlock noopBlock = ^(NSString *s, NSString *d, NSDictionary *data, NSString *eid) {};
+    NSObject<HAEntityDetailSection> *section = (NSObject<HAEntityDetailSection> *)
+        [HAEntityDetailSectionFactory sectionForEntity:entity serviceBlock:noopBlock];
+    UIView *view = [section viewForEntity:entity];
+    view.frame = CGRectMake(0, 0, kDetailSectionWidth, 600);
+    [view layoutIfNeeded];
+    if (outView) *outView = view;
+    return section;
+}
+
+- (BOOL)section:(NSObject *)section shows:(NSString *)key inView:(UIView *)root {
+    for (UIView *v = [section valueForKey:key]; v && v != root; v = v.superview) {
+        if (v.hidden) return NO;
+    }
+    return YES;
+}
+
+- (void)assertSection:(NSObject *)section view:(UIView *)view shows:(NSArray<NSString *> *)shown hides:(NSArray<NSString *> *)hidden {
+    for (NSString *key in shown) XCTAssertTrue([self section:section shows:key inView:view], @"%@ should be shown", key);
+    for (NSString *key in hidden) XCTAssertFalse([self section:section shows:key inView:view], @"%@ should be hidden", key);
+}
+
+- (void)testMediaMoreInfoControlsPerState {
+    HAEntity *off = [self tvWithState:@"off" extra:nil];
+    // HA's more-info keeps source select while off; power is turn_on.
+    XCTAssertEqualObjects([off mediaMoreInfoControls], (@[HAMediaControlTurnOn, HAMediaControlSelectSource]));
+    XCTAssertEqualObjects([[self tvWithState:@"unavailable" extra:nil] mediaMoreInfoControls], @[]);
+    HAEntity *withModes = [HASnapshotTestHelpers entityWithId:@"media_player.avr" state:@"standby" attributes:@{
+        @"supported_features": @(HAMediaPlayerFeatureTurnOn | HAMediaPlayerFeatureSelectSoundMode),
+        @"sound_mode_list": @[@"Movie", @"Music"]}];
+    XCTAssertEqualObjects([withModes mediaMoreInfoControls], (@[HAMediaControlTurnOn, HAMediaControlSelectSoundMode]));
+    // Active: the card's controls (source already included), no duplicates.
+    HAEntity *on = [self tvWithState:@"on" extra:nil];
+    XCTAssertEqualObjects([on mediaMoreInfoControls], [on mediaControls]);
+}
+
+- (void)testMediaDetailOffShowsPowerAndSourceOnly {
+    UIView *view = nil;
+    NSObject *section = [self mediaSectionForEntity:[self tvWithState:@"off" extra:nil] view:&view];
+    [self assertSection:section view:view shows:@[@"powerButton", @"sourceSelectButton"]
+                  hides:@[@"transportRow", @"volumeRow", @"seekRow", @"soundModeButton"]];
+    XCTAssertEqualObjects(((UIButton *)[section valueForKey:@"powerButton"]).accessibilityLabel, @"Turn on");
+}
+
+- (void)testMediaDetailUnavailableShowsNothingActionable {
+    UIView *view = nil;
+    NSObject *section = [self mediaSectionForEntity:[self tvWithState:@"unavailable" extra:nil] view:&view];
+    [self assertSection:section view:view shows:@[@"mediaInfoLabel"]
+                  hides:@[@"transportRow", @"volumeRow", @"seekRow", @"bottomRow", @"powerButton"]];
+}
+
+- (void)testMediaDetailUpdatesInPlaceWhenTurnedOnAndOff {
+    UIView *view = nil;
+    NSObject<HAEntityDetailSection> *section = [self mediaSectionForEntity:[self tvWithState:@"off" extra:nil] view:&view];
+    CGFloat offHeight = [section preferredHeight];
+
+    [section updateWithEntity:[self tvWithState:@"playing" extra:@{@"media_title": @"News", @"source": @"TV"}]];
+    [view layoutIfNeeded];
+    [self assertSection:section view:view
+                  shows:@[@"prevButton", @"playPauseButton", @"nextButton", @"muteButton", @"volumeDownButton",
+                          @"volumeUpButton", @"sourceSelectButton", @"powerButton"]
+                  hides:@[@"volumeSlider", @"shuffleButton", @"repeatButton", @"seekRow"]];
+    XCTAssertEqualObjects(((UIButton *)[section valueForKey:@"powerButton"]).accessibilityLabel, @"Turn off");
+    XCTAssertEqualObjects(((UIButton *)[section valueForKey:@"playPauseButton"]).accessibilityLabel, @"Pause");
+    XCTAssertGreaterThan([section preferredHeight], offHeight, @"controls added in place must grow the section");
+
+    [section updateWithEntity:[self tvWithState:@"off" extra:nil]];
+    [view layoutIfNeeded];
+    [self assertSection:section view:view shows:@[@"powerButton"] hides:@[@"transportRow", @"volumeRow"]];
+    XCTAssertEqualWithAccuracy([section preferredHeight], offHeight, 0.5);
+}
+
+- (void)testMediaDetailFullSpeakerShowsExtendedControls {
+    UIView *view = nil;
+    NSObject *section = [self mediaSectionForEntity:[HASnapshotTestHelpers mediaPlayerSpeakerFullPlaying] view:&view];
+    [self assertSection:section view:view
+                  shows:@[@"repeatButton", @"prevButton", @"playPauseButton", @"nextButton", @"shuffleButton",
+                          @"muteButton", @"volumeSlider", @"seekRow", @"sourceSelectButton", @"powerButton"]
+                  hides:@[@"volumeDownButton", @"volumeUpButton", @"soundModeButton"]];
+}
+
+- (void)testMediaPlayerSectionSpeakerFull {
+    UIView *view = [self sectionViewForEntity:[HASnapshotTestHelpers mediaPlayerSpeakerFullPlaying]];
+    [self verifyView:view identifier:@"mediaPlayerSectionSpeakerFull"];
+}
+
 - (void)testMediaPlayerSectionTVOff {
     UIView *view = [self sectionViewForEntity:[HASnapshotTestHelpers mediaPlayerTVOff]];
     [self verifyView:view identifier:@"mediaPlayerSectionTVOff"];

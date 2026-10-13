@@ -1107,21 +1107,40 @@
 
 static const CGFloat kMediaDetailSmallIconSize = 26.0;
 static const CGFloat kMediaDetailPlayIconSize  = 40.0;
+static const CGFloat kMediaDetailModeIconSize  = 20.0;
+static const CGFloat kMediaDetailVolumeIconSize = 20.0;
+static const CGFloat kMediaDetailFitWidth      = 320.0;
 
+/// Mirrors HA's more-info dialog (more-info-media_player.ts): every control
+/// is created once and shown or hidden by -updateWithEntity: from
+/// -[HAEntity mediaMoreInfoControls], so a state change while the sheet is
+/// open (e.g. off → on) reveals or hides controls in place.
 @interface HAMediaPlayerDetailSection : NSObject <HAEntityDetailSection>
 @property (nonatomic, copy) HADetailServiceBlock serviceBlock;
+@property (nonatomic, strong) UIStackView *rootStack;
 @property (nonatomic, strong) UILabel *mediaInfoLabel;
 @property (nonatomic, strong) UILabel *sourceLabel;
+@property (nonatomic, strong) UIView *seekRow;
 @property (nonatomic, strong) UISlider *seekSlider;
 @property (nonatomic, strong) UILabel *positionTimeLabel;
 @property (nonatomic, strong) UILabel *durationTimeLabel;
+@property (nonatomic, strong) UIView *transportRow;
+@property (nonatomic, strong) UIButton *repeatButton;
 @property (nonatomic, strong) UIButton *prevButton;
 @property (nonatomic, strong) UIButton *playPauseButton;
 @property (nonatomic, strong) UIButton *nextButton;
+@property (nonatomic, strong) UIButton *shuffleButton;
+@property (nonatomic, strong) UIStackView *volumeRow;
 @property (nonatomic, strong) UIButton *muteButton;
+@property (nonatomic, strong) UIButton *volumeDownButton;
+@property (nonatomic, strong) UIButton *volumeUpButton;
 @property (nonatomic, strong) UISlider *volumeSlider;
-@property (nonatomic, strong) UIButton *sourceButton;
+@property (nonatomic, strong) UIStackView *bottomRow;
+@property (nonatomic, strong) UIButton *sourceSelectButton;
+@property (nonatomic, strong) UIButton *soundModeButton;
 @property (nonatomic, strong) UIButton *powerButton;
+@property (nonatomic, copy) NSString *playPauseService;
+@property (nonatomic, copy) NSString *powerService;
 @property (nonatomic, weak) HAEntity *entity;
 @property (nonatomic, weak) UIView *containerRef;
 @end
@@ -1133,177 +1152,135 @@ static const CGFloat kMediaDetailPlayIconSize  = 40.0;
     UIView *container = [[UIView alloc] init];
     self.containerRef = container;
 
-    NSInteger features = [entity supportedFeatures];
-    UIView *prevAnchor = nil;
+    self.rootStack = [[UIStackView alloc] init];
+    self.rootStack.axis = UILayoutConstraintAxisVertical;
+    self.rootStack.spacing = 12;
+    self.rootStack.alignment = UIStackViewAlignmentFill;
+    self.rootStack.translatesAutoresizingMaskIntoConstraints = NO;
+    [container addSubview:self.rootStack];
+    NSLayoutConstraint *bottom = [self.rootStack.bottomAnchor constraintEqualToAnchor:container.bottomAnchor];
+    bottom.priority = 999; // yields if a caller forces a different frame height
+    [NSLayoutConstraint activateConstraints:@[
+        [self.rootStack.topAnchor constraintEqualToAnchor:container.topAnchor],
+        [self.rootStack.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
+        [self.rootStack.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
+        bottom,
+    ]];
 
-    // Media info: title + source
+    // ── Media info: title + app name ──
+    UIStackView *infoStack = [[UIStackView alloc] init];
+    infoStack.axis = UILayoutConstraintAxisVertical;
+    infoStack.spacing = 2;
     self.mediaInfoLabel = [[UILabel alloc] init];
     self.mediaInfoLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
     self.mediaInfoLabel.textColor = [HATheme primaryTextColor];
     self.mediaInfoLabel.textAlignment = NSTextAlignmentCenter;
     self.mediaInfoLabel.numberOfLines = 2;
-    self.mediaInfoLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:self.mediaInfoLabel];
-
+    [infoStack addArrangedSubview:self.mediaInfoLabel];
     self.sourceLabel = [[UILabel alloc] init];
     self.sourceLabel.font = [UIFont systemFontOfSize:13];
     self.sourceLabel.textColor = [HATheme secondaryTextColor];
     self.sourceLabel.textAlignment = NSTextAlignmentCenter;
-    self.sourceLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:self.sourceLabel];
+    [infoStack addArrangedSubview:self.sourceLabel];
+    [self.rootStack addArrangedSubview:infoStack];
 
+    // ── Seek slider + times ──
+    self.seekRow = [[UIView alloc] init];
+    self.seekSlider = [[UISlider alloc] init];
+    self.seekSlider.minimumValue = 0;
+    self.seekSlider.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.seekSlider addTarget:self action:@selector(seekReleased:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside];
+    [self.seekRow addSubview:self.seekSlider];
+    self.positionTimeLabel = [self timeLabelWithAlignment:NSTextAlignmentLeft];
+    self.durationTimeLabel = [self timeLabelWithAlignment:NSTextAlignmentRight];
+    [self.seekRow addSubview:self.positionTimeLabel];
+    [self.seekRow addSubview:self.durationTimeLabel];
     [NSLayoutConstraint activateConstraints:@[
-        [self.mediaInfoLabel.topAnchor constraintEqualToAnchor:container.topAnchor],
-        [self.mediaInfoLabel.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-        [self.mediaInfoLabel.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
-        [self.sourceLabel.topAnchor constraintEqualToAnchor:self.mediaInfoLabel.bottomAnchor constant:2],
-        [self.sourceLabel.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-        [self.sourceLabel.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
+        [self.seekSlider.topAnchor constraintEqualToAnchor:self.seekRow.topAnchor],
+        [self.seekSlider.leadingAnchor constraintEqualToAnchor:self.seekRow.leadingAnchor],
+        [self.seekSlider.trailingAnchor constraintEqualToAnchor:self.seekRow.trailingAnchor],
+        [self.positionTimeLabel.topAnchor constraintEqualToAnchor:self.seekSlider.bottomAnchor constant:2],
+        [self.positionTimeLabel.leadingAnchor constraintEqualToAnchor:self.seekRow.leadingAnchor],
+        [self.positionTimeLabel.bottomAnchor constraintEqualToAnchor:self.seekRow.bottomAnchor],
+        [self.durationTimeLabel.topAnchor constraintEqualToAnchor:self.seekSlider.bottomAnchor constant:2],
+        [self.durationTimeLabel.trailingAnchor constraintEqualToAnchor:self.seekRow.trailingAnchor],
     ]];
-    prevAnchor = self.sourceLabel;
+    [self.rootStack addArrangedSubview:self.seekRow];
 
-    // Seek slider (if SEEK supported, bit 1 = 2)
-    if (features & 2) {
-        self.positionTimeLabel = [[UILabel alloc] init];
-        self.positionTimeLabel.font = [UIFont monospacedDigitSystemFontOfSize:11 weight:UIFontWeightRegular];
-        self.positionTimeLabel.textColor = [HATheme secondaryTextColor];
-        self.positionTimeLabel.translatesAutoresizingMaskIntoConstraints = NO;
-        [container addSubview:self.positionTimeLabel];
+    // ── Transport: repeat | prev | play/pause | next | shuffle (HA's order) ──
+    // MDI glyphs, not Unicode media symbols: the app's icon font renders on
+    // every supported iOS version, unlike system/emoji font coverage (#24).
+    self.repeatButton = [self makeTransportButton:@"repeat" size:kMediaDetailModeIconSize action:@selector(repeatTapped)];
+    self.repeatButton.accessibilityLabel = HALocalizedString(@"accessibility.media_player.repeat", @"VoiceOver label for a media player's repeat-mode button.");
+    self.prevButton = [self makeTransportButton:@"skip-previous" size:kMediaDetailSmallIconSize action:@selector(prevTapped)];
+    self.prevButton.accessibilityLabel = HALocalizedString(@"accessibility.media_player.previous_track", @"VoiceOver label for a media player's previous-track button.");
+    self.playPauseButton = [self makeTransportButton:@"play-pause" size:kMediaDetailPlayIconSize action:@selector(playPauseTapped)];
+    self.nextButton = [self makeTransportButton:@"skip-next" size:kMediaDetailSmallIconSize action:@selector(nextTapped)];
+    self.nextButton.accessibilityLabel = HALocalizedString(@"accessibility.media_player.next_track", @"VoiceOver label for a media player's next-track button.");
+    self.shuffleButton = [self makeTransportButton:@"shuffle-variant" size:kMediaDetailModeIconSize action:@selector(shuffleTapped)];
+    self.shuffleButton.accessibilityLabel = HALocalizedString(@"accessibility.media_player.shuffle", @"VoiceOver label for a media player's shuffle button.");
 
-        self.durationTimeLabel = [[UILabel alloc] init];
-        self.durationTimeLabel.font = [UIFont monospacedDigitSystemFontOfSize:11 weight:UIFontWeightRegular];
-        self.durationTimeLabel.textColor = [HATheme secondaryTextColor];
-        self.durationTimeLabel.textAlignment = NSTextAlignmentRight;
-        self.durationTimeLabel.translatesAutoresizingMaskIntoConstraints = NO;
-        [container addSubview:self.durationTimeLabel];
-
-        self.seekSlider = [[UISlider alloc] init];
-        self.seekSlider.minimumValue = 0;
-        self.seekSlider.translatesAutoresizingMaskIntoConstraints = NO;
-        [self.seekSlider addTarget:self action:@selector(seekReleased:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside];
-        [container addSubview:self.seekSlider];
-
-        [NSLayoutConstraint activateConstraints:@[
-            [self.seekSlider.topAnchor constraintEqualToAnchor:prevAnchor.bottomAnchor constant:10],
-            [self.seekSlider.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-            [self.seekSlider.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
-            [self.positionTimeLabel.topAnchor constraintEqualToAnchor:self.seekSlider.bottomAnchor constant:2],
-            [self.positionTimeLabel.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-            [self.durationTimeLabel.topAnchor constraintEqualToAnchor:self.seekSlider.bottomAnchor constant:2],
-            [self.durationTimeLabel.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
-        ]];
-        prevAnchor = self.positionTimeLabel;
-    }
-
-    // Transport buttons: prev | play/pause | next
-    UIStackView *transportStack = [[UIStackView alloc] init];
+    UIStackView *transportStack = [[UIStackView alloc] initWithArrangedSubviews:@[
+        self.repeatButton, self.prevButton, self.playPauseButton, self.nextButton, self.shuffleButton]];
     transportStack.axis = UILayoutConstraintAxisHorizontal;
     transportStack.spacing = 24;
     transportStack.alignment = UIStackViewAlignmentCenter;
     transportStack.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:transportStack];
-
-    // MDI glyphs, not Unicode media symbols: the app's icon font renders on
-    // every supported iOS version, unlike system/emoji font coverage (#24).
-    if (features & HAMediaPlayerFeaturePreviousTrack) {
-        self.prevButton = [self makeTransportButton:@"skip-previous" size:kMediaDetailSmallIconSize action:@selector(prevTapped)];
-        self.prevButton.accessibilityLabel = HALocalizedString(@"accessibility.media_player.previous_track", @"VoiceOver label for a media player's previous-track button.");
-        [transportStack addArrangedSubview:self.prevButton];
-    }
-
-    self.playPauseButton = [self makeTransportButton:@"play-pause" size:kMediaDetailPlayIconSize action:@selector(playPauseTapped)];
-    self.playPauseButton.accessibilityLabel = HALocalizedString(@"accessibility.media_player.play_pause", @"VoiceOver label for a media player's combined play/pause button.");
-    [transportStack addArrangedSubview:self.playPauseButton];
-
-    if (features & HAMediaPlayerFeatureNextTrack) {
-        self.nextButton = [self makeTransportButton:@"skip-next" size:kMediaDetailSmallIconSize action:@selector(nextTapped)];
-        self.nextButton.accessibilityLabel = HALocalizedString(@"accessibility.media_player.next_track", @"VoiceOver label for a media player's next-track button.");
-        [transportStack addArrangedSubview:self.nextButton];
-    }
-
+    self.transportRow = [[UIView alloc] init];
+    [self.transportRow addSubview:transportStack];
     [NSLayoutConstraint activateConstraints:@[
-        [transportStack.topAnchor constraintEqualToAnchor:prevAnchor.bottomAnchor constant:10],
-        [transportStack.centerXAnchor constraintEqualToAnchor:container.centerXAnchor],
+        [transportStack.topAnchor constraintEqualToAnchor:self.transportRow.topAnchor],
+        [transportStack.bottomAnchor constraintEqualToAnchor:self.transportRow.bottomAnchor],
+        [transportStack.centerXAnchor constraintEqualToAnchor:self.transportRow.centerXAnchor],
     ]];
-    prevAnchor = transportStack;
+    [self.rootStack addArrangedSubview:self.transportRow];
 
-    // Volume row: mute button + slider
-    UIStackView *volumeRow = [[UIStackView alloc] init];
-    volumeRow.axis = UILayoutConstraintAxisHorizontal;
-    volumeRow.spacing = 8;
-    volumeRow.alignment = UIStackViewAlignmentCenter;
-    volumeRow.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:volumeRow];
-
-    if (features & 8) { // VOLUME_MUTE
-        self.muteButton = [UIButton buttonWithType:UIButtonTypeSystem];
-        self.muteButton.titleLabel.font = [UIFont systemFontOfSize:18];
-        [self.muteButton addTarget:self action:@selector(muteTapped) forControlEvents:UIControlEventTouchUpInside];
-        [self.muteButton setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
-        [volumeRow addArrangedSubview:self.muteButton];
+    // ── Volume: mute | down | up | slider ──
+    self.muteButton = [self makeTransportButton:@"volume-high" size:kMediaDetailVolumeIconSize action:@selector(muteTapped)];
+    self.volumeDownButton = [self makeTransportButton:@"volume-minus" size:kMediaDetailVolumeIconSize action:@selector(volumeDownTapped)];
+    self.volumeDownButton.accessibilityLabel = HALocalizedString(@"accessibility.media_player.volume_down", @"VoiceOver label for a media player's volume-down button.");
+    self.volumeUpButton = [self makeTransportButton:@"volume-plus" size:kMediaDetailVolumeIconSize action:@selector(volumeUpTapped)];
+    self.volumeUpButton.accessibilityLabel = HALocalizedString(@"accessibility.media_player.volume_up", @"VoiceOver label for a media player's volume-up button.");
+    for (UIButton *btn in @[self.muteButton, self.volumeDownButton, self.volumeUpButton]) {
+        [btn setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
     }
+    self.volumeSlider = [[UISlider alloc] init];
+    self.volumeSlider.minimumValue = 0;
+    self.volumeSlider.maximumValue = 100;
+    [self.volumeSlider addTarget:self action:@selector(volumeReleased:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside];
+    self.volumeRow = [[UIStackView alloc] initWithArrangedSubviews:@[
+        self.muteButton, self.volumeDownButton, self.volumeUpButton, self.volumeSlider]];
+    self.volumeRow.axis = UILayoutConstraintAxisHorizontal;
+    self.volumeRow.spacing = 8;
+    self.volumeRow.alignment = UIStackViewAlignmentCenter;
+    [self.rootStack addArrangedSubview:self.volumeRow];
 
-    if (features & 4) { // VOLUME_SET
-        self.volumeSlider = [[UISlider alloc] init];
-        self.volumeSlider.minimumValue = 0;
-        self.volumeSlider.maximumValue = 100;
-        [self.volumeSlider addTarget:self action:@selector(volumeReleased:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside];
-        [volumeRow addArrangedSubview:self.volumeSlider];
-    }
-
-    [NSLayoutConstraint activateConstraints:@[
-        [volumeRow.topAnchor constraintEqualToAnchor:prevAnchor.bottomAnchor constant:12],
-        [volumeRow.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-        [volumeRow.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
-    ]];
-    prevAnchor = volumeRow;
-
-    // Bottom row: source selector + power
-    UIStackView *bottomRow = [[UIStackView alloc] init];
-    bottomRow.axis = UILayoutConstraintAxisHorizontal;
-    bottomRow.spacing = 12;
-    bottomRow.distribution = UIStackViewDistributionFillEqually;
-    bottomRow.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:bottomRow];
-
-    NSArray *soundModes = [entity mediaSoundModes];
-    if (soundModes.count > 0 && (features & 65536)) {
-        self.sourceButton = [UIButton buttonWithType:UIButtonTypeSystem];
-        self.sourceButton.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
-        self.sourceButton.backgroundColor = [HATheme buttonBackgroundColor];
-        self.sourceButton.layer.cornerRadius = 8;
-        self.sourceButton.clipsToBounds = YES;
-        [self.sourceButton addTarget:self action:@selector(soundModeTapped) forControlEvents:UIControlEventTouchUpInside];
-        [bottomRow addArrangedSubview:self.sourceButton];
-    }
-
-    if (features & (HAMediaPlayerFeatureTurnOn | HAMediaPlayerFeatureTurnOff)) {
-        // U+23FB (the Unicode power symbol) isn't in the system or emoji
-        // fonts on older iOS — only LastResort has it — so it drew as an
-        // empty box. Use the MDI glyph, as HA does (mdiPowerStandby).
-        self.powerButton = [UIButton buttonWithType:UIButtonTypeSystem];
-        [HAIconMapper setIconName:@"power-standby" onButton:self.powerButton size:22 color:[HATheme primaryTextColor]];
-        self.powerButton.backgroundColor = [HATheme buttonBackgroundColor];
-        self.powerButton.layer.cornerRadius = 8;
-        self.powerButton.clipsToBounds = YES;
-        [self.powerButton addTarget:self action:@selector(powerTapped) forControlEvents:UIControlEventTouchUpInside];
-        [bottomRow addArrangedSubview:self.powerButton];
-    }
-
-    if (bottomRow.arrangedSubviews.count > 0) {
-        [NSLayoutConstraint activateConstraints:@[
-            [bottomRow.topAnchor constraintEqualToAnchor:prevAnchor.bottomAnchor constant:12],
-            [bottomRow.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-            [bottomRow.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
-            [bottomRow.heightAnchor constraintEqualToConstant:36],
-            [bottomRow.bottomAnchor constraintEqualToAnchor:container.bottomAnchor],
-        ]];
-    } else {
-        [prevAnchor.bottomAnchor constraintEqualToAnchor:container.bottomAnchor].active = YES;
-    }
+    // ── Bottom: source | sound mode | power ──
+    self.sourceSelectButton = [self makePillButtonWithAction:@selector(sourceTapped)];
+    self.soundModeButton = [self makePillButtonWithAction:@selector(soundModeTapped)];
+    // U+23FB (the Unicode power symbol) isn't in the system or emoji fonts on
+    // older iOS — only LastResort has it — so it drew as an empty box. Use the
+    // MDI glyph, as HA does (mdiPowerStandby).
+    self.powerButton = [self makePillButtonWithAction:@selector(powerTapped)];
+    [HAIconMapper setIconName:@"power-standby" onButton:self.powerButton size:22 color:[HATheme primaryTextColor]];
+    self.bottomRow = [[UIStackView alloc] initWithArrangedSubviews:@[self.sourceSelectButton, self.soundModeButton, self.powerButton]];
+    self.bottomRow.axis = UILayoutConstraintAxisHorizontal;
+    self.bottomRow.spacing = 12;
+    self.bottomRow.distribution = UIStackViewDistributionFillEqually;
+    [self.bottomRow.heightAnchor constraintEqualToConstant:36].active = YES;
+    [self.rootStack addArrangedSubview:self.bottomRow];
 
     [self updateWithEntity:entity];
     return container;
+}
+
+- (UILabel *)timeLabelWithAlignment:(NSTextAlignment)alignment {
+    UILabel *label = [[UILabel alloc] init];
+    label.font = [UIFont monospacedDigitSystemFontOfSize:11 weight:UIFontWeightRegular];
+    label.textColor = [HATheme secondaryTextColor];
+    label.textAlignment = alignment;
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    return label;
 }
 
 - (UIButton *)makeTransportButton:(NSString *)iconName size:(CGFloat)size action:(SEL)action {
@@ -1313,78 +1290,142 @@ static const CGFloat kMediaDetailPlayIconSize  = 40.0;
     return btn;
 }
 
+- (UIButton *)makePillButtonWithAction:(SEL)action {
+    UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
+    btn.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
+    btn.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+    btn.backgroundColor = [HATheme buttonBackgroundColor];
+    btn.layer.cornerRadius = 8;
+    btn.clipsToBounds = YES;
+    [btn addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
+    return btn;
+}
+
 - (CGFloat)preferredHeight {
-    NSInteger features = [self.entity supportedFeatures];
-    CGFloat height = 50; // media info + source label
-    if (features & 2) height += 50; // seek slider + time labels
-    height += 50; // transport buttons
-    height += 36; // volume row
-    NSArray *soundModes = [self.entity mediaSoundModes];
-    BOOL hasBottom = ((features & 128) || (features & 256) ||
-                      (soundModes.count > 0 && (features & 65536)));
-    if (hasBottom) height += 48; // bottom row
-    return height;
+    UIView *container = self.containerRef;
+    if (!container) return 0;
+    CGFloat width = container.bounds.size.width > 0 ? container.bounds.size.width : kMediaDetailFitWidth;
+    return ceil([container systemLayoutSizeFittingSize:CGSizeMake(width, 0)
+                         withHorizontalFittingPriority:UILayoutPriorityRequired
+                               verticalFittingPriority:UILayoutPriorityFittingSizeLevel].height);
 }
 
 - (void)updateWithEntity:(HAEntity *)entity {
     self.entity = entity;
+    NSArray<NSString *> *controls = [entity mediaMoreInfoControls];
+    BOOL active = [HAEntity mediaPlayerStateIsActive:entity.state];
+    NSInteger features = [entity supportedFeatures];
+    UIColor *textColor = [HATheme primaryTextColor];
 
+    // ── Info ──
     NSString *title = [entity mediaTitle];
     NSString *artist = [entity mediaArtist];
-    if (title.length > 0 && artist.length > 0) {
-        self.mediaInfoLabel.text = [NSString stringWithFormat:@"%@ \u2014 %@", title, artist];
-    } else if (title.length > 0) {
+    if (active && title.length > 0 && artist.length > 0) {
+        self.mediaInfoLabel.text = [NSString stringWithFormat:@"%@ — %@", title, artist];
+    } else if (active && title.length > 0) {
         self.mediaInfoLabel.text = title;
     } else {
         self.mediaInfoLabel.text = entity.state;
     }
+    NSString *appName = active ? [entity mediaAppName] : nil;
+    self.sourceLabel.text = appName;
+    self.sourceLabel.hidden = (appName.length == 0);
 
-    self.sourceLabel.text = [entity mediaAppName];
-
-    BOOL playing = [entity isPlaying];
-    [HAIconMapper setIconName:(playing ? @"pause" : @"play") onButton:self.playPauseButton
-                         size:kMediaDetailPlayIconSize color:[HATheme primaryTextColor]];
-
-    // Seek slider
-    if (self.seekSlider) {
-        NSNumber *duration = [entity mediaDuration];
-        NSNumber *position = [entity mediaPosition];
-        if (duration) self.seekSlider.maximumValue = duration.floatValue;
-        if (position) self.seekSlider.value = position.floatValue;
-        self.seekSlider.enabled = playing;
+    // ── Seek: only while active, with SEEK and a known duration ──
+    NSNumber *duration = [entity mediaDuration];
+    NSNumber *position = [entity mediaPosition];
+    BOOL showSeek = active && (features & HAMediaPlayerFeatureSeek) && duration.doubleValue > 0;
+    self.seekRow.hidden = !showSeek;
+    if (showSeek) {
+        self.seekSlider.maximumValue = duration.floatValue;
+        if (position && !self.seekSlider.isTracking) self.seekSlider.value = position.floatValue;
         self.positionTimeLabel.text = [self formatTime:position.integerValue];
         self.durationTimeLabel.text = [self formatTime:duration.integerValue];
     }
 
-    // Volume
-    NSNumber *vol = [entity volumeLevel];
-    NSInteger pct = vol ? (NSInteger)(vol.doubleValue * 100.0) : 0;
-    self.volumeSlider.value = pct;
+    // ── Transport ──
+    self.repeatButton.hidden = ![controls containsObject:HAMediaControlRepeat];
+    self.prevButton.hidden = ![controls containsObject:HAMediaControlPreviousTrack];
+    self.nextButton.hidden = ![controls containsObject:HAMediaControlNextTrack];
+    self.shuffleButton.hidden = ![controls containsObject:HAMediaControlShuffle];
 
+    NSString *repeatMode = [entity mediaRepeat];
+    [HAIconMapper setIconName:([repeatMode isEqualToString:@"one"] ? @"repeat-once" : ([repeatMode isEqualToString:@"all"] ? @"repeat" : @"repeat-off"))
+                     onButton:self.repeatButton size:kMediaDetailModeIconSize color:textColor];
+    [HAIconMapper setIconName:([entity mediaShuffle] ? @"shuffle-variant" : @"shuffle-disabled")
+                     onButton:self.shuffleButton size:kMediaDetailModeIconSize color:textColor];
+
+    NSMutableArray<NSString *> *playControls = [NSMutableArray array];
+    for (NSString *c in @[HAMediaControlPlay, HAMediaControlPause, HAMediaControlStop, HAMediaControlPlayPause]) {
+        if ([controls containsObject:c]) [playControls addObject:c];
+    }
+    // Assumed-state players can offer several at once: fold into one toggle.
+    self.playPauseService = playControls.count == 1 ? playControls.firstObject
+                          : (playControls.count > 1 ? HAMediaControlPlayPause : nil);
+    self.playPauseButton.hidden = (self.playPauseService == nil);
+    NSString *playIcon = @"play-pause";
+    NSString *playLabel = HALocalizedString(@"accessibility.media_player.play_pause", @"VoiceOver label for a media player's combined play/pause button.");
+    if ([self.playPauseService isEqualToString:HAMediaControlPlay]) {
+        playIcon = @"play";
+        playLabel = HALocalizedString(@"accessibility.media_player.play", @"VoiceOver label for a media player's play button.");
+    } else if ([self.playPauseService isEqualToString:HAMediaControlPause]) {
+        playIcon = @"pause";
+        playLabel = HALocalizedString(@"accessibility.media_player.pause", @"VoiceOver label for a media player's pause button.");
+    } else if ([self.playPauseService isEqualToString:HAMediaControlStop]) {
+        playIcon = @"stop";
+        playLabel = HALocalizedString(@"accessibility.media_player.stop", @"VoiceOver label for a media player's stop button.");
+    }
+    [HAIconMapper setIconName:playIcon onButton:self.playPauseButton size:kMediaDetailPlayIconSize color:textColor];
+    self.playPauseButton.accessibilityLabel = playLabel;
+    self.transportRow.hidden = self.repeatButton.hidden && self.prevButton.hidden && self.playPauseButton.hidden &&
+                               self.nextButton.hidden && self.shuffleButton.hidden;
+
+    // ── Volume ──
     BOOL muted = [entity isVolumeMuted];
-    [self.muteButton setTitle:muted ? @"\U0001F507" : @"\U0001F50A" forState:UIControlStateNormal];
+    self.muteButton.hidden = ![controls containsObject:HAMediaControlVolumeMute];
+    self.volumeDownButton.hidden = ![controls containsObject:HAMediaControlVolumeDown];
+    self.volumeUpButton.hidden = ![controls containsObject:HAMediaControlVolumeUp];
+    self.volumeSlider.hidden = ![controls containsObject:HAMediaControlVolumeSet];
+    [HAIconMapper setIconName:(muted ? @"volume-off" : @"volume-high") onButton:self.muteButton
+                         size:kMediaDetailVolumeIconSize color:textColor];
+    self.muteButton.accessibilityLabel = muted
+        ? HALocalizedString(@"accessibility.media_player.unmute", @"VoiceOver label for a media player's mute button while muted.")
+        : HALocalizedString(@"accessibility.media_player.mute", @"VoiceOver label for a media player's mute button while not muted.");
+    NSNumber *vol = [entity volumeLevel];
+    if (!self.volumeSlider.isTracking) self.volumeSlider.value = vol ? (float)(vol.doubleValue * 100.0) : 0;
+    self.volumeRow.hidden = self.muteButton.hidden && self.volumeDownButton.hidden &&
+                            self.volumeUpButton.hidden && self.volumeSlider.hidden;
 
-    // Sound mode button
+    // ── Source / sound mode ──
+    self.sourceSelectButton.hidden = ![controls containsObject:HAMediaControlSelectSource];
+    NSString *source = [entity mediaSource];
+    NSString *sourceTitle = source.length > 0 ? source
+        : ([[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"media_player" attr:@"source"]
+            ?: HALocalizedString(@"attr.source.name", @"Fallback label on the source-picker button in the media player cell, shown when no source is currently selected. Used only when Home Assistant's own translation for media_player's source attribute is unavailable."));
+    [self.sourceSelectButton setTitle:[NSString stringWithFormat:@"%@  ▾", sourceTitle] forState:UIControlStateNormal];
+    self.sourceSelectButton.accessibilityLabel = HALocalizedString(@"cell.media_player.source", @"Action sheet title for picking a media source in the media player cell.");
+
+    self.soundModeButton.hidden = ![controls containsObject:HAMediaControlSelectSoundMode];
     NSString *soundMode = [entity mediaSoundMode];
-    if (soundMode) [self.sourceButton setTitle:soundMode forState:UIControlStateNormal];
+    NSString *soundModeName = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"media_player" attr:@"sound_mode"]
+        ?: HALocalizedString(@"attr.sound_mode.name", @"Action-sheet/button title for a media player's sound mode, used only when Home Assistant's own translation for media_player's sound_mode attribute is unavailable.");
+    [self.soundModeButton setTitle:(soundMode.length > 0 ? soundMode : soundModeName) forState:UIControlStateNormal];
+    self.soundModeButton.accessibilityLabel = soundModeName;
 
-    BOOL available = entity.isAvailable && ![entity.state isEqualToString:@"off"];
-    self.prevButton.enabled = available;
-    self.playPauseButton.enabled = entity.isAvailable;
-    self.nextButton.enabled = available;
-    self.volumeSlider.enabled = available;
-    self.muteButton.enabled = available;
+    // ── Power: turn_on while off/standby, turn_off while on (per HA) ──
+    if ([controls containsObject:HAMediaControlTurnOn] && (!active || ![controls containsObject:HAMediaControlTurnOff])) {
+        self.powerService = HAMediaControlTurnOn;
+    } else if ([controls containsObject:HAMediaControlTurnOff]) {
+        self.powerService = HAMediaControlTurnOff;
+    } else {
+        self.powerService = nil;
+    }
+    self.powerButton.hidden = (self.powerService == nil);
+    self.powerButton.accessibilityLabel = [self.powerService isEqualToString:HAMediaControlTurnOn]
+        ? HALocalizedString(@"accessibility.media_player.turn_on", @"VoiceOver label for a media player's power button while the player is off.")
+        : HALocalizedString(@"accessibility.media_player.turn_off", @"VoiceOver label for a media player's power button while the player is on.");
 
-    // Power: turn_on while off/standby, turn_off otherwise — each only when supported.
-    BOOL powerIsOn = [HAEntity mediaPlayerStateIsActive:entity.state];
-    NSInteger features = [entity supportedFeatures];
-    BOOL powerUsable = powerIsOn ? (features & HAMediaPlayerFeatureTurnOff) != 0
-                                 : (features & HAMediaPlayerFeatureTurnOn) != 0;
-    self.powerButton.enabled = powerUsable && ![entity.state isEqualToString:@"unavailable"];
-    self.powerButton.alpha = self.powerButton.enabled ? 1.0 : 0.4;
-    self.powerButton.accessibilityLabel = powerIsOn
-        ? HALocalizedString(@"accessibility.media_player.turn_off", @"VoiceOver label for a media player's power button while the player is on.")
-        : HALocalizedString(@"accessibility.media_player.turn_on", @"VoiceOver label for a media player's power button while the player is off.");
+    self.bottomRow.hidden = self.sourceSelectButton.hidden && self.soundModeButton.hidden && self.powerButton.hidden;
 }
 
 - (NSString *)formatTime:(NSInteger)totalSeconds {
@@ -1396,58 +1437,55 @@ static const CGFloat kMediaDetailPlayIconSize  = 40.0;
     return [NSString stringWithFormat:@"%ld:%02ld", (long)minutes, (long)seconds];
 }
 
-- (void)prevTapped {
-    if (!self.entity || !self.serviceBlock) return;
+- (void)callMediaService:(NSString *)service data:(NSDictionary *)data {
+    if (!self.entity || !self.serviceBlock || !service) return;
     [HAHaptics lightImpact];
-    self.serviceBlock(@"media_previous_track", @"media_player", nil, self.entity.entityId);
+    self.serviceBlock(service, @"media_player", data, self.entity.entityId);
 }
 
-- (void)playPauseTapped {
-    if (!self.entity || !self.serviceBlock) return;
-    [HAHaptics lightImpact];
-    self.serviceBlock(@"media_play_pause", @"media_player", nil, self.entity.entityId);
+- (void)prevTapped       { [self callMediaService:@"media_previous_track" data:nil]; }
+- (void)playPauseTapped  { [self callMediaService:self.playPauseService data:nil]; }
+- (void)nextTapped       { [self callMediaService:@"media_next_track" data:nil]; }
+- (void)volumeDownTapped { [self callMediaService:@"volume_down" data:nil]; }
+- (void)volumeUpTapped   { [self callMediaService:@"volume_up" data:nil]; }
+- (void)powerTapped      { [self callMediaService:self.powerService data:nil]; }
+
+- (void)shuffleTapped {
+    [self callMediaService:@"shuffle_set" data:@{@"shuffle": @(![self.entity mediaShuffle])}];
 }
 
-- (void)nextTapped {
-    if (!self.entity || !self.serviceBlock) return;
-    [HAHaptics lightImpact];
-    self.serviceBlock(@"media_next_track", @"media_player", nil, self.entity.entityId);
+- (void)repeatTapped {
+    // HA's cycle: off → all → one → off
+    NSString *current = [self.entity mediaRepeat];
+    NSString *next = [current isEqualToString:@"off"] ? @"all" : ([current isEqualToString:@"all"] ? @"one" : @"off");
+    [self callMediaService:@"repeat_set" data:@{@"repeat": next}];
 }
 
 - (void)muteTapped {
-    if (!self.entity || !self.serviceBlock) return;
-    [HAHaptics lightImpact];
-    BOOL muted = [self.entity isVolumeMuted];
-    self.serviceBlock(@"volume_mute", @"media_player", @{@"is_volume_muted": @(!muted)}, self.entity.entityId);
+    [self callMediaService:@"volume_mute" data:@{@"is_volume_muted": @(![self.entity isVolumeMuted])}];
 }
 
 - (void)volumeReleased:(UISlider *)sender {
-    if (!self.entity || !self.serviceBlock) return;
-    [HAHaptics lightImpact];
-    double level = sender.value / 100.0;
-    self.serviceBlock(@"volume_set", @"media_player", @{@"volume_level": @(level)}, self.entity.entityId);
+    [self callMediaService:@"volume_set" data:@{@"volume_level": @(sender.value / 100.0)}];
 }
 
 - (void)seekReleased:(UISlider *)sender {
-    if (!self.entity || !self.serviceBlock) return;
-    [HAHaptics lightImpact];
-    self.serviceBlock(@"media_seek", @"media_player", @{@"seek_position": @((double)sender.value)}, self.entity.entityId);
+    [self callMediaService:@"media_seek" data:@{@"seek_position": @((double)sender.value)}];
 }
 
-- (void)soundModeTapped {
-    if (!self.entity || !self.serviceBlock) return;
-    NSArray *modes = [self.entity mediaSoundModes];
-    if (modes.count == 0) return;
-
-    NSString *soundModeAlertTitle = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"media_player" attr:@"sound_mode"]
-        ?: HALocalizedString(@"attr.sound_mode.name", @"Action-sheet title for picking a media player sound mode, used only when Home Assistant's own translation for media_player's sound_mode attribute is unavailable.");
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:soundModeAlertTitle
+- (void)presentPickerWithTitle:(NSString *)title
+                       options:(NSArray<NSString *> *)options
+                       current:(NSString *)current
+                    sourceView:(UIView *)sourceView
+                       handler:(void (^)(NSString *option))handler {
+    if (!self.entity || !self.serviceBlock || options.count == 0) return;
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
                                                                   message:nil
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
-    for (NSString *mode in modes) {
-        [alert addAction:[UIAlertAction actionWithTitle:mode style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-            [HAHaptics lightImpact];
-            self.serviceBlock(@"select_sound_mode", @"media_player", @{@"sound_mode": mode}, self.entity.entityId);
+    for (NSString *option in options) {
+        NSString *optionTitle = [option isEqualToString:current] ? [NSString stringWithFormat:@"✓ %@", option] : option;
+        [alert addAction:[UIAlertAction actionWithTitle:optionTitle style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            handler(option);
         }]];
     }
     [alert addAction:[UIAlertAction actionWithTitle:HALocalizedString(@"action.cancel", @"Cancel button in alerts and action sheets throughout Settings.") style:UIAlertActionStyleCancel handler:nil]];
@@ -1455,18 +1493,35 @@ static const CGFloat kMediaDetailPlayIconSize  = 40.0;
     UIViewController *vc = [self.containerRef ha_parentViewController];
     if (vc) {
         if (alert.popoverPresentationController) {
-            alert.popoverPresentationController.sourceView = self.sourceButton;
-            alert.popoverPresentationController.sourceRect = self.sourceButton.bounds;
+            alert.popoverPresentationController.sourceView = sourceView;
+            alert.popoverPresentationController.sourceRect = sourceView.bounds;
         }
         [vc presentViewController:alert animated:YES completion:nil];
     }
 }
 
-- (void)powerTapped {
-    if (!self.entity || !self.serviceBlock) return;
-    [HAHaptics lightImpact];
-    BOOL isOn = [HAEntity mediaPlayerStateIsActive:self.entity.state];
-    self.serviceBlock(isOn ? @"turn_off" : @"turn_on", @"media_player", nil, self.entity.entityId);
+- (void)sourceTapped {
+    __weak typeof(self) weakSelf = self;
+    [self presentPickerWithTitle:HALocalizedString(@"cell.media_player.source", @"Action sheet title for picking a media source in the media player cell.")
+                         options:[self.entity mediaSourceList]
+                         current:[self.entity mediaSource]
+                      sourceView:self.sourceSelectButton
+                         handler:^(NSString *source) {
+        [weakSelf callMediaService:@"select_source" data:@{@"source": source}];
+    }];
+}
+
+- (void)soundModeTapped {
+    NSString *soundModeAlertTitle = [[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"media_player" attr:@"sound_mode"]
+        ?: HALocalizedString(@"attr.sound_mode.name", @"Action-sheet/button title for a media player's sound mode, used only when Home Assistant's own translation for media_player's sound_mode attribute is unavailable.");
+    __weak typeof(self) weakSelf = self;
+    [self presentPickerWithTitle:soundModeAlertTitle
+                         options:[self.entity mediaSoundModes]
+                         current:[self.entity mediaSoundMode]
+                      sourceView:self.soundModeButton
+                         handler:^(NSString *mode) {
+        [weakSelf callMediaService:@"select_sound_mode" data:@{@"sound_mode": mode}];
+    }];
 }
 
 @end
