@@ -1325,7 +1325,8 @@ static const CGFloat kMediaDetailFitWidth      = 320.0;
     } else if (active && title.length > 0) {
         self.mediaInfoLabel.text = title;
     } else {
-        self.mediaInfoLabel.text = entity.state;
+        // Translated state ("Off", "Éteint", …), not the raw HA state string
+        self.mediaInfoLabel.text = [HAEntityDisplayHelper formattedStateForEntity:entity decimals:0];
     }
     NSString *appName = active ? [entity mediaAppName] : nil;
     self.sourceLabel.text = appName;
