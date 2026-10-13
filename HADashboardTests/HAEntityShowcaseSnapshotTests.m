@@ -434,6 +434,27 @@
     [self verifyView:cell identifier:nil];
 }
 
+#pragma mark - Media control card, issue #24 (full width, real item height)
+
+- (UIView *)mediaControlCardForEntity:(HAEntity *)entity {
+    HADashboardConfigItem *item = [HASnapshotTestHelpers itemWithEntityId:entity.entityId
+        cardType:@"media-control" columnSpan:12 headingIcon:nil displayName:nil];
+    return [self cellForEntity:entity cellClass:[HAMediaPlayerEntityCell class]
+        size:CGSizeMake(kColumnWidth, [HAMediaPlayerEntityCell preferredHeightForEntity:entity]) configItem:item];
+}
+
+- (void)testMediaControlReporterTVOff {
+    [self verifyView:[self mediaControlCardForEntity:[HASnapshotTestHelpers mediaPlayerTVOff]] identifier:nil];
+}
+
+- (void)testMediaControlReporterTVOn {
+    [self verifyView:[self mediaControlCardForEntity:[HASnapshotTestHelpers mediaPlayerTVOn]] identifier:nil];
+}
+
+- (void)testMediaControlSpeakerFullPlaying {
+    [self verifyView:[self mediaControlCardForEntity:[HASnapshotTestHelpers mediaPlayerSpeakerFullPlaying]] identifier:nil];
+}
+
 #pragma mark - Alarm Control Panel (7 variants)
 
 - (void)testAlarmScDisarmed {
