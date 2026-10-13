@@ -345,6 +345,8 @@
     HADashboardConfigItem *item = config.items.firstObject;
     XCTAssertNil(item.customProperties[@"name_blank"]);
     XCTAssertEqualObjects(item.displayName, @"Sunrise");
+}
+
 #pragma mark - Media player control gating (#24)
 
 // The reporter's Sony TV: PAUSE | VOLUME_MUTE | PREVIOUS_TRACK | NEXT_TRACK |
