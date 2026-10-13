@@ -538,6 +538,45 @@
 /* Action sheet title for picking a media source in the media player cell. */
 "cell.media_player.source" = "Source";
 
+/* VoiceOver label for the more-info (three dots) button on a card, which opens the entity's detail sheet. */
+"accessibility.more_info" = "More info";
+
+/* VoiceOver label for a media player's power button while the player is off. */
+"accessibility.media_player.turn_on" = "Turn on";
+
+/* VoiceOver label for a media player's power button while the player is on. */
+"accessibility.media_player.turn_off" = "Turn off";
+
+/* VoiceOver label for a media player's previous-track button. */
+"accessibility.media_player.previous_track" = "Previous track";
+
+/* VoiceOver label for a media player's next-track button. */
+"accessibility.media_player.next_track" = "Next track";
+
+/* VoiceOver label for a media player's play button. */
+"accessibility.media_player.play" = "Play";
+
+/* VoiceOver label for a media player's pause button. */
+"accessibility.media_player.pause" = "Pause";
+
+/* VoiceOver label for a media player's stop button. */
+"accessibility.media_player.stop" = "Stop";
+
+/* VoiceOver label for a media player's combined play/pause button. */
+"accessibility.media_player.play_pause" = "Play/pause";
+
+/* VoiceOver label for a media player's volume-down button. */
+"accessibility.media_player.volume_down" = "Volume down";
+
+/* VoiceOver label for a media player's volume-up button. */
+"accessibility.media_player.volume_up" = "Volume up";
+
+/* VoiceOver label for a media player's mute button while not muted. */
+"accessibility.media_player.mute" = "Mute";
+
+/* VoiceOver label for a media player's mute button while muted. */
+"accessibility.media_player.unmute" = "Unmute";
+
 
 /* Button in the calendar card header, jumps to today. Also used as a day-header label. Max ~8 chars. */
 "cell.calendar.today" = "Today";

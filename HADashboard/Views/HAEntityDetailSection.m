@@ -10,6 +10,7 @@
 #import "UIView+HAUtilities.h"
 #import "HAStrings.h"
 #import "HAStateLocalizer.h"
+#import "HAIconMapper.h"
 
 #pragma mark - Light Detail Section
 
@@ -1104,6 +1105,9 @@
 
 #pragma mark - Media Player Detail Section
 
+static const CGFloat kMediaDetailSmallIconSize = 26.0;
+static const CGFloat kMediaDetailPlayIconSize  = 40.0;
+
 @interface HAMediaPlayerDetailSection : NSObject <HAEntityDetailSection>
 @property (nonatomic, copy) HADetailServiceBlock serviceBlock;
 @property (nonatomic, strong) UILabel *mediaInfoLabel;
@@ -1199,16 +1203,21 @@
     transportStack.translatesAutoresizingMaskIntoConstraints = NO;
     [container addSubview:transportStack];
 
-    if (features & 16) {
-        self.prevButton = [self makeTransportButton:@"\u23EE" size:22 action:@selector(prevTapped)];
+    // MDI glyphs, not Unicode media symbols: the app's icon font renders on
+    // every supported iOS version, unlike system/emoji font coverage (#24).
+    if (features & HAMediaPlayerFeaturePreviousTrack) {
+        self.prevButton = [self makeTransportButton:@"skip-previous" size:kMediaDetailSmallIconSize action:@selector(prevTapped)];
+        self.prevButton.accessibilityLabel = HALocalizedString(@"accessibility.media_player.previous_track", @"VoiceOver label for a media player's previous-track button.");
         [transportStack addArrangedSubview:self.prevButton];
     }
 
-    self.playPauseButton = [self makeTransportButton:@"\u23EF" size:36 action:@selector(playPauseTapped)];
+    self.playPauseButton = [self makeTransportButton:@"play-pause" size:kMediaDetailPlayIconSize action:@selector(playPauseTapped)];
+    self.playPauseButton.accessibilityLabel = HALocalizedString(@"accessibility.media_player.play_pause", @"VoiceOver label for a media player's combined play/pause button.");
     [transportStack addArrangedSubview:self.playPauseButton];
 
-    if (features & 32) {
-        self.nextButton = [self makeTransportButton:@"\u23ED" size:22 action:@selector(nextTapped)];
+    if (features & HAMediaPlayerFeatureNextTrack) {
+        self.nextButton = [self makeTransportButton:@"skip-next" size:kMediaDetailSmallIconSize action:@selector(nextTapped)];
+        self.nextButton.accessibilityLabel = HALocalizedString(@"accessibility.media_player.next_track", @"VoiceOver label for a media player's next-track button.");
         [transportStack addArrangedSubview:self.nextButton];
     }
 
@@ -1268,10 +1277,12 @@
         [bottomRow addArrangedSubview:self.sourceButton];
     }
 
-    if ((features & 128) || (features & 256)) { // TURN_ON or TURN_OFF
+    if (features & (HAMediaPlayerFeatureTurnOn | HAMediaPlayerFeatureTurnOff)) {
+        // U+23FB (the Unicode power symbol) isn't in the system or emoji
+        // fonts on older iOS — only LastResort has it — so it drew as an
+        // empty box. Use the MDI glyph, as HA does (mdiPowerStandby).
         self.powerButton = [UIButton buttonWithType:UIButtonTypeSystem];
-        [self.powerButton setTitle:@"\u23FB" forState:UIControlStateNormal]; // power symbol
-        self.powerButton.titleLabel.font = [UIFont systemFontOfSize:20];
+        [HAIconMapper setIconName:@"power-standby" onButton:self.powerButton size:22 color:[HATheme primaryTextColor]];
         self.powerButton.backgroundColor = [HATheme buttonBackgroundColor];
         self.powerButton.layer.cornerRadius = 8;
         self.powerButton.clipsToBounds = YES;
@@ -1295,10 +1306,9 @@
     return container;
 }
 
-- (UIButton *)makeTransportButton:(NSString *)symbol size:(CGFloat)size action:(SEL)action {
+- (UIButton *)makeTransportButton:(NSString *)iconName size:(CGFloat)size action:(SEL)action {
     UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
-    [btn setTitle:symbol forState:UIControlStateNormal];
-    btn.titleLabel.font = [UIFont systemFontOfSize:size];
+    [HAIconMapper setIconName:iconName onButton:btn size:size color:[HATheme primaryTextColor]];
     [btn addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
     return btn;
 }
@@ -1332,7 +1342,8 @@
     self.sourceLabel.text = [entity mediaAppName];
 
     BOOL playing = [entity isPlaying];
-    [self.playPauseButton setTitle:playing ? @"\u23F8" : @"\u25B6\uFE0F" forState:UIControlStateNormal];
+    [HAIconMapper setIconName:(playing ? @"pause" : @"play") onButton:self.playPauseButton
+                         size:kMediaDetailPlayIconSize color:[HATheme primaryTextColor]];
 
     // Seek slider
     if (self.seekSlider) {
@@ -1363,6 +1374,17 @@
     self.nextButton.enabled = available;
     self.volumeSlider.enabled = available;
     self.muteButton.enabled = available;
+
+    // Power: turn_on while off/standby, turn_off otherwise — each only when supported.
+    BOOL powerIsOn = [HAEntity mediaPlayerStateIsActive:entity.state];
+    NSInteger features = [entity supportedFeatures];
+    BOOL powerUsable = powerIsOn ? (features & HAMediaPlayerFeatureTurnOff) != 0
+                                 : (features & HAMediaPlayerFeatureTurnOn) != 0;
+    self.powerButton.enabled = powerUsable && ![entity.state isEqualToString:@"unavailable"];
+    self.powerButton.alpha = self.powerButton.enabled ? 1.0 : 0.4;
+    self.powerButton.accessibilityLabel = powerIsOn
+        ? HALocalizedString(@"accessibility.media_player.turn_off", @"VoiceOver label for a media player's power button while the player is on.")
+        : HALocalizedString(@"accessibility.media_player.turn_on", @"VoiceOver label for a media player's power button while the player is off.");
 }
 
 - (NSString *)formatTime:(NSInteger)totalSeconds {
@@ -1443,8 +1465,8 @@
 - (void)powerTapped {
     if (!self.entity || !self.serviceBlock) return;
     [HAHaptics lightImpact];
-    BOOL isOff = [self.entity.state isEqualToString:@"off"];
-    self.serviceBlock(isOff ? @"turn_on" : @"turn_off", @"media_player", nil, self.entity.entityId);
+    BOOL isOn = [HAEntity mediaPlayerStateIsActive:self.entity.state];
+    self.serviceBlock(isOn ? @"turn_off" : @"turn_on", @"media_player", nil, self.entity.entityId);
 }
 
 @end

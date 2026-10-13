@@ -1256,6 +1256,29 @@
         @"supported_features": @21437, @"icon": @"mdi:radio"}];
 }
 
++ (HAEntity *)mediaPlayerTVOff {
+    return [self entityWithId:@"media_player.sony_tv" state:@"off" attributes:@{
+        @"friendly_name": @"Sony TV", @"device_class": @"tv", @"supported_features": @150969,
+        @"source_list": @[@"HDMI 1", @"HDMI 2", @"TV"]}];
+}
+
++ (HAEntity *)mediaPlayerTVOn {
+    return [self entityWithId:@"media_player.sony_tv" state:@"on" attributes:@{
+        @"friendly_name": @"Sony TV", @"device_class": @"tv", @"supported_features": @150969,
+        @"source": @"HDMI 1", @"source_list": @[@"HDMI 1", @"HDMI 2", @"TV"],
+        @"volume_level": @0.25, @"is_volume_muted": @NO}];
+}
+
++ (HAEntity *)mediaPlayerSpeakerFullPlaying {
+    return [self entityWithId:@"media_player.kitchen_speaker" state:@"playing" attributes:@{
+        @"friendly_name": @"Kitchen Speaker", @"media_title": @"Clair de Lune",
+        @"media_artist": @"Claude Debussy", @"media_content_type": @"music",
+        @"source": @"Spotify", @"source_list": @[@"Spotify", @"AirPlay", @"Bluetooth"],
+        @"volume_level": @0.4, @"is_volume_muted": @NO, @"shuffle": @YES, @"repeat": @"one",
+        @"media_duration": @300, @"media_position": @90,
+        @"supported_features": @449471, @"icon": @"mdi:speaker"}];
+}
+
 #pragma mark - Showcase: Alarm (7 variants)
 
 + (HAEntity *)alarmScDisarmed {

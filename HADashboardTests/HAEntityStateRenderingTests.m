@@ -10,6 +10,8 @@
 #import "HABaseEntityCell.h"
 #import "HAEntityDisplayHelper.h"
 #import "HALovelaceParser.h"
+#import "HAMediaPlayerEntityCell.h"
+#import "HAIconMapper.h"
 
 // -----------------------------------------------------------------------
 // Regression coverage for the gap the coordinator flagged after the Phase 2
@@ -343,6 +345,222 @@
     HADashboardConfigItem *item = config.items.firstObject;
     XCTAssertNil(item.customProperties[@"name_blank"]);
     XCTAssertEqualObjects(item.displayName, @"Sunrise");
+#pragma mark - Media player control gating (#24)
+
+// The reporter's Sony TV: PAUSE | VOLUME_MUTE | PREVIOUS_TRACK | NEXT_TRACK |
+// TURN_ON | TURN_OFF | VOLUME_STEP | SELECT_SOURCE | PLAY | BROWSE_MEDIA.
+static const NSInteger kReporterTVFeatures = 150969;
+// PAUSE | SEEK | VOLUME_SET | VOLUME_MUTE | PREVIOUS_TRACK | NEXT_TRACK |
+// TURN_ON | TURN_OFF | PLAY_MEDIA | SELECT_SOURCE | STOP | PLAY |
+// SHUFFLE_SET | BROWSE_MEDIA | REPEAT_SET.
+static const NSInteger kFullSpeakerFeatures = 449471;
+
+- (NSDictionary *)tvAttributes {
+    return @{@"friendly_name": @"Sony TV", @"device_class": @"tv",
+             @"supported_features": @(kReporterTVFeatures),
+             @"source_list": @[@"HDMI 1", @"HDMI 2", @"TV"]};
+}
+
+- (void)testMediaPlayerFeatureBitsMatchHomeAssistant {
+    XCTAssertEqual(kReporterTVFeatures,
+                   HAMediaPlayerFeaturePause | HAMediaPlayerFeatureVolumeMute | HAMediaPlayerFeaturePreviousTrack |
+                   HAMediaPlayerFeatureNextTrack | HAMediaPlayerFeatureTurnOn | HAMediaPlayerFeatureTurnOff |
+                   HAMediaPlayerFeatureVolumeStep | HAMediaPlayerFeatureSelectSource | HAMediaPlayerFeaturePlay |
+                   HAMediaPlayerFeatureBrowseMedia);
+}
+
+- (void)testMediaControlsReporterTVOffShowsOnlyPower {
+    NSArray *controls = [HAEntity mediaControlsForState:@"off" supportedFeatures:kReporterTVFeatures attributes:[self tvAttributes]];
+    XCTAssertEqualObjects(controls, @[HAMediaControlTurnOn]);
+}
+
+- (void)testMediaControlsStandbyAndUnknownAreOffStates {
+    for (NSString *state in @[@"standby", @"unknown"]) {
+        NSArray *controls = [HAEntity mediaControlsForState:state supportedFeatures:kReporterTVFeatures attributes:[self tvAttributes]];
+        XCTAssertEqualObjects(controls, @[HAMediaControlTurnOn], @"state %@", state);
+    }
+}
+
+- (void)testMediaControlsUnavailableShowsNothing {
+    NSArray *controls = [HAEntity mediaControlsForState:@"unavailable" supportedFeatures:kReporterTVFeatures attributes:[self tvAttributes]];
+    XCTAssertEqualObjects(controls, @[]);
+}
+
+- (void)testMediaControlsReporterTVOn {
+    // HA shows previous/next only while playing or paused; "on" gets a
+    // play/pause toggle. VOLUME_STEP without VOLUME_SET → step buttons.
+    NSArray *controls = [HAEntity mediaControlsForState:@"on" supportedFeatures:kReporterTVFeatures attributes:[self tvAttributes]];
+    NSArray *expected = @[HAMediaControlTurnOff, HAMediaControlPlayPause,
+                          HAMediaControlVolumeMute, HAMediaControlVolumeDown, HAMediaControlVolumeUp,
+                          HAMediaControlSelectSource];
+    XCTAssertEqualObjects(controls, expected);
+}
+
+- (void)testMediaControlsReporterTVPlaying {
+    NSArray *controls = [HAEntity mediaControlsForState:@"playing" supportedFeatures:kReporterTVFeatures attributes:[self tvAttributes]];
+    NSArray *expected = @[HAMediaControlTurnOff, HAMediaControlPreviousTrack, HAMediaControlPause, HAMediaControlNextTrack,
+                          HAMediaControlVolumeMute, HAMediaControlVolumeDown, HAMediaControlVolumeUp,
+                          HAMediaControlSelectSource];
+    XCTAssertEqualObjects(controls, expected);
+}
+
+- (void)testMediaControlsSourceNeedsNonEmptySourceList {
+    NSArray *controls = [HAEntity mediaControlsForState:@"on" supportedFeatures:kReporterTVFeatures
+                                             attributes:@{@"source_list": @[]}];
+    XCTAssertFalse([controls containsObject:HAMediaControlSelectSource]);
+    controls = [HAEntity mediaControlsForState:@"on" supportedFeatures:kReporterTVFeatures & ~HAMediaPlayerFeatureSelectSource
+                                    attributes:[self tvAttributes]];
+    XCTAssertFalse([controls containsObject:HAMediaControlSelectSource]);
+}
+
+- (void)testMediaControlsFullFeaturedSpeakerPlaying {
+    NSArray *controls = [HAEntity mediaControlsForState:@"playing" supportedFeatures:kFullSpeakerFeatures
+                                             attributes:@{@"source_list": @[@"Spotify", @"AirPlay"]}];
+    NSArray *expected = @[HAMediaControlTurnOff, HAMediaControlShuffle, HAMediaControlPreviousTrack, HAMediaControlPause,
+                          HAMediaControlNextTrack, HAMediaControlRepeat, HAMediaControlVolumeMute, HAMediaControlVolumeSet,
+                          HAMediaControlSelectSource];
+    XCTAssertEqualObjects(controls, expected);
+}
+
+- (void)testMediaControlsSpeakerPausedAndIdle {
+    NSArray *paused = [HAEntity mediaControlsForState:@"paused" supportedFeatures:kFullSpeakerFeatures attributes:@{}];
+    XCTAssertTrue([paused containsObject:HAMediaControlPlay]);
+    XCTAssertFalse([paused containsObject:HAMediaControlPause]);
+    XCTAssertTrue([paused containsObject:HAMediaControlShuffle]);
+
+    // Idle: play, but no previous/next/shuffle/repeat (HA gates those on playing/paused).
+    NSArray *idle = [HAEntity mediaControlsForState:@"idle" supportedFeatures:kFullSpeakerFeatures attributes:@{}];
+    NSArray *expected = @[HAMediaControlTurnOff, HAMediaControlPlay, HAMediaControlVolumeMute, HAMediaControlVolumeSet];
+    XCTAssertEqualObjects(idle, expected);
+}
+
+- (void)testMediaControlsPlayingWithStopButNoPauseShowsStop {
+    NSInteger features = HAMediaPlayerFeatureStop | HAMediaPlayerFeaturePlay;
+    NSArray *controls = [HAEntity mediaControlsForState:@"playing" supportedFeatures:features attributes:@{}];
+    XCTAssertEqualObjects(controls, @[HAMediaControlStop]);
+}
+
+- (void)testMediaControlsWithoutTurnOnOffHaveNoPower {
+    NSInteger features = kFullSpeakerFeatures & ~(HAMediaPlayerFeatureTurnOn | HAMediaPlayerFeatureTurnOff);
+    XCTAssertEqualObjects([HAEntity mediaControlsForState:@"off" supportedFeatures:features attributes:@{}], @[]);
+    NSArray *playing = [HAEntity mediaControlsForState:@"playing" supportedFeatures:features attributes:@{}];
+    XCTAssertFalse([playing containsObject:HAMediaControlTurnOn]);
+    XCTAssertFalse([playing containsObject:HAMediaControlTurnOff]);
+    XCTAssertTrue([playing containsObject:HAMediaControlPause]);
+}
+
+- (void)testMediaControlsTurnOffOnlyPlayerOffShowsNothing {
+    XCTAssertEqualObjects([HAEntity mediaControlsForState:@"off" supportedFeatures:HAMediaPlayerFeatureTurnOff attributes:@{}], @[]);
+}
+
+- (void)testMediaControlsAssumedStateKeepsControlsWhileOff {
+    NSInteger features = HAMediaPlayerFeatureTurnOn | HAMediaPlayerFeatureTurnOff | HAMediaPlayerFeaturePlay |
+                         HAMediaPlayerFeaturePause | HAMediaPlayerFeatureVolumeStep;
+    NSArray *controls = [HAEntity mediaControlsForState:@"off" supportedFeatures:features attributes:@{@"assumed_state": @YES}];
+    NSArray *expected = @[HAMediaControlTurnOn, HAMediaControlTurnOff, HAMediaControlPlay, HAMediaControlPause,
+                          HAMediaControlVolumeDown, HAMediaControlVolumeUp];
+    XCTAssertEqualObjects(controls, expected);
+}
+
+#pragma mark - Media player card (#24)
+
+- (HAMediaPlayerEntityCell *)mediaCellForEntity:(HAEntity *)entity {
+    CGFloat height = [HAMediaPlayerEntityCell preferredHeightForEntity:entity];
+    HAMediaPlayerEntityCell *cell = [[HAMediaPlayerEntityCell alloc] initWithFrame:CGRectMake(0, 0, 320, height)];
+    HADashboardConfigItem *item = [HASnapshotTestHelpers itemWithEntityId:entity.entityId cardType:@"media-control"
+                                                              columnSpan:12 headingIcon:nil displayName:nil];
+    [cell configureWithEntity:entity configItem:item];
+    [cell layoutIfNeeded];
+    return cell;
+}
+
+/// YES when the view and all its ancestors up to (not including) `root` are visible.
+- (BOOL)isViewShown:(UIView *)view inRoot:(UIView *)root {
+    for (UIView *v = view; v && v != root; v = v.superview) {
+        if (v.hidden || v.alpha <= 0.01) return NO;
+    }
+    return YES;
+}
+
+/// Lowest maxY of any shown descendant control, in the cell's coordinates.
+- (CGFloat)maxShownControlYInCell:(UIView *)cell {
+    CGFloat maxY = 0;
+    NSMutableArray<UIView *> *queue = [NSMutableArray arrayWithObject:cell];
+    while (queue.count > 0) {
+        UIView *v = queue.firstObject;
+        [queue removeObjectAtIndex:0];
+        [queue addObjectsFromArray:v.subviews];
+        if (![v isKindOfClass:[UIControl class]] && ![v isKindOfClass:[UILabel class]]) continue;
+        if (![self isViewShown:v inRoot:cell]) continue;
+        if ([v isKindOfClass:[UILabel class]] && ((UILabel *)v).text.length == 0) continue;
+        if ([v isKindOfClass:[UILabel class]] && [v.superview isKindOfClass:[UIButton class]]) continue;
+        // The volume slider keeps its ~31pt intrinsic height centred on the
+        // 28pt volume row; its track is centred, so its frame overhang isn't content.
+        if (v == [cell valueForKey:@"volumeSlider"]) continue;
+        maxY = MAX(maxY, CGRectGetMaxY([v convertRect:v.bounds toView:cell]));
+    }
+    return maxY;
+}
+
+- (void)testMediaCardReporterTVOffShowsPowerOnly {
+    HAEntity *tv = [HASnapshotTestHelpers mediaPlayerTVOff];
+    HAMediaPlayerEntityCell *cell = [self mediaCellForEntity:tv];
+
+    UIButton *power = [cell valueForKey:@"powerButton"];
+    XCTAssertTrue([self isViewShown:power inRoot:cell]);
+    XCTAssertEqualObjects(power.accessibilityLabel, @"Turn on");
+    XCTAssertEqualObjects([power attributedTitleForState:UIControlStateNormal].string,
+                          [HAIconMapper glyphForIconName:@"power-standby"]);
+    for (NSString *key in @[@"prevButton", @"playPauseButton", @"nextButton", @"muteButton", @"volumeSlider",
+                            @"sourceButton", @"shuffleButton", @"repeatButton", @"progressSlider"]) {
+        XCTAssertFalse([self isViewShown:[cell valueForKey:key] inRoot:cell], @"%@ should be hidden while off", key);
+    }
+    XCTAssertTrue([self isViewShown:[cell valueForKey:@"moreInfoButton"] inRoot:cell]);
+}
+
+- (void)testMediaCardReporterTVOnShowsStepVolumeAndNoSlider {
+    HAMediaPlayerEntityCell *cell = [self mediaCellForEntity:[HASnapshotTestHelpers mediaPlayerTVOn]];
+    for (NSString *key in @[@"powerButton", @"playPauseButton", @"muteButton", @"volumeDownButton", @"volumeUpButton", @"sourceButton"]) {
+        XCTAssertTrue([self isViewShown:[cell valueForKey:key] inRoot:cell], @"%@ should be shown", key);
+    }
+    for (NSString *key in @[@"prevButton", @"nextButton", @"volumeSlider", @"shuffleButton", @"repeatButton"]) {
+        XCTAssertFalse([self isViewShown:[cell valueForKey:key] inRoot:cell], @"%@ should be hidden", key);
+    }
+    XCTAssertEqualObjects(((UIButton *)[cell valueForKey:@"powerButton"]).accessibilityLabel, @"Turn off");
+}
+
+- (void)testMediaCardHeightFitsContentForEveryState {
+    NSArray<HAEntity *> *entities = @[
+        [HASnapshotTestHelpers mediaPlayerTVOff], [HASnapshotTestHelpers mediaPlayerTVOn],
+        [HASnapshotTestHelpers mediaPlayerSpeakerFullPlaying], [HASnapshotTestHelpers mediaPlayerScFull],
+        [HASnapshotTestHelpers mediaPlayerScIdle], [HASnapshotTestHelpers mediaPlayerScOff],
+        [HASnapshotTestHelpers mediaPlayerScNoSource],
+        [HASnapshotTestHelpers entityWithId:@"media_player.gone" state:@"unavailable" attributes:@{@"supported_features": @(kReporterTVFeatures)}],
+    ];
+    for (HAEntity *entity in entities) {
+        HAMediaPlayerEntityCell *cell = [self mediaCellForEntity:entity];
+        // The 48pt header (padding + icon circle) is always there.
+        CGFloat contentBottom = MAX([self maxShownControlYInCell:cell], 48.0);
+        CGFloat height = cell.bounds.size.height;
+        // Last shown control ends one padding (12pt) above the bottom edge — no clipping, no blank band.
+        XCTAssertEqualWithAccuracy(height - contentBottom, 12.0, 1.5, @"%@ (%@): height %.1f, content bottom %.1f",
+                                   entity.entityId, entity.state, height, contentBottom);
+    }
+    XCTAssertLessThan([HAMediaPlayerEntityCell preferredHeightForEntity:[HASnapshotTestHelpers mediaPlayerTVOff]],
+                      [HAMediaPlayerEntityCell preferredHeightForEntity:[HASnapshotTestHelpers mediaPlayerTVOn]]);
+}
+
+- (void)testMediaCardReconfigureFromOnToOffCollapsesRows {
+    HAEntity *tv = [HASnapshotTestHelpers mediaPlayerTVOn];
+    HAMediaPlayerEntityCell *cell = [self mediaCellForEntity:tv];
+    XCTAssertTrue([self isViewShown:[cell valueForKey:@"volumeDownButton"] inRoot:cell]);
+
+    HAEntity *off = [HASnapshotTestHelpers mediaPlayerTVOff];
+    cell.frame = CGRectMake(0, 0, 320, [HAMediaPlayerEntityCell preferredHeightForEntity:off]);
+    [cell configureWithEntity:off configItem:nil];
+    [cell layoutIfNeeded];
+    XCTAssertFalse([self isViewShown:[cell valueForKey:@"volumeDownButton"] inRoot:cell]);
+    XCTAssertEqualWithAccuracy(cell.bounds.size.height - MAX([self maxShownControlYInCell:cell], 48.0), 12.0, 1.5);
 }
 
 @end

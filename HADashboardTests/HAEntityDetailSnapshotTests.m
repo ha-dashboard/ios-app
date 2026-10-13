@@ -5,6 +5,8 @@
 #import "HAAttributeRowView.h"
 #import "HAEntity.h"
 #import "HATheme.h"
+#import "HAIconMapper.h"
+#import <CoreText/CoreText.h>
 
 /// Standard width for detail section snapshots (matches bottom sheet content area).
 static const CGFloat kDetailSectionWidth = 320.0;
@@ -166,6 +168,60 @@ static const CGFloat kDetailSectionWidth = 320.0;
     HAEntity *entity = [HASnapshotTestHelpers mediaPlayerOff];
     UIView *view = [self sectionViewForEntity:entity];
     [self verifyView:view identifier:@"mediaPlayerSectionOff"];
+}
+
+/// Issue #24: the power button was titled U+23FB, which older iOS fonts don't
+/// cover, so it drew as an empty box. It must use a glyph the bundled MDI
+/// font actually contains, and draw visible ink.
+- (void)testMediaPlayerSectionPowerButtonRendersGlyph {
+    HAEntity *tv = [HASnapshotTestHelpers mediaPlayerTVOff];
+    HADetailServiceBlock noopBlock = ^(NSString *s, NSString *d, NSDictionary *data, NSString *eid) {};
+    id<HAEntityDetailSection> section = [HAEntityDetailSectionFactory sectionForEntity:tv serviceBlock:noopBlock];
+    UIView *view = [section viewForEntity:tv];
+    view.frame = CGRectMake(0, 0, kDetailSectionWidth, [section preferredHeight]);
+    [view layoutIfNeeded];
+
+    UIButton *power = [(NSObject *)section valueForKey:@"powerButton"];
+    XCTAssertNotNil(power, @"TURN_ON/TURN_OFF player must get a power button");
+    XCTAssertFalse(power.hidden);
+    XCTAssertTrue(power.enabled, @"TURN_ON is supported, so power is usable while off");
+    XCTAssertEqualObjects(power.accessibilityLabel, @"Turn on");
+
+    NSAttributedString *title = [power attributedTitleForState:UIControlStateNormal];
+    XCTAssertEqualObjects(title.string, [HAIconMapper glyphForIconName:@"power-standby"]);
+    XCTAssertFalse([title.string containsString:@"\u23FB"]);
+    UIFont *font = [title attribute:NSFontAttributeName atIndex:0 effectiveRange:NULL];
+    XCTAssertEqualObjects(font.fontName, [HAIconMapper mdiFontName]);
+
+    // The MDI font has a real glyph for it (MDI codepoints are outside the BMP: a surrogate pair).
+    unichar chars[2] = {0, 0};
+    CGGlyph glyphs[2] = {0, 0};
+    XCTAssertEqual(title.string.length, 2u);
+    [title.string getCharacters:chars range:NSMakeRange(0, title.string.length)];
+    XCTAssertTrue(CTFontGetGlyphsForCharacters((__bridge CTFontRef)font, chars, glyphs, (CFIndex)title.string.length));
+    XCTAssertNotEqual(glyphs[0], 0);
+
+    // And it draws ink.
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(40, 40), NO, 1);
+    [title drawAtPoint:CGPointMake(4, 4)];
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    CFDataRef data = CGDataProviderCopyData(CGImageGetDataProvider(image.CGImage));
+    const UInt8 *px = CFDataGetBytePtr(data);
+    size_t bytesPerRow = CGImageGetBytesPerRow(image.CGImage);
+    NSUInteger ink = 0;
+    for (size_t y = 0; y < CGImageGetHeight(image.CGImage); y++) {
+        for (size_t x = 0; x < CGImageGetWidth(image.CGImage); x++) {
+            if (px[y * bytesPerRow + x * 4 + 3] > 0) ink++;
+        }
+    }
+    CFRelease(data);
+    XCTAssertGreaterThan(ink, 40u, @"power glyph should draw visible pixels");
+}
+
+- (void)testMediaPlayerSectionTVOff {
+    UIView *view = [self sectionViewForEntity:[HASnapshotTestHelpers mediaPlayerTVOff]];
+    [self verifyView:view identifier:@"mediaPlayerSectionTVOff"];
 }
 
 #pragma mark - Fan Section

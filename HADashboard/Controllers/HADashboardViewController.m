@@ -84,6 +84,11 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 @property (nonatomic, strong) CAGradientLayer *backgroundGradient;
 @property (nonatomic, strong) HABottomSheetTransitioningDelegate *bottomSheetDelegate;
 @property (nonatomic, strong) UILongPressGestureRecognizer *longPressGesture;
+/// Media player card heights last handed to the layout, by entity ID. The
+/// card's height depends on the player's state (#24), so an update that
+/// changes it must invalidate the layout, not just reconfigure the cell.
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *mediaPlayerLayoutHeights;
+@property (nonatomic, assign) BOOL needsLayoutInvalidationOnFlush;
 @property (nonatomic, strong) UITapGestureRecognizer *doubleTapGesture;
 @property (nonatomic, assign) CGPoint lastTapPoint;
 @property (nonatomic, strong) HASkeletonView *skeletonView;
@@ -803,13 +808,30 @@ static const CGFloat kRowUnitHeight = 56.0;
     HADashboardConfigItem *item = [self itemAtIndexPath:indexPath];
     HADashboardConfigSection *section = [self sectionAtIndex:indexPath.section];
     HAEntity *entity = [[HAConnectionManager sharedManager] entityForId:item.entityId];
-    return [[self class] heightForItem:item entity:entity section:section itemWidth:itemWidth];
+    BOOL usedMediaPlayerHeight = NO;
+    CGFloat height = [[self class] heightForItem:item entity:entity section:section itemWidth:itemWidth
+                           usedMediaPlayerHeight:&usedMediaPlayerHeight];
+    // Media player cards change height with state; remember what was laid out so
+    // -entityDidUpdate: can invalidate the layout when it changes.
+    if (usedMediaPlayerHeight && entity.entityId) {
+        if (!self.mediaPlayerLayoutHeights) self.mediaPlayerLayoutHeights = [NSMutableDictionary dictionary];
+        self.mediaPlayerLayoutHeights[entity.entityId] = @([HAMediaPlayerEntityCell preferredHeightForEntity:entity]);
+    }
+    return height;
 }
 
 + (CGFloat)heightForItem:(HADashboardConfigItem *)item
                   entity:(HAEntity *)entity
                  section:(HADashboardConfigSection *)section
                itemWidth:(CGFloat)itemWidth {
+    return [self heightForItem:item entity:entity section:section itemWidth:itemWidth usedMediaPlayerHeight:NULL];
+}
+
++ (CGFloat)heightForItem:(HADashboardConfigItem *)item
+                  entity:(HAEntity *)entity
+                 section:(HADashboardConfigSection *)section
+               itemWidth:(CGFloat)itemWidth
+   usedMediaPlayerHeight:(BOOL *)usedMediaPlayerHeight {
     // Extra height for items that have a heading above the card
     BOOL hasHeading = (item.customProperties[@"headingIcon"] != nil && item.displayName.length > 0);
     CGFloat headingExtra = hasHeading ? [HABaseEntityCell headingHeight] : 0;
@@ -889,7 +911,8 @@ static const CGFloat kRowUnitHeight = 56.0;
         // Domain-based fallback for non-tile light cards (tiles are sized above).
         height = [HALightEntityCell preferredHeightForEntity:entity configItem:item] + headingExtra;
     } else if ([[entity domain] isEqualToString:HAEntityDomainMediaPlayer]) {
-        height = [HAMediaPlayerEntityCell preferredHeight] + headingExtra;
+        height = [HAMediaPlayerEntityCell preferredHeightForEntity:entity] + headingExtra;
+        if (usedMediaPlayerHeight) *usedMediaPlayerHeight = YES;
     } else if ([item.cardType isEqualToString:@"logbook"]) {
         NSInteger hours = 24;
         if ([item.customProperties[@"hours_to_show"] isKindOfClass:[NSNumber class]]) {
@@ -2775,6 +2798,12 @@ isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
     // while the next HTTP image fetch completes.
     if ([[entity domain] isEqualToString:HAEntityDomainCamera]) return;
 
+    // Media player cards change height with state (e.g. off shows only power).
+    NSNumber *laidOutHeight = self.mediaPlayerLayoutHeights[entity.entityId];
+    if (laidOutHeight && fabs([laidOutHeight doubleValue] - [HAMediaPlayerEntityCell preferredHeightForEntity:entity]) > 0.5) {
+        self.needsLayoutInvalidationOnFlush = YES;
+    }
+
     // If this entity is used in a visibility condition, the update may add/remove
     // items from the collection view — trigger a full rebuild instead of cell reload.
     if ([self entityUsedInVisibilityConditions:entity.entityId]) {
@@ -2848,6 +2877,11 @@ isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)flushPendingReloads {
     [self flushPendingHeaderReloads];
+    // Before the visible-cells early exit: an off-screen card's height still matters.
+    if (self.needsLayoutInvalidationOnFlush) {
+        self.needsLayoutInvalidationOnFlush = NO;
+        [self.collectionView.collectionViewLayout invalidateLayout];
+    }
     if (self.pendingReloadPaths.count == 0) return;
 
     // Take a snapshot and clear before iterating

@@ -2,7 +2,9 @@
 
 @interface HAMediaPlayerEntityCell : HABaseEntityCell
 
-/// Returns the preferred height for the media player cell card area (excludes heading).
-+ (CGFloat)preferredHeight;
+/// Preferred card height (excludes heading) for the entity's current state:
+/// rows of controls the player doesn't offer right now (e.g. everything but
+/// power while off) are collapsed, so the height depends on state.
++ (CGFloat)preferredHeightForEntity:(HAEntity *)entity;
 
 @end

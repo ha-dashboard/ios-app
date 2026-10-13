@@ -233,6 +233,11 @@
 + (HAEntity *)mediaPlayerScIdle;
 + (HAEntity *)mediaPlayerScOff;
 + (HAEntity *)mediaPlayerScNoSource;
+/// Issue #24: the reporter's Sony TV (supported_features 150969), off and on,
+/// and a full-featured speaker (shuffle/repeat/volume set/seek) playing.
++ (HAEntity *)mediaPlayerTVOff;
++ (HAEntity *)mediaPlayerTVOn;
++ (HAEntity *)mediaPlayerSpeakerFullPlaying;
 
 #pragma mark - Showcase: Alarm (7 variants)
 
