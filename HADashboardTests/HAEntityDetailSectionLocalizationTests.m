@@ -230,4 +230,28 @@
     XCTAssertNil([[HAStateLocalizer sharedLocalizer] localizedAttributeNameForDomain:@"climate" attr:@"aux_heat"]);
 }
 
+#pragma mark - media_player state text (#24 follow-up)
+
+- (HAEntity *)offTV {
+    return [HASnapshotTestHelpers entityWithId:@"media_player.sony_tv"
+                                         state:@"off"
+                                    attributes:@{@"friendly_name": @"Sony TV", @"device_class": @"tv",
+                                                 @"supported_features": @150969}];
+}
+
+- (void)testMediaPlayerOffStateUsesHATranslation {
+    [[HAStateLocalizer sharedLocalizer] test_setResources:@{@"component.media_player.entity_component._.state.off": @"Éteint"}
+                                             languageCode:@"fr"];
+    UIView *view = [self buildDetailViewForEntity:[self offTV]];
+    XCTAssertTrue([self viewHierarchy:view containsTextMatching:@"Éteint"],
+                  @"An idle media player's detail sheet must show HA's translated state");
+}
+
+- (void)testMediaPlayerOffStateIsNotRawWithNoLiveData {
+    UIView *view = [self buildDetailViewForEntity:[self offTV]];
+    XCTAssertFalse([self viewHierarchy:view containsTextMatching:@"off"],
+                   @"The detail sheet must not show the raw lowercase state");
+    XCTAssertTrue([self viewHierarchy:view containsTextMatching:@"Off"]);
+}
+
 @end
