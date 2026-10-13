@@ -201,3 +201,145 @@
 }
 
 @end
+
+// -----------------------------------------------------------------------
+// State-dependent item heights: a light's or media player's card height
+// follows its state, so an entity update that changes it must invalidate
+// the layout exactly once — and an update that doesn't must not.
+// -----------------------------------------------------------------------
+
+@interface HADashboardViewController (HeightRelayoutTestAccess)
+@property (nonatomic, strong) NSMutableDictionary<NSIndexPath *, NSArray<NSNumber *> *> *stateDependentItemHeights;
+- (void)entityDidUpdate:(NSNotification *)notification;
+- (void)flushPendingReloads;
+- (void)invalidateLayoutForStateDependentHeights;
+@end
+
+@interface HACountingDashboardViewController : HADashboardViewController
+@property (nonatomic, assign) NSInteger heightInvalidations;
+@end
+
+@implementation HACountingDashboardViewController
+- (void)invalidateLayoutForStateDependentHeights {
+    self.heightInvalidations++;
+    [super invalidateLayoutForStateDependentHeights];
+}
+@end
+
+@interface HAStateDependentHeightRelayoutTests : XCTestCase
+@property (nonatomic, strong) HACountingDashboardViewController *dashVC;
+@property (nonatomic, strong) UIWindow *window;
+@end
+
+@implementation HAStateDependentHeightRelayoutTests
+
+- (HAEntity *)storeEntity:(NSString *)entityId state:(NSString *)state attributes:(NSDictionary *)attributes {
+    HAEntity *entity = [[HAEntity alloc] initWithDictionary:@{
+        @"entity_id": entityId, @"state": state, @"attributes": attributes,
+        @"last_changed": @"2026-10-13T08:00:00Z", @"last_updated": @"2026-10-13T08:00:00Z"}];
+    [HAConnectionManager sharedManager].entityStore[entityId] = entity;
+    return entity;
+}
+
+- (HAEntity *)lightWithState:(NSString *)state {
+    return [self storeEntity:@"light.kitchen" state:state attributes:@{
+        @"friendly_name": @"Kitchen", @"brightness": @200,
+        @"supported_color_modes": @[@"brightness"], @"color_mode": @"brightness"}];
+}
+
+- (HAEntity *)tvWithState:(NSString *)state {
+    return [self storeEntity:@"media_player.tv" state:state attributes:@{
+        @"friendly_name": @"TV", @"supported_features": @150969, @"source_list": @[@"HDMI 1"]}];
+}
+
+- (void)setUp {
+    [super setUp];
+    [[HAConnectionManager sharedManager] clearEntityStore];
+    [self lightWithState:@"on"];
+    [self tvWithState:@"off"];
+
+    self.dashVC = [[HACountingDashboardViewController alloc] init];
+    [self.dashVC loadViewIfNeeded];
+    self.window = [[UIWindow alloc] initWithFrame:CGRectMake(0, 0, 1024, 768)];
+    self.window.rootViewController = [[UINavigationController alloc] initWithRootViewController:self.dashVC];
+    [self.window makeKeyAndVisible];
+
+    NSDictionary *config = @{@"views": @[@{@"title": @"Home", @"cards": @[
+        @{@"type": @"light", @"entity": @"light.kitchen"},
+        @{@"type": @"media-control", @"entity": @"media_player.tv"},
+    ]}]};
+    self.dashVC.statesLoaded = YES;
+    self.dashVC.lovelaceLoaded = YES;
+    self.dashVC.lovelaceFetchDone = YES;
+    self.dashVC.lovelaceDashboard = [HALovelaceParser parseDashboardFromDictionary:config];
+    [self.dashVC rebuildDashboard];
+    [self layOut];
+    self.dashVC.heightInvalidations = 0;
+}
+
+- (void)tearDown {
+    self.window.hidden = YES;
+    self.window = nil;
+    self.dashVC = nil;
+    [[HAConnectionManager sharedManager] clearEntityStore];
+    [super tearDown];
+}
+
+- (void)layOut {
+    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    [self.dashVC.collectionView layoutIfNeeded];
+}
+
+- (void)deliverUpdate:(HAEntity *)entity {
+    [self.dashVC entityDidUpdate:[NSNotification notificationWithName:HAConnectionManagerEntityDidUpdateNotification
+                                                                object:nil userInfo:@{@"entity": entity}]];
+    [self.dashVC flushPendingReloads];
+    [self layOut];
+}
+
+- (void)testStateDependentHeightsAreRecorded {
+    XCTAssertGreaterThanOrEqual(self.dashVC.stateDependentItemHeights.count, 2u,
+                                @"light and media player items must record their laid-out height");
+}
+
+- (void)testLightHeightChangeInvalidatesLayoutOnce {
+    [self deliverUpdate:[self lightWithState:@"off"]];
+    XCTAssertEqual(self.dashVC.heightInvalidations, 1, @"on → off shrinks the light card");
+
+    // Same state again: height unchanged, no further invalidation.
+    [self deliverUpdate:[self lightWithState:@"off"]];
+    XCTAssertEqual(self.dashVC.heightInvalidations, 1);
+
+    [self deliverUpdate:[self lightWithState:@"on"]];
+    XCTAssertEqual(self.dashVC.heightInvalidations, 2);
+}
+
+- (void)testMediaPlayerHeightChangeInvalidatesLayoutOnce {
+    [self deliverUpdate:[self tvWithState:@"on"]];
+    XCTAssertEqual(self.dashVC.heightInvalidations, 1, @"off → on adds the TV's control rows");
+
+    [self deliverUpdate:[self tvWithState:@"on"]];
+    XCTAssertEqual(self.dashVC.heightInvalidations, 1);
+}
+
+- (void)testUnchangedHeightDoesNotInvalidate {
+    // Brightness changes don't change the light card's rows.
+    [self storeEntity:@"light.kitchen" state:@"on" attributes:@{
+        @"friendly_name": @"Kitchen", @"brightness": @20,
+        @"supported_color_modes": @[@"brightness"], @"color_mode": @"brightness"}];
+    [self deliverUpdate:[[HAConnectionManager sharedManager] entityForId:@"light.kitchen"]];
+    XCTAssertEqual(self.dashVC.heightInvalidations, 0);
+}
+
+- (void)testTwoChangesInOneFlushInvalidateOnce {
+    HAEntity *light = [self lightWithState:@"off"];
+    HAEntity *tv = [self tvWithState:@"on"];
+    for (HAEntity *e in @[light, tv]) {
+        [self.dashVC entityDidUpdate:[NSNotification notificationWithName:HAConnectionManagerEntityDidUpdateNotification
+                                                                    object:nil userInfo:@{@"entity": e}]];
+    }
+    [self.dashVC flushPendingReloads];
+    XCTAssertEqual(self.dashVC.heightInvalidations, 1, @"coalesced into one layout invalidation");
+}
+
+@end
