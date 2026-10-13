@@ -83,6 +83,11 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
 @property (nonatomic, strong) CAGradientLayer *backgroundGradient;
 @property (nonatomic, strong) HABottomSheetTransitioningDelegate *bottomSheetDelegate;
 @property (nonatomic, strong) UILongPressGestureRecognizer *longPressGesture;
+/// Media player card heights last handed to the layout, by entity ID. The
+/// card's height depends on the player's state (#24), so an update that
+/// changes it must invalidate the layout, not just reconfigure the cell.
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *mediaPlayerLayoutHeights;
+@property (nonatomic, assign) BOOL needsLayoutInvalidationOnFlush;
 @property (nonatomic, strong) UITapGestureRecognizer *doubleTapGesture;
 @property (nonatomic, assign) CGPoint lastTapPoint;
 @property (nonatomic, strong) HASkeletonView *skeletonView;
@@ -872,7 +877,12 @@ static const CGFloat kRowUnitHeight = 56.0;
         // cardType-specific checks (tile, logbook).
         height = [HALightEntityCell preferredHeightForEntity:entity configItem:item] + headingExtra;
     } else if ([[entity domain] isEqualToString:HAEntityDomainMediaPlayer]) {
-        height = [HAMediaPlayerEntityCell preferredHeight] + headingExtra;
+        CGFloat mediaHeight = [HAMediaPlayerEntityCell preferredHeightForEntity:entity];
+        if (entity.entityId) {
+            if (!self.mediaPlayerLayoutHeights) self.mediaPlayerLayoutHeights = [NSMutableDictionary dictionary];
+            self.mediaPlayerLayoutHeights[entity.entityId] = @(mediaHeight);
+        }
+        height = mediaHeight + headingExtra;
     } else if ([item.cardType isEqualToString:@"tile"]) {
         BOOL isCompact = [item.customProperties[@"compact"] boolValue];
         height = (isCompact ? [HATileEntityCell compactHeight] : [HATileEntityCell preferredHeightForConfigItem:item]) + headingExtra;
@@ -2508,6 +2518,12 @@ heightForHeaderInSection:(NSInteger)section {
     // while the next HTTP image fetch completes.
     if ([[entity domain] isEqualToString:HAEntityDomainCamera]) return;
 
+    // Media player cards change height with state (e.g. off shows only power).
+    NSNumber *laidOutHeight = self.mediaPlayerLayoutHeights[entity.entityId];
+    if (laidOutHeight && fabs([laidOutHeight doubleValue] - [HAMediaPlayerEntityCell preferredHeightForEntity:entity]) > 0.5) {
+        self.needsLayoutInvalidationOnFlush = YES;
+    }
+
     // If this entity is used in a visibility condition, the update may add/remove
     // items from the collection view — trigger a full rebuild instead of cell reload.
     if ([self entityUsedInVisibilityConditions:entity.entityId]) {
@@ -2560,6 +2576,11 @@ heightForHeaderInSection:(NSInteger)section {
 }
 
 - (void)flushPendingReloads {
+    // Before the visible-cells early exit: an off-screen card's height still matters.
+    if (self.needsLayoutInvalidationOnFlush) {
+        self.needsLayoutInvalidationOnFlush = NO;
+        [self.collectionView.collectionViewLayout invalidateLayout];
+    }
     if (self.pendingReloadPaths.count == 0) return;
 
     // Take a snapshot and clear before iterating
