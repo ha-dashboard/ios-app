@@ -15,8 +15,9 @@ NSString *const HAHeadingTapActionKey = @"headingTapAction";
 
 #pragma mark - Sections grid helpers
 
-/// Columns in one sections-view section's card grid (hui-grid-section
-/// --base-column-count). HA spans a card over min(columns, grid width), so
+/// Card-grid columns per view column in a sections-view section
+/// (hui-grid-section --base-column-count): a section with column_span N has a
+/// 12 × N column grid. HA spans a card over min(columns, grid width), so
 /// anything wider — e.g. "columns: 33" — fills the section.
 static const NSInteger kHASectionGridColumns = 12;
 
@@ -89,10 +90,13 @@ static NSInteger HACardFeatureRows(NSUInteger featureCount, NSString *position) 
                         [allCards addObjectsFromArray:sectionCards];
 
                         NSString *sectionIcon = HASafeDictStringOrNil(section, @"icon");
+                        // HA DEFAULT_SECTION_COLUMN_SPAN is 1
+                        NSInteger columnSpan = MAX(1, HASafeDictInteger(section, @"column_span", 1));
                         [parsedSections addObject:@{
                             @"title": sectionTitle ?: @"",
                             @"icon": sectionIcon ?: @"",
-                            @"cards": sectionCards
+                            @"cards": sectionCards,
+                            @"column_span": @(columnSpan)
                         }];
                     }
                     view.rawSections = [parsedSections copy];
@@ -276,6 +280,13 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                 break; // only the first card can be the section header
             }
 
+            // The section's own card grid is 12 × column_span columns wide
+            // (hui-grid-section --grid-column-count); HA never spans a section
+            // over more view columns than max_columns allows.
+            NSInteger viewMaxColumns = (view.maxColumns > 0) ? view.maxColumns : 4; // HA DEFAULT_MAX_COLUMNS
+            NSInteger sectionColumnSpan = MIN(MAX(1, HASafeDictInteger(rawSection, @"column_span", 1)), viewMaxColumns);
+            NSInteger sectionGridColumns = kHASectionGridColumns * sectionColumnSpan;
+
             // Collect all items from all cards in this HA section into a single config section
             NSMutableArray<HADashboardConfigSection *> *cardSections = [NSMutableArray array];
             NSMutableArray<HADashboardConfigItem *> *cardItems = [NSMutableArray array];
@@ -286,7 +297,10 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                     if (cardIdx != titleHeadingIdx) {
                         NSInteger startSectionCount = cardSections.count;
                         NSInteger startItemCount = cardItems.count;
-                        [self _appendStandaloneHeadingForCard:card sections:cardSections allItems:cardItems];
+                        [self _appendStandaloneHeadingForCard:card
+                                                 columnSpan:sectionGridColumns
+                                                   sections:cardSections
+                                                   allItems:cardItems];
                         [self _applyVisibilityOfCard:card
                                           toSections:cardSections
                                     fromSectionIndex:startSectionCount
@@ -296,10 +310,9 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                     continue;
                 }
 
-                // Sections view: a non-zero sectionGridMax marks the card as sitting on a
-                // section's 12-column grid (no scaling — ours is 12 columns too), which
-                // turns on HA's per-card grid sizing (min/max clamps, clock rows).
-                NSInteger sectionGridMax = (view.maxColumns > 0) ? view.maxColumns : 4;
+                // Sections view: a non-zero sectionGridColumns marks the card as sitting on a
+                // section's 12 × column_span grid (12 columns per view column, like ours,
+                // so no scaling), which turns on HA's per-card grid sizing.
                 NSString *cardPath = [NSString stringWithFormat:@"%@/section[%lu]/card[%lu]",
                                        viewPathForLog, (unsigned long)sectionIdx, (unsigned long)cardIdx];
                 [self processCard:card
@@ -307,7 +320,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                       sectionIcon:nil
                           columns:config.columns
                       gridColumns:0
-                   sectionGridMax:sectionGridMax
+                   sectionGridColumns:sectionGridColumns
                          sections:cardSections
                          allItems:cardItems
                       nameContext:nameContext
@@ -318,6 +331,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             HADashboardConfigSection *columnSection = [[HADashboardConfigSection alloc] init];
             columnSection.title = haSectionTitle;
             columnSection.icon = haSectionIcon;
+            columnSection.columnSpan = sectionColumnSpan;
             if (titleHeadingIdx != NSNotFound) {
                 // The opening heading's badges and tap_action ride on the section header
                 NSDictionary *extras = [self _headingExtrasForCard:sectionCards[titleHeadingIdx]];
@@ -416,7 +430,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                   sectionIcon:card[@"icon"]
                       columns:config.columns
                   gridColumns:0
-               sectionGridMax:0
+               sectionGridColumns:0
                      sections:sections
                      allItems:allItems
                   nameContext:nameContext
@@ -571,6 +585,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
 /// one becomes the section header). Never used for headings nested in grid
 /// cards — those keep the embedded headingIcon mechanism (see CLAUDE.md).
 + (void)_appendStandaloneHeadingForCard:(NSDictionary *)card
+                             columnSpan:(NSInteger)columnSpan
                                sections:(NSMutableArray<HADashboardConfigSection *> *)sections
                                allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems {
     NSString *heading = HASafeDictStringOrNil(card, @"heading");
@@ -580,7 +595,8 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
 
     HADashboardConfigItem *headingItem = [[HADashboardConfigItem alloc] init];
     headingItem.cardType = @"heading";
-    headingItem.columnSpan = 12;
+    // hui-heading-card getGridOptions(): columns "full" — the whole section grid
+    headingItem.columnSpan = MAX(columnSpan, kHASectionGridColumns);
     headingItem.rowSpan = 1;
     headingItem.displayName = heading;
     NSMutableDictionary *props = [NSMutableDictionary dictionaryWithDictionary:extras];
@@ -623,14 +639,15 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
 
 /// Process a single Lovelace card into a config section with items.
 /// @param gridColumns If > 0, overrides the item's columnSpan (from a parent grid card's grid_options)
-/// @param sectionGridMax HA sections view max_columns (typically 4). > 0 marks a sections
-///        view, whose cards get HA's grid sizing; pass 0 for non-sections views.
+/// @param sectionGridColumns Columns of the HA section grid the card sits on (12 × the
+///        section's column_span). > 0 marks a sections view, whose cards get HA's grid
+///        sizing and may span up to this many columns ("full"); pass 0 for non-sections views.
 + (void)processCard:(NSDictionary *)card
        sectionTitle:(NSString *)sectionTitle
         sectionIcon:(NSString *)sectionIcon
             columns:(NSInteger)maxColumns
         gridColumns:(NSInteger)gridColumns
-     sectionGridMax:(NSInteger)sectionGridMax
+     sectionGridColumns:(NSInteger)sectionGridColumns
            sections:(NSMutableArray<HADashboardConfigSection *> *)sections
            allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems
         nameContext:(HAEntityNameRegistryContext *)nameContext
@@ -644,7 +661,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
            sectionIcon:sectionIcon
                columns:maxColumns
            gridColumns:gridColumns
-        sectionGridMax:sectionGridMax
+        sectionGridColumns:sectionGridColumns
               sections:sections
               allItems:allItems
            nameContext:nameContext
@@ -706,7 +723,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
          sectionIcon:(NSString *)sectionIcon
              columns:(NSInteger)maxColumns
          gridColumns:(NSInteger)gridColumns
-      sectionGridMax:(NSInteger)sectionGridMax
+      sectionGridColumns:(NSInteger)sectionGridColumns
             sections:(NSMutableArray<HADashboardConfigSection *> *)sections
             allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems
          nameContext:(HAEntityNameRegistryContext *)nameContext
@@ -782,7 +799,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                   sectionIcon:sectionIcon
                       columns:maxColumns
                   gridColumns:gridColumns
-               sectionGridMax:sectionGridMax
+               sectionGridColumns:sectionGridColumns
                      sections:innerSections
                      allItems:innerItems
                   nameContext:nameContext
@@ -805,15 +822,26 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             // "columns" on the grid card = number of columns in the grid layout.
             // Each child gets 12/columns sub-grid span (out of 12-column grid).
             NSInteger parentGridCols = gridColumns; // inherit from above if set
+            // The container's own width on the section grid: HA's default 12
+            // (stacks and grid cards have no getGridOptions()), or the whole
+            // section grid (12 × column_span) for "columns: full".
+            id containerColsValue = [self configGridOptionsForCard:card][@"columns"];
+            BOOL containerFull = sectionGridColumns > 0 && gridColumns <= 0 &&
+                                 [containerColsValue isKindOfClass:[NSString class]] &&
+                                 [[containerColsValue lowercaseString] isEqualToString:@"full"];
+            NSInteger containerWidth = containerFull ? sectionGridColumns : kHASectionGridColumns;
             NSInteger gridCardColumns = [card[@"columns"] integerValue];
             if (gridCardColumns > 1) {
-                parentGridCols = 12 / gridCardColumns; // e.g. columns:2 → each child gets 6
+                parentGridCols = MAX(1, containerWidth / gridCardColumns); // e.g. columns:2 → each child gets 6
+            } else if (containerFull) {
+                parentGridCols = sectionGridColumns; // a full-width stack's children fill the section
             }
-            // The container's own section width (grid_options, or legacy
-            // layout_options ×3). HA spans it over min(columns, 12), so an
+            // An explicit numeric width (grid_options, or legacy layout_options
+            // ×3). HA spans it over min(columns, section grid), so an
             // oversized value such as 33 fills the section.
-            NSInteger containerCols = HAGridIntegerValue([self configGridOptionsForCard:card][@"columns"]);
-            if (containerCols > 0) parentGridCols = MIN(containerCols, kHASectionGridColumns);
+            NSInteger containerCols = HAGridIntegerValue(containerColsValue);
+            NSInteger sectionGridLimit = sectionGridColumns > 0 ? sectionGridColumns : kHASectionGridColumns;
+            if (containerCols > 0) parentGridCols = MIN(containerCols, sectionGridLimit);
 
             // Check if first sub-card is a heading
             NSDictionary *first = subCards.firstObject;
@@ -888,7 +916,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                     contentCount++;
                 }
                 if (contentCount > 1) {
-                    parentGridCols = MAX(1, 12 / (NSInteger)contentCount);
+                    parentGridCols = MAX(1, containerWidth / (NSInteger)contentCount);
                 }
             }
 
@@ -911,7 +939,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                       sectionIcon:emitHeadingAsItem ? nil : gridIcon
                           columns:maxColumns
                       gridColumns:parentGridCols
-                   sectionGridMax:sectionGridMax
+                   sectionGridColumns:sectionGridColumns
                          sections:sections
                          allItems:allItems
                       nameContext:nameContext
@@ -969,7 +997,8 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             id colsValue = configGridOptions[@"columns"];
             if ([colsValue isKindOfClass:[NSString class]] &&
                 [[colsValue lowercaseString] isEqualToString:@"full"]) {
-                cardColumnSpan = kHASectionGridColumns;
+                // The whole section grid (12 × column_span in sections views)
+                cardColumnSpan = sectionGridColumns > 0 ? sectionGridColumns : kHASectionGridColumns;
             } else {
                 NSInteger cols = HAGridIntegerValue(colsValue);
                 if (cols > 0) cardColumnSpan = cols;
@@ -979,17 +1008,26 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
         NSInteger rows = HAGridIntegerValue(configGridOptions[@"rows"]);
         if (rows > 0) cardRowSpan = rows;
     }
-    // Default column span: HA sections view defaults tile/button/sensor to 6 (half-width,
-    // two per row). Other card types (including standalone gauge) default to 12 (full width).
-    // Gauge cards inside grid cards already have gridColumns set by the parent, so they
-    // don't reach this default — only standalone gauges do, which should be full width.
+    // Default column span. Sections views use the card type's own HA default
+    // (getGridOptions() columns: e.g. tile/sensor/entity 6, an icon-only button
+    // 3, map "full"); cards HA gives no default span 12 — one view column's
+    // width, so half of a column_span 2 section. Cards inside grid cards
+    // already have gridColumns set by the parent and don't reach this.
+    if (cardColumnSpan <= 0 && sectionGridColumns > 0) {
+        id haColumns = [self haGridOptionsForCard:card][@"columns"];
+        if ([haColumns isKindOfClass:[NSString class]]) {
+            cardColumnSpan = sectionGridColumns; // "full"
+        } else {
+            NSInteger cols = HAGridIntegerValue(haColumns);
+            cardColumnSpan = cols > 0 ? cols : kHASectionGridColumns;
+        }
+    }
+    // Masonry views: tile/button/sensor half width, everything else full.
     if (cardColumnSpan <= 0) {
         if ([cardType isEqualToString:@"tile"] ||
             [cardType isEqualToString:@"button"] ||
             [cardType isEqualToString:@"sensor"]) {
             cardColumnSpan = 6;
-        } else if ([cardType isEqualToString:@"clock"] && sectionGridMax > 0) {
-            cardColumnSpan = 6; // hui-clock-card getGridOptions: columns 6
         } else {
             cardColumnSpan = 12;
         }
@@ -1000,8 +1038,11 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
     // e.g. a tile with "columns: 4" renders at 6 (GitHub #25). Children of a
     // grid/stack card are sized by their parent there, not by their own
     // grid_options, and masonry views ignore grid_options altogether.
-    if (sectionGridMax > 0 && gridColumns <= 0) {
-        [self _clampSectionGridSizeForCard:card columnSpan:&cardColumnSpan rowSpan:&cardRowSpan];
+    if (sectionGridColumns > 0 && gridColumns <= 0) {
+        [self _clampSectionGridSizeForCard:card
+                               gridColumns:sectionGridColumns
+                                columnSpan:&cardColumnSpan
+                                   rowSpan:&cardRowSpan];
     }
 
     // HA built-in clock card: entity-less, rendered natively by HAClockCardCell.
@@ -1013,7 +1054,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                 sectionIcon:sectionIcon
                  columnSpan:cardColumnSpan
                     rowSpan:cardRowSpan
-             sectionGridMax:sectionGridMax
+             sectionGridColumns:sectionGridColumns
                    sections:sections
                    allItems:allItems];
         return;
@@ -1843,10 +1884,12 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
 }
 
 /// HA computeCardGridSize() for a card placed directly on a sections-view
-/// section grid: numeric columns clamp to [min_columns, max_columns] and then
-/// to the section's 12 columns; explicit rows clamp to [min_rows, max_rows].
-/// "full" columns and auto rows (0) are left alone.
+/// section grid of `gridColumns` columns (12 × column_span): numeric columns
+/// clamp to [min_columns, max_columns] and then to the section grid; explicit
+/// rows clamp to [min_rows, max_rows]. "full" columns and auto rows (0) are
+/// left alone.
 + (void)_clampSectionGridSizeForCard:(NSDictionary *)card
+                         gridColumns:(NSInteger)gridColumns
                           columnSpan:(NSInteger *)columnSpan
                              rowSpan:(NSInteger *)rowSpan {
     NSDictionary *merged = [self _mergedGridOptionsForCard:card];
@@ -1856,7 +1899,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
     if (!fullWidth && *columnSpan > 0) {
         *columnSpan = HAGridConditionalClamp(*columnSpan, merged[@"min_columns"], merged[@"max_columns"]);
     }
-    *columnSpan = MAX(1, MIN(*columnSpan, kHASectionGridColumns));
+    *columnSpan = MAX(1, MIN(*columnSpan, MAX(gridColumns, kHASectionGridColumns)));
     if (*rowSpan > 0) {
         *rowSpan = MAX(1, HAGridConditionalClamp(*rowSpan, merged[@"min_rows"], merged[@"max_rows"]));
     }
@@ -1872,7 +1915,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
           sectionIcon:(NSString *)sectionIcon
            columnSpan:(NSInteger)columnSpan
               rowSpan:(NSInteger)rowSpan
-       sectionGridMax:(NSInteger)sectionGridMax
+       sectionGridColumns:(NSInteger)sectionGridColumns
              sections:(NSMutableArray<HADashboardConfigSection *> *)sections
              allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems {
     NSMutableDictionary *props = [NSMutableDictionary dictionary];
@@ -1902,7 +1945,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
 
     item.columnSpan = columnSpan > 0 ? columnSpan : 12;
     item.rowSpan = rowSpan;
-    if (sectionGridMax > 0) {
+    if (sectionGridColumns > 0) {
         // The clock has no intrinsic height: in sections views it takes
         // hui-clock-card getGridOptions() rows when none are configured, and
         // always clamps them to [min_rows, max_rows] — also inside a grid

@@ -27,7 +27,7 @@ extern NSString *const HAUnsupportedCardTypeKey;
 @property (nonatomic, copy) NSString *path;
 @property (nonatomic, copy) NSString *icon;
 @property (nonatomic, strong) NSArray<NSDictionary *> *rawCards;
-/// HA 2024+ sections: array of @{@"title": NSString, @"cards": NSArray}
+/// HA 2024+ sections: array of @{@"title": NSString, @"icon": NSString, @"cards": NSArray, @"column_span": NSNumber (>= 1)}
 /// nil for classic (non-sections) views.
 @property (nonatomic, strong) NSArray<NSDictionary *> *rawSections;
 /// Maximum columns for sections layout (from HA view config "max_columns"). 0 = use default (4).

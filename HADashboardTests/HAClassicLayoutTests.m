@@ -19,6 +19,8 @@
 @property (nonatomic, strong) NSArray<NSNumber *> *itemHeights;  // height per item (flat)
 /// Sub-grid column span per item (flat); nil = every item spans 12
 @property (nonatomic, strong) NSArray<NSNumber *> *itemGridColumns;
+/// Columnar layout: column_span per section; nil = 1
+@property (nonatomic, strong) NSArray<NSNumber *> *sectionSpans;
 /// Leading full-width items (masonry, section 0) / sections (columnar)
 @property (nonatomic, assign) NSInteger fullWidthCount;
 @end
@@ -114,14 +116,31 @@ isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
     return section < self.fullWidthCount;
 }
 
+- (NSInteger)collectionView:(UICollectionView *)collectionView
+                     layout:(UICollectionViewLayout *)layout
+       columnSpanForSection:(NSInteger)section {
+    return section < (NSInteger)self.sectionSpans.count ? self.sectionSpans[section].integerValue : 1;
+}
+
 @end
 
 #pragma mark - Tests
 
 @interface HAClassicLayoutTests : XCTestCase
+@property (nonatomic, strong) NSMutableArray *retainedLayoutObjects;
 @end
 
 @implementation HAClassicLayoutTests
+
+- (void)setUp {
+    [super setUp];
+    self.retainedLayoutObjects = [NSMutableArray array];
+}
+
+- (void)tearDown {
+    self.retainedLayoutObjects = nil;
+    [super tearDown];
+}
 
 #pragma mark - Helpers
 
@@ -1318,45 +1337,192 @@ isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
 
     NSArray<HADashboardConfigItem *> *middle = config.sections[1].items;
     XCTAssertEqualObjects([middle valueForKey:@"cardType"], (@[@"clock", @"weather-forecast", @"weather-forecast"]));
-    XCTAssertEqualObjects([middle valueForKey:@"columnSpan"], (@[@12, @12, @12]),
-                          @"columns: 33 clamps to the full section width");
+    XCTAssertEqual(config.sections[1].columnSpan, 2);
+    XCTAssertEqualObjects([middle valueForKey:@"columnSpan"], (@[@24, @24, @24]),
+                          @"columns: 33 clamps to the span-2 section's full 24-column grid");
+    XCTAssertEqual(config.sections[0].columnSpan, 1);
+    XCTAssertEqual(config.sections[2].columnSpan, 1);
 
     XCTAssertEqualObjects([config.sections[2].items valueForKey:@"columnSpan"], (@[@6, @6]));
 }
 
-/// GitHub #25 at iPad landscape width: section 1's tiles sit side by side and
-/// the second ends at the column's right edge — no gap before section 2.
-- (void)testSectionsGrid_reporterView_columnarLayoutHasNoGap {
-    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:[self reporterSectionsView] columns:3];
+/// Lays a parsed sections config out in HAColumnarLayout with the dashboard's
+/// real geometry (HADashboardViewController -applyLayoutForSectionsView:).
+- (HAColumnarLayout *)columnarLayoutForConfig:(HADashboardConfig *)config
+                                   maxColumns:(NSInteger)maxColumns
+                                        width:(CGFloat)width {
     NSMutableArray<NSNumber *> *counts = [NSMutableArray array];
     NSMutableArray<NSNumber *> *spans = [NSMutableArray array];
+    NSMutableArray<NSNumber *> *sectionSpans = [NSMutableArray array];
     for (HADashboardConfigSection *section in config.sections) {
         [counts addObject:@(section.items.count)];
+        [sectionSpans addObject:@(MAX(section.columnSpan, 1))];
         for (HADashboardConfigItem *item in section.items) [spans addObject:@(item.columnSpan)];
     }
-
     HAColumnarLayout *layout = [[HAColumnarLayout alloc] init];
-    layout.contentInsets = UIEdgeInsetsMake(8, 8, 8, 8);
-    layout.interColumnSpacing = 8;
-    layout.interItemSpacing = 8;
-    layout.maxColumns = 4;
+    layout.contentInsets = UIEdgeInsetsMake(4, 8, 8, 8);
+    layout.interColumnSpacing = 6;
+    layout.interItemSpacing = 6;
+    layout.maxColumns = maxColumns;
     HALayoutTestDataSource *ds = [[HALayoutTestDataSource alloc] init];
     ds.sectionCount = (NSInteger)config.sections.count;
     ds.itemCounts = counts;
     ds.itemGridColumns = spans;
+    ds.sectionSpans = sectionSpans;
     layout.delegate = ds;
-    (void)[self collectionViewWithLayout:layout dataSource:ds width:1024 height:768];
+    UICollectionView *cv = [self collectionViewWithLayout:layout dataSource:ds width:width height:768];
+    // The layout's delegate and collection view are weak: keep both alive for the test.
+    [self.retainedLayoutObjects addObjectsFromArray:@[ds, cv]];
+    return layout;
+}
 
-    CGRect person = [layout layoutAttributesForItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:0]].frame;
-    CGRect sun = [layout layoutAttributesForItemAtIndexPath:[NSIndexPath indexPathForItem:1 inSection:0]].frame;
-    CGRect clock = [layout layoutAttributesForItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:1]].frame;
-    CGFloat columnRight = CGRectGetMinX(clock) - layout.interColumnSpacing;
+static CGRect HAItemFrame(HAColumnarLayout *layout, NSInteger section, NSInteger item) {
+    return [layout layoutAttributesForItemAtIndexPath:[NSIndexPath indexPathForItem:item inSection:section]].frame;
+}
 
-    XCTAssertEqualWithAccuracy(CGRectGetMinY(person), CGRectGetMinY(sun), 0.5, @"Both tiles share a row");
-    XCTAssertEqualWithAccuracy(CGRectGetWidth(person), CGRectGetWidth(sun), 0.5, @"Both tiles are half width");
-    XCTAssertEqualWithAccuracy(CGRectGetMaxX(sun), columnRight, 1.0, @"The second tile reaches the column edge");
-    XCTAssertEqualWithAccuracy(CGRectGetWidth(clock), CGRectGetWidth(
-        [layout layoutAttributesForItemAtIndexPath:[NSIndexPath indexPathForItem:1 inSection:1]].frame), 0.5);
+/// GitHub #25 at iPad landscape and portrait widths: four columns (the app's
+/// 180pt minimum column width allows 4 down to ~754pt), so the 1/2/1 spans
+/// fill one row as 1/4 + 1/2 + 1/4, and section 1's tiles fill their column.
+- (void)testSectionsGrid_reporterView_columnarLayoutAt1024And768 {
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:[self reporterSectionsView] columns:3];
+    for (NSNumber *widthValue in @[@1024, @768, @1366, @1180, @1133]) {
+        CGFloat width = widthValue.doubleValue;
+        HAColumnarLayout *layout = [self columnarLayoutForConfig:config maxColumns:4 width:width];
+        CGFloat column = floor((width - 16.0 - 3 * 6.0) / 4.0);
+
+        CGRect person = HAItemFrame(layout, 0, 0), sun = HAItemFrame(layout, 0, 1);
+        CGRect clock = HAItemFrame(layout, 1, 0), forecast = HAItemFrame(layout, 1, 2);
+        CGRect setting = HAItemFrame(layout, 2, 0), solene = HAItemFrame(layout, 2, 1);
+
+        XCTAssertEqualWithAccuracy(CGRectGetMinX(person), 8.0, 0.5, @"%@", widthValue);
+        XCTAssertEqualWithAccuracy(CGRectGetMinY(person), CGRectGetMinY(sun), 0.5, @"%@", widthValue);
+        XCTAssertEqualWithAccuracy(CGRectGetWidth(person), CGRectGetWidth(sun), 0.5, @"%@", widthValue);
+        XCTAssertEqualWithAccuracy(CGRectGetMaxX(sun), 8.0 + column, 1.0, @"Section 1 is one column wide at %@", widthValue);
+
+        XCTAssertEqualWithAccuracy(CGRectGetMinX(clock), 8.0 + column + 6.0, 0.5, @"%@", widthValue);
+        XCTAssertEqualWithAccuracy(CGRectGetWidth(clock), 2 * column + 6.0, 0.5, @"Section 2 spans two columns at %@", widthValue);
+        XCTAssertEqualWithAccuracy(CGRectGetWidth(forecast), CGRectGetWidth(clock), 0.5);
+        XCTAssertEqualWithAccuracy(CGRectGetMinY(clock), CGRectGetMinY(person), 0.5, @"One section row at %@", widthValue);
+
+        XCTAssertEqualWithAccuracy(CGRectGetMinX(setting), 8.0 + 3 * (column + 6.0), 0.5, @"%@", widthValue);
+        XCTAssertEqualWithAccuracy(CGRectGetMaxX(solene), 8.0 + 4 * column + 3 * 6.0, 1.0, @"Section 3 ends at the right edge at %@", widthValue);
+        XCTAssertEqualWithAccuracy(CGRectGetMinY(setting), CGRectGetMinY(person), 0.5);
+    }
+}
+
+/// Fewer columns than spans: HA clamps each span to the column count and
+/// places sections in order, wrapping when the next one doesn't fit and
+/// leaving the gap behind it empty (grid-auto-flow: row).
+- (void)testColumnarLayout_spanClampsAndWrapsLikeHA {
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:[self reporterSectionsView] columns:3];
+
+    // 600pt: 3 columns. [1][2 ] on the first row, [1] alone on the second.
+    HAColumnarLayout *layout = [self columnarLayoutForConfig:config maxColumns:4 width:600];
+    CGFloat column = floor((600 - 16.0 - 2 * 6.0) / 3.0);
+    CGRect s1 = HAItemFrame(layout, 0, 0), s2 = HAItemFrame(layout, 1, 0), s3 = HAItemFrame(layout, 2, 0);
+    XCTAssertEqualWithAccuracy(CGRectGetMinY(s1), CGRectGetMinY(s2), 0.5);
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(s2), 2 * column + 6.0, 0.5);
+    XCTAssertGreaterThan(CGRectGetMinY(s3), CGRectGetMaxY(s2));
+    XCTAssertEqualWithAccuracy(CGRectGetMinX(s3), 8.0, 0.5);
+
+    // 450pt: 2 columns. Section 2 can't fit beside section 1 and takes the
+    // whole next row; section 3 starts a third row.
+    layout = [self columnarLayoutForConfig:config maxColumns:4 width:450];
+    column = floor((450 - 16.0 - 6.0) / 2.0);
+    s1 = HAItemFrame(layout, 0, 0); s2 = HAItemFrame(layout, 1, 0); s3 = HAItemFrame(layout, 2, 0);
+    XCTAssertEqualWithAccuracy(CGRectGetMinX(s2), 8.0, 0.5);
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(s2), 2 * column + 6.0, 0.5);
+    XCTAssertGreaterThan(CGRectGetMinY(s2), CGRectGetMaxY(s1));
+    XCTAssertGreaterThan(CGRectGetMinY(s3), CGRectGetMaxY(s2));
+
+    // One column (iPhone width): every span collapses to 1; the stack's 24
+    // columns clamp to the column, section 1's tiles stay half width.
+    layout = [self columnarLayoutForConfig:config maxColumns:4 width:320];
+    s1 = HAItemFrame(layout, 0, 0); s2 = HAItemFrame(layout, 1, 0);
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(s2), 320 - 16.0, 0.5);
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(s1), floor((320 - 16.0) / 2.0 - 4.0), 0.5);
+
+    // max_columns smaller than a span: the span is clamped, the section fills the row.
+    NSDictionary *dict = @{@"views": @[@{@"type": @"sections", @"max_columns": @2, @"sections": @[
+        @{@"type": @"grid", @"column_span": @3, @"cards": @[@{@"type": @"tile", @"entity": @"light.a"}]}]}]};
+    HADashboardConfig *wide = [HALovelaceParser dashboardConfigFromView:
+                               [HALovelaceParser parseDashboardFromDictionary:dict].views.firstObject columns:3];
+    XCTAssertEqual(wide.sections.firstObject.columnSpan, 2, @"column_span never exceeds max_columns");
+    layout = [self columnarLayoutForConfig:wide maxColumns:2 width:1024];
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(HAItemFrame(layout, 0, 0)),
+                               floor((1024 - 16.0) / 4.0 - 4.0), 0.5, @"A default tile is 6 of the section's 24 columns");
+}
+
+- (HADashboardConfig *)spanTwoConfigWithCards:(NSArray *)cards {
+    NSDictionary *dict = @{@"views": @[@{@"type": @"sections", @"max_columns": @4, @"sections": @[
+        @{@"type": @"grid", @"column_span": @2, @"cards": cards},
+        @{@"type": @"grid", @"cards": @[@{@"type": @"tile", @"entity": @"light.x"}]},
+        @{@"type": @"grid", @"cards": @[@{@"type": @"tile", @"entity": @"light.y"}]}]}]};
+    return [HALovelaceParser dashboardConfigFromView:
+            [HALovelaceParser parseDashboardFromDictionary:dict].views.firstObject columns:3];
+}
+
+/// A column_span 2 section has a 24-column grid: default tiles sit four per row.
+- (void)testColumnarLayout_spanTwoSection_fitsFourDefaultTilesPerRow {
+    HADashboardConfig *config = [self spanTwoConfigWithCards:@[
+        @{@"type": @"tile", @"entity": @"light.a"}, @{@"type": @"tile", @"entity": @"light.b"},
+        @{@"type": @"tile", @"entity": @"light.c"}, @{@"type": @"tile", @"entity": @"light.d"}]];
+    XCTAssertEqualObjects([config.sections[0].items valueForKey:@"columnSpan"], (@[@6, @6, @6, @6]));
+    HAColumnarLayout *layout = [self columnarLayoutForConfig:config maxColumns:4 width:1024];
+    CGFloat sectionWidth = 2 * floor((1024 - 16.0 - 18.0) / 4.0) + 6.0;
+    for (NSInteger i = 0; i < 4; i++) {
+        CGRect frame = HAItemFrame(layout, 0, i);
+        XCTAssertEqualWithAccuracy(CGRectGetMinY(frame), CGRectGetMinY(HAItemFrame(layout, 0, 0)), 0.5, @"tile %ld", (long)i);
+        XCTAssertEqualWithAccuracy(CGRectGetWidth(frame), floor(sectionWidth / 4.0 - 4.0), 0.5, @"tile %ld", (long)i);
+    }
+    XCTAssertEqualWithAccuracy(CGRectGetMaxX(HAItemFrame(layout, 0, 3)), 8.0 + sectionWidth, 1.0);
+}
+
+/// In a span-2 section "columns: 12" is one view column (half the section);
+/// "full", oversized values, a map's default and a heading span all of it.
+- (void)testColumnarLayout_spanTwoSection_fullVersusTwelve {
+    HADashboardConfig *config = [self spanTwoConfigWithCards:@[
+        @{@"type": @"gauge", @"entity": @"sensor.a", @"grid_options": @{@"columns": @12}},
+        @{@"type": @"gauge", @"entity": @"sensor.b", @"grid_options": @{@"columns": @"full"}},
+        @{@"type": @"gauge", @"entity": @"sensor.c", @"grid_options": @{@"columns": @40}},
+        @{@"type": @"gauge", @"entity": @"sensor.d"},
+        @{@"type": @"heading", @"heading": @"Later"},
+        @{@"type": @"map", @"entities": @[@"person.a"]},
+        @{@"type": @"vertical-stack", @"grid_options": @{@"columns": @"full"},
+          @"cards": @[@{@"type": @"tile", @"entity": @"light.a"}]},
+    ]];
+    NSArray<HADashboardConfigItem *> *items = config.sections[0].items;
+    XCTAssertEqualObjects([items valueForKey:@"cardType"],
+                          (@[@"gauge", @"gauge", @"gauge", @"gauge", @"heading", @"map", @"tile"]));
+    XCTAssertEqualObjects([items valueForKey:@"columnSpan"], (@[@12, @24, @24, @12, @24, @24, @24]));
+
+    HAColumnarLayout *layout = [self columnarLayoutForConfig:config maxColumns:4 width:1024];
+    CGFloat sectionWidth = 2 * floor((1024 - 16.0 - 18.0) / 4.0) + 6.0;
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(HAItemFrame(layout, 0, 0)), floor(sectionWidth / 2.0 - 4.0), 0.5);
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(HAItemFrame(layout, 0, 1)), sectionWidth, 0.5);
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(HAItemFrame(layout, 0, 6)), sectionWidth, 0.5);
+
+    // In a span-1 section "full" and 12 are the same thing.
+    HADashboardConfig *single = [self sectionsConfigWithCards:@[
+        @{@"type": @"gauge", @"entity": @"sensor.b", @"grid_options": @{@"columns": @"full"}},
+        @{@"type": @"heading", @"heading": @"Later"}]];
+    XCTAssertEqualObjects([single.sections[0].items valueForKey:@"columnSpan"], (@[@12, @12]));
+}
+
+/// Sections views use each card type's own HA default width.
+- (void)testSectionsGrid_haDefaultColumns {
+    XCTAssertEqual(([self sectionsItemForCard:@{@"type": @"entity", @"entity": @"sensor.a"}].columnSpan), 6);
+    XCTAssertEqual(([self sectionsItemForCard:@{@"type": @"statistic", @"entity": @"sensor.a"}].columnSpan), 6);
+    XCTAssertEqual(([self sectionsItemForCard:@{@"type": @"area", @"area": @"kitchen"}].columnSpan), 6);
+    XCTAssertEqual(([self sectionsItemForCard:(@{@"type": @"button", @"entity": @"light.a", @"show_name": @NO})].columnSpan), 3);
+    XCTAssertEqual(([self sectionsItemForCard:@{@"type": @"button", @"entity": @"light.a"}].columnSpan), 6);
+    XCTAssertEqual(([self sectionsItemForCard:@{@"type": @"tile", @"entity": @"light.a"}].columnSpan), 6);
+    XCTAssertEqual(([self sectionsItemForCard:@{@"type": @"gauge", @"entity": @"sensor.a"}].columnSpan), 12);
+    // Masonry views keep their own defaults.
+    NSDictionary *dict = @{@"views": @[@{@"title": @"Classic", @"cards": @[@{@"type": @"entity", @"entity": @"sensor.a"}]}]};
+    HADashboardConfig *classic = [HALovelaceParser dashboardConfigFromView:
+                                  [HALovelaceParser parseDashboardFromDictionary:dict].views.firstObject columns:3];
+    XCTAssertEqual(classic.items.firstObject.columnSpan, 12);
 }
 
 @end
