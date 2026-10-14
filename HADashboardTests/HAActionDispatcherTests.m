@@ -4,6 +4,12 @@
 #import "HAEntity.h"
 #import "HAConnectionManager.h"
 #import "HASnapshotTestHelpers.h"
+#import "HAWebSocketClient.h"
+#import "HAAuthManager.h"
+#import "HADashboardViewController.h"
+#import "HADashboardConfig.h"
+#import "HALovelaceParser.h"
+#import <objc/runtime.h>
 
 @interface HAActionDispatcherTests : XCTestCase
 @property (nonatomic, strong) XCTestExpectation *notificationExpectation;
@@ -246,6 +252,153 @@
     HAActionDispatcher *a = [HAActionDispatcher sharedDispatcher];
     HAActionDispatcher *b = [HAActionDispatcher sharedDispatcher];
     XCTAssertEqual(a, b);
+}
+
+@end
+
+#pragma mark - Entity-less button card actions (GitHub #26)
+
+@interface HADashboardViewController (EntitylessButtonTestAccess)
+@property (nonatomic, strong) HADashboardConfig *dashboardConfig;
+- (void)executeActionType:(NSString *)actionType forEntity:(HAEntity *)entity configProperties:(NSDictionary *)props;
+- (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath;
+@end
+
+/// Taps on an entity-less button run its configured action with no entity, and
+/// a perform-action reaches the WebSocket as call_service with the target's
+/// entity_id list intact. HAWebSocketClient -sendCommand: is the capture seam;
+/// the shared connection manager gets an "authenticated" client for the test.
+@interface HAEntitylessButtonActionTests : XCTestCase
+@property (nonatomic, strong) NSMutableArray<NSDictionary *> *sentCommands;
+@property (nonatomic, assign) IMP originalSendCommand;
+@property (nonatomic, assign) IMP originalIsAuthenticated;
+@property (nonatomic, assign) IMP originalIsDemoMode;
+@property (nonatomic, strong) id originalWSClient;
+@property (nonatomic, strong) HADashboardViewController *dashboard;
+@end
+
+@implementation HAEntitylessButtonActionTests
+
+- (void)setUp {
+    [super setUp];
+    self.sentCommands = [NSMutableArray array];
+    NSMutableArray *sent = self.sentCommands;
+    self.originalSendCommand = method_setImplementation(
+        class_getInstanceMethod([HAWebSocketClient class], @selector(sendCommand:)),
+        imp_implementationWithBlock(^NSInteger(id client, NSDictionary *command) {
+            [sent addObject:command];
+            return 1;
+        }));
+    self.originalIsAuthenticated = method_setImplementation(
+        class_getInstanceMethod([HAWebSocketClient class], @selector(isAuthenticated)),
+        imp_implementationWithBlock(^BOOL(id client) { return YES; }));
+    self.originalIsDemoMode = method_setImplementation(
+        class_getInstanceMethod([HAAuthManager class], @selector(isDemoMode)),
+        imp_implementationWithBlock(^BOOL(id manager) { return NO; }));
+
+    HAConnectionManager *conn = [HAConnectionManager sharedManager];
+    self.originalWSClient = [conn valueForKey:@"wsClient"];
+    [conn setValue:[[HAWebSocketClient alloc] initWithURL:[NSURL URLWithString:@"ws://127.0.0.1:9/api/websocket"] token:@"test"]
+            forKey:@"wsClient"];
+    self.dashboard = [[HADashboardViewController alloc] init];
+}
+
+- (void)tearDown {
+    [[HAConnectionManager sharedManager] setValue:self.originalWSClient forKey:@"wsClient"];
+    method_setImplementation(class_getInstanceMethod([HAWebSocketClient class], @selector(sendCommand:)), self.originalSendCommand);
+    method_setImplementation(class_getInstanceMethod([HAWebSocketClient class], @selector(isAuthenticated)), self.originalIsAuthenticated);
+    method_setImplementation(class_getInstanceMethod([HAAuthManager class], @selector(isDemoMode)), self.originalIsDemoMode);
+    self.dashboard = nil;
+    [super tearDown];
+}
+
+/// Parse `card` in a sections view and tap its (single) item on the dashboard.
+- (void)tapCard:(NSDictionary *)card {
+    NSDictionary *dict = @{@"views": @[@{@"title": @"T", @"type": @"sections",
+                                         @"sections": @[@{@"type": @"grid", @"cards": @[card]}]}]};
+    HALovelaceView *view = [HALovelaceParser parseDashboardFromDictionary:dict].views.firstObject;
+    self.dashboard.dashboardConfig = [HALovelaceParser dashboardConfigFromView:view columns:3];
+    NSIndexPath *indexPath = nil;
+    NSArray *sections = self.dashboard.dashboardConfig.sections;
+    for (NSUInteger s = 0; s < sections.count && !indexPath; s++) {
+        if ([sections[s] items].count > 0) indexPath = [NSIndexPath indexPathForItem:0 inSection:(NSInteger)s];
+    }
+    XCTAssertNotNil(indexPath, @"The card must produce an item");
+    UICollectionView *cv = [[UICollectionView alloc] initWithFrame:CGRectZero
+                                              collectionViewLayout:[[UICollectionViewFlowLayout alloc] init]];
+    [self.dashboard collectionView:cv didSelectItemAtIndexPath:indexPath];
+}
+
+- (void)testReporterButtonTap_sendsCallServiceWithTargetEntityList {
+    [self tapCard:@{
+        @"type": @"button", @"show_name": @YES, @"show_icon": @YES, @"show_state": @NO,
+        @"icon": @"mdi:robot-vacuum", @"color": @"red", @"name": @"Arrêter Coco Marcel",
+        @"tap_action": @{@"action": @"perform-action", @"perform_action": @"vacuum.stop",
+                         @"target": @{@"entity_id": @[@"vacuum.valetudo_cocomarcel"]}},
+        @"grid_options": @{@"columns": @"full"},
+    }];
+
+    XCTAssertEqual(self.sentCommands.count, 1u);
+    NSDictionary *command = self.sentCommands.firstObject;
+    XCTAssertEqualObjects(command[@"type"], @"call_service");
+    XCTAssertEqualObjects(command[@"domain"], @"vacuum");
+    XCTAssertEqualObjects(command[@"service"], @"stop");
+    XCTAssertEqualObjects(command[@"service_data"], (@{@"entity_id": @[@"vacuum.valetudo_cocomarcel"]}));
+}
+
+- (void)testLegacyCallServiceWithServiceDataAndStringTarget {
+    [self tapCard:@{@"type": @"button", @"icon": @"mdi:lightbulb",
+                    @"tap_action": @{@"action": @"call-service", @"service": @"light.turn_on",
+                                     @"service_data": @{@"brightness_pct": @40},
+                                     @"target": @{@"entity_id": @"light.kitchen", @"area_id": @"kitchen"}}}];
+
+    XCTAssertEqual(self.sentCommands.count, 1u);
+    NSDictionary *command = self.sentCommands.firstObject;
+    XCTAssertEqualObjects(command[@"domain"], @"light");
+    XCTAssertEqualObjects(command[@"service"], @"turn_on");
+    XCTAssertEqualObjects(command[@"service_data"],
+                          (@{@"brightness_pct": @40, @"entity_id": @"light.kitchen", @"area_id": @"kitchen"}));
+}
+
+- (void)testDefaultTapAndToggle_doNothingWithoutEntity {
+    __block BOOL moreInfoPosted = NO;
+    id observer = [[NSNotificationCenter defaultCenter] addObserverForName:@"HAActionMoreInfoNotification" object:nil
+                                                                     queue:nil usingBlock:^(NSNotification *note) {
+        moreInfoPosted = YES;
+    }];
+    // HA default tap_action without an entity is more-info: nothing to show.
+    [self tapCard:@{@"type": @"button", @"icon": @"mdi:lightbulb"}];
+    [self tapCard:@{@"type": @"button", @"icon": @"mdi:lightbulb", @"tap_action": @{@"action": @"toggle"}}];
+    [self tapCard:@{@"type": @"button", @"icon": @"mdi:lightbulb", @"tap_action": @{@"action": @"more-info"}}];
+    [[NSNotificationCenter defaultCenter] removeObserver:observer];
+
+    XCTAssertEqual(self.sentCommands.count, 0u);
+    XCTAssertFalse(moreInfoPosted);
+}
+
+- (void)testTapNavigate_postsNavigation {
+    [self expectationForNotification:HAActionNavigateNotification object:nil handler:^BOOL(NSNotification *note) {
+        return [note.userInfo[@"path"] isEqualToString:@"/lovelace/robots"];
+    }];
+    [self tapCard:@{@"type": @"button", @"name": @"Robots",
+                    @"tap_action": @{@"action": @"navigate", @"navigation_path": @"/lovelace/robots"}}];
+    [self waitForExpectationsWithTimeout:1.0 handler:nil];
+}
+
+- (void)testHoldAndDoubleTapActions_runWithoutEntity {
+    NSDictionary *props = @{
+        @"hold_action": @{@"action": @"perform-action", @"perform_action": @"script.turn_on",
+                          @"target": @{@"entity_id": @[@"script.a", @"script.b"]}},
+        @"double_tap_action": @{@"action": @"perform-action", @"perform_action": @"vacuum.return_to_base",
+                                @"data": @{@"entity_id": @"vacuum.x"}},
+    };
+    [self.dashboard executeActionType:@"hold_action" forEntity:nil configProperties:props];
+    [self.dashboard executeActionType:@"double_tap_action" forEntity:nil configProperties:props];
+
+    XCTAssertEqual(self.sentCommands.count, 2u);
+    XCTAssertEqualObjects(self.sentCommands[0][@"service_data"], (@{@"entity_id": @[@"script.a", @"script.b"]}));
+    XCTAssertEqualObjects(self.sentCommands[1][@"service"], @"return_to_base");
+    XCTAssertEqualObjects(self.sentCommands[1][@"service_data"], (@{@"entity_id": @"vacuum.x"}));
 }
 
 @end

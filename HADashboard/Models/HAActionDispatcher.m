@@ -174,11 +174,15 @@ NSString *const HAActionNavigateNotification = @"HAActionNavigateNotification";
     }
 
     [HAHaptics lightImpact];
-    // Use the entity_id from data for the API call, or fall back to context entity
-    NSString *entityId = data[@"entity_id"];
-    // Remove entity_id from data dict since callService takes it separately
+    // A single entity_id string is passed separately (callService: re-adds it
+    // and uses it for the optimistic update). A list (target.entity_id: [a, b])
+    // stays in the service data verbatim — it is not an NSString entity ID.
     NSMutableDictionary *serviceData = [data mutableCopy];
-    [serviceData removeObjectForKey:@"entity_id"];
+    NSString *entityId = nil;
+    if ([data[@"entity_id"] isKindOfClass:[NSString class]]) {
+        entityId = data[@"entity_id"];
+        [serviceData removeObjectForKey:@"entity_id"];
+    }
 
     [[HAConnectionManager sharedManager] callService:service
                                             inDomain:domain

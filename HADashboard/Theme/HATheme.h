@@ -64,6 +64,10 @@ extern NSString *const HAThemeDidChangeNotification;
 /// teal, grey/gray, white, black, cyan, pink, indigo, amber) or hex (#RRGGBB / RRGGBB).
 + (UIColor *)colorFromString:(NSString *)colorString;
 
+/// Like colorFromString:, but nil for anything that is neither a known named
+/// color nor a valid 6-digit hex (colorFromString: falls back to black).
++ (UIColor *)colorFromStringOrNil:(NSString *)colorString;
+
 // Backgrounds
 + (UIColor *)backgroundColor;
 + (UIColor *)cellBackgroundColor;
