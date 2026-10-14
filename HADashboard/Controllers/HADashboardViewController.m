@@ -1898,8 +1898,8 @@ static inline NSString *HANormalizeState(id val) {
     if (self.kioskToast && self.kioskToast.superview) return;
     __weak typeof(self) weakSelf = self;
     self.kioskToast = [HAToastView showInView:self.view
-        message:@"Kiosk mode is on. Triple-tap the top of the screen to exit."
-        subtitle:@"Tap to open Settings"
+        message:HALocalizedString(@"dashboard.kiosk_toast.message", @"Toast shown when the dashboard opens in kiosk mode, explaining how to leave it.")
+        subtitle:HALocalizedString(@"dashboard.kiosk_toast.subtitle", @"Second line of the kiosk-mode toast; tapping the toast opens Settings.")
         duration:5.0
         tapAction:^{
             [weakSelf.navigationController setNavigationBarHidden:NO animated:NO];

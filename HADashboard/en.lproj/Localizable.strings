@@ -693,6 +693,12 @@
 /* Fallback nav bar button title on pre-iOS 13 devices when the gear glyph can't be rendered. Opens Settings. */
 "dashboard.settings_button_fallback" = "Settings";
 
+/* Toast shown when the dashboard opens in kiosk mode, explaining how to leave it. */
+"dashboard.kiosk_toast.message" = "Kiosk mode is on. Triple-tap the top of the screen to exit.";
+
+/* Second line of the kiosk-mode toast; tapping the toast opens Settings. */
+"dashboard.kiosk_toast.subtitle" = "Tap to open Settings";
+
 /* Connection status bar text, shown at launch and when disconnected with no specific error. */
 "dashboard.status.disconnected" = "Disconnected";
 
