@@ -73,6 +73,7 @@ targets:
           - materialdesignicons-webfont.ttf
         CFBundleLocalizations:
           - en
+          - fr
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
