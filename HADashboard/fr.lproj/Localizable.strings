@@ -958,3 +958,20 @@
 
 /* Collapsed mode button in the humidifier cell, shown when no mode is set. Also used as the mode-picker action-sheet title. */
 "cell.humidifier.mode_button" = "Mode";
+
+/* Media control and card accessibility labels added in 1.3.1 (GitHub #24). */
+"accessibility.more_info" = "Plus d'infos";
+"accessibility.media_player.turn_on" = "Allumer";
+"accessibility.media_player.turn_off" = "Éteindre";
+"accessibility.media_player.previous_track" = "Piste précédente";
+"accessibility.media_player.next_track" = "Piste suivante";
+"accessibility.media_player.play" = "Lecture";
+"accessibility.media_player.pause" = "Pause";
+"accessibility.media_player.stop" = "Arrêt";
+"accessibility.media_player.play_pause" = "Lecture/pause";
+"accessibility.media_player.volume_down" = "Baisser le volume";
+"accessibility.media_player.volume_up" = "Augmenter le volume";
+"accessibility.media_player.mute" = "Couper le son";
+"accessibility.media_player.unmute" = "Rétablir le son";
+"accessibility.media_player.shuffle" = "Lecture aléatoire";
+"accessibility.media_player.repeat" = "Répéter";

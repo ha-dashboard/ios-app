@@ -38,3 +38,4 @@ settings.dev.stream_mode.mjpeg
 settings.live_stream.client_plural
 settings.live_stream.client_singular
 settings.theme_mode.auto
+accessibility.media_player.pause

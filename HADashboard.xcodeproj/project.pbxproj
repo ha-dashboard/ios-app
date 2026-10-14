@@ -1869,6 +1869,7 @@
 		4D3F0E89E0336F9D57BFEAD6 /* LOTLayerContainer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LOTLayerContainer.h; sourceTree = "<group>"; };
 		4D63F01660C8621B1C9D04A4 /* testLightButton_showStateTrue__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testLightButton_showStateTrue__light@2x.png"; sourceTree = "<group>"; };
 		4D768BC6F082E648AB8FE65D /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		65E8378F6F641A41DA0621A1 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/Localizable.strings; sourceTree = "<group>"; };
 		4DC602D48C64076EB02EF177 /* testSensorBattery__dark_gradient@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testSensorBattery__dark_gradient@2x.png"; sourceTree = "<group>"; };
 		4DEB48096A691FEC2BCC9740 /* testButtonRowCoverClosed_buttonRowCoverClosed_light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testButtonRowCoverClosed_buttonRowCoverClosed_light@2x.png"; sourceTree = "<group>"; };
 		4DF07363C1E0544153CBB651 /* testGraphMulti__light@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "testGraphMulti__light@2x.png"; sourceTree = "<group>"; };
@@ -5028,6 +5029,7 @@
 			knownRegions = (
 				Base,
 				en,
+				fr,
 			);
 			mainGroup = 77CF34BDA4294E11B29D6909;
 			minimizedProjectReferenceProxies = 1;
@@ -6466,6 +6468,7 @@
 			isa = PBXVariantGroup;
 			children = (
 				4D768BC6F082E648AB8FE65D /* en */,
+				65E8378F6F641A41DA0621A1 /* fr */,
 			);
 			name = Localizable.strings;
 			sourceTree = "<group>";
