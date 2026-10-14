@@ -14,6 +14,8 @@
 @property (nonatomic, strong) UILabel *tileIconLabel;
 @property (nonatomic, strong) UILabel *tileNameLabel;
 @property (nonatomic, strong) NSLayoutConstraint *tileStateTopConstraint;
+/// Button card without icon_height: icon scales with the card like HA's (40% of width).
+@property (nonatomic, assign) BOOL scalesButtonIcon;
 @property (nonatomic, strong) UILabel *tileStateLabel;
 @property (nonatomic, strong) UIStackView *compactStack;
 /// Normal (tile) layout constraints
@@ -164,6 +166,18 @@
     // Long-press opens detail via the collection view's long-press gesture.
 }
 
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!self.scalesButtonIcon) return;
+    // HA sizes the button icon at 40% of the card width, capped so the name
+    // still fits below it.
+    CGSize size = self.contentView.bounds.size;
+    CGFloat iconSize = floor(MAX(28.0, MIN(96.0, MIN(size.width * 0.4, size.height * 0.5))));
+    if (fabs(self.tileIconLabel.font.pointSize - iconSize) > 0.5) {
+        self.tileIconLabel.font = [HAIconMapper mdiFontOfSize:iconSize];
+    }
+}
+
 - (void)applyCompactMode:(BOOL)compact {
     if (self.isCompact == compact) return;
     self.isCompact = compact;
@@ -261,7 +275,12 @@ static UIColor *HAEntitylessButtonIconColor(NSDictionary *props) {
 
     // Determine if this is a compact button card (inside horizontal-stack)
     BOOL compact = [configItem.customProperties[@"compact"] boolValue];
-    BOOL vertical = [configItem.customProperties[@"vertical"] boolValue];
+    // HA's button card is always laid out vertically (icon centred above the
+    // name); `vertical` is only a tile-card option.
+    BOOL isButton = [configItem.cardType isEqualToString:@"button"];
+    BOOL vertical = isButton || [configItem.customProperties[@"vertical"] boolValue];
+    self.scalesButtonIcon = isButton && !compact &&
+        [configItem.customProperties[@"icon_height"] length] == 0;
 
     // Compact takes priority over vertical (both use the same stack)
     if (compact) {
@@ -553,6 +572,7 @@ static UIColor *HAEntitylessButtonIconColor(NSDictionary *props) {
     self.tileStateLabel.hidden = NO;
     // Force reset to normal mode — set flags to YES first so the guards
     // in apply*Mode: don't short-circuit when already NO.
+    self.scalesButtonIcon = NO;
     self.isVertical = YES;
     [self applyVerticalMode:NO];
     self.isCompact = YES;
