@@ -27,7 +27,7 @@ extern NSString *const HAUnsupportedCardTypeKey;
 @property (nonatomic, copy) NSString *path;
 @property (nonatomic, copy) NSString *icon;
 @property (nonatomic, strong) NSArray<NSDictionary *> *rawCards;
-/// HA 2024+ sections: array of @{@"title": NSString, @"cards": NSArray}
+/// HA 2024+ sections: array of @{@"title": NSString, @"icon": NSString, @"cards": NSArray, @"column_span": NSNumber (>= 1)}
 /// nil for classic (non-sections) views.
 @property (nonatomic, strong) NSArray<NSDictionary *> *rawSections;
 /// Maximum columns for sections layout (from HA view config "max_columns"). 0 = use default (4).
@@ -133,6 +133,21 @@ extern NSString *const HAUnsupportedCardTypeKey;
 /// HAHeadingTapActionKey → the heading's own tap_action, when actionable.
 extern NSString *const HAHeadingBadgesKey;
 extern NSString *const HAHeadingTapActionKey;
+
+/// The grid options HA's own card element reports for this card config in a
+/// sections view (its getGridOptions()), with keys "columns", "rows",
+/// "min_columns", "max_columns", "min_rows" and "max_rows" (NSNumber, or the
+/// strings "full" / "auto" for columns / rows). Only keys HA defines are
+/// present; an empty dictionary means HA's card has no getGridOptions() and
+/// therefore no minimum or maximum size (e.g. markdown, gauge, glance, stacks).
++ (NSDictionary<NSString *, id> *)haGridOptionsForCard:(NSDictionary *)card;
+
+/// A card's own sizing config the way HA's hui-card getConfigGridOptions()
+/// reads it: "grid_options" when present, otherwise the legacy
+/// "layout_options" migrated to grid options (grid_columns, grid_min_columns
+/// and grid_max_columns ×3 from HA's former 4-column grid; rows unchanged).
+/// Empty when the card has neither.
++ (NSDictionary<NSString *, id> *)configGridOptionsForCard:(NSDictionary *)card;
 
 /// Extract all entity IDs from a Lovelace card dictionary (recursively handles stacks)
 + (NSArray<NSDictionary *> *)extractEntitiesFromCard:(NSDictionary *)card;

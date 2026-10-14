@@ -1019,6 +1019,7 @@ static const CGFloat kRowUnitHeight = 56.0;
             filtered.entityIds = section.entityIds;
             filtered.nameOverrides = section.nameOverrides;
             filtered.customProperties = section.customProperties;
+            filtered.columnSpan = section.columnSpan;
             filtered.items = filteredItems;
             [filteredSections addObject:filtered];
         }
@@ -2291,6 +2292,12 @@ heightForHeaderInSection:(NSInteger)section {
     isFullWidthSection:(NSInteger)section {
     HADashboardConfigSection *configSection = [self sectionAtIndex:section];
     return [configSection.customProperties[@"viewBadges"] boolValue];
+}
+
+- (NSInteger)collectionView:(UICollectionView *)collectionView
+                     layout:(UICollectionViewLayout *)layout
+       columnSpanForSection:(NSInteger)section {
+    return MAX([self sectionAtIndex:section].columnSpan, 1);
 }
 
 #pragma mark - HAMasonryLayoutDelegate

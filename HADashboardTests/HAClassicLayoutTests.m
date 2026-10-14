@@ -17,6 +17,10 @@
 @property (nonatomic, strong) NSArray<NSString *> *cardTypes;  // card type per item (flat)
 @property (nonatomic, strong) NSArray<NSNumber *> *entityCounts; // entity count per item (flat)
 @property (nonatomic, strong) NSArray<NSNumber *> *itemHeights;  // height per item (flat)
+/// Sub-grid column span per item (flat); nil = every item spans 12
+@property (nonatomic, strong) NSArray<NSNumber *> *itemGridColumns;
+/// Columnar layout: column_span per section; nil = 1
+@property (nonatomic, strong) NSArray<NSNumber *> *sectionSpans;
 /// Leading full-width items (masonry, section 0) / sections (columnar)
 @property (nonatomic, assign) NSInteger fullWidthCount;
 @end
@@ -96,6 +100,13 @@ isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
 - (NSInteger)collectionView:(UICollectionView *)collectionView
                      layout:(UICollectionViewLayout *)layout
   gridColumnsForItemAtIndexPath:(NSIndexPath *)indexPath {
+    NSInteger flatIndex = indexPath.item;
+    for (NSInteger sec = 0; sec < indexPath.section && sec < (NSInteger)self.itemCounts.count; sec++) {
+        flatIndex += self.itemCounts[sec].integerValue;
+    }
+    if (flatIndex < (NSInteger)self.itemGridColumns.count) {
+        return self.itemGridColumns[flatIndex].integerValue;
+    }
     return 12;
 }
 
@@ -105,14 +116,31 @@ isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
     return section < self.fullWidthCount;
 }
 
+- (NSInteger)collectionView:(UICollectionView *)collectionView
+                     layout:(UICollectionViewLayout *)layout
+       columnSpanForSection:(NSInteger)section {
+    return section < (NSInteger)self.sectionSpans.count ? self.sectionSpans[section].integerValue : 1;
+}
+
 @end
 
 #pragma mark - Tests
 
 @interface HAClassicLayoutTests : XCTestCase
+@property (nonatomic, strong) NSMutableArray *retainedLayoutObjects;
 @end
 
 @implementation HAClassicLayoutTests
+
+- (void)setUp {
+    [super setUp];
+    self.retainedLayoutObjects = [NSMutableArray array];
+}
+
+- (void)tearDown {
+    self.retainedLayoutObjects = nil;
+    [super tearDown];
+}
 
 #pragma mark - Helpers
 
@@ -1138,6 +1166,363 @@ isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
         [xOrigins addObject:@(round(CGRectGetMinX(frame)))];
     }
     XCTAssertEqual(xOrigins.count, 3u, @"The 3 cards still fill 3 columns at 1024pt");
+}
+
+#pragma mark - Sections grid min/max sizing (GitHub #25)
+
+/// The span the parser gives the single card in a one-card sections view.
+- (HADashboardConfigItem *)sectionsItemForCard:(NSDictionary *)card {
+    HADashboardConfig *config = [self sectionsConfigWithCards:@[card]];
+    return config.items.firstObject;
+}
+
+/// The reporter's view (GitHub #25): sections view, max_columns 4, column spans 1/2/1.
+- (HALovelaceView *)reporterSectionsView {
+    NSDictionary *dict = @{@"views": @[@{
+        @"title": @"Home", @"type": @"sections", @"max_columns": @4,
+        @"sections": @[
+            @{@"type": @"grid", @"column_span": @1, @"cards": @[
+                @{@"type": @"tile", @"entity": @"person.psolyca", @"grid_options": @{@"columns": @4, @"rows": @1}},
+                @{@"type": @"tile", @"entity": @"sensor.sun_next_rising", @"name": @" ",
+                  @"icon": @"mdi:weather-sunset-up", @"time_format": @{@"type": @"time", @"style": @"long"}},
+            ]},
+            @{@"type": @"grid", @"column_span": @2, @"cards": @[
+                @{@"type": @"vertical-stack", @"grid_options": @{@"columns": @33, @"rows": @"auto"}, @"cards": @[
+                    @{@"type": @"clock", @"clock_style": @"digital", @"clock_size": @"large", @"show_seconds": @YES,
+                      @"no_background": @YES, @"date_format": @[@"weekday-long", @"day-numeric", @"month-long"],
+                      @"grid_options": @{@"columns": @9, @"rows": @2}},
+                    @{@"type": @"weather-forecast", @"entity": @"weather.forecast_maison", @"show_current": @YES,
+                      @"show_forecast": @NO, @"forecast_type": @"daily", @"forecast_slots": @1},
+                    @{@"type": @"weather-forecast", @"entity": @"weather.cleguer", @"show_current": @NO,
+                      @"show_forecast": @YES, @"forecast_type": @"daily", @"forecast_slots": @4},
+                ]},
+            ]},
+            @{@"type": @"grid", @"column_span": @1, @"cards": @[
+                @{@"type": @"tile", @"entity": @"sensor.sun_next_setting", @"name": @" ",
+                  @"icon": @"mdi:weather-moonset-down", @"time_format": @{@"type": @"time", @"style": @"long"}},
+                @{@"type": @"tile", @"entity": @"person.solene"},
+            ]},
+        ]}]};
+    return [HALovelaceParser parseDashboardFromDictionary:dict].views.firstObject;
+}
+
+- (void)testSectionsGrid_tileBelowMinColumns_widensToSix {
+    HADashboardConfigItem *item = [self sectionsItemForCard:@{@"type": @"tile", @"entity": @"person.a",
+                                                              @"grid_options": @{@"columns": @4, @"rows": @1}}];
+    XCTAssertEqual(item.columnSpan, 6, @"hui-tile-card min_columns is 6");
+    XCTAssertEqual(item.rowSpan, 1);
+}
+
+- (void)testSectionsGrid_verticalTile_minColumnsIsThree {
+    HADashboardConfigItem *item = [self sectionsItemForCard:@{@"type": @"tile", @"entity": @"light.a", @"vertical": @YES,
+                                                              @"grid_options": @{@"columns": @2}}];
+    XCTAssertEqual(item.columnSpan, 3);
+    item = [self sectionsItemForCard:@{@"type": @"tile", @"entity": @"light.a", @"vertical": @YES,
+                                       @"grid_options": @{@"columns": @4}}];
+    XCTAssertEqual(item.columnSpan, 4, @"A vertical tile may be narrower than 6");
+}
+
+- (void)testSectionsGrid_tileWithInlineFeatures_minColumnsIsTwelve {
+    HADashboardConfigItem *item = [self sectionsItemForCard:@{
+        @"type": @"tile", @"entity": @"light.a", @"features_position": @"inline",
+        @"features": @[@{@"type": @"light-brightness"}], @"grid_options": @{@"columns": @6}}];
+    XCTAssertEqual(item.columnSpan, 12);
+    // Features below the tile keep the usual minimum of 6.
+    item = [self sectionsItemForCard:@{@"type": @"tile", @"entity": @"light.a",
+                                       @"features": @[@{@"type": @"light-brightness"}], @"grid_options": @{@"columns": @6}}];
+    XCTAssertEqual(item.columnSpan, 6);
+}
+
+- (void)testSectionsGrid_oversizedColumns_fillTheSection {
+    HADashboardConfigItem *item = [self sectionsItemForCard:@{@"type": @"tile", @"entity": @"light.a", @"grid_options": @{@"columns": @33}}];
+    XCTAssertEqual(item.columnSpan, 12);
+    item = [self sectionsItemForCard:@{@"type": @"tile", @"entity": @"light.a", @"grid_options": @{@"columns": @"full"}}];
+    XCTAssertEqual(item.columnSpan, 12);
+    HADashboardConfig *config = [self sectionsConfigWithCards:@[
+        @{@"type": @"vertical-stack", @"grid_options": @{@"columns": @33}, @"cards": @[
+            @{@"type": @"tile", @"entity": @"light.a"}, @{@"type": @"sensor", @"entity": @"sensor.b"}]}]];
+    XCTAssertEqualObjects([config.items valueForKey:@"columnSpan"], (@[@12, @12]));
+}
+
+- (void)testSectionsGrid_cardWithoutHAMinimum_keepsConfiguredColumns {
+    HADashboardConfigItem *item = [self sectionsItemForCard:@{@"type": @"gauge", @"entity": @"sensor.a",
+                                                              @"grid_options": @{@"columns": @4}}];
+    XCTAssertEqual(item.columnSpan, 4, @"hui-gauge-card has no getGridOptions(), so no minimum");
+    XCTAssertEqualObjects([HALovelaceParser haGridOptionsForCard:@{@"type": @"markdown"}], @{});
+    XCTAssertEqualObjects([HALovelaceParser haGridOptionsForCard:@{@"type": @"custom:button-card"}], @{});
+}
+
+- (void)testSectionsGrid_maxColumnsAndRowsFromConfig_clamp {
+    HADashboardConfigItem *item = [self sectionsItemForCard:@{@"type": @"gauge", @"entity": @"sensor.a",
+        @"grid_options": @{@"columns": @9, @"max_columns": @6, @"rows": @1, @"min_rows": @3}}];
+    XCTAssertEqual(item.columnSpan, 6);
+    XCTAssertEqual(item.rowSpan, 3);
+    // Config min_columns overrides the card's own minimum (hui-card merge order).
+    item = [self sectionsItemForCard:@{@"type": @"tile", @"entity": @"light.a",
+                                       @"grid_options": @{@"columns": @3, @"min_columns": @3}}];
+    XCTAssertEqual(item.columnSpan, 3);
+}
+
+- (void)testSectionsGrid_explicitRowsClampToMinRows {
+    // show_current + show_forecast → min_rows 3, min_columns 5
+    HADashboardConfigItem *item = [self sectionsItemForCard:@{@"type": @"weather-forecast", @"entity": @"weather.home",
+                                                              @"grid_options": @{@"columns": @3, @"rows": @1}}];
+    XCTAssertEqual(item.columnSpan, 5);
+    XCTAssertEqual(item.rowSpan, 3);
+    item = [self sectionsItemForCard:@{@"type": @"tile", @"entity": @"light.a"}];
+    XCTAssertEqual(item.rowSpan, 0, @"Unconfigured rows stay auto (content height)");
+}
+
+- (void)testSectionsGrid_legacyLayoutOptions_areMigratedTimesThree {
+    HADashboardConfigItem *item = [self sectionsItemForCard:@{@"type": @"gauge", @"entity": @"sensor.a",
+                                                              @"layout_options": @{@"grid_columns": @2, @"grid_rows": @2}}];
+    XCTAssertEqual(item.columnSpan, 6, @"layout_options used HA's former 4-column grid");
+    XCTAssertEqual(item.rowSpan, 2);
+    item = [self sectionsItemForCard:@{@"type": @"tile", @"entity": @"light.a", @"layout_options": @{@"grid_columns": @1}}];
+    XCTAssertEqual(item.columnSpan, 6, @"3 is below the tile minimum");
+    item = [self sectionsItemForCard:@{@"type": @"gauge", @"entity": @"sensor.a",
+                                       @"grid_options": @{@"columns": @4}, @"layout_options": @{@"grid_columns": @4}}];
+    XCTAssertEqual(item.columnSpan, 4, @"grid_options wins over layout_options");
+    NSDictionary *migrated = [HALovelaceParser configGridOptionsForCard:@{@"layout_options": @{
+        @"grid_columns": @"full", @"grid_min_columns": @2, @"grid_max_rows": @3}}];
+    XCTAssertEqualObjects(migrated, (@{@"columns": @"full", @"min_columns": @6, @"max_rows": @3}));
+}
+
+- (void)testSectionsGrid_childrenOfGridCards_followTheirParent {
+    HADashboardConfig *config = [self sectionsConfigWithCards:@[
+        @{@"type": @"grid", @"grid_options": @{@"columns": @3}, @"cards": @[
+            @{@"type": @"tile", @"entity": @"vacuum.a", @"grid_options": @{@"columns": @2}}]}]];
+    XCTAssertEqual(config.items.firstObject.columnSpan, 3, @"HA sizes a grid card's children by the grid, not their own minimum");
+}
+
+- (void)testMasonryView_doesNotClampGridOptions {
+    NSDictionary *dict = @{@"views": @[@{@"title": @"Classic", @"cards": @[
+        @{@"type": @"tile", @"entity": @"person.a", @"grid_options": @{@"columns": @4}}]}]};
+    HALovelaceView *view = [HALovelaceParser parseDashboardFromDictionary:dict].views.firstObject;
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:view columns:3];
+    XCTAssertEqual(config.items.firstObject.columnSpan, 4, @"Masonry views ignore grid sizing");
+}
+
+- (void)testSectionsGrid_haCardTable_matchesUpstream {
+    NSDictionary *(^opts)(NSDictionary *) = ^NSDictionary *(NSDictionary *card) {
+        return [HALovelaceParser haGridOptionsForCard:card];
+    };
+    XCTAssertEqualObjects(opts(@{@"type": @"button"}), (@{@"columns": @6, @"rows": @2, @"min_columns": @2, @"min_rows": @2}));
+    XCTAssertEqualObjects(opts((@{@"type": @"button", @"show_name": @NO})), (@{@"columns": @3, @"rows": @1, @"min_columns": @2, @"min_rows": @1}));
+    XCTAssertEqualObjects(opts(@{@"type": @"entity"}), (@{@"columns": @6, @"rows": @2, @"min_columns": @6, @"min_rows": @2}));
+    XCTAssertEqualObjects(opts((@{@"type": @"thermostat", @"features": @[@{}, @{}]})),
+                          (@{@"columns": @12, @"rows": @7, @"min_columns": @6, @"min_rows": @4}));
+    XCTAssertEqualObjects(opts((@{@"type": @"weather-forecast", @"show_current": @NO, @"forecast_type": @"daily"})),
+                          (@{@"columns": @12, @"rows": @3, @"min_columns": @4, @"min_rows": @2}));
+    XCTAssertEqualObjects(opts((@{@"type": @"tile", @"features": @[@{}, @{}, @{}], @"features_position": @"inline"})),
+                          (@{@"columns": @6, @"rows": @2, @"min_columns": @12, @"min_rows": @2}));
+    XCTAssertEqualObjects(opts((@{@"type": @"area", @"vertical": @YES})),
+                          (@{@"columns": @6, @"rows": @4, @"min_columns": @3, @"min_rows": @4}));
+    XCTAssertEqualObjects(opts((@{@"type": @"logbook", @"title": @"Log"})),
+                          (@{@"columns": @12, @"rows": @6, @"min_columns": @6, @"min_rows": @4}));
+    XCTAssertEqualObjects(opts(@{@"type": @"map"}), (@{@"columns": @"full", @"rows": @4, @"min_columns": @6, @"min_rows": @2}));
+}
+
+/// GitHub #25: section 1's two tiles are both half width and fill the section;
+/// the span-2 section's vertical stack (columns: 33) fills its section.
+- (void)testSectionsGrid_reporterView_parsesLikeHA {
+    HALovelaceView *view = [self reporterSectionsView];
+    XCTAssertEqual(view.maxColumns, 4);
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:view columns:3];
+    XCTAssertEqual(config.sections.count, 3u);
+
+    NSArray<HADashboardConfigItem *> *first = config.sections[0].items;
+    XCTAssertEqualObjects([first valueForKey:@"columnSpan"], (@[@6, @6]));
+    XCTAssertEqual(first[0].columnSpan + first[1].columnSpan, 12, @"The two tiles fill section 1");
+
+    NSArray<HADashboardConfigItem *> *middle = config.sections[1].items;
+    XCTAssertEqualObjects([middle valueForKey:@"cardType"], (@[@"clock", @"weather-forecast", @"weather-forecast"]));
+    XCTAssertEqual(config.sections[1].columnSpan, 2);
+    XCTAssertEqualObjects([middle valueForKey:@"columnSpan"], (@[@24, @24, @24]),
+                          @"columns: 33 clamps to the span-2 section's full 24-column grid");
+    XCTAssertEqual(config.sections[0].columnSpan, 1);
+    XCTAssertEqual(config.sections[2].columnSpan, 1);
+
+    XCTAssertEqualObjects([config.sections[2].items valueForKey:@"columnSpan"], (@[@6, @6]));
+}
+
+/// Lays a parsed sections config out in HAColumnarLayout with the dashboard's
+/// real geometry (HADashboardViewController -applyLayoutForSectionsView:).
+- (HAColumnarLayout *)columnarLayoutForConfig:(HADashboardConfig *)config
+                                   maxColumns:(NSInteger)maxColumns
+                                        width:(CGFloat)width {
+    NSMutableArray<NSNumber *> *counts = [NSMutableArray array];
+    NSMutableArray<NSNumber *> *spans = [NSMutableArray array];
+    NSMutableArray<NSNumber *> *sectionSpans = [NSMutableArray array];
+    for (HADashboardConfigSection *section in config.sections) {
+        [counts addObject:@(section.items.count)];
+        [sectionSpans addObject:@(MAX(section.columnSpan, 1))];
+        for (HADashboardConfigItem *item in section.items) [spans addObject:@(item.columnSpan)];
+    }
+    HAColumnarLayout *layout = [[HAColumnarLayout alloc] init];
+    layout.contentInsets = UIEdgeInsetsMake(4, 8, 8, 8);
+    layout.interColumnSpacing = 6;
+    layout.interItemSpacing = 6;
+    layout.maxColumns = maxColumns;
+    HALayoutTestDataSource *ds = [[HALayoutTestDataSource alloc] init];
+    ds.sectionCount = (NSInteger)config.sections.count;
+    ds.itemCounts = counts;
+    ds.itemGridColumns = spans;
+    ds.sectionSpans = sectionSpans;
+    layout.delegate = ds;
+    UICollectionView *cv = [self collectionViewWithLayout:layout dataSource:ds width:width height:768];
+    // The layout's delegate and collection view are weak: keep both alive for the test.
+    [self.retainedLayoutObjects addObjectsFromArray:@[ds, cv]];
+    return layout;
+}
+
+static CGRect HAItemFrame(HAColumnarLayout *layout, NSInteger section, NSInteger item) {
+    return [layout layoutAttributesForItemAtIndexPath:[NSIndexPath indexPathForItem:item inSection:section]].frame;
+}
+
+/// GitHub #25 at iPad landscape and portrait widths: four columns (the app's
+/// 180pt minimum column width allows 4 down to ~754pt), so the 1/2/1 spans
+/// fill one row as 1/4 + 1/2 + 1/4, and section 1's tiles fill their column.
+- (void)testSectionsGrid_reporterView_columnarLayoutAt1024And768 {
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:[self reporterSectionsView] columns:3];
+    for (NSNumber *widthValue in @[@1024, @768, @1366, @1180, @1133]) {
+        CGFloat width = widthValue.doubleValue;
+        HAColumnarLayout *layout = [self columnarLayoutForConfig:config maxColumns:4 width:width];
+        CGFloat column = floor((width - 16.0 - 3 * 6.0) / 4.0);
+
+        CGRect person = HAItemFrame(layout, 0, 0), sun = HAItemFrame(layout, 0, 1);
+        CGRect clock = HAItemFrame(layout, 1, 0), forecast = HAItemFrame(layout, 1, 2);
+        CGRect setting = HAItemFrame(layout, 2, 0), solene = HAItemFrame(layout, 2, 1);
+
+        XCTAssertEqualWithAccuracy(CGRectGetMinX(person), 8.0, 0.5, @"%@", widthValue);
+        XCTAssertEqualWithAccuracy(CGRectGetMinY(person), CGRectGetMinY(sun), 0.5, @"%@", widthValue);
+        XCTAssertEqualWithAccuracy(CGRectGetWidth(person), CGRectGetWidth(sun), 0.5, @"%@", widthValue);
+        XCTAssertEqualWithAccuracy(CGRectGetMaxX(sun), 8.0 + column, 1.0, @"Section 1 is one column wide at %@", widthValue);
+
+        XCTAssertEqualWithAccuracy(CGRectGetMinX(clock), 8.0 + column + 6.0, 0.5, @"%@", widthValue);
+        XCTAssertEqualWithAccuracy(CGRectGetWidth(clock), 2 * column + 6.0, 0.5, @"Section 2 spans two columns at %@", widthValue);
+        XCTAssertEqualWithAccuracy(CGRectGetWidth(forecast), CGRectGetWidth(clock), 0.5);
+        XCTAssertEqualWithAccuracy(CGRectGetMinY(clock), CGRectGetMinY(person), 0.5, @"One section row at %@", widthValue);
+
+        XCTAssertEqualWithAccuracy(CGRectGetMinX(setting), 8.0 + 3 * (column + 6.0), 0.5, @"%@", widthValue);
+        XCTAssertEqualWithAccuracy(CGRectGetMaxX(solene), 8.0 + 4 * column + 3 * 6.0, 1.0, @"Section 3 ends at the right edge at %@", widthValue);
+        XCTAssertEqualWithAccuracy(CGRectGetMinY(setting), CGRectGetMinY(person), 0.5);
+    }
+}
+
+/// Fewer columns than spans: HA clamps each span to the column count and
+/// places sections in order, wrapping when the next one doesn't fit and
+/// leaving the gap behind it empty (grid-auto-flow: row).
+- (void)testColumnarLayout_spanClampsAndWrapsLikeHA {
+    HADashboardConfig *config = [HALovelaceParser dashboardConfigFromView:[self reporterSectionsView] columns:3];
+
+    // 600pt: 3 columns. [1][2 ] on the first row, [1] alone on the second.
+    HAColumnarLayout *layout = [self columnarLayoutForConfig:config maxColumns:4 width:600];
+    CGFloat column = floor((600 - 16.0 - 2 * 6.0) / 3.0);
+    CGRect s1 = HAItemFrame(layout, 0, 0), s2 = HAItemFrame(layout, 1, 0), s3 = HAItemFrame(layout, 2, 0);
+    XCTAssertEqualWithAccuracy(CGRectGetMinY(s1), CGRectGetMinY(s2), 0.5);
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(s2), 2 * column + 6.0, 0.5);
+    XCTAssertGreaterThan(CGRectGetMinY(s3), CGRectGetMaxY(s2));
+    XCTAssertEqualWithAccuracy(CGRectGetMinX(s3), 8.0, 0.5);
+
+    // 450pt: 2 columns. Section 2 can't fit beside section 1 and takes the
+    // whole next row; section 3 starts a third row.
+    layout = [self columnarLayoutForConfig:config maxColumns:4 width:450];
+    column = floor((450 - 16.0 - 6.0) / 2.0);
+    s1 = HAItemFrame(layout, 0, 0); s2 = HAItemFrame(layout, 1, 0); s3 = HAItemFrame(layout, 2, 0);
+    XCTAssertEqualWithAccuracy(CGRectGetMinX(s2), 8.0, 0.5);
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(s2), 2 * column + 6.0, 0.5);
+    XCTAssertGreaterThan(CGRectGetMinY(s2), CGRectGetMaxY(s1));
+    XCTAssertGreaterThan(CGRectGetMinY(s3), CGRectGetMaxY(s2));
+
+    // One column (iPhone width): every span collapses to 1; the stack's 24
+    // columns clamp to the column, section 1's tiles stay half width.
+    layout = [self columnarLayoutForConfig:config maxColumns:4 width:320];
+    s1 = HAItemFrame(layout, 0, 0); s2 = HAItemFrame(layout, 1, 0);
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(s2), 320 - 16.0, 0.5);
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(s1), floor((320 - 16.0) / 2.0 - 4.0), 0.5);
+
+    // max_columns smaller than a span: the span is clamped, the section fills the row.
+    NSDictionary *dict = @{@"views": @[@{@"type": @"sections", @"max_columns": @2, @"sections": @[
+        @{@"type": @"grid", @"column_span": @3, @"cards": @[@{@"type": @"tile", @"entity": @"light.a"}]}]}]};
+    HADashboardConfig *wide = [HALovelaceParser dashboardConfigFromView:
+                               [HALovelaceParser parseDashboardFromDictionary:dict].views.firstObject columns:3];
+    XCTAssertEqual(wide.sections.firstObject.columnSpan, 2, @"column_span never exceeds max_columns");
+    layout = [self columnarLayoutForConfig:wide maxColumns:2 width:1024];
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(HAItemFrame(layout, 0, 0)),
+                               floor((1024 - 16.0) / 4.0 - 4.0), 0.5, @"A default tile is 6 of the section's 24 columns");
+}
+
+- (HADashboardConfig *)spanTwoConfigWithCards:(NSArray *)cards {
+    NSDictionary *dict = @{@"views": @[@{@"type": @"sections", @"max_columns": @4, @"sections": @[
+        @{@"type": @"grid", @"column_span": @2, @"cards": cards},
+        @{@"type": @"grid", @"cards": @[@{@"type": @"tile", @"entity": @"light.x"}]},
+        @{@"type": @"grid", @"cards": @[@{@"type": @"tile", @"entity": @"light.y"}]}]}]};
+    return [HALovelaceParser dashboardConfigFromView:
+            [HALovelaceParser parseDashboardFromDictionary:dict].views.firstObject columns:3];
+}
+
+/// A column_span 2 section has a 24-column grid: default tiles sit four per row.
+- (void)testColumnarLayout_spanTwoSection_fitsFourDefaultTilesPerRow {
+    HADashboardConfig *config = [self spanTwoConfigWithCards:@[
+        @{@"type": @"tile", @"entity": @"light.a"}, @{@"type": @"tile", @"entity": @"light.b"},
+        @{@"type": @"tile", @"entity": @"light.c"}, @{@"type": @"tile", @"entity": @"light.d"}]];
+    XCTAssertEqualObjects([config.sections[0].items valueForKey:@"columnSpan"], (@[@6, @6, @6, @6]));
+    HAColumnarLayout *layout = [self columnarLayoutForConfig:config maxColumns:4 width:1024];
+    CGFloat sectionWidth = 2 * floor((1024 - 16.0 - 18.0) / 4.0) + 6.0;
+    for (NSInteger i = 0; i < 4; i++) {
+        CGRect frame = HAItemFrame(layout, 0, i);
+        XCTAssertEqualWithAccuracy(CGRectGetMinY(frame), CGRectGetMinY(HAItemFrame(layout, 0, 0)), 0.5, @"tile %ld", (long)i);
+        XCTAssertEqualWithAccuracy(CGRectGetWidth(frame), floor(sectionWidth / 4.0 - 4.0), 0.5, @"tile %ld", (long)i);
+    }
+    XCTAssertEqualWithAccuracy(CGRectGetMaxX(HAItemFrame(layout, 0, 3)), 8.0 + sectionWidth, 1.0);
+}
+
+/// In a span-2 section "columns: 12" is one view column (half the section);
+/// "full", oversized values, a map's default and a heading span all of it.
+- (void)testColumnarLayout_spanTwoSection_fullVersusTwelve {
+    HADashboardConfig *config = [self spanTwoConfigWithCards:@[
+        @{@"type": @"gauge", @"entity": @"sensor.a", @"grid_options": @{@"columns": @12}},
+        @{@"type": @"gauge", @"entity": @"sensor.b", @"grid_options": @{@"columns": @"full"}},
+        @{@"type": @"gauge", @"entity": @"sensor.c", @"grid_options": @{@"columns": @40}},
+        @{@"type": @"gauge", @"entity": @"sensor.d"},
+        @{@"type": @"heading", @"heading": @"Later"},
+        @{@"type": @"map", @"entities": @[@"person.a"]},
+        @{@"type": @"vertical-stack", @"grid_options": @{@"columns": @"full"},
+          @"cards": @[@{@"type": @"tile", @"entity": @"light.a"}]},
+    ]];
+    NSArray<HADashboardConfigItem *> *items = config.sections[0].items;
+    XCTAssertEqualObjects([items valueForKey:@"cardType"],
+                          (@[@"gauge", @"gauge", @"gauge", @"gauge", @"heading", @"map", @"tile"]));
+    XCTAssertEqualObjects([items valueForKey:@"columnSpan"], (@[@12, @24, @24, @12, @24, @24, @24]));
+
+    HAColumnarLayout *layout = [self columnarLayoutForConfig:config maxColumns:4 width:1024];
+    CGFloat sectionWidth = 2 * floor((1024 - 16.0 - 18.0) / 4.0) + 6.0;
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(HAItemFrame(layout, 0, 0)), floor(sectionWidth / 2.0 - 4.0), 0.5);
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(HAItemFrame(layout, 0, 1)), sectionWidth, 0.5);
+    XCTAssertEqualWithAccuracy(CGRectGetWidth(HAItemFrame(layout, 0, 6)), sectionWidth, 0.5);
+
+    // In a span-1 section "full" and 12 are the same thing.
+    HADashboardConfig *single = [self sectionsConfigWithCards:@[
+        @{@"type": @"gauge", @"entity": @"sensor.b", @"grid_options": @{@"columns": @"full"}},
+        @{@"type": @"heading", @"heading": @"Later"}]];
+    XCTAssertEqualObjects([single.sections[0].items valueForKey:@"columnSpan"], (@[@12, @12]));
+}
+
+/// Sections views use each card type's own HA default width.
+- (void)testSectionsGrid_haDefaultColumns {
+    XCTAssertEqual(([self sectionsItemForCard:@{@"type": @"entity", @"entity": @"sensor.a"}].columnSpan), 6);
+    XCTAssertEqual(([self sectionsItemForCard:@{@"type": @"statistic", @"entity": @"sensor.a"}].columnSpan), 6);
+    XCTAssertEqual(([self sectionsItemForCard:@{@"type": @"area", @"area": @"kitchen"}].columnSpan), 6);
+    XCTAssertEqual(([self sectionsItemForCard:(@{@"type": @"button", @"entity": @"light.a", @"show_name": @NO})].columnSpan), 3);
+    XCTAssertEqual(([self sectionsItemForCard:@{@"type": @"button", @"entity": @"light.a"}].columnSpan), 6);
+    XCTAssertEqual(([self sectionsItemForCard:@{@"type": @"tile", @"entity": @"light.a"}].columnSpan), 6);
+    XCTAssertEqual(([self sectionsItemForCard:@{@"type": @"gauge", @"entity": @"sensor.a"}].columnSpan), 12);
+    // Masonry views keep their own defaults.
+    NSDictionary *dict = @{@"views": @[@{@"title": @"Classic", @"cards": @[@{@"type": @"entity", @"entity": @"sensor.a"}]}]};
+    HADashboardConfig *classic = [HALovelaceParser dashboardConfigFromView:
+                                  [HALovelaceParser parseDashboardFromDictionary:dict].views.firstObject columns:3];
+    XCTAssertEqual(classic.items.firstObject.columnSpan, 12);
 }
 
 @end
