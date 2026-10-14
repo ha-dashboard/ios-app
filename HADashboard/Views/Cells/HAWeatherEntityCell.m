@@ -75,7 +75,9 @@ static void HAWeatherSectionsFromCustomProperties(NSDictionary *customProperties
     NSInteger forecastRows = HAWeatherForecastRowsFromCustomProperties(props);
 
     CGFloat height = kBottomPadding;
-    if (showCurrent) height += kTopContentHeight;
+    // Current conditions (which include the name, as in HA) or, for a
+    // forecast-only card, just the top padding above the forecast rows.
+    height += showCurrent ? kTopContentHeight : kBottomPadding;
     if (showForecast) {
         if (showCurrent) height += kForecastGap;
         height += kForecastRowHeight * forecastRows;
@@ -153,10 +155,11 @@ static void HAWeatherSectionsFromCustomProperties(NSDictionary *customProperties
     // -configureWithEntity:configItem: (never both active): one anchored to
     // detailsLabel (current conditions shown — organic, ">=" so a taller
     // current-conditions block just tightens the gap instead of conflicting)
-    // and one anchored directly to nameLabel (current conditions hidden, so
-    // the forecast strip isn't pinned below hidden-but-still-laid-out labels).
+    // and one anchored to the top padding (current conditions hidden: HA's
+    // forecast-only card has no name either, and anchoring below the hidden
+    // name label pushed the last forecast row out of the card).
     self.forecastTopWhenCurrentShown = [self.forecastContainer.topAnchor constraintGreaterThanOrEqualToAnchor:self.detailsLabel.bottomAnchor constant:kForecastGap];
-    self.forecastTopWhenCurrentHidden = [self.forecastContainer.topAnchor constraintEqualToAnchor:self.nameLabel.bottomAnchor constant:2];
+    self.forecastTopWhenCurrentHidden = [self.forecastContainer.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:kBottomPadding];
     self.forecastTopWhenCurrentHidden.active = NO; // default: current conditions shown
 
     self.forecastHeightConstraint = [self.forecastContainer.heightAnchor constraintEqualToConstant:kForecastRowHeight * kDefaultForecastRows];
@@ -190,6 +193,7 @@ static void HAWeatherSectionsFromCustomProperties(NSDictionary *customProperties
     self.conditionSymbol.hidden = !showCurrent;
     self.tempLabel.hidden = !showCurrent;
     self.detailsLabel.hidden = !showCurrent;
+    self.nameLabel.hidden = !showCurrent;
     self.forecastTopWhenCurrentShown.active = showCurrent;
     self.forecastTopWhenCurrentHidden.active = !showCurrent;
 
@@ -440,6 +444,7 @@ static void HAWeatherSectionsFromCustomProperties(NSDictionary *customProperties
     self.tempLabel.hidden = NO;
     self.detailsLabel.text = nil;
     self.detailsLabel.hidden = NO;
+    self.nameLabel.hidden = NO;
     self.forecastTopWhenCurrentShown.active = YES;
     self.forecastTopWhenCurrentHidden.active = NO;
     self.forecastSectionEnabled = NO;

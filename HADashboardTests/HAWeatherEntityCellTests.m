@@ -113,6 +113,33 @@
     XCTAssertTrue(forecastTopWhenCurrentHiddenActive.boolValue);
 }
 
+- (void)testShowCurrentFalse_forecastRowsFitInsidePreferredHeight {
+    // GitHub #25 screenshot: a forecast-only card clipped its last row because
+    // the rows were anchored below the (hidden) name label, which the height
+    // math didn't account for. HA's forecast-only card has no name either.
+    HAEntity *entity = [HASnapshotTestHelpers weatherSunny];
+    HADashboardConfigItem *item = [self itemWithCustomProperties:@{@"show_current": @NO, @"forecast_slots": @4}];
+    HAWeatherEntityCell *cell = [self cellConfiguredWithEntity:entity item:item];
+
+    UILabel *nameLabel = [cell valueForKey:@"nameLabel"];
+    XCTAssertTrue(nameLabel.hidden, @"Forecast-only cards have no name, as in HA");
+
+    UIView *forecast = [cell valueForKey:@"forecastContainer"];
+    CGRect frame = [forecast convertRect:forecast.bounds toView:cell.contentView];
+    XCTAssertEqualWithAccuracy(frame.size.height, 4 * 26.0, 0.5, @"All four forecast rows must get their full height");
+    XCTAssertGreaterThanOrEqual(frame.origin.y, 0);
+    XCTAssertLessThanOrEqual(CGRectGetMaxY(frame), cell.contentView.bounds.size.height + 0.5,
+                             @"The last forecast row must not be clipped");
+}
+
+- (void)testShowCurrentFalse_reuseRestoresNameLabel {
+    HAEntity *entity = [HASnapshotTestHelpers weatherSunny];
+    HAWeatherEntityCell *cell = [self cellConfiguredWithEntity:entity item:[self itemWithCustomProperties:@{@"show_current": @NO}]];
+    [cell prepareForReuse];
+    [cell configureWithEntity:entity configItem:[self itemWithCustomProperties:@{}]];
+    XCTAssertFalse(((UILabel *)[cell valueForKey:@"nameLabel"]).hidden);
+}
+
 - (void)testShowCurrentFalseAndShowForecastFalse_forcesCurrentConditionsVisible {
     HAEntity *entity = [HASnapshotTestHelpers weatherSunny];
     HADashboardConfigItem *item = [self itemWithCustomProperties:@{@"show_current": @NO, @"show_forecast": @NO}];
