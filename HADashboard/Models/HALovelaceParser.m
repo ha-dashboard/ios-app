@@ -1060,6 +1060,19 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
         return;
     }
 
+    // HA button card without an entity (GitHub #26): a plain action button
+    // (icon/name + tap_action), rendered by HATileEntityCell with a nil entity.
+    if ([cardType isEqualToString:@"button"] && HASafeDictStringOrNil(card, @"entity").length == 0) {
+        [self _addEntitylessButtonCard:card
+                          headingTitle:headingTitle
+                           sectionIcon:sectionIcon
+                            columnSpan:cardColumnSpan
+                               rowSpan:cardRowSpan
+                              sections:sections
+                              allItems:allItems];
+        return;
+    }
+
     // Parse view_layout.position for sidebar view support
     NSString *viewLayoutPosition = nil;
     NSDictionary *viewLayout = card[@"view_layout"];
@@ -1969,17 +1982,75 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
     [allItems addObject:item];
 }
 
+#pragma mark - Entity-less Button Card
+
+/// hui-button-card with no `entity`: copies its display and action config onto
+/// a single entity-less item (cardType "button"). Without an entity HA shows
+/// only a plain string `name` (a name-config object resolves against an empty
+/// state object to nothing), the configured icon (none → no icon) and never a
+/// state. Sizing was already resolved by the shared grid_options path, which
+/// includes hui-button-card's getGridOptions() in sections views.
++ (void)_addEntitylessButtonCard:(NSDictionary *)card
+                    headingTitle:(NSString *)headingTitle
+                     sectionIcon:(NSString *)sectionIcon
+                      columnSpan:(NSInteger)columnSpan
+                         rowSpan:(NSInteger)rowSpan
+                        sections:(NSMutableArray<HADashboardConfigSection *> *)sections
+                        allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems {
+    NSMutableDictionary *props = [NSMutableDictionary dictionary];
+    for (NSString *key in @[@"icon", @"color", @"icon_height"]) {
+        if ([card[key] isKindOfClass:[NSString class]]) props[key] = card[key];
+    }
+    for (NSString *key in @[@"show_name", @"show_icon", @"show_state"]) {
+        if ([card[key] isKindOfClass:[NSNumber class]]) props[key] = card[key];
+    }
+    for (NSString *key in @[@"tap_action", @"hold_action", @"double_tap_action"]) {
+        if ([card[key] isKindOfClass:[NSDictionary class]]) props[key] = card[key];
+    }
+
+    NSString *name = [card[@"name"] isKindOfClass:[NSString class]] ? card[@"name"] : nil;
+    NSString *trimmedName = [name stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    // HA renders a configured string name verbatim, so a blank one hides it.
+    if (name && trimmedName.length == 0) props[@"name_blank"] = @YES;
+
+    HADashboardConfigItem *item = [[HADashboardConfigItem alloc] init];
+    item.cardType = @"button";
+    // A grid heading uses the embedded headingIcon mechanism, exactly like the
+    // entity cards: displayName carries the heading, the card name rides along.
+    BOOL isGridHeading = headingTitle.length > 0;
+    if (isGridHeading && sectionIcon.length > 0) {
+        item.displayName = headingTitle;
+        props[@"headingIcon"] = sectionIcon;
+        if (trimmedName.length > 0) props[@"nameOverride"] = trimmedName;
+    } else if (trimmedName.length > 0) {
+        item.displayName = trimmedName;
+    }
+    item.columnSpan = columnSpan > 0 ? columnSpan : 12;
+    item.rowSpan = rowSpan;
+    item.customProperties = [props copy];
+
+    HADashboardConfigSection *section = [[HADashboardConfigSection alloc] init];
+    section.title = isGridHeading ? headingTitle : nil;
+    section.cardType = @"button";
+    section.icon = sectionIcon;
+    section.entityIds = @[];
+    section.items = @[item];
+    [sections addObject:section];
+    [allItems addObject:item];
+}
+
 #pragma mark - Unsupported Card Placeholder
 
-/// HA built-in card types that are legitimately entity-less by design (a plain
-/// action button, a static image, a webpage embed, HA-managed list cards with
-/// their own internal state). Reaching the drop point with zero entities for
-/// one of these is normal configuration, not an unsupported card — stay silent
-/// exactly like before this feature existed.
+/// HA built-in card types that are legitimately entity-less by design (a static
+/// image, a webpage embed, HA-managed list cards with their own internal
+/// state). Reaching the drop point with zero entities for one of these is
+/// normal configuration, not an unsupported card — stay silent exactly like
+/// before this feature existed. (Entity-less button cards never get here:
+/// they render as their own item, see _addEntitylessButtonCard:.)
 + (NSSet<NSString *> *)_entityOptionalCardTypes {
     static NSSet<NSString *> *types = nil;
     if (!types) {
-        types = [NSSet setWithArray:@[@"button", @"picture", @"iframe",
+        types = [NSSet setWithArray:@[@"picture", @"iframe",
                                        @"shopping-list", @"todo-list"]];
     }
     return types;

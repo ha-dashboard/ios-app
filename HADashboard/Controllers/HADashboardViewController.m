@@ -2425,9 +2425,16 @@ isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
     if ([ct isEqualToString:@"calendar"]) return;
 
     HAEntity *entity = [[HAConnectionManager sharedManager] entityForId:item.entityId];
-    if (!entity) return;
+    if (!entity && ![self isEntitylessButtonItem:item]) return;
 
     [self executeActionType:@"tap_action" forEntity:entity configProperties:item.customProperties];
+}
+
+/// A button card configured without an entity (GitHub #26). Its actions run
+/// with no entity: perform-action/navigate/url work, while toggle and the
+/// default more-info have nothing to act on and do nothing.
+- (BOOL)isEntitylessButtonItem:(HADashboardConfigItem *)item {
+    return item.entityId.length == 0 && [item.cardType isEqualToString:@"button"];
 }
 
 /// Resolve and execute an action (tap_action, hold_action, double_tap_action) for an entity.
@@ -2694,7 +2701,7 @@ isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath {
     if ([ct isEqualToString:@"calendar"]) return;
 
     HAEntity *entity = [[HAConnectionManager sharedManager] entityForId:item.entityId];
-    if (!entity) return;
+    if (!entity && ![self isEntitylessButtonItem:item]) return;
 
     [self executeActionType:@"hold_action" forEntity:entity configProperties:item.customProperties];
 }

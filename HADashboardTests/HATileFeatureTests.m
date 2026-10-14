@@ -11,6 +11,8 @@
 #import "HASnapshotTestHelpers.h"
 #import "HADashboardViewController.h"
 #import "HALightEntityCell.h"
+#import "HAIconMapper.h"
+#import "HATheme.h"
 
 #pragma mark - Test Helpers
 
@@ -684,6 +686,115 @@ static HADashboardConfigItem *makeConfigItem(NSString *entityId, NSArray *featur
                                    [HATileEntityCell preferredHeightForConfigItem:item], 0.01,
                                    @"%@ tile must use the tile height", entity.entityId);
     }
+}
+
+@end
+
+#pragma mark - Entity-less button card (GitHub #26)
+
+@interface HATileEntityCell (EntitylessButtonTestAccess)
+@property (nonatomic, strong) UILabel *tileIconLabel;
+@property (nonatomic, strong) UILabel *tileNameLabel;
+@property (nonatomic, strong) UILabel *tileStateLabel;
+@property (nonatomic, strong) UIStackView *featuresStack;
+@end
+
+/// Theme colors are dynamic providers, so compare what they resolve to.
+static BOOL HASameResolvedColor(UIColor *a, UIColor *b) {
+    if (@available(iOS 13.0, *)) {
+        UITraitCollection *traits = [UITraitCollection currentTraitCollection];
+        a = [a resolvedColorWithTraitCollection:traits];
+        b = [b resolvedColorWithTraitCollection:traits];
+    }
+    return a && b && CGColorEqualToColor(a.CGColor, b.CGColor);
+}
+
+@interface HAEntitylessButtonCellTests : XCTestCase
+@end
+
+@implementation HAEntitylessButtonCellTests
+
+- (HADashboardConfigItem *)buttonItemWithName:(NSString *)name props:(NSDictionary *)props {
+    HADashboardConfigItem *item = [[HADashboardConfigItem alloc] init];
+    item.cardType = @"button";
+    item.columnSpan = 12;
+    item.displayName = name;
+    item.customProperties = props;
+    return item;
+}
+
+- (HATileEntityCell *)configuredCellForItem:(HADashboardConfigItem *)item {
+    HATileEntityCell *cell = [[HATileEntityCell alloc] initWithFrame:CGRectMake(0, 0, 320, 100)];
+    [cell configureWithEntity:nil configItem:item];
+    [cell layoutIfNeeded];
+    return cell;
+}
+
+- (void)testReporterButton_rendersIconNameAndColorWithoutState {
+    HADashboardConfigItem *item = [self buttonItemWithName:@"Arrêter Coco Marcel" props:@{
+        @"icon": @"mdi:robot-vacuum", @"color": @"red",
+        @"show_name": @YES, @"show_icon": @YES, @"show_state": @NO,
+        @"features": @[@{@"type": @"light-brightness"}],
+    }];
+    HATileEntityCell *cell = [self configuredCellForItem:item];
+
+    XCTAssertEqualObjects(cell.tileNameLabel.text, @"Arrêter Coco Marcel");
+    XCTAssertFalse(cell.tileNameLabel.hidden);
+    XCTAssertEqualObjects(cell.tileIconLabel.text, [HAIconMapper glyphForIconName:@"robot-vacuum"]);
+    XCTAssertFalse(cell.tileIconLabel.hidden);
+    XCTAssertTrue(HASameResolvedColor(cell.tileIconLabel.textColor, [HATheme colorFromString:@"red"]));
+    XCTAssertTrue(cell.tileStateLabel.hidden);
+    XCTAssertNil(cell.tileStateLabel.text);
+    XCTAssertEqualWithAccuracy(cell.contentView.alpha, 1.0, 0.001, @"HA shows entity-less buttons as available");
+    XCTAssertTrue(cell.featuresStack.hidden, @"Features need an entity");
+}
+
+- (void)testShowStateTrue_stillNoStateWithoutEntity {
+    HATileEntityCell *cell = [self configuredCellForItem:[self buttonItemWithName:@"Go" props:@{
+        @"icon": @"mdi:bell", @"show_state": @YES}]];
+    XCTAssertTrue(cell.tileStateLabel.hidden);
+}
+
+- (void)testNoIcon_leavesIconEmpty_andDefaultColor {
+    HATileEntityCell *cell = [self configuredCellForItem:[self buttonItemWithName:nil props:nil]];
+    XCTAssertEqual(cell.tileIconLabel.text.length, 0u, @"HA shows no icon without an entity or icon");
+    XCTAssertEqualObjects(cell.tileNameLabel.text, @"");
+    XCTAssertTrue(HASameResolvedColor(cell.tileIconLabel.textColor, [HATheme secondaryTextColor]));
+}
+
+- (void)testStateNoneAndUnknownColors_fallBackToDefaultIconColor {
+    for (NSString *color in @[@"state", @"none", @"not-a-color"]) {
+        HATileEntityCell *cell = [self configuredCellForItem:[self buttonItemWithName:@"X" props:@{
+            @"icon": @"mdi:bell", @"color": color}]];
+        XCTAssertTrue(HASameResolvedColor(cell.tileIconLabel.textColor, [HATheme secondaryTextColor]), @"%@", color);
+    }
+    HATileEntityCell *hex = [self configuredCellForItem:[self buttonItemWithName:@"X" props:@{
+        @"icon": @"mdi:bell", @"color": @"#00ff00"}]];
+    XCTAssertTrue(HASameResolvedColor(hex.tileIconLabel.textColor, [UIColor colorWithRed:0 green:1 blue:0 alpha:1]));
+    HATileEntityCell *black = [self configuredCellForItem:[self buttonItemWithName:@"X" props:@{
+        @"icon": @"mdi:bell", @"color": @"black"}]];
+    XCTAssertTrue(HASameResolvedColor(black.tileIconLabel.textColor, [UIColor blackColor]));
+}
+
+- (void)testShowFlagsAndBlankName {
+    HATileEntityCell *cell = [self configuredCellForItem:[self buttonItemWithName:nil props:@{
+        @"icon": @"mdi:bell", @"show_icon": @NO, @"name_blank": @YES}]];
+    XCTAssertTrue(cell.tileIconLabel.hidden);
+    XCTAssertTrue(cell.tileNameLabel.hidden);
+}
+
+- (void)testHeightMatchesEntityButton {
+    HAEntity *sw = [HASnapshotTestHelpers switchEntityOn];
+    HADashboardConfigItem *entityButton = [HASnapshotTestHelpers itemWithEntityId:sw.entityId cardType:@"button"
+                                                                       columnSpan:6 headingIcon:nil displayName:nil];
+    HADashboardConfigItem *entityless = [self buttonItemWithName:@"Go" props:@{@"icon": @"mdi:bell"}];
+    CGFloat expected = [HADashboardViewController heightForItem:entityButton entity:sw section:nil itemWidth:300];
+    XCTAssertEqualWithAccuracy([HADashboardViewController heightForItem:entityless entity:nil section:nil itemWidth:300],
+                               expected, 0.01);
+    entityButton.rowSpan = 3;
+    entityless.rowSpan = 3;
+    XCTAssertEqualWithAccuracy([HADashboardViewController heightForItem:entityless entity:nil section:nil itemWidth:300],
+                               [HADashboardViewController heightForItem:entityButton entity:sw section:nil itemWidth:300], 0.01);
 }
 
 @end

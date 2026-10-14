@@ -357,6 +357,20 @@ static UIImage *_blurredGradientCache = nil;
     return [UIColor colorWithRed:r green:g blue:b alpha:1.0];
 }
 
++ (UIColor *)colorFromStringOrNil:(NSString *)colorString {
+    if (![colorString isKindOfClass:[NSString class]]) return nil;
+    NSString *hex = [colorString stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"# "]];
+    NSCharacterSet *nonHex = [[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdefABCDEF"] invertedSet];
+    if (hex.length == 6 && [hex rangeOfCharacterFromSet:nonHex].location == NSNotFound) {
+        return [self colorFromHex:hex];
+    }
+    // Not hex: only a named color resolves to anything but colorFromHex:'s black.
+    UIColor *named = [self colorFromString:colorString];
+    BOOL isBlackFallback = [named isEqual:[UIColor blackColor]] &&
+                           ![[colorString lowercaseString] isEqualToString:@"black"];
+    return isBlackFallback ? nil : named;
+}
+
 + (UIColor *)colorFromString:(NSString *)colorString {
     if (!colorString || ![colorString isKindOfClass:[NSString class]]) return nil;
     NSString *lower = [colorString lowercaseString];
