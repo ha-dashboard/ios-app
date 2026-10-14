@@ -13,6 +13,42 @@ NSString *const HAUnsupportedCardTypeKey = @"unsupportedCardType";
 NSString *const HAHeadingBadgesKey = @"headingBadges";
 NSString *const HAHeadingTapActionKey = @"headingTapAction";
 
+#pragma mark - Sections grid helpers
+
+/// Columns in one sections-view section's card grid (hui-grid-section
+/// --base-column-count). HA spans a card over min(columns, grid width), so
+/// anything wider — e.g. "columns: 33" — fills the section.
+static const NSInteger kHASectionGridColumns = 12;
+
+/// HA's legacy layout_options used a 4-column section grid; migrateLayoutToGridOptions
+/// multiplies its column values by GRID_COLUMN_MULTIPLIER (3).
+static const NSInteger kHALayoutOptionsColumnMultiplier = 3;
+
+/// A grid_options number (NSNumber, or a numeric string from a hand-edited
+/// config); 0 for "full", "auto" and anything malformed.
+static NSInteger HAGridIntegerValue(id value) {
+    if ([value isKindOfClass:[NSNumber class]] || [value isKindOfClass:[NSString class]]) {
+        return [value integerValue];
+    }
+    return 0;
+}
+
+/// HA conditionalClamp(): clamp only against the bounds that are defined.
+static NSInteger HAGridConditionalClamp(NSInteger value, id min, id max) {
+    if ([min isKindOfClass:[NSNumber class]]) value = MAX(value, [min integerValue]);
+    if ([max isKindOfClass:[NSNumber class]]) value = MIN(value, [max integerValue]);
+    return value;
+}
+
+/// HA computeCardFeatureRows(): features below the card, two per row when the
+/// first one sits inline.
+static NSInteger HACardFeatureRows(NSUInteger featureCount, NSString *position) {
+    if (![position isEqualToString:@"inline"]) return (NSInteger)featureCount;
+    NSInteger below = featureCount > 0 ? (NSInteger)featureCount - 1 : 0;
+    NSInteger columns = MAX(MIN(below, 2), 1);
+    return (below + columns - 1) / columns;
+}
+
 #pragma mark - HALovelaceView
 
 @implementation HALovelaceView
@@ -260,7 +296,9 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                     continue;
                 }
 
-                // Sections view: scale grid_options.columns from HA's section grid to our 12-col sub-grid
+                // Sections view: a non-zero sectionGridMax marks the card as sitting on a
+                // section's 12-column grid (no scaling — ours is 12 columns too), which
+                // turns on HA's per-card grid sizing (min/max clamps, clock rows).
                 NSInteger sectionGridMax = (view.maxColumns > 0) ? view.maxColumns : 4;
                 NSString *cardPath = [NSString stringWithFormat:@"%@/section[%lu]/card[%lu]",
                                        viewPathForLog, (unsigned long)sectionIdx, (unsigned long)cardIdx];
@@ -585,8 +623,8 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
 
 /// Process a single Lovelace card into a config section with items.
 /// @param gridColumns If > 0, overrides the item's columnSpan (from a parent grid card's grid_options)
-/// @param sectionGridMax HA sections view grid max (typically 4). When > 0 and < 12,
-///        grid_options.columns values are scaled to our 12-column sub-grid. Pass 0 for non-sections views.
+/// @param sectionGridMax HA sections view max_columns (typically 4). > 0 marks a sections
+///        view, whose cards get HA's grid sizing; pass 0 for non-sections views.
 + (void)processCard:(NSDictionary *)card
        sectionTitle:(NSString *)sectionTitle
         sectionIcon:(NSString *)sectionIcon
@@ -771,16 +809,11 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             if (gridCardColumns > 1) {
                 parentGridCols = 12 / gridCardColumns; // e.g. columns:2 → each child gets 6
             }
-            NSDictionary *gridOptions = card[@"grid_options"];
-            if ([gridOptions isKindOfClass:[NSDictionary class]]) {
-                NSInteger cols = [gridOptions[@"columns"] integerValue];
-                if (cols > 0) parentGridCols = cols;
-            }
-            NSDictionary *layoutOptions = card[@"layout_options"];
-            if ([layoutOptions isKindOfClass:[NSDictionary class]]) {
-                NSInteger cols = [layoutOptions[@"grid_columns"] integerValue];
-                if (cols > 0) parentGridCols = cols;
-            }
+            // The container's own section width (grid_options, or legacy
+            // layout_options ×3). HA spans it over min(columns, 12), so an
+            // oversized value such as 33 fills the section.
+            NSInteger containerCols = HAGridIntegerValue([self configGridOptionsForCard:card][@"columns"]);
+            if (containerCols > 0) parentGridCols = MIN(containerCols, kHASectionGridColumns);
 
             // Check if first sub-card is a heading
             NSDictionary *first = subCards.firstObject;
@@ -804,13 +837,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             // (thermostat(9)+vacuum(3) side-by-side). If the grid has no explicit
             // column spec (like Printy), emit the heading as a standalone full-width
             // item — it won't conflict with packing.
-            BOOL gridHasExplicitCols = NO;
-            if ([gridOptions isKindOfClass:[NSDictionary class]] && [gridOptions[@"columns"] integerValue] > 0) {
-                gridHasExplicitCols = YES;
-            }
-            if ([layoutOptions isKindOfClass:[NSDictionary class]] && [layoutOptions[@"grid_columns"] integerValue] > 0) {
-                gridHasExplicitCols = YES;
-            }
+            BOOL gridHasExplicitCols = containerCols > 0;
             // Also treat inherited gridColumns from parent as explicit
             if (gridColumns > 0) gridHasExplicitCols = YES;
 
@@ -931,52 +958,26 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
         if (!sectionTitle) sectionTitle = HASafeDictStringOrNil(card, @"heading");
     }
 
-    // Column span and row span from grid_options / layout_options
+    // Column span and row span from grid_options (or legacy layout_options,
+    // migrated to HA's 12-column grid). HA's sections grid is 12 columns per
+    // section, the same as our sub-grid, so the values need no scaling.
     NSInteger cardColumnSpan = gridColumns; // from parent grid card, or 0
     NSInteger cardRowSpan = 0; // 0 = auto (use per-card-type height)
     {
-        NSDictionary *gridOptions = card[@"grid_options"];
-        if ([gridOptions isKindOfClass:[NSDictionary class]]) {
-            if (cardColumnSpan <= 0) {
-                id colsValue = gridOptions[@"columns"];
-                NSInteger cols = 0;
-                if ([colsValue isKindOfClass:[NSNumber class]]) {
-                    cols = [colsValue integerValue];
-                } else if ([colsValue isKindOfClass:[NSString class]]) {
-                    if ([[colsValue lowercaseString] isEqualToString:@"full"]) {
-                        cols = 12; // full width in our sub-grid
-                    } else {
-                        cols = [colsValue integerValue];
-                    }
-                }
-                if (cols > 0) {
-                    // HA sections view uses a 12-column CSS grid natively.
-                    // grid_options.columns values are already in terms of 12 columns.
-                    cardColumnSpan = cols;
-                }
-            }
-            // rows: number = explicit row units, "auto" or missing = auto height
-            id rowsValue = gridOptions[@"rows"];
-            if ([rowsValue isKindOfClass:[NSNumber class]]) {
-                cardRowSpan = [rowsValue integerValue];
-            } else if ([rowsValue isKindOfClass:[NSString class]] &&
-                       ![[rowsValue lowercaseString] isEqualToString:@"auto"]) {
-                cardRowSpan = [rowsValue integerValue];
-            }
-        }
-        NSDictionary *layoutOptions = card[@"layout_options"];
-        if ([layoutOptions isKindOfClass:[NSDictionary class]]) {
-            if (cardColumnSpan <= 0) {
-                NSInteger cols = [layoutOptions[@"grid_columns"] integerValue];
+        NSDictionary *configGridOptions = [self configGridOptionsForCard:card];
+        if (cardColumnSpan <= 0) {
+            id colsValue = configGridOptions[@"columns"];
+            if ([colsValue isKindOfClass:[NSString class]] &&
+                [[colsValue lowercaseString] isEqualToString:@"full"]) {
+                cardColumnSpan = kHASectionGridColumns;
+            } else {
+                NSInteger cols = HAGridIntegerValue(colsValue);
                 if (cols > 0) cardColumnSpan = cols;
             }
-            if (cardRowSpan <= 0) {
-                id rowsValue = layoutOptions[@"grid_rows"];
-                if ([rowsValue isKindOfClass:[NSNumber class]]) {
-                    cardRowSpan = [rowsValue integerValue];
-                }
-            }
         }
+        // rows: number = explicit row units, "auto" or missing = auto height
+        NSInteger rows = HAGridIntegerValue(configGridOptions[@"rows"]);
+        if (rows > 0) cardRowSpan = rows;
     }
     // Default column span: HA sections view defaults tile/button/sensor to 6 (half-width,
     // two per row). Other card types (including standalone gauge) default to 12 (full width).
@@ -994,6 +995,15 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
         }
     }
 
+    // Sections views: HA widens or narrows every card placed directly on a
+    // section grid to its card type's min/max size (computeCardGridSize), so
+    // e.g. a tile with "columns: 4" renders at 6 (GitHub #25). Children of a
+    // grid/stack card are sized by their parent there, not by their own
+    // grid_options, and masonry views ignore grid_options altogether.
+    if (sectionGridMax > 0 && gridColumns <= 0) {
+        [self _clampSectionGridSizeForCard:card columnSpan:&cardColumnSpan rowSpan:&cardRowSpan];
+    }
+
     // HA built-in clock card: entity-less, rendered natively by HAClockCardCell.
     // Exact match — "custom:clock-weather-card" is routed by containsString:
     // "clock-weather" elsewhere and must never land here.
@@ -1002,7 +1012,6 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                headingTitle:headingTitle
                 sectionIcon:sectionIcon
                  columnSpan:cardColumnSpan
-          clampToMinColumns:(gridColumns <= 0)
                     rowSpan:cardRowSpan
              sectionGridMax:sectionGridMax
                    sections:sections
@@ -1682,6 +1691,177 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
     [sections addObject:section];
 }
 
+#pragma mark - Sections Grid Sizing
+
++ (NSDictionary<NSString *, id> *)haGridOptionsForCard:(NSDictionary *)card {
+    if (![card isKindOfClass:[NSDictionary class]]) return @{};
+    NSString *type = HASafeDictStringOrNil(card, @"type");
+    if (type.length == 0) return @{};
+
+    // Each entry ports that card's getGridOptions() from home-assistant/frontend
+    // src/panels/lovelace/cards/hui-<type>-card.ts. Cards HA gives no
+    // getGridOptions() (gauge, glance, light, media-control, markdown, picture*,
+    // alarm-panel, plant-status, todo-list, stacks, grid, conditional, …) have
+    // no minimum or maximum size and fall through to the empty dictionary.
+    BOOL vertical = HASafeDictBool(card, @"vertical", NO);
+    NSUInteger featureCount = HASafeDictArrayOrNil(card, @"features").count;
+    NSString *featurePosition = vertical ? @"bottom" : (HASafeDictStringOrNil(card, @"features_position") ?: @"bottom");
+    BOOL inlineFeatures = featureCount > 0 && [featurePosition isEqualToString:@"inline"];
+
+    if ([type isEqualToString:@"tile"]) {
+        NSInteger minColumns = inlineFeatures ? 12 : 6;
+        NSInteger rows = 1 + (featureCount > 0 ? HACardFeatureRows(featureCount, featurePosition) : 0);
+        if (vertical) {
+            rows++;
+            minColumns = 3;
+        }
+        return @{@"columns": @6, @"rows": @(rows), @"min_columns": @(minColumns), @"min_rows": @(rows)};
+    }
+    if ([type isEqualToString:@"area"]) {
+        NSInteger columns = inlineFeatures ? 12 : 6;
+        NSInteger minColumns = columns;
+        NSInteger rows = 1 + (featureCount > 0 ? HACardFeatureRows(featureCount, featurePosition) : 0);
+        if (vertical) {
+            rows++;
+            minColumns = 3;
+        }
+        if (![HASafeDictStringOrNil(card, @"display_type") isEqualToString:@"compact"]) {
+            rows += inlineFeatures ? 3 : 2;
+        }
+        return @{@"columns": @(columns), @"rows": @(rows), @"min_columns": @(minColumns), @"min_rows": @(rows)};
+    }
+    if ([type isEqualToString:@"button"]) {
+        // hui-button-card setConfig defaults show_icon and show_name to true.
+        BOOL showIcon = HASafeDictBool(card, @"show_icon", YES);
+        BOOL showName = HASafeDictBool(card, @"show_name", YES);
+        BOOL showState = HASafeDictBool(card, @"show_state", NO);
+        if (showIcon && (showName || showState)) {
+            return @{@"columns": @6, @"rows": @2, @"min_columns": @2, @"min_rows": @2};
+        }
+        return @{@"columns": @3, @"rows": @1, @"min_columns": @2, @"min_rows": @1};
+    }
+    if ([type isEqualToString:@"entity"] || [type isEqualToString:@"sensor"] ||
+        [type isEqualToString:@"statistic"]) {
+        return @{@"columns": @6, @"rows": @2, @"min_columns": @6, @"min_rows": @2};
+    }
+    if ([type isEqualToString:@"entities"]) {
+        return @{@"columns": @12, @"rows": @"auto", @"min_columns": @3};
+    }
+    if ([type isEqualToString:@"thermostat"] || [type isEqualToString:@"humidifier"]) {
+        NSInteger featureHeight = (NSInteger)ceil(featureCount * 2.0 / 3.0);
+        return @{@"columns": @12, @"rows": @(5 + featureHeight), @"min_columns": @6, @"min_rows": @(2 + featureHeight)};
+    }
+    if ([type isEqualToString:@"weather-forecast"]) {
+        BOOL showCurrent = HASafeDictBool(card, @"show_current", YES);
+        BOOL showForecast = HASafeDictBool(card, @"show_forecast", YES);
+        NSInteger rows = 1, minRows = 1;
+        if (showCurrent) { rows++; minRows++; }
+        if (showForecast) {
+            rows++; minRows++;
+            if ([HASafeDictStringOrNil(card, @"forecast_type") isEqualToString:@"daily"]) rows++;
+        }
+        return @{@"columns": @12, @"rows": @(rows),
+                 @"min_columns": @(showCurrent && showForecast ? 5 : 4), @"min_rows": @(minRows)};
+    }
+    if ([type isEqualToString:@"clock"]) {
+        BOOL hasTitle = HASafeDictStringOrNil(card, @"title").length > 0;
+        NSString *size = HASafeDictStringOrNil(card, @"clock_size");
+        if ([HASafeDictStringOrNil(card, @"clock_style") isEqualToString:@"analog"]) {
+            if ([size isEqualToString:@"medium"]) {
+                return @{@"columns": @6, @"rows": @3, @"min_columns": @5, @"min_rows": @(hasTitle ? 4 : 3)};
+            }
+            if ([size isEqualToString:@"large"]) {
+                return @{@"columns": @6, @"rows": @4, @"min_columns": @6, @"min_rows": @(hasTitle ? 5 : 4)};
+            }
+            return @{@"columns": @6, @"rows": @2, @"min_columns": @2, @"min_rows": @(hasTitle ? 3 : 2)};
+        }
+        if ([size isEqualToString:@"medium"]) {
+            return @{@"columns": @6, @"rows": @2, @"min_columns": @4, @"min_rows": @(hasTitle ? 2 : 1), @"max_rows": @4};
+        }
+        if ([size isEqualToString:@"large"]) {
+            return @{@"columns": @6, @"rows": @2, @"min_columns": @6, @"min_rows": @2, @"max_rows": @4};
+        }
+        return @{@"columns": @6, @"rows": @1, @"min_columns": @3, @"min_rows": @1, @"max_rows": @4};
+    }
+    if ([type isEqualToString:@"heading"]) {
+        return @{@"columns": @"full", @"rows": @"auto", @"min_columns": @3};
+    }
+    if ([type isEqualToString:@"calendar"]) {
+        return @{@"columns": @12, @"rows": @6, @"min_columns": @4, @"min_rows": @4};
+    }
+    if ([type isEqualToString:@"logbook"]) {
+        BOOL hasTitle = HASafeDictStringOrNil(card, @"title").length > 0;
+        return @{@"columns": @12, @"rows": @6, @"min_columns": @6, @"min_rows": @(hasTitle ? 4 : 3)};
+    }
+    if ([type isEqualToString:@"history-graph"]) {
+        return @{@"columns": @12, @"min_columns": @6, @"min_rows": @2};
+    }
+    if ([type isEqualToString:@"statistics-graph"]) {
+        return @{@"columns": @12, @"min_columns": @6, @"min_rows": @3};
+    }
+    if ([type isEqualToString:@"map"]) {
+        return @{@"columns": @"full", @"rows": @4, @"min_columns": @6, @"min_rows": @2};
+    }
+    return @{};
+}
+
++ (NSDictionary<NSString *, id> *)configGridOptionsForCard:(NSDictionary *)card {
+    if (![card isKindOfClass:[NSDictionary class]]) return @{};
+    NSDictionary *gridOptions = HASafeDictDictOrNil(card, @"grid_options");
+    if (gridOptions) return gridOptions;
+    NSDictionary *layoutOptions = HASafeDictDictOrNil(card, @"layout_options");
+    if (!layoutOptions) return @{};
+
+    NSMutableDictionary *migrated = [NSMutableDictionary dictionary];
+    NSDictionary<NSString *, NSString *> *columnKeys = @{@"grid_columns": @"columns",
+                                                         @"grid_min_columns": @"min_columns",
+                                                         @"grid_max_columns": @"max_columns"};
+    for (NSString *legacyKey in columnKeys) {
+        id value = layoutOptions[legacyKey];
+        if ([value isKindOfClass:[NSNumber class]]) {
+            migrated[columnKeys[legacyKey]] = @([value integerValue] * kHALayoutOptionsColumnMultiplier);
+        } else if (value && value != [NSNull null]) {
+            migrated[columnKeys[legacyKey]] = value; // strings ("full") pass through unscaled
+        }
+    }
+    NSDictionary<NSString *, NSString *> *rowKeys = @{@"grid_rows": @"rows",
+                                                      @"grid_min_rows": @"min_rows",
+                                                      @"grid_max_rows": @"max_rows"};
+    for (NSString *legacyKey in rowKeys) {
+        id value = layoutOptions[legacyKey];
+        if (value && value != [NSNull null]) migrated[rowKeys[legacyKey]] = value;
+    }
+    return [migrated copy];
+}
+
+/// hui-card getGridOptions(): the card element's options overlaid with the
+/// card config's own (grid_options or migrated layout_options).
++ (NSDictionary<NSString *, id> *)_mergedGridOptionsForCard:(NSDictionary *)card {
+    NSMutableDictionary *merged = [[self haGridOptionsForCard:card] mutableCopy];
+    [merged addEntriesFromDictionary:[self configGridOptionsForCard:card]];
+    return merged;
+}
+
+/// HA computeCardGridSize() for a card placed directly on a sections-view
+/// section grid: numeric columns clamp to [min_columns, max_columns] and then
+/// to the section's 12 columns; explicit rows clamp to [min_rows, max_rows].
+/// "full" columns and auto rows (0) are left alone.
++ (void)_clampSectionGridSizeForCard:(NSDictionary *)card
+                          columnSpan:(NSInteger *)columnSpan
+                             rowSpan:(NSInteger *)rowSpan {
+    NSDictionary *merged = [self _mergedGridOptionsForCard:card];
+    id configuredColumns = [self configGridOptionsForCard:card][@"columns"];
+    BOOL fullWidth = [configuredColumns isKindOfClass:[NSString class]] &&
+                     [[configuredColumns lowercaseString] isEqualToString:@"full"];
+    if (!fullWidth && *columnSpan > 0) {
+        *columnSpan = HAGridConditionalClamp(*columnSpan, merged[@"min_columns"], merged[@"max_columns"]);
+    }
+    *columnSpan = MAX(1, MIN(*columnSpan, kHASectionGridColumns));
+    if (*rowSpan > 0) {
+        *rowSpan = MAX(1, HAGridConditionalClamp(*rowSpan, merged[@"min_rows"], merged[@"max_rows"]));
+    }
+}
+
 #pragma mark - Clock Card
 
 /// Copies the built-in `clock` card's config onto a single entity-less item
@@ -1691,7 +1871,6 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
          headingTitle:(NSString *)headingTitle
           sectionIcon:(NSString *)sectionIcon
            columnSpan:(NSInteger)columnSpan
-    clampToMinColumns:(BOOL)clampToMinColumns
               rowSpan:(NSInteger)rowSpan
        sectionGridMax:(NSInteger)sectionGridMax
              sections:(NSMutableArray<HADashboardConfigSection *> *)sections
@@ -1724,35 +1903,16 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
     item.columnSpan = columnSpan > 0 ? columnSpan : 12;
     item.rowSpan = rowSpan;
     if (sectionGridMax > 0) {
-        // hui-clock-card getGridOptions(): rows clamp to [min_rows, max_rows],
-        // columns to min_columns. Classic (masonry) views size to content.
-        BOOL analog = [props[@"clock_style"] isEqual:@"analog"];
-        NSString *size = props[@"clock_size"];
-        BOOL hasTitle = title.length > 0;
-        NSInteger rows, minRows, maxRows, minColumns;
-        if (analog) {
-            maxRows = 0;
-            if ([size isEqual:@"medium"]) {
-                rows = 3; minRows = hasTitle ? 4 : 3; minColumns = 5;
-            } else if ([size isEqual:@"large"]) {
-                rows = 4; minRows = hasTitle ? 5 : 4; minColumns = 6;
-            } else {
-                rows = 2; minRows = hasTitle ? 3 : 2; minColumns = 2;
-            }
-        } else {
-            maxRows = 4;
-            if ([size isEqual:@"medium"]) {
-                rows = 2; minRows = hasTitle ? 2 : 1; minColumns = 4;
-            } else if ([size isEqual:@"large"]) {
-                rows = 2; minRows = 2; minColumns = 6;
-            } else {
-                rows = 1; minRows = 1; minColumns = 3;
-            }
+        // The clock has no intrinsic height: in sections views it takes
+        // hui-clock-card getGridOptions() rows when none are configured, and
+        // always clamps them to [min_rows, max_rows] — also inside a grid
+        // card. Columns were already clamped by the shared sections sizing.
+        // Classic (masonry) views size the clock to its content.
+        NSDictionary *gridOptions = [self _mergedGridOptionsForCard:card];
+        NSInteger rows = rowSpan > 0 ? rowSpan : HAGridIntegerValue(gridOptions[@"rows"]);
+        if (rows > 0) {
+            item.rowSpan = MAX(1, HAGridConditionalClamp(rows, gridOptions[@"min_rows"], gridOptions[@"max_rows"]));
         }
-        NSInteger effectiveRows = MAX(rowSpan > 0 ? rowSpan : rows, minRows);
-        if (maxRows > 0) effectiveRows = MIN(effectiveRows, maxRows);
-        item.rowSpan = effectiveRows;
-        if (clampToMinColumns) item.columnSpan = MIN(MAX(item.columnSpan, minColumns), 12);
     }
     item.customProperties = [props copy];
 
