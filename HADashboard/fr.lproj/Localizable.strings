@@ -1,0 +1,960 @@
+/* Generic affirmative button (alerts, dialogs). */
+"action.ok" = "OK";
+
+
+/* Navigation bar title for the Settings screen. */
+"settings.nav_title" = "Paramètres";
+
+/* All-caps section header in Settings, above connection summary. */
+"settings.section.connection.title" = "CONNEXION";
+
+/* All-caps section header in Settings, above theme controls. */
+"settings.section.appearance.title" = "APPARENCE";
+
+/* Segmented control option, Settings > Appearance theme mode. Short label. */
+"settings.theme_mode.auto" = "Auto";
+
+/* Segmented control option, Settings > Appearance theme mode. Short label. */
+"settings.theme_mode.dark" = "Sombre";
+
+/* Segmented control option, Settings > Appearance theme mode. Short label. */
+"settings.theme_mode.light" = "Clair";
+
+/* Toggle row title in Settings > Appearance. */
+"settings.section.sun_entity.title" = "Utiliser l'entité Soleil";
+
+/* Help paragraph under the "Use Sun Entity" toggle in Settings. */
+"settings.section.sun_entity.help" = "Utilise l'entité sun.sun de Home Assistant pour le mode sombre automatique au lieu de l'apparence du système.";
+
+/* Label above the gradient enable switch in Settings > Appearance. */
+"settings.section.gradient_background.title" = "Arrière-plan dégradé";
+
+/* Label above the gradient preset segmented control in Settings > Appearance. */
+"settings.section.gradient_preset.title" = "Préréglage de dégradé";
+
+/* Segmented control option, gradient preset picker in Settings. Short label. */
+"settings.gradient_preset.purple" = "Violet";
+
+/* Segmented control option, gradient preset picker in Settings. Short label. */
+"settings.gradient_preset.ocean" = "Océan";
+
+/* Segmented control option, gradient preset picker in Settings. Short label. */
+"settings.gradient_preset.sunset" = "Coucher de soleil";
+
+/* Segmented control option, gradient preset picker in Settings. Short label. */
+"settings.gradient_preset.forest" = "Forêt";
+
+/* Segmented control option, gradient preset picker in Settings. Short label. */
+"settings.gradient_preset.night" = "Nuit";
+
+/* Segmented control option, gradient preset picker in Settings. Short label. */
+"settings.gradient_preset.custom" = "Personnalisé";
+
+/* All-caps section header in Settings, above the language picker. Hidden while only one language ships. */
+"settings.section.language.title" = "LANGUE";
+
+/* Segmented control option, Settings > Language picker. Follows the iOS system language. Short label. */
+"settings.language.system_default" = "Langue du système";
+
+/* Help paragraph under the language picker in Settings. */
+"settings.language.help" = "Remplace la langue de l'app, quelle que soit la langue du système iOS. Les noms et états des entités suivent toujours la langue de votre serveur Home Assistant.";
+
+/* Toast shown after changing the in-app language override in Settings. */
+"settings.toast.language_changed" = "Langue mise à jour";
+
+/* All-caps section header in Settings, above kiosk/demo/display toggles. */
+"settings.section.display.title" = "AFFICHAGE";
+
+/* Toggle row title in Settings > Display. */
+"settings.section.kiosk_mode.title" = "Mode kiosque";
+
+/* Help paragraph under the "Kiosk Mode" toggle in Settings. Two paragraphs, can wrap. */
+"settings.section.kiosk_mode.help" = "Masque la barre de navigation et empêche la mise en veille de l'écran. Touchez trois fois le haut de l'écran pour afficher temporairement les commandes.\n\nPour un verrouillage complet, activez l'Accès guidé dans Réglages de l'iPad → Accessibilité → Accès guidé, puis cliquez trois fois sur le bouton principal dans l'app.";
+
+/* Toggle row title in Settings > Display (sub-setting of Kiosk Mode). */
+"settings.section.wake_on_touch.title" = "Réveil au toucher";
+
+/* Help paragraph under the "Wake on Touch" toggle in Settings. */
+"settings.section.wake_on_touch.help" = "Atténue l'écran après 60 secondes d'inactivité. Touchez n'importe où pour le réveiller.";
+
+/* Toggle row title in Settings > Display. */
+"settings.section.demo_mode.title" = "Mode démo";
+
+/* Help paragraph under the "Demo Mode" toggle in Settings. */
+"settings.section.demo_mode.help" = "Affiche l'app avec des données de démonstration au lieu de se connecter à un serveur Home Assistant. Utile pour présenter les fonctionnalités de l'app.";
+
+/* Toggle row title in Settings > Display. */
+"settings.section.auto_reload.title" = "Rechargement automatique du tableau de bord";
+
+/* Help paragraph under the "Auto-Reload Dashboard" toggle in Settings. */
+"settings.section.auto_reload.help" = "Recharge automatiquement le tableau de bord lorsque sa configuration est modifiée sur le serveur Home Assistant.";
+
+/* Toggle row title in Settings > Display. */
+"settings.section.mute_camera_audio.title" = "Couper le son des caméras";
+
+/* Help paragraph under the "Mute Camera Audio" toggle in Settings. */
+"settings.section.mute_camera_audio.help" = "Contrôle la lecture audio des cartes caméra Home Assistant uniquement. Le flux caméra local inclut toujours l'audio du micro tant qu'un client le regarde ; désactivez ce flux pour arrêter la diffusion de l'audio.";
+
+/* Button in Settings > Display. Destructive-styled text button. */
+"settings.action.clear_cache" = "Vider le cache et recharger";
+
+/* All-caps section header in Settings, above device registration controls. */
+"settings.section.device_integration.title" = "INTÉGRATION DE L'APPAREIL";
+
+/* All-caps section header in Settings, above app/version info. */
+"settings.section.about.title" = "À PROPOS";
+
+/* All-caps section header in Settings, hidden unless developer mode is unlocked. */
+"settings.section.developer.title" = "DÉVELOPPEUR";
+
+/* Toggle row title in Settings > Developer (hidden section). */
+"settings.dev.disable_blur.title" = "Désactiver le flou";
+
+/* Help text under the "Disable Blur" developer toggle in Settings. */
+"settings.dev.disable_blur.help" = "Désactive les arrière-plans de cartes en verre dépoli pour les tests de performance A/B";
+
+/* Toggle row title in Settings > Developer (hidden section). */
+"settings.dev.performance_monitor.title" = "Moniteur de performances";
+
+/* Help text under the "Performance Monitor" developer toggle in Settings. */
+"settings.dev.performance_monitor.help" = "Journalise les FPS et les durées dans /tmp/perf.log (redémarrez l'app pour appliquer)";
+
+/* Label above the camera stream mode segmented control in Settings > Developer. */
+"settings.dev.camera_stream_mode.title" = "Mode du flux caméra";
+
+/* Segmented control option, developer camera stream mode picker. Short label. */
+"settings.dev.stream_mode.auto" = "Auto";
+
+/* Segmented control option, developer camera stream mode picker. Short label. */
+"settings.dev.stream_mode.mjpeg" = "MJPEG";
+
+/* Segmented control option, developer camera stream mode picker. Short label. */
+"settings.dev.stream_mode.hls" = "HLS";
+
+/* Segmented control option, developer camera stream mode picker. Short label. */
+"settings.dev.stream_mode.snapshot" = "Instantané";
+
+/* Toggle row title in Settings > Developer (hidden section). */
+"settings.dev.verbose_logging.title" = "Journalisation détaillée";
+
+/* Help text under the "Verbose Logging" developer toggle in Settings. */
+"settings.dev.verbose_logging.help" = "Journalise les messages de niveau débogage (images caméra, interrogations, tailles de données). Utile pour diagnostiquer les problèmes.";
+
+/* Button in Settings > Developer (hidden section). */
+"settings.dev.export_logs" = "Exporter les journaux";
+
+/* Button in Settings, bottom of screen. Destructive-styled text button. */
+"settings.action.log_out_reset" = "Se déconnecter et réinitialiser";
+
+/* Section title above the Local Camera Stream controls in Settings. */
+"settings.live_stream.title" = "Flux caméra local";
+
+/* Segmented control option, Local Camera Stream camera picker. Short label. */
+"settings.live_stream.camera.front" = "Avant";
+
+/* Segmented control option, Local Camera Stream camera picker. Short label. */
+"settings.live_stream.camera.rear" = "Arrière";
+
+/* Segmented control option, Local Camera Stream camera picker. Short label. */
+"settings.live_stream.camera.both" = "Les deux";
+
+/* Button below the Local Camera Stream status label in Settings. Small text. */
+"settings.live_stream.access_button" = "Accès protégé · Gérer";
+
+/* Toast message after copying multiple RTSP URLs in Settings. */
+"settings.toast.rtsp_urls_copied" = "URL RTSP copiées";
+
+/* Toast message after copying a single RTSP URL in Settings. */
+"settings.toast.rtsp_url_copied" = "URL RTSP copiée";
+
+/* Action sheet title for the protected stream access menu in Settings. */
+"alert.protected_stream_access.title" = "Accès protégé au flux";
+
+/* Action sheet message explaining camera stream credential security in Settings. Carries real security meaning -- do not paraphrase. */
+"alert.protected_stream_access.message" = "Chaque appareil possède son propre mot de passe robuste. Lorsque « Enregistrer auprès de Home Assistant » est activé, Home Assistant le reçoit via HTTPS, ou automatiquement via une connexion HTTP sur le réseau local. En HTTP, ce mot de passe est envoyé sans chiffrement de transport. Les flux multimédias RTSP restent également en clair sur votre réseau local de confiance.";
+
+/* Action sheet button, copies the stream URL with embedded password. */
+"action.copy_url_with_password" = "Copier l'URL avec le mot de passe";
+
+/* Toast title after copying the password-embedded stream URL in Settings. */
+"settings.toast.sensitive_url_copied.title" = "URL de connexion sensible copiée";
+
+/* Toast subtitle after copying the password-embedded stream URL in Settings. */
+"settings.toast.sensitive_url_copied.subtitle" = "L'élément du presse-papiers local expire dans 60 secondes";
+
+/* Action sheet / alert button, rotates the local stream's device password. */
+"action.rotate_stream_password" = "Renouveler le mot de passe du flux";
+
+/* Cancel button in alerts and action sheets throughout Settings. */
+"action.cancel" = "Annuler";
+
+/* Alert title confirming stream password rotation in Settings. */
+"alert.rotate_stream_password.title" = "Renouveler le mot de passe du flux ?";
+
+/* Alert message confirming stream password rotation in Settings. Carries real security/behaviour meaning -- do not paraphrase. */
+"alert.rotate_stream_password.message" = "Les clients actuels seront déconnectés immédiatement. L'écouteur protégé se réarme d'abord avec le nouveau mot de passe. L'app tente ensuite de mettre à jour de façon asynchrone les entrées caméra Home Assistant qu'elle gère, et réessaie en cas d'échec temporaire tant que le même flux, le même réglage d'enregistrement, le même compte et le même serveur restent actifs. Les clients manuels auront besoin de la nouvelle URL.";
+
+/* Destructive alert action confirming stream password rotation. */
+"action.rotate" = "Renouveler";
+
+/* Toast subtitle after rotating stream password, when HA registration will follow automatically. */
+"settings.toast.rotate_follow_up.pending" = "Mise à jour de Home Assistant à suivre ; les Réglages affichent la progression";
+
+/* Toast subtitle after rotating stream password, when no automatic HA update will happen. */
+"settings.toast.rotate_follow_up.manual_only" = "Les clients manuels ont besoin de la nouvelle URL protégée";
+
+/* Toast title after successfully rotating the stream password in Settings. */
+"settings.toast.password_rotated" = "Mot de passe du flux renouvelé";
+
+/* Local Camera Stream status label in Settings, shown when the feature needs a newer iOS. */
+"settings.live_stream.status.unsupported" = "Nécessite iOS 10.3.3 ou version ultérieure.";
+
+/* Local Camera Stream status label in Settings, shown while actively capturing and streaming. %1$lu is the authenticated client count, %2$@ is "client" or "clients". */
+"format.live_stream.status.live" = "CAMÉRA + MICRO EN DIRECT · %1$lu %2$@ authentifié(s)";
+
+/* Singular noun used inline in the live-stream status label ("1 authenticated client"). */
+"settings.live_stream.client_singular" = "client";
+
+/* Plural noun used inline in the live-stream status label ("2 authenticated clients"). */
+"settings.live_stream.client_plural" = "clients";
+
+/* Local Camera Stream status label in Settings, shown while armed but not yet capturing. */
+"settings.live_stream.status.protected_waiting" = "PROTÉGÉ · Caméra éteinte · En attente d'un spectateur authentifié";
+
+/* Local Camera Stream status label in Settings, dual-camera mode. %1$@ is the live/waiting state text, %2$@ is the front stream address, %3$@ is the rear stream address. */
+"format.live_stream.status.dual_camera" = "%1$@\nAVANT %2$@\nARRIÈRE %3$@\nTouchez une adresse pour la copier sans les identifiants.";
+
+/* Camera label, all-caps, prefixing the front stream address in Settings. */
+"settings.live_stream.camera_label.front" = "AVANT";
+
+/* Camera label, all-caps, prefixing the rear stream address in Settings. */
+"settings.live_stream.camera_label.rear" = "ARRIÈRE";
+
+/* Local Camera Stream status label in Settings, single-camera mode. %1$@ is the live/waiting state text, %2$@ is the camera label (FRONT/REAR), %3$@ is the stream address. */
+"format.live_stream.status.single_camera" = "%1$@\n%2$@ %3$@\nTouchez l'adresse pour la copier sans les identifiants.";
+
+/* Local Camera Stream status label in Settings, shown briefly while the listener re-arms. */
+"settings.live_stream.status.rearming" = "Le flux protégé se réarme.";
+
+/* Local Camera Stream status label in Settings, shown when the feature is off. */
+"settings.live_stream.status.off" = "Désactivé · Un mot de passe d'appareil unique est conservé pour la prochaine utilisation.";
+
+/* Appended to the live-stream status label in Settings when a registration retry is scheduled. %1$lu is the retry attempt number, %2$.0f is the delay in seconds. */
+"format.live_stream.status.retry" = "\nHome Assistant : nouvelle tentative %1$lu dans %2$.0f s.";
+
+/* Appended to a status label in Settings to show the last registration error. %1$@ is the error description. */
+"format.live_stream.status.last_error" = "\nDernière erreur : %1$@";
+
+/* Appended to the live-stream status label in Settings while a camera-registration retry is in progress. %1$lu is the retry attempt number. */
+"format.live_stream.status.registering_retry" = "\nHome Assistant : enregistrement de la caméra (tentative %1$lu)…";
+
+/* Appended to the live-stream status label in Settings while camera registration is first in progress. */
+"settings.live_stream.status.registering" = "\nHome Assistant : enregistrement de la caméra…";
+
+/* Appended to the live-stream status label in Settings to show a registration error. %1$@ is the error description. */
+"format.live_stream.status.ha_error" = "\nHome Assistant : %1$@";
+
+/* Appended to the live-stream status label in Settings as a standing security reminder. */
+"settings.live_stream.status.security_note" = "\nSécurité : les flux RTSP et l'enregistrement du mot de passe de la caméra auprès d'un serveur Home Assistant en HTTP local sont transmis en clair sur votre réseau local.";
+
+/* Toggle row label in Settings > Device Integration. */
+"settings.device_integration.register.title" = "Enregistrer auprès de Home Assistant";
+
+/* Label above the device name text field in Settings > Device Integration. */
+"settings.device_integration.device_name.title" = "Nom de l'appareil";
+
+/* Device Integration status label in Settings, shown when registration is disabled. Long paragraph. */
+"settings.device_integration.status.off" = "Désactivé. Activez pour envoyer des diagnostics à votre Home Assistant, notamment la batterie, la luminosité, l'état de l'app et du tableau de bord, les identifiants Wi-Fi lorsqu'ils sont disponibles, l'état du flux caméra et l'espace de stockage disponible, uniquement via une route webhook locale.";
+
+/* Device Integration status label in Settings, shown once registration completed. */
+"settings.device_integration.status.registered" = "Enregistré — diagnostics et commandes de l'appareil activés.";
+
+/* Device Integration status label in Settings, shown when enabled but not yet registered. */
+"settings.device_integration.status.pending" = "L'enregistrement est activé mais pas terminé. HA Dashboard réessaiera lors de sa reconnexion à Home Assistant.";
+
+/* Device Integration status label in Settings, shown while a registration request is in flight. */
+"settings.device_integration.status.registering" = "Enregistrement…";
+
+/* Device Integration status label in Settings when protected camera credentials could not be read. %1$@ is the error description. */
+"format.device_integration.credentials_failed" = "Enregistré — échec des identifiants de caméra protégés : %1$@";
+
+/* Generic fallback error description used when a specific NSError has none. */
+"error.unknown" = "Erreur inconnue";
+
+/* Device Integration status label in Settings while camera entries are being added after registration. */
+"settings.device_integration.status.adding_cameras" = "Enregistré — ajout des entrées caméra…";
+
+/* Device Integration status label in Settings when adding a camera entry failed. %1$@ is the error description. */
+"format.device_integration.camera_entry_failed" = "Enregistré — échec de l'entrée caméra : %1$@";
+
+/* Device Integration status label in Settings when registration itself failed. %1$@ is the error description. */
+"format.device_integration.registration_failed" = "Échec de l'enregistrement : %1$@";
+
+/* Label in Settings > About, left side of the app version row. */
+"settings.about.version.label" = "Version";
+
+/* Value in Settings > About version row. %1$@ is the marketing version, %2$@ is the build number. */
+"format.version_build" = "%1$@ (%2$@)";
+
+/* Settings > About server row value, and connection summary, shown when no server is configured. */
+"settings.connection.not_connected" = "Non connecté";
+
+/* Label in Settings > About, left side of the connected-server row. */
+"settings.about.server.label" = "Serveur";
+
+/* Link button in Settings > About, opens the GitHub repository. */
+"settings.about.github_repository" = "Dépôt GitHub";
+
+/* Link button in Settings > About, opens the license file. */
+"settings.about.license" = "Licence : Apache 2.0";
+
+/* Link button in Settings > About, opens the privacy policy. */
+"settings.about.privacy_policy" = "Politique de confidentialité";
+
+/* Open-source acknowledgements footer text in Settings > About. Small text, can wrap. */
+"settings.about.oss_credits" = "Conçu avec SocketRocket, Lottie et Material Design Icons.";
+
+/* Connection summary row title in Settings, shown when demo mode is active. */
+"settings.connection.demo_mode" = "Mode démo";
+
+/* Connection summary row subtitle in Settings, shown when demo mode is active. */
+"settings.connection.demo_subtitle" = "Utilisation de données d'exemple";
+
+/* Connection summary row title in Settings, fallback when a server URL is configured but unknown. */
+"settings.connection.connected_fallback" = "Connecté";
+
+/* Connection summary row subtitle in Settings, shown in OAuth (username/password) auth mode. */
+"settings.connection.auth_mode.oauth" = "Nom d'utilisateur/mot de passe";
+
+/* Connection summary row subtitle in Settings, shown in long-lived access token auth mode. */
+"settings.connection.auth_mode.token" = "Jeton d'accès";
+
+/* Connection summary row subtitle in Settings, shown when no server is configured yet. */
+"settings.connection.tap_to_configure" = "Touchez pour configurer";
+
+/* Alert title confirming cache clear in Settings. */
+"alert.clear_cache.title" = "Vider le cache";
+
+/* Alert message confirming cache clear in Settings. */
+"alert.clear_cache.message" = "Cette action vide tous les états d'entités et configurations de tableau de bord en cache, puis recharge depuis la source actuelle.";
+
+/* Destructive alert action, clears cache and reloads. */
+"action.clear_and_reload" = "Vider et recharger";
+
+/* Alert message confirming logout/reset in Settings. Explains what local data is removed. */
+"alert.log_out_reset.message" = "Cette action supprime les identifiants enregistrés localement, les données d'enregistrement, les réglages, les données de tableau de bord en cache et les journaux, puis remet l'app dans son état initial. Les appareils et entrées caméra Home Assistant restent sur votre serveur jusqu'à ce que vous les y supprimiez.";
+
+/* Destructive alert action, logs out and resets the app. */
+"action.log_out" = "Se déconnecter";
+
+/* Toast message shown when developer mode is unlocked via the version-tap gesture. */
+"settings.dev.mode_enabled" = "Mode développeur activé";
+
+/* Toast message shown when developer mode is turned off via the version-tap gesture. */
+"settings.dev.mode_disabled" = "Mode développeur désactivé";
+
+
+/* Section title above discovered-server rows on the connection form. */
+"connection.discovery.title" = "Serveurs trouvés sur votre réseau";
+
+/* Label above the server URL field on the connection form. */
+"connection.server_url.label" = "URL du serveur";
+
+/* Placeholder (example value) in the server URL field on the connection form. */
+"connection.server_url.placeholder" = "http://192.168.1.100:8123";
+
+/* Hint text under the trusted-network mode on the connection form. Two lines. */
+"connection.trusted.hint" = "Aucun mot de passe requis.\nVotre appareil est sur un réseau de confiance.";
+
+/* Label above the username field on the connection form. */
+"connection.username.label" = "Nom d'utilisateur";
+
+/* Placeholder in the username field on the connection form. */
+"connection.username.placeholder" = "Nom d'utilisateur Home Assistant";
+
+/* Label above the password field on the connection form, also used as its placeholder. */
+"connection.password.label" = "Mot de passe";
+
+/* Hint text under the username/password fields on the connection form. Small text. */
+"connection.login.hint" = "L'app obtiendra et renouvellera les jetons d'accès de manière sécurisée.";
+
+/* Label above the access token field on the connection form. */
+"connection.token.label" = "Jeton d'accès longue durée";
+
+/* Placeholder in the access token field on the connection form. */
+"connection.token.placeholder" = "Collez votre jeton d'accès ici";
+
+/* Hint text under the access token field on the connection form, describing where to generate one in HA. */
+"connection.token.hint" = "À générer dans HA : Paramètres → Personnes → [Utilisateur] → Jetons d'accès longue durée";
+
+/* Primary button on the connection form. */
+"action.connect" = "Se connecter";
+
+/* Segmented control option, connection form auth mode picker, shown only when HA reports a trusted-networks provider. Short label. */
+"connection.auth_mode.trusted_network" = "Réseau de confiance";
+
+/* Fallback name for a discovered server on the connection form when it has no advertised name. */
+"connection.discovery.fallback_name" = "Home Assistant";
+
+/* Version label next to a discovered server row on the connection form. %1$@ is the version string. */
+"format.discovery.version" = "v%1$@";
+
+/* Status/error text on the connection form when the server URL field is empty. */
+"connection.error.missing_server_url" = "Veuillez saisir l'URL du serveur";
+
+/* Status text on the connection form while a trusted-network or username/password login is in progress. */
+"connection.status.logging_in" = "Connexion en cours...";
+
+/* Status/error text on the connection form when a login attempt fails. %1$@ is the error description. */
+"format.connection.login_failed" = "Échec de l'ouverture de session : %1$@";
+
+/* Status/error text on the connection form for an unexpected trusted-network auth response. */
+"connection.error.unexpected_response" = "Réponse inattendue du serveur";
+
+/* Action sheet title for picking a trusted-network user on the connection form. */
+"alert.select_user.title" = "Sélectionner un utilisateur";
+
+/* Action sheet message for picking a trusted-network user on the connection form. */
+"alert.select_user.message" = "Choisissez l'utilisateur avec lequel vous connecter";
+
+/* Fallback error description on the connection form when a trusted-network login returns no auth code and no error. */
+"connection.error.no_auth_code" = "aucun code d'authentification";
+
+/* Status text on the connection form while exchanging an auth code for an access token. */
+"connection.status.obtaining_token" = "Obtention du jeton...";
+
+/* Status/error text on the connection form when token exchange fails. %1$@ is the error description. */
+"format.connection.token_exchange_failed" = "Échec de l'échange du jeton : %1$@";
+
+/* Fallback error description on the connection form when token exchange returns no access token and no error. */
+"connection.error.no_access_token" = "aucun jeton d'accès";
+
+/* Status text on the connection form after a successful connection. */
+"connection.status.connected" = "Connecté !";
+
+/* Status/error text on the connection form when the access token field is empty. */
+"connection.error.missing_token" = "Veuillez saisir un jeton d'accès";
+
+/* Status text on the connection form while testing an access token against the server. */
+"connection.status.testing_connection" = "Test de la connexion...";
+
+/* Status/error text on the connection form when testing an access token connection fails. %1$@ is the error description. */
+"format.connection.connection_failed" = "Échec de la connexion : %1$@";
+
+/* Status/error text on the connection form when the username field is empty. */
+"connection.error.missing_username" = "Veuillez saisir un nom d'utilisateur";
+
+/* Status/error text on the connection form when the password field is empty. */
+"connection.error.missing_password" = "Veuillez saisir un mot de passe";
+
+
+/* Error label in the camera cell, shown when the entity is unavailable. */
+"cell.camera.unavailable" = "Indisponible";
+
+/* Badge text overlaid on a recording camera cell. Leading/trailing spaces are intentional padding -- keep them. Max ~5 chars. */
+"cell.camera.badge.rec" = " REC ";
+
+/* Badge text overlaid on a live-streaming camera cell. Leading/trailing spaces are intentional padding -- keep them. Max ~6 chars. */
+"cell.camera.badge.live" = " LIVE ";
+
+/* Fallback camera name drawn onto the demo-mode placeholder image, when the entity has no friendly name. */
+"cell.camera.fallback_name" = "Caméra";
+
+/* Error label in the camera cell, shown when a snapshot fetch fails and no image is available. */
+"cell.camera.no_signal" = "Aucun signal";
+
+/* Entity state text shown when Home Assistant reports an entity as unavailable. Home Assistant does not serve a translation for this over the WebSocket (see docs/plans/i18n-plan.md §2.3), so it stays app-owned. */
+"state.default.unavailable" = "Indisponible";
+
+/* Entity state text shown when Home Assistant reports an entity's state as unknown. Home Assistant does not serve a translation for this over the WebSocket (see docs/plans/i18n-plan.md §2.3), so it stays app-owned. */
+"state.default.unknown" = "Inconnu";
+
+/* Offline/first-launch fallback for a person entity's "home" state, shown only before any Home Assistant translation data has loaded. Matches Home Assistant's own English text. */
+"state.fallback.person.home" = "Maison";
+
+/* Offline/first-launch fallback for a person entity's "not_home" state, shown only before any Home Assistant translation data has loaded. Matches Home Assistant's own English text. */
+"state.fallback.person.not_home" = "Absent";
+
+/* Offline/first-launch fallback for a device_tracker entity's "home" state, shown only before any Home Assistant translation data has loaded. Matches Home Assistant's own English text. */
+"state.fallback.device_tracker.home" = "Maison";
+
+/* Offline/first-launch fallback for a device_tracker entity's "not_home" state, shown only before any Home Assistant translation data has loaded. Matches Home Assistant's own English text. */
+"state.fallback.device_tracker.not_home" = "Absent";
+
+
+/* Temperature label in the thermostat gauge cell, shown when no value is available. */
+"cell.thermostat.no_value" = "--";
+
+/* Collapsed preset-mode button in the thermostat gauge cell, shown when no preset is set. Keep the trailing triangle glyph. */
+"cell.thermostat.preset_label" = "Préréglage ▾";
+
+/* Collapsed fan-mode button in the thermostat gauge cell, shown when no fan mode is set. Keep the trailing triangle glyph. */
+"cell.thermostat.fan_label" = "Ventilateur ▾";
+
+/* Collapsed swing-mode button in the thermostat gauge cell, shown when no swing mode is set. Keep the trailing triangle glyph. */
+"cell.thermostat.swing_label" = "Oscillation ▾";
+
+
+/* Button in the lock cell, unlatches/releases a lock that supports it. Max ~10 chars -- sits in a fixed-width pill. */
+"cell.lock.open" = "Ouvrir";
+
+/* Button and alert title in the lock cell, locks the entity. Max ~10 chars -- sits in a fixed-width pill. */
+"cell.lock.lock" = "Verrouiller";
+
+/* Button and alert title in the lock cell, unlocks the entity. Max ~10 chars -- sits in a fixed-width pill. */
+"cell.lock.unlock" = "Déverrouiller";
+
+/* Confirmation alert message in the lock cell before locking/unlocking. %1$@ is "Lock" or "Unlock", %2$@ is the entity's friendly name. */
+"format.lock.confirm_action.message" = "%1$@ %2$@ ?";
+
+/* Text field placeholder in the lock-code entry alert. */
+"cell.lock.enter_code" = "Saisir le code";
+
+
+/* Button in the timer cell, starts the timer. Max ~8 chars -- fixed-width pill. */
+"cell.timer.start" = "Démarrer";
+
+/* Button in the timer cell, pauses the timer. Max ~8 chars -- fixed-width pill. */
+"cell.timer.pause" = "Pause";
+
+/* Remaining/duration label in the timer cell, shown when no value is available. */
+"cell.timer.no_value" = "--:--:--";
+
+/* Button in the timer cell, force-completes the timer. Max ~8 chars -- fixed-width pill. */
+"cell.timer.finish" = "Terminer";
+
+/* Button in the timer cell, opens the duration picker. Max ~8 chars -- fixed-width pill. */
+"cell.timer.change" = "Modifier";
+
+/* Alert title for the timer duration picker. */
+"cell.timer.set_duration" = "Définir la durée";
+
+/* Confirm button in the timer duration picker alert. Short label. */
+"cell.timer.set" = "Définir";
+
+/* Volume label in the media player cell, shown when no volume value is available. */
+"cell.media_player.no_value" = "—";
+
+/* Action sheet title for picking a media source in the media player cell. */
+"cell.media_player.source" = "Source";
+
+
+/* Button in the calendar card header, jumps to today. Also used as a day-header label. Max ~8 chars. */
+"cell.calendar.today" = "Aujourd'hui";
+
+/* Day-header label in the calendar card's list view, for the day after today. Max ~10 chars. */
+"cell.calendar.tomorrow" = "Demain";
+
+/* Date range label in the calendar card header, week view, same month. %1$ld is the start day, %2$ld is the end day, %3$@ is the month abbreviation, %4$@ is the year. Produces e.g. "16 – 22 Feb 2026". */
+"format.calendar.date_range_same_month" = "%1$ld – %2$ld %3$@ %4$@";
+
+/* Date range label in the calendar card header, week view, spanning two months. %1$ld is the start day, %2$@ is the start month abbreviation, %3$ld is the end day, %4$@ is the end month abbreviation, %5$@ is the year. */
+"format.calendar.date_range_cross_month" = "%1$ld %2$@ – %3$ld %4$@ %5$@";
+
+/* Time label in a calendar event row, shown for all-day events. */
+"card.calendar.all_day" = "Toute la journée";
+
+/* Time range label in a calendar event row. %1$@ is the start time, %2$@ is the end time. */
+"format.calendar.time_range" = "%1$@ - %2$@";
+
+/* Placeholder text in the calendar card's list view when there are no upcoming events. */
+"card.calendar.no_upcoming_events" = "Aucun événement à venir";
+
+
+/* Label before the custom history range start-date button in the entity detail view. */
+"cell.entity_detail.from_label" = "Du :";
+
+/* Label before the custom history range end-date button in the entity detail view. */
+"cell.entity_detail.to_label" = "Au :";
+
+/* Button that applies a custom history date range in the entity detail view. */
+"action.apply" = "Appliquer";
+
+/* Action sheet title for the fallback start-date picker in the entity detail view. */
+"alert.date_picker.start_date_title" = "Date de début";
+
+/* Action sheet title for the fallback end-date picker in the entity detail view. */
+"alert.date_picker.end_date_title" = "Date de fin";
+
+/* Confirm button, dismisses a date/value picker. */
+"action.done" = "Terminé";
+
+
+/* Button in the scene cell, activates the scene. Max ~10 chars -- fixed-width pill. */
+"cell.scene.activate" = "Activer";
+
+/* Feedback label in the scene cell, briefly shown after activation. Max ~10 chars. */
+"cell.scene.activated" = "Activée";
+
+/* Button in the scene cell, stops a running script. Max ~8 chars -- fixed-width pill. */
+"cell.scene.stop" = "Arrêter";
+
+/* Button in the scene cell, runs a script entity. Max ~10 chars -- fixed-width pill. */
+"cell.scene.run" = "Exécuter";
+
+/* Button in the scene cell, triggers an automation entity. Max ~10 chars -- fixed-width pill. */
+"cell.scene.trigger" = "Déclencher";
+
+
+/* Button in the alarm cell, arms in away mode. Max ~10 chars -- pill button. */
+"cell.alarm.away" = "Absence";
+
+/* Button in the alarm cell, arms in home mode. Max ~10 chars -- pill button. */
+"cell.alarm.home" = "Maison";
+
+/* Button in the alarm cell, arms in night mode. Max ~10 chars -- pill button. */
+"cell.alarm.night" = "Nuit";
+
+/* Button in the alarm cell, arms in vacation mode. Max ~10 chars -- pill button. */
+"cell.alarm.vacation" = "Vacances";
+
+/* Button in the alarm cell, arms with custom bypass. Max ~10 chars -- pill button. */
+"cell.alarm.bypass" = "Contourner";
+
+/* Button in the alarm cell, disarms the alarm. Max ~10 chars -- pill button. */
+"cell.alarm.disarm" = "Désarmer";
+
+/* Text field placeholder in the alarm cell's code entry field. */
+"cell.alarm.code" = "Code";
+
+/* State badge text in the alarm cell. */
+"cell.alarm.state.armed_away" = "Armée (absence)";
+
+/* State badge text in the alarm cell. */
+"cell.alarm.state.armed_home" = "Armée (maison)";
+
+/* State badge text in the alarm cell. */
+"cell.alarm.state.armed_night" = "Armée (nuit)";
+
+/* State badge text in the alarm cell. */
+"cell.alarm.state.armed_vacation" = "Armée (vacances)";
+
+/* State badge text in the alarm cell. */
+"cell.alarm.state.disarmed" = "Désarmée";
+
+/* State badge text in the alarm cell. */
+"cell.alarm.state.pending" = "En attente";
+
+/* State badge text in the alarm cell. */
+"cell.alarm.state.arming" = "Armement";
+
+/* State badge text in the alarm cell, all-caps. */
+"cell.alarm.state.triggered" = "DÉCLENCHÉE";
+
+/* State badge fallback text in the alarm cell, shown when the state is nil. */
+"cell.alarm.state.unknown" = "Inconnu";
+
+
+/* Fallback nav bar button title on pre-iOS 13 devices when the gear glyph can't be rendered. Opens Settings. */
+"dashboard.settings_button_fallback" = "Paramètres";
+
+/* Connection status bar text, shown at launch and when disconnected with no specific error. */
+"dashboard.status.disconnected" = "Déconnecté";
+
+/* Connection status bar text, shown while automatically retrying after a disconnect. */
+"dashboard.status.disconnected_reconnecting" = "Déconnecté — reconnexion...";
+
+/* Fallback section title for entities with no area assignment, in the auto-generated dashboard. */
+"dashboard.section.other" = "Autre";
+
+/* Fallback dashboard title/name used throughout the title button and dashboard switcher when none is set. */
+"dashboard.default_title" = "Tableau de bord";
+
+/* Fallback dashboard name in the dashboard-switcher action sheet when a dashboard has no title. */
+"dashboard.untitled_fallback" = "Sans titre";
+
+
+/* State label fallback in the base entity cell, shown when no display state is available. */
+"cell.base.no_value" = "—";
+
+/* Button in the button-entity cell, triggers a button-domain press. Max ~8 chars. */
+"cell.button.press" = "Appuyer";
+
+/* Feedback label in the button-entity cell, briefly shown after a press. Max ~10 chars. */
+"cell.button.pressed" = "Appuyé";
+
+/* Humidity label appended under the weather clock cell. %.0f is the humidity percentage; %% is a literal percent sign, not a second value. */
+"format.weather_clock.humidity" = "%.0f%% d'humidité";
+
+/* Button in the counter cell, resets the counter to its initial value. Max ~8 chars. */
+"cell.counter.reset" = "Réinit.";
+
+/* Tilt position label in the cover cell. %ld is the tilt percentage; %% is a literal percent sign, not a second value. */
+"format.cover.tilt_percent" = "Inclinaison %ld%%";
+
+/* Tilt position label in the cover cell while dragging the tilt slider. %.0f is the tilt percentage; %% is a literal percent sign, not a second value. */
+"format.cover.tilt_percent_live" = "Inclinaison %.0f%%";
+
+/* Button in the input_number cell, submits a typed value. Max ~8 chars. */
+"cell.input_number.set" = "Définir";
+
+/* Button fallback text in the input_select cell, shown when no option is selected. */
+"cell.input_select.no_value" = "—";
+
+/* Placeholder text in the logbook card, shown when there is no recent activity. */
+"card.logbook.no_recent_activity" = "Aucune activité récente";
+
+/* Fallback title in the logbook card header, shown when no title is configured. */
+"card.logbook.default_title" = "Journal";
+
+/* Item count description in the todo cell, singular. */
+"cell.todo.item_count_singular" = "1 élément";
+
+/* Item count description in the todo cell, plural. %ld is the item count. */
+"format.todo.item_count_plural" = "%ld éléments";
+
+/* Button in the update cell, installs an available update. Max ~10 chars. */
+"cell.update.update" = "Mise à jour";
+
+/* Button in the update cell, skips an available update version. Max ~10 chars. */
+"cell.update.skip" = "Ignorer";
+
+/* Button in the update cell, shown while an update is being installed. Max ~14 chars. */
+"cell.update.installing" = "Installation…";
+
+/* Version label in the update cell, shown when the installed version is already current. %@ is the installed version. */
+"format.update.up_to_date" = "v%@ (à jour)";
+
+/* Status label fallback in the vacuum cell, shown when the entity is unavailable. */
+"cell.vacuum.unavailable" = "Indisponible";
+
+/* Temperature label fallback in the water heater cell, shown when no target temperature is available. */
+"cell.water_heater.no_value" = "--";
+
+/* Current temperature label in the water heater cell. %1$@ is the current temperature, %2$@ is the unit. */
+"format.water_heater.currently" = "Actuellement %1$@%2$@";
+
+/* Current temperature label fallback in the climate cell, shown when no current temperature is available. */
+"cell.climate.no_value" = "—";
+
+/* Target temperature label in the climate cell. %.1f is the target temperature, with a degree sign already appended by the format. */
+"format.climate.target_temp" = "Cible : %.1f°";
+
+/* Value label fallback in the gauge card, shown when the state cannot be formatted. */
+"card.gauge.no_value" = "--";
+
+/* Button fallback text in the input_datetime cell, shown when no value is set. */
+"cell.input_datetime.no_value" = "—";
+
+/* Temperature label fallback in the weather cell, shown when no temperature is available. */
+"cell.weather.no_value" = "—";
+
+/* Status label fallback in the glance-item view, shown when the entity is unavailable. */
+"cell.glance.unavailable" = "Indisponible";
+
+/* Tooltip value label fallback in the graph view, shown when no data point is under the touch/cursor. */
+"cell.graph.tooltip_no_value" = "\u2014";
+
+/* Navigation bar title for the connection settings screen. */
+"settings.connection_nav_title" = "Connexion";
+
+/* Navigation bar title for the login screen. */
+"login.nav_title" = "HA Dashboard";
+
+/* Card title on the login screen, above the connection form. */
+"login.card_title" = "Connectez-vous à votre serveur";
+
+/* Label next to the demo-mode toggle on the login screen. */
+"login.try_demo_mode" = "Essayer le mode démo";
+
+/* VoiceOver accessibility label for the persistent streaming privacy indicator, shown while the local camera stream is actively capturing. */
+"accessibility.camera_mic_live" = "La caméra et le micro sont actifs. Touchez pour arrêter la diffusion.";
+
+/* Fallback confirmation alert message for a Lovelace tap-action confirmation dialog that specifies no custom text. */
+"alert.confirm_action.default_message" = "Êtes-vous sûr ?";
+
+/* Confirm button in a Lovelace tap-action confirmation dialog. */
+"action.confirm" = "Confirmer";
+
+/* Fallback Lovelace view name when the dashboard config does not name a view. %1$lu is the 1-based view number. */
+"format.lovelace.view_fallback_name" = "Vue %1$lu";
+
+/* Dropdown button placeholder in the mode-feature strip (climate/alarm mode picker) when no mode is currently known. */
+"feature.mode.select_placeholder" = "Sélectionner";
+
+/* Lock button in the lock-feature button row. Max ~8 chars. */
+"feature.lock.lock_button" = "Verrouiller";
+
+/* Unlock button in the lock-feature button row. Max ~8 chars. */
+"feature.lock.unlock_button" = "Déverrouiller";
+
+/* HAEntityDetailSection.m -- entity detail sheet strings below */
+
+/* Label above the color wheel in the light detail sheet. Short -- sits above a 200x200 wheel. */
+"cell.entity_detail.light.color_label" = "Couleur";
+
+/* Label above the color-temperature slider in the light detail sheet, used only when Home Assistant's own translation for light's color_temp_kelvin attribute is unavailable. Short -- sits above a narrow gradient slider. */
+"attr.color_temp.name" = "Temp. couleur";
+
+/* Button in the light detail sheet, briefly blinks the light to identify it. Includes a leading lightning-bolt glyph (⚡). Max ~12 chars -- fixed-width button. */
+"cell.entity_detail.light.flash_button" = "⚡ Flash";
+
+/* Label above the transition-duration segmented control in the light detail sheet. Short -- sits above a 5-item segment control. */
+"cell.entity_detail.light.transition_label" = "Transition";
+
+/* Header above the row of same-area scene chips in the light detail sheet. Short -- sits above a horizontal scroll row of pill buttons. */
+"cell.entity_detail.light.scenes_header" = "Scènes";
+
+/* Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity off. Max ~10 chars -- fixed-width pill. */
+"action.turn_off" = "Éteindre";
+
+/* Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity on. Max ~10 chars -- fixed-width pill. */
+"action.turn_on" = "Allumer";
+
+/* Effect-picker button title in the light detail sheet. %1$@ is the localized attribute label (e.g. "Effect"), %2$@ is the current effect name or a placeholder. */
+"format.entity_detail.effect_button" = "%1$@ : %2$@  ▾";
+
+/* Action-sheet/button title for a light's effect, used only when Home Assistant's own translation for light's effect attribute is unavailable. */
+"attr.effect.name" = "Effet";
+
+/* Label above the fan-mode segmented control in the climate detail sheet, used only when Home Assistant's own translation for climate's fan_mode attribute is unavailable. Short -- sits above a segment control. */
+"attr.fan_mode.name" = "Ventilateur";
+
+/* Label next to the aux-heat switch in the climate detail sheet. Deprecated in HA core, so not served by Home Assistant's own translations -- this is an app-owned fallback used unconditionally. */
+"attr.aux_heat.name" = "Chauffage d'appoint";
+
+/* Target temperature label in the climate detail sheet. %1$@ is the localized attribute label (e.g. "Target temperature"), %2$.1f is the numeric value with one decimal. */
+"format.entity_detail.target_temperature" = "%1$@ : %2$.1f°";
+
+/* Target temperature label in the climate/water-heater detail sheet, shown when no target temperature is available. %1$@ is the localized attribute label (e.g. "Target temperature"). */
+"format.entity_detail.target_temperature_no_value" = "%1$@ : —";
+
+/* Label preceding the target temperature in the climate/water-heater detail sheet, used only when Home Assistant's own translation for the entity's temperature attribute is unavailable. */
+"attr.target_temperature.name" = "Cible";
+
+/* Label above the tilt slider in the cover detail sheet, used only when Home Assistant's own translation for cover's current_tilt_position attribute is unavailable. Short -- sits above a narrow slider. */
+"attr.tilt_position.name" = "Inclinaison";
+
+/* Button in the cover/valve detail sheet, opens the cover/valve. Max ~10 chars -- fixed-width pill. */
+"cell.entity_detail.open_close.open" = "Ouvrir";
+
+/* Button in the cover/valve/vacuum detail sheet, stops the current movement/operation. Max ~10 chars -- fixed-width pill. */
+"cell.entity_detail.stop_button" = "Arrêter";
+
+/* Button in the cover/valve detail sheet, closes the cover/valve. Max ~10 chars -- fixed-width pill. */
+"cell.entity_detail.open_close.close" = "Fermer";
+
+/* Label next to the switch in the generic toggle detail sheet (switch/input_boolean/automation domains). */
+"cell.entity_detail.toggle.label" = "Basculer";
+
+/* Label next to the oscillation switch in the fan detail sheet, used only when Home Assistant's own translation for fan's oscillating attribute is unavailable. */
+"attr.oscillating.name" = "Oscillation";
+
+/* Label above the forward/reverse buttons in the fan detail sheet, used only when Home Assistant's own translation for fan's direction attribute is unavailable. Short -- sits above a 2-button row. */
+"attr.direction.name" = "Direction";
+
+/* Button in the fan detail sheet, sets fan direction to forward. Max ~10 chars -- fixed-width pill. */
+"cell.entity_detail.fan.forward_button" = "Avant";
+
+/* Button in the fan detail sheet, sets fan direction to reverse. Max ~10 chars -- fixed-width pill. */
+"cell.entity_detail.fan.reverse_button" = "Arrière";
+
+/* Preset-mode picker button title in the fan detail sheet. %@ is the current preset mode name or a placeholder, followed by a dropdown glyph (▾). */
+"format.entity_detail.fan_preset_button" = "Préréglage : %@  ▾";
+
+/* Action-sheet title for picking a fan preset mode. */
+"alert.entity_detail.fan_preset_mode.title" = "Mode préréglé";
+
+/* Action-sheet/button title for a media player's sound mode, used only when Home Assistant's own translation for media_player's sound_mode attribute is unavailable. */
+"attr.sound_mode.name" = "Mode sonore";
+
+/* Fallback label on the source-picker button in the media player cell, shown when no source is currently selected. Used only when Home Assistant's own translation for media_player's source attribute is unavailable. */
+"attr.source.name" = "Source";
+
+/* Button in the lock detail sheet, shown after the first tap on Open as a confirmation step before unlatching. Max ~14 chars -- fixed-width pill. */
+"cell.entity_detail.lock.confirm_open" = "Confirmer ?";
+
+/* Button in the vacuum detail sheet, sends the vacuum back to its dock. Max ~10 chars -- fixed-width pill. */
+"cell.entity_detail.vacuum.return_button" = "Retour";
+
+/* Button in the vacuum detail sheet, makes the vacuum emit a locate sound. Max ~10 chars -- fixed-width pill. */
+"cell.entity_detail.vacuum.locate_button" = "Localiser";
+
+/* Button in the vacuum detail sheet, starts a spot clean. Max ~12 chars -- fixed-width pill. */
+"cell.entity_detail.vacuum.clean_spot_button" = "Nettoyer zone";
+
+/* Placeholder shown on the vacuum fan-speed picker button when no current fan speed is known. Short -- sits inline before a dropdown glyph. */
+"cell.entity_detail.vacuum.fan_speed_default" = "Par défaut";
+
+/* Fan-speed picker button title in the vacuum detail sheet. %@ is the current fan speed name or a placeholder, followed by a dropdown glyph (▾). */
+"format.entity_detail.vacuum_fan_speed_button" = "Vitesse du ventilateur : %@  ▾";
+
+/* Action-sheet title for picking a vacuum fan speed. */
+"alert.entity_detail.vacuum_fan_speed.title" = "Vitesse du ventilateur";
+
+/* Countdown display in the timer detail sheet, shown once the countdown reaches zero before it stops. */
+"cell.entity_detail.timer.zero" = "0:00:00";
+
+/* Button in the alarm detail sheet, arms the alarm in Home mode. Max ~12 chars -- fixed-width pill. */
+"cell.entity_detail.alarm.arm_home" = "Armer maison";
+
+/* Button in the alarm detail sheet, arms the alarm in Away mode. Max ~12 chars -- fixed-width pill. */
+"cell.entity_detail.alarm.arm_away" = "Armer absence";
+
+/* Button in the alarm detail sheet, arms the alarm in Night mode. Max ~12 chars -- fixed-width pill. */
+"cell.entity_detail.alarm.arm_night" = "Armer nuit";
+
+/* Button in the alarm detail sheet, arms the alarm in Vacation mode. Max ~14 chars -- fixed-width pill. */
+"cell.entity_detail.alarm.arm_vacation" = "Armer vacances";
+
+/* Button in the alarm detail sheet, arms the alarm with a Custom Bypass mode. Max ~14 chars -- fixed-width pill. */
+"cell.entity_detail.alarm.arm_custom" = "Armer perso.";
+
+/* Text field placeholder in the alarm detail sheet's code entry field. */
+"cell.alarm.enter_code" = "Saisir le code";
+
+/* Row label in the weather detail sheet. Short -- sits to the right of a small glyph. */
+"cell.entity_detail.weather.temperature_label" = "Température";
+
+/* Row label in the weather detail sheet. Short -- sits to the right of a small glyph. */
+"cell.entity_detail.weather.humidity_label" = "Humidité";
+
+/* Row label in the weather detail sheet. Short -- sits to the right of a small glyph. */
+"cell.entity_detail.weather.pressure_label" = "Pression";
+
+/* Row label in the weather detail sheet. Short -- sits to the right of a small glyph. */
+"cell.entity_detail.weather.wind_label" = "Vent";
+
+/* Button in the update detail sheet, installs an available update. Max ~10 chars -- fixed-width pill. */
+"cell.entity_detail.update.install" = "Installer";
+
+/* Installed-version label in the update detail sheet. %@ is the installed version string or a placeholder. */
+"format.entity_detail.update.installed" = "Version installée : %@";
+
+/* Latest-version label in the update detail sheet. %@ is the latest version string or a placeholder. */
+"format.entity_detail.update.latest" = "Dernière version : %@";
+
+/* Placeholder shown in a mode/effect/preset picker button in an entity detail sheet when no current value is known. Short -- sits inline before a dropdown glyph. */
+"cell.entity_detail.mode.none_placeholder" = "Aucun";
+
+/* Mode picker button title in an entity detail sheet (humidifier/water heater). %@ is the current mode name or a placeholder, followed by a dropdown glyph (▾). */
+"format.entity_detail.mode_button" = "Mode : %@  ▾";
+
+/* Action-sheet title for picking a humidifier mode. */
+"alert.entity_detail.humidifier_mode.title" = "Mode";
+
+/* Target temperature label in the water heater detail sheet. %1$@ is the localized attribute label (e.g. "Target temperature"), %2$.0f is the numeric value with no decimals. */
+"format.entity_detail.target_temperature_whole" = "%1$@ : %2$.0f°";
+
+/* Action-sheet title for picking a water heater operation mode. */
+"alert.entity_detail.water_heater_operation_mode.title" = "Mode de fonctionnement";
+/* Settings toggle title in the Display section. */
+"settings.unsupportedCards.title" = "Afficher les cartes non prises en charge";
+
+/* Help text under the Show Unsupported Cards toggle. */
+"settings.unsupportedCards.footer" = "Affiche un espace réservé pour les types de cartes que HA Dash ne peut pas encore afficher.";
+
+/* Title shown on a placeholder for a Lovelace card type the app cannot render. */
+"card.unsupported.title" = "Carte non prise en charge";
+
+/* VoiceOver label for an unsupported-card placeholder. %1$@ is the raw Lovelace card type, e.g. custom:bubble-card. */
+"card.unsupported.accessibilityFormat" = "Carte non prise en charge : %1$@";
+
+/* VoiceOver label for the small badge on a generically-rendered card standing in for an unsupported custom card type. %1$@ is the raw Lovelace card type, e.g. custom:bubble-card. */
+"card.fallbackBadge.accessibilityFormat" = "Type de carte non pris en charge : %1$@ (affichage de base)";
+
+/* Prefix before the current-humidity percentage in the humidifier cell's info line. %.0f is the percentage value. */
+"cell.humidifier.current_humidity" = "Humidité actuelle : %.0f%%";
+
+/* Collapsed mode button in the humidifier cell, shown when no mode is set. Also used as the mode-picker action-sheet title. */
+"cell.humidifier.mode_button" = "Mode";
