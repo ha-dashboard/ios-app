@@ -30,6 +30,7 @@
 #import "HAGraphCardCell.h"
 #import "HAHeadingCell.h"
 #import "HAClockWeatherCell.h"
+#import "HAClockCardCell.h"
 #import "HATileEntityCell.h"
 #import "HAGaugeCardCell.h"
 #import "HACalendarCardCell.h"
@@ -56,6 +57,7 @@ static NSString *const kThermostatGaugeCellId  = @"HAThermostatGaugeCell";
 static NSString *const kBadgeRowCellId         = @"HABadgeRowCell";
 static NSString *const kGraphCardCellId        = @"HAGraphCardCell";
 static NSString *const kClockWeatherCellId     = @"HAClockWeatherCell";
+static NSString *const kClockCardCellId        = @"HAClockCardCell";
 static NSString *const kGaugeCardCellId        = @"HAGaugeCardCell";
 static NSString *const kCalendarCardCellId     = @"HACalendarCardCell";
 static NSString *const kGlanceCardCellId       = @"HAGlanceCardCell";
@@ -126,6 +128,7 @@ static NSString *const kLogbookCardCellId   = @"HALogbookCardCell";
     [collectionView registerClass:[HAGraphCardCell class]         forCellWithReuseIdentifier:kGraphCardCellId];
     [collectionView registerClass:[HAHeadingCell class]           forCellWithReuseIdentifier:kHeadingCellId];
     [collectionView registerClass:[HAClockWeatherCell class]      forCellWithReuseIdentifier:kClockWeatherCellId];
+    [collectionView registerClass:[HAClockCardCell class]         forCellWithReuseIdentifier:kClockCardCellId];
     [collectionView registerClass:[HATileEntityCell class]       forCellWithReuseIdentifier:kTileCellId];
     [collectionView registerClass:[HAGaugeCardCell class]       forCellWithReuseIdentifier:kGaugeCardCellId];
     [collectionView registerClass:[HACalendarCardCell class]   forCellWithReuseIdentifier:kCalendarCardCellId];
@@ -284,6 +287,11 @@ static NSString *const kLogbookCardCellId   = @"HALogbookCardCell";
     }
     if ([cardType isEqualToString:@"heading"]) {
         return kHeadingCellId;
+    }
+    // Built-in HA clock card: exact match so it can't shadow (or be shadowed
+    // by) the custom:clock-weather-card containsString: check below.
+    if ([cardType isEqualToString:@"clock"]) {
+        return kClockCardCellId;
     }
     if ([cardType containsString:@"clock-weather"]) {
         return kClockWeatherCellId;

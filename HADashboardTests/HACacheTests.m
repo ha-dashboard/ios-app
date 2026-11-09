@@ -1,8 +1,94 @@
 #import <XCTest/XCTest.h>
+#import <UIKit/UIKit.h>
 #import "HACacheManager.h"
 #import "HAEntityStateCache.h"
 #import "HADashboardConfigCache.h"
 #import "HAEntity.h"
+
+#pragma mark - Test Doubles
+
+/// In-memory stand-in for HACacheManager so HAEntityStateCache tests never
+/// touch the real filesystem and can observe/time writes deterministically.
+@interface HAFakeCacheWriting : NSObject <HACacheWriting>
+@property (nonatomic, strong) NSMutableDictionary<NSString *, id> *files;
+@property (nonatomic, assign) NSUInteger writeCount;
+@property (nonatomic, assign) BOOL simulateSlowWrite;
+@property (nonatomic, assign) BOOL overlapDetected;
+@property (nonatomic, assign) BOOL inFlight;
+@property (nonatomic, copy) void (^onWrite)(void);
+@end
+
+@implementation HAFakeCacheWriting
+
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _files = [NSMutableDictionary dictionary];
+    }
+    return self;
+}
+
+- (id)readJSONFromFile:(NSString *)filename {
+    return self.files[filename];
+}
+
+- (void)writeJSON:(id)object toFile:(NSString *)filename completion:(void (^)(BOOL success))completion {
+    BOOL ok = [self writeJSONSync:object toFile:filename];
+    if (completion) completion(ok);
+}
+
+- (BOOL)writeJSONSync:(id)object toFile:(NSString *)filename {
+    if (self.inFlight) {
+        self.overlapDetected = YES;
+    }
+    self.inFlight = YES;
+    if (self.simulateSlowWrite) {
+        usleep(50 * 1000); // 50ms — widen the window for a concurrent call to land
+    }
+    self.files[filename] = object;
+    self.writeCount++;
+    if (self.onWrite) self.onWrite();
+    self.inFlight = NO;
+    return YES;
+}
+
+- (void)deleteCacheFile:(NSString *)filename {
+    [self.files removeObjectForKey:filename];
+}
+
+- (NSString *)persistentCacheDirectory {
+    return @"/fake-cache-dir";
+}
+
+@end
+
+/// Captures the block HAEntityStateCache schedules instead of letting
+/// dispatch_after wait on the real wall clock — tests fire it on demand.
+@interface HAFakeScheduler : NSObject
+@property (nonatomic, copy) dispatch_block_t pendingBlock;
+@property (nonatomic, assign) NSTimeInterval lastDelay;
+@property (nonatomic, assign) NSUInteger scheduleCount;
+@end
+
+@implementation HAFakeScheduler
+
+- (HAEntityStateCacheScheduler)schedulerBlock {
+    __weak typeof(self) weakSelf = self;
+    return ^(NSTimeInterval delay, dispatch_block_t block) {
+        weakSelf.lastDelay = delay;
+        weakSelf.pendingBlock = block;
+        weakSelf.scheduleCount++;
+    };
+}
+
+/// Simulates the debounce interval elapsing.
+- (void)fire {
+    dispatch_block_t block = self.pendingBlock;
+    self.pendingBlock = nil;
+    if (block) block();
+}
+
+@end
 
 #pragma mark - HACacheManager Tests
 
@@ -211,36 +297,167 @@
     XCTAssertNotNil(cached[@"light.flush_test"]);
 }
 
-- (void)testDebounceCoalescesWrites {
-    HAEntityStateCache *cache = [HAEntityStateCache sharedCache];
+- (void)testBurstUpdatesProduceAtMostOneWritePerInterval {
+    HAFakeCacheWriting *fake = [HAFakeCacheWriting new];
+    HAFakeScheduler *scheduler = [HAFakeScheduler new];
+    HAEntityStateCache *cache = [[HAEntityStateCache alloc] initWithCacheManager:fake
+                                                                        scheduler:scheduler.schedulerBlock];
 
-    // Write 1
-    HAEntity *e1 = [[HAEntity alloc] initWithDictionary:@{
-        @"entity_id": @"light.debounce1", @"state": @"on", @"attributes": @{}
+    // A burst of 20 updates in a row (simulating a busy HA instance) must
+    // schedule exactly one debounced write, not one per update. Callers
+    // (HAConnectionManager) always pass the FULL entity store snapshot on
+    // every call, so the test does the same, growing the snapshot each time.
+    NSMutableDictionary<NSString *, HAEntity *> *snapshot = [NSMutableDictionary dictionary];
+    for (int i = 0; i < 20; i++) {
+        NSString *entityId = [NSString stringWithFormat:@"sensor.burst_%d", i];
+        HAEntity *entity = [[HAEntity alloc] initWithDictionary:@{
+            @"entity_id": entityId, @"state": @(i).stringValue, @"attributes": @{}
+        }];
+        snapshot[entityId] = entity;
+        [cache entitiesDidUpdate:[snapshot copy]];
+    }
+    XCTAssertEqual(scheduler.scheduleCount, 1, @"A burst of updates should schedule only one timer");
+    XCTAssertEqual(scheduler.lastDelay, 300.0, @"Debounce interval should be 5 minutes");
+    XCTAssertEqual(fake.writeCount, 0, @"Nothing should be written before the timer fires");
+
+    // Simulate the debounce interval elapsing.
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    fake.onWrite = ^{ dispatch_semaphore_signal(sem); };
+    [scheduler fire];
+    XCTAssertEqual(dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC))), 0,
+                   @"Debounced write should complete promptly");
+
+    XCTAssertEqual(fake.writeCount, 1, @"The whole burst should coalesce into exactly one write");
+    NSDictionary *written = fake.files[@"entity-states.json"];
+    XCTAssertEqual(written.count, 20, @"The single write should contain the latest snapshot of all 20 entities");
+}
+
+- (void)testUnchangedDataProducesNoWrite {
+    HAFakeCacheWriting *fake = [HAFakeCacheWriting new];
+    HAEntityStateCache *cache = [[HAEntityStateCache alloc] initWithCacheManager:fake
+                                                                        scheduler:^(NSTimeInterval d, dispatch_block_t b) { /* unused: test flushes synchronously */ }];
+
+    NSDictionary *fixedFields = @{
+        @"entity_id": @"sensor.steady", @"state": @"21.0", @"attributes": @{@"unit_of_measurement": @"°C"},
+        @"last_changed": @"2026-03-02T10:00:00Z", @"last_updated": @"2026-03-02T10:00:00Z"
+    };
+
+    HAEntity *first = [[HAEntity alloc] initWithDictionary:fixedFields];
+    [cache entitiesDidUpdate:@{@"sensor.steady": first}];
+    [cache flushToDisk];
+    XCTAssertEqual(fake.writeCount, 1, @"First write with new data should hit disk");
+
+    // A second, content-identical snapshot (a fresh HAEntity instance, same
+    // fields) must not produce a second write.
+    HAEntity *second = [[HAEntity alloc] initWithDictionary:fixedFields];
+    [cache entitiesDidUpdate:@{@"sensor.steady": second}];
+    [cache flushToDisk];
+    XCTAssertEqual(fake.writeCount, 1, @"Identical serialized content should be skipped, not re-written");
+
+    // A real change must still write.
+    HAEntity *changed = [[HAEntity alloc] initWithDictionary:@{
+        @"entity_id": @"sensor.steady", @"state": @"21.5", @"attributes": @{@"unit_of_measurement": @"°C"},
+        @"last_changed": @"2026-03-02T10:05:00Z", @"last_updated": @"2026-03-02T10:05:00Z"
     }];
-    [cache entitiesDidUpdate:@{@"light.debounce1": e1}];
+    [cache entitiesDidUpdate:@{@"sensor.steady": changed}];
+    [cache flushToDisk];
+    XCTAssertEqual(fake.writeCount, 2, @"A genuine state change must still be written");
+}
 
-    // Write 2 immediately after (should coalesce, not trigger a second disk write)
-    HAEntity *e2 = [[HAEntity alloc] initWithDictionary:@{
-        @"entity_id": @"light.debounce2", @"state": @"off", @"attributes": @{}
-    }];
-    [cache entitiesDidUpdate:@{@"light.debounce1": e1, @"light.debounce2": e2}];
+- (void)testLifecycleNotificationsFlushPendingWrites {
+    HAFakeCacheWriting *fake = [HAFakeCacheWriting new];
+    HAEntityStateCache *cache = [[HAEntityStateCache alloc] initWithCacheManager:fake
+                                                                        scheduler:^(NSTimeInterval d, dispatch_block_t b) { /* never fires in this test */ }];
 
-    // Before debounce fires, file should NOT exist yet (no flush called)
-    NSDictionary *immediate = [cache loadCachedStates];
-    XCTAssertNil(immediate, @"Cache should not be written before debounce interval");
+    HAEntity *e1 = [[HAEntity alloc] initWithDictionary:@{@"entity_id": @"light.bg", @"state": @"on", @"attributes": @{}}];
+    [cache entitiesDidUpdate:@{@"light.bg": e1}];
+    XCTAssertEqual(fake.writeCount, 0, @"Nothing written yet — only the app-lifecycle notification should trigger it");
 
-    // Wait for debounce (5s + margin)
-    XCTestExpectation *exp = [self expectationWithDescription:@"debounce fires"];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6.0 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        NSDictionary *afterDebounce = [cache loadCachedStates];
-        XCTAssertNotNil(afterDebounce, @"Cache should exist after debounce");
-        // Should contain the LATEST update (both entities)
-        XCTAssertEqual(afterDebounce.count, 2, @"Should have both entities from coalesced write");
-        [exp fulfill];
-    });
-    [self waitForExpectationsWithTimeout:10 handler:nil];
+    [[NSNotificationCenter defaultCenter] postNotificationName:UIApplicationDidEnterBackgroundNotification object:nil];
+    XCTAssertEqual(fake.writeCount, 1, @"Entering background should flush the pending snapshot");
+
+    HAEntity *e2 = [[HAEntity alloc] initWithDictionary:@{@"entity_id": @"light.term", @"state": @"off", @"attributes": @{}}];
+    [cache entitiesDidUpdate:@{@"light.term": e2}];
+    [[NSNotificationCenter defaultCenter] postNotificationName:UIApplicationWillTerminateNotification object:nil];
+    XCTAssertEqual(fake.writeCount, 2, @"Terminating should also flush any newly pending snapshot");
+}
+
+- (void)testFlushIsNoOpWhenNothingPending {
+    HAFakeCacheWriting *fake = [HAFakeCacheWriting new];
+    HAEntityStateCache *cache = [[HAEntityStateCache alloc] initWithCacheManager:fake
+                                                                        scheduler:^(NSTimeInterval d, dispatch_block_t b) {}];
+    [cache flushToDisk];
+    XCTAssertEqual(fake.writeCount, 0, @"Flushing with nothing pending must not touch disk");
+}
+
+- (void)testOnlyOneWriteInFlightAtATime {
+    HAFakeCacheWriting *fake = [HAFakeCacheWriting new];
+    fake.simulateSlowWrite = YES;
+    HAEntityStateCache *cache = [[HAEntityStateCache alloc] initWithCacheManager:fake
+                                                                        scheduler:^(NSTimeInterval d, dispatch_block_t b) {}];
+
+    dispatch_group_t group = dispatch_group_create();
+    for (int i = 0; i < 4; i++) {
+        NSString *entityId = [NSString stringWithFormat:@"sensor.concurrent_%d", i];
+        dispatch_group_async(group, dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+            HAEntity *entity = [[HAEntity alloc] initWithDictionary:@{
+                @"entity_id": entityId, @"state": [NSString stringWithFormat:@"%d", i], @"attributes": @{}
+            }];
+            [cache entitiesDidUpdate:@{entityId: entity}];
+            [cache flushToDisk];
+        });
+    }
+    XCTAssertEqual(dispatch_group_wait(group, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC))), 0,
+                   @"Concurrent flushes should all complete without deadlocking");
+    XCTAssertFalse(fake.overlapDetected, @"The shared serial write queue must never let two writes overlap");
+}
+
+- (void)testSerializedSizeAndWriteRateBenchmark {
+    // A representative snapshot: 50 entities with realistic attribute payloads.
+    NSMutableDictionary<NSString *, HAEntity *> *entities = [NSMutableDictionary dictionary];
+    for (int i = 0; i < 50; i++) {
+        NSString *entityId = [NSString stringWithFormat:@"sensor.benchmark_%d", i];
+        entities[entityId] = [[HAEntity alloc] initWithDictionary:@{
+            @"entity_id": entityId,
+            @"state": @"23.5",
+            @"attributes": @{
+                @"friendly_name": [NSString stringWithFormat:@"Benchmark Entity %d", i],
+                @"unit_of_measurement": @"°C",
+                @"device_class": @"temperature",
+                @"icon": @"mdi:thermometer"
+            },
+            @"last_changed": @"2026-03-02T10:00:00Z",
+            @"last_updated": @"2026-03-02T10:00:00Z"
+        }];
+    }
+
+    HAFakeCacheWriting *fake = [HAFakeCacheWriting new];
+    HAEntityStateCache *cache = [[HAEntityStateCache alloc] initWithCacheManager:fake
+                                                                        scheduler:^(NSTimeInterval d, dispatch_block_t b) {}];
+    [cache entitiesDidUpdate:entities];
+    [cache flushToDisk];
+
+    NSData *writtenData = [NSJSONSerialization dataWithJSONObject:fake.files[@"entity-states.json"] options:0 error:nil];
+    NSUInteger bytes = writtenData.length;
+    XCTAssertGreaterThan(bytes, 0);
+
+    static const NSTimeInterval kOldDebounceInterval = 5.0;   // pre-fix behavior
+    static const NSTimeInterval kNewDebounceInterval = 300.0; // this fix
+    double beforeWritesPerHour = 3600.0 / kOldDebounceInterval;
+    double afterWritesPerHour  = 3600.0 / kNewDebounceInterval;
+    double beforeMBPerHour = (bytes * beforeWritesPerHour) / (1024.0 * 1024.0);
+    double afterMBPerHour  = (bytes * afterWritesPerHour) / (1024.0 * 1024.0);
+
+    NSLog(@"[cache-benchmark] %lu entities serialize to %lu bytes (%.1f KB)",
+          (unsigned long)entities.count, (unsigned long)bytes, bytes / 1024.0);
+    NSLog(@"[cache-benchmark] before: %.0f writes/hour -> %.2f MB/hour (worst case, no dedupe)",
+          beforeWritesPerHour, beforeMBPerHour);
+    NSLog(@"[cache-benchmark] after:  %.0f writes/hour -> %.2f MB/hour upper bound (dedupe skips further when unchanged)",
+          afterWritesPerHour, afterMBPerHour);
+    NSLog(@"[cache-benchmark] frequency-alone reduction: %.0fx", beforeWritesPerHour / afterWritesPerHour);
+
+    XCTAssertEqualWithAccuracy(afterWritesPerHour, beforeWritesPerHour / 60.0, 0.001,
+                               @"New debounce interval is 60x longer than the old one");
 }
 
 - (void)testServerURLChangeClearsCache {

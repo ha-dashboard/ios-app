@@ -1256,6 +1256,29 @@
         @"supported_features": @21437, @"icon": @"mdi:radio"}];
 }
 
++ (HAEntity *)mediaPlayerTVOff {
+    return [self entityWithId:@"media_player.sony_tv" state:@"off" attributes:@{
+        @"friendly_name": @"Sony TV", @"device_class": @"tv", @"supported_features": @150969,
+        @"source_list": @[@"HDMI 1", @"HDMI 2", @"TV"]}];
+}
+
++ (HAEntity *)mediaPlayerTVOn {
+    return [self entityWithId:@"media_player.sony_tv" state:@"on" attributes:@{
+        @"friendly_name": @"Sony TV", @"device_class": @"tv", @"supported_features": @150969,
+        @"source": @"HDMI 1", @"source_list": @[@"HDMI 1", @"HDMI 2", @"TV"],
+        @"volume_level": @0.25, @"is_volume_muted": @NO}];
+}
+
++ (HAEntity *)mediaPlayerSpeakerFullPlaying {
+    return [self entityWithId:@"media_player.kitchen_speaker" state:@"playing" attributes:@{
+        @"friendly_name": @"Kitchen Speaker", @"media_title": @"Clair de Lune",
+        @"media_artist": @"Claude Debussy", @"media_content_type": @"music",
+        @"source": @"Spotify", @"source_list": @[@"Spotify", @"AirPlay", @"Bluetooth"],
+        @"volume_level": @0.4, @"is_volume_muted": @NO, @"shuffle": @YES, @"repeat": @"one",
+        @"media_duration": @300, @"media_position": @90,
+        @"supported_features": @449471, @"icon": @"mdi:speaker"}];
+}
+
 #pragma mark - Showcase: Alarm (7 variants)
 
 + (HAEntity *)alarmScDisarmed {
@@ -1900,12 +1923,33 @@
 
 #pragma mark - Weather Forecast Helper
 
+/// Mirrors -[HABaseSnapshotTestCase fixedTestDate] (2026-01-15 14:30:00 UTC,
+/// a Thursday). Duplicated here rather than shared via inheritance because
+/// this class is a plain NSObject helper, not a test-case subclass — keep
+/// the two in sync if either ever changes.
++ (NSDate *)fixedForecastBaseDate {
+    NSDateComponents *components = [[NSDateComponents alloc] init];
+    components.year = 2026;
+    components.month = 1;
+    components.day = 15;
+    components.hour = 14;
+    components.minute = 30;
+    components.second = 0;
+    components.timeZone = [NSTimeZone timeZoneForSecondsFromGMT:0];
+    return [[NSCalendar calendarWithIdentifier:NSCalendarIdentifierGregorian] dateFromComponents:components];
+}
+
 + (NSArray *)forecastArrayForDays:(NSInteger)days {
     NSMutableArray *forecast = [NSMutableArray arrayWithCapacity:days];
     NSArray *conditions = @[@"sunny", @"partlycloudy", @"cloudy", @"rainy",
                             @"sunny", @"lightning-rainy", @"snowy", @"partlycloudy", @"windy"];
-    NSCalendar *cal = [NSCalendar currentCalendar];
-    NSDate *today = [NSDate date];
+    // Fixed base date + UTC calendar: forecast day-of-week labels must not
+    // drift with the real calendar date the test happens to run on (was
+    // previously [NSDate date] — see the fixture-determinism fix for
+    // GitHub #20's weather-forecast snapshot tests).
+    NSCalendar *cal = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];
+    cal.timeZone = [NSTimeZone timeZoneForSecondsFromGMT:0];
+    NSDate *today = [self fixedForecastBaseDate];
 
     for (NSInteger i = 0; i < days; i++) {
         NSDate *date = [cal dateByAddingUnit:NSCalendarUnitDay value:i + 1 toDate:today options:0];

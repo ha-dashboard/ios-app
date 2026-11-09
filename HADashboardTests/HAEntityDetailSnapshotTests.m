@@ -5,6 +5,8 @@
 #import "HAAttributeRowView.h"
 #import "HAEntity.h"
 #import "HATheme.h"
+#import "HAIconMapper.h"
+#import <CoreText/CoreText.h>
 
 /// Standard width for detail section snapshots (matches bottom sheet content area).
 static const CGFloat kDetailSectionWidth = 320.0;
@@ -166,6 +168,158 @@ static const CGFloat kDetailSectionWidth = 320.0;
     HAEntity *entity = [HASnapshotTestHelpers mediaPlayerOff];
     UIView *view = [self sectionViewForEntity:entity];
     [self verifyView:view identifier:@"mediaPlayerSectionOff"];
+}
+
+/// Issue #24: the power button was titled U+23FB, which older iOS fonts don't
+/// cover, so it drew as an empty box. It must use a glyph the bundled MDI
+/// font actually contains, and draw visible ink.
+- (void)testMediaPlayerSectionPowerButtonRendersGlyph {
+    HAEntity *tv = [HASnapshotTestHelpers mediaPlayerTVOff];
+    HADetailServiceBlock noopBlock = ^(NSString *s, NSString *d, NSDictionary *data, NSString *eid) {};
+    id<HAEntityDetailSection> section = [HAEntityDetailSectionFactory sectionForEntity:tv serviceBlock:noopBlock];
+    UIView *view = [section viewForEntity:tv];
+    view.frame = CGRectMake(0, 0, kDetailSectionWidth, [section preferredHeight]);
+    [view layoutIfNeeded];
+
+    UIButton *power = [(NSObject *)section valueForKey:@"powerButton"];
+    XCTAssertNotNil(power, @"TURN_ON/TURN_OFF player must get a power button");
+    XCTAssertFalse(power.hidden);
+    XCTAssertTrue(power.enabled, @"TURN_ON is supported, so power is usable while off");
+    XCTAssertEqualObjects(power.accessibilityLabel, @"Turn on");
+
+    NSAttributedString *title = [power attributedTitleForState:UIControlStateNormal];
+    XCTAssertEqualObjects(title.string, [HAIconMapper glyphForIconName:@"power-standby"]);
+    XCTAssertFalse([title.string containsString:@"\u23FB"]);
+    UIFont *font = [title attribute:NSFontAttributeName atIndex:0 effectiveRange:NULL];
+    XCTAssertEqualObjects(font.fontName, [HAIconMapper mdiFontName]);
+
+    // The MDI font has a real glyph for it (MDI codepoints are outside the BMP: a surrogate pair).
+    unichar chars[2] = {0, 0};
+    CGGlyph glyphs[2] = {0, 0};
+    XCTAssertEqual(title.string.length, 2u);
+    [title.string getCharacters:chars range:NSMakeRange(0, title.string.length)];
+    XCTAssertTrue(CTFontGetGlyphsForCharacters((__bridge CTFontRef)font, chars, glyphs, (CFIndex)title.string.length));
+    XCTAssertNotEqual(glyphs[0], 0);
+
+    // And it draws ink.
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(40, 40), NO, 1);
+    [title drawAtPoint:CGPointMake(4, 4)];
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    CFDataRef data = CGDataProviderCopyData(CGImageGetDataProvider(image.CGImage));
+    const UInt8 *px = CFDataGetBytePtr(data);
+    size_t bytesPerRow = CGImageGetBytesPerRow(image.CGImage);
+    NSUInteger ink = 0;
+    for (size_t y = 0; y < CGImageGetHeight(image.CGImage); y++) {
+        for (size_t x = 0; x < CGImageGetWidth(image.CGImage); x++) {
+            if (px[y * bytesPerRow + x * 4 + 3] > 0) ink++;
+        }
+    }
+    CFRelease(data);
+    XCTAssertGreaterThan(ink, 40u, @"power glyph should draw visible pixels");
+}
+
+#pragma mark - Media detail gating (HA more-info rules)
+
+- (HAEntity *)tvWithState:(NSString *)state extra:(NSDictionary *)extra {
+    NSMutableDictionary *attrs = [@{@"friendly_name": @"Sony TV", @"device_class": @"tv",
+                                    @"supported_features": @150969,
+                                    @"source_list": @[@"HDMI 1", @"HDMI 2", @"TV"]} mutableCopy];
+    [attrs addEntriesFromDictionary:extra ?: @{}];
+    return [HASnapshotTestHelpers entityWithId:@"media_player.sony_tv" state:state attributes:attrs];
+}
+
+/// Builds the media detail section, laid out at the detail width; returns the section.
+- (NSObject<HAEntityDetailSection> *)mediaSectionForEntity:(HAEntity *)entity view:(UIView **)outView {
+    HADetailServiceBlock noopBlock = ^(NSString *s, NSString *d, NSDictionary *data, NSString *eid) {};
+    NSObject<HAEntityDetailSection> *section = (NSObject<HAEntityDetailSection> *)
+        [HAEntityDetailSectionFactory sectionForEntity:entity serviceBlock:noopBlock];
+    UIView *view = [section viewForEntity:entity];
+    view.frame = CGRectMake(0, 0, kDetailSectionWidth, 600);
+    [view layoutIfNeeded];
+    if (outView) *outView = view;
+    return section;
+}
+
+- (BOOL)section:(NSObject *)section shows:(NSString *)key inView:(UIView *)root {
+    for (UIView *v = [section valueForKey:key]; v && v != root; v = v.superview) {
+        if (v.hidden) return NO;
+    }
+    return YES;
+}
+
+- (void)assertSection:(NSObject *)section view:(UIView *)view shows:(NSArray<NSString *> *)shown hides:(NSArray<NSString *> *)hidden {
+    for (NSString *key in shown) XCTAssertTrue([self section:section shows:key inView:view], @"%@ should be shown", key);
+    for (NSString *key in hidden) XCTAssertFalse([self section:section shows:key inView:view], @"%@ should be hidden", key);
+}
+
+- (void)testMediaMoreInfoControlsPerState {
+    HAEntity *off = [self tvWithState:@"off" extra:nil];
+    // HA's more-info keeps source select while off; power is turn_on.
+    XCTAssertEqualObjects([off mediaMoreInfoControls], (@[HAMediaControlTurnOn, HAMediaControlSelectSource]));
+    XCTAssertEqualObjects([[self tvWithState:@"unavailable" extra:nil] mediaMoreInfoControls], @[]);
+    HAEntity *withModes = [HASnapshotTestHelpers entityWithId:@"media_player.avr" state:@"standby" attributes:@{
+        @"supported_features": @(HAMediaPlayerFeatureTurnOn | HAMediaPlayerFeatureSelectSoundMode),
+        @"sound_mode_list": @[@"Movie", @"Music"]}];
+    XCTAssertEqualObjects([withModes mediaMoreInfoControls], (@[HAMediaControlTurnOn, HAMediaControlSelectSoundMode]));
+    // Active: the card's controls (source already included), no duplicates.
+    HAEntity *on = [self tvWithState:@"on" extra:nil];
+    XCTAssertEqualObjects([on mediaMoreInfoControls], [on mediaControls]);
+}
+
+- (void)testMediaDetailOffShowsPowerAndSourceOnly {
+    UIView *view = nil;
+    NSObject *section = [self mediaSectionForEntity:[self tvWithState:@"off" extra:nil] view:&view];
+    [self assertSection:section view:view shows:@[@"powerButton", @"sourceSelectButton"]
+                  hides:@[@"transportRow", @"volumeRow", @"seekRow", @"soundModeButton"]];
+    XCTAssertEqualObjects(((UIButton *)[section valueForKey:@"powerButton"]).accessibilityLabel, @"Turn on");
+}
+
+- (void)testMediaDetailUnavailableShowsNothingActionable {
+    UIView *view = nil;
+    NSObject *section = [self mediaSectionForEntity:[self tvWithState:@"unavailable" extra:nil] view:&view];
+    [self assertSection:section view:view shows:@[@"mediaInfoLabel"]
+                  hides:@[@"transportRow", @"volumeRow", @"seekRow", @"bottomRow", @"powerButton"]];
+}
+
+- (void)testMediaDetailUpdatesInPlaceWhenTurnedOnAndOff {
+    UIView *view = nil;
+    NSObject<HAEntityDetailSection> *section = [self mediaSectionForEntity:[self tvWithState:@"off" extra:nil] view:&view];
+    CGFloat offHeight = [section preferredHeight];
+
+    [section updateWithEntity:[self tvWithState:@"playing" extra:@{@"media_title": @"News", @"source": @"TV"}]];
+    [view layoutIfNeeded];
+    [self assertSection:section view:view
+                  shows:@[@"prevButton", @"playPauseButton", @"nextButton", @"muteButton", @"volumeDownButton",
+                          @"volumeUpButton", @"sourceSelectButton", @"powerButton"]
+                  hides:@[@"volumeSlider", @"shuffleButton", @"repeatButton", @"seekRow"]];
+    XCTAssertEqualObjects(((UIButton *)[section valueForKey:@"powerButton"]).accessibilityLabel, @"Turn off");
+    XCTAssertEqualObjects(((UIButton *)[section valueForKey:@"playPauseButton"]).accessibilityLabel, @"Pause");
+    XCTAssertGreaterThan([section preferredHeight], offHeight, @"controls added in place must grow the section");
+
+    [section updateWithEntity:[self tvWithState:@"off" extra:nil]];
+    [view layoutIfNeeded];
+    [self assertSection:section view:view shows:@[@"powerButton"] hides:@[@"transportRow", @"volumeRow"]];
+    XCTAssertEqualWithAccuracy([section preferredHeight], offHeight, 0.5);
+}
+
+- (void)testMediaDetailFullSpeakerShowsExtendedControls {
+    UIView *view = nil;
+    NSObject *section = [self mediaSectionForEntity:[HASnapshotTestHelpers mediaPlayerSpeakerFullPlaying] view:&view];
+    [self assertSection:section view:view
+                  shows:@[@"repeatButton", @"prevButton", @"playPauseButton", @"nextButton", @"shuffleButton",
+                          @"muteButton", @"volumeSlider", @"seekRow", @"sourceSelectButton", @"powerButton"]
+                  hides:@[@"volumeDownButton", @"volumeUpButton", @"soundModeButton"]];
+}
+
+- (void)testMediaPlayerSectionSpeakerFull {
+    UIView *view = [self sectionViewForEntity:[HASnapshotTestHelpers mediaPlayerSpeakerFullPlaying]];
+    [self verifyView:view identifier:@"mediaPlayerSectionSpeakerFull"];
+}
+
+- (void)testMediaPlayerSectionTVOff {
+    UIView *view = [self sectionViewForEntity:[HASnapshotTestHelpers mediaPlayerTVOff]];
+    [self verifyView:view identifier:@"mediaPlayerSectionTVOff"];
 }
 
 #pragma mark - Fan Section

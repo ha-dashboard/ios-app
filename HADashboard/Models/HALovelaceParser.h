@@ -27,13 +27,16 @@ extern NSString *const HAUnsupportedCardTypeKey;
 @property (nonatomic, copy) NSString *path;
 @property (nonatomic, copy) NSString *icon;
 @property (nonatomic, strong) NSArray<NSDictionary *> *rawCards;
-/// HA 2024+ sections: array of @{@"title": NSString, @"cards": NSArray}
+/// HA 2024+ sections: array of @{@"title": NSString, @"icon": NSString, @"cards": NSArray, @"column_span": NSNumber (>= 1)}
 /// nil for classic (non-sections) views.
 @property (nonatomic, strong) NSArray<NSDictionary *> *rawSections;
 /// Maximum columns for sections layout (from HA view config "max_columns"). 0 = use default (4).
 @property (nonatomic, assign) NSInteger maxColumns;
 /// View layout type: "masonry" (default classic), "panel", "sidebar", or "sections".
 @property (nonatomic, copy) NSString *viewType;
+/// View-level badges (the view config's "badges" array), normalized by
+/// +[HALovelaceParser normalizedViewBadgeConfigs:]. nil when the view has none.
+@property (nonatomic, copy) NSArray<NSDictionary *> *rawBadges;
 @end
 
 
@@ -99,6 +102,52 @@ extern NSString *const HAUnsupportedCardTypeKey;
                                    deviceNames:(NSDictionary<NSString *, NSString *> *)deviceNames
                             floorNamesByAreaId:(NSDictionary<NSString *, NSString *> *)floorNamesByAreaId
                            entityRegistryNames:(NSDictionary<NSString *, NSString *> *)entityRegistryNames;
+
+/// Normalize a Lovelace view's "badges" array the way HA's ensureBadgeConfig()
+/// and the entity/state-label badge classes do, returning only badges this app
+/// renders (entity badges), each a dictionary with "type" = "entity", a
+/// non-empty "entity", and explicit show_name/show_state/show_icon NSNumbers:
+/// - a plain entity-id string becomes an entity badge with show_name YES;
+/// - a dictionary without "type" becomes an entity badge (show_name default NO);
+/// - "state-label" keeps only entity/color/show_name (default YES)/visibility;
+/// - "entity" applies HA's defaults and migrates the deprecated display_type.
+/// Unknown types (custom:*, entity-filter, shortcut, energy totals) and
+/// malformed entries are skipped.
++ (NSArray<NSDictionary *> *)normalizedViewBadgeConfigs:(NSArray *)rawBadges;
+
+/// Normalize a heading card's badges the way hui-heading-card and
+/// hui-entity-heading-badge do: the legacy "entities" list is appended to
+/// "badges" (migrateHeadingCardConfig); entries without a type, or of type
+/// "entity", become entity badges with explicit show_state/show_icon
+/// NSNumbers (default YES) and tap_action/hold_action/double_tap_action
+/// defaulting to {"action": "none"}; a plain entity-id string is accepted as
+/// an entity badge. Button badges, other types and entries without an entity
+/// are skipped. Returns an empty array when the card has none.
++ (NSArray<NSDictionary *> *)normalizedHeadingBadgeConfigs:(NSDictionary *)headingCard;
+
+/// Keys the parser stores a heading card's extras under, on the heading's
+/// item customProperties (standalone heading items and grid items carrying an
+/// embedded headingIcon heading) or on its section's customProperties (the
+/// heading that becomes a sections-view section header):
+/// HAHeadingBadgesKey → normalized badge configs (non-empty array);
+/// HAHeadingTapActionKey → the heading's own tap_action, when actionable.
+extern NSString *const HAHeadingBadgesKey;
+extern NSString *const HAHeadingTapActionKey;
+
+/// The grid options HA's own card element reports for this card config in a
+/// sections view (its getGridOptions()), with keys "columns", "rows",
+/// "min_columns", "max_columns", "min_rows" and "max_rows" (NSNumber, or the
+/// strings "full" / "auto" for columns / rows). Only keys HA defines are
+/// present; an empty dictionary means HA's card has no getGridOptions() and
+/// therefore no minimum or maximum size (e.g. markdown, gauge, glance, stacks).
++ (NSDictionary<NSString *, id> *)haGridOptionsForCard:(NSDictionary *)card;
+
+/// A card's own sizing config the way HA's hui-card getConfigGridOptions()
+/// reads it: "grid_options" when present, otherwise the legacy
+/// "layout_options" migrated to grid options (grid_columns, grid_min_columns
+/// and grid_max_columns ×3 from HA's former 4-column grid; rows unchanged).
+/// Empty when the card has neither.
++ (NSDictionary<NSString *, id> *)configGridOptionsForCard:(NSDictionary *)card;
 
 /// Extract all entity IDs from a Lovelace card dictionary (recursively handles stacks)
 + (NSArray<NSDictionary *> *)extractEntitiesFromCard:(NSDictionary *)card;

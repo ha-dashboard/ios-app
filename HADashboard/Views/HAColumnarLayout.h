@@ -13,7 +13,8 @@
                    layout:(UICollectionViewLayout *)layout
 heightForHeaderInSection:(NSInteger)section;
 
-/// Return the sub-grid column span (out of 12) for an item (default 12 = full width)
+/// Return the sub-grid column span for an item: out of 12 per view column the
+/// section spans (12 = one column's width; 12 × span = the whole section).
 - (NSInteger)collectionView:(UICollectionView *)collectionView
                      layout:(UICollectionViewLayout *)layout
   gridColumnsForItemAtIndexPath:(NSIndexPath *)indexPath;
@@ -24,6 +25,22 @@ heightForHeaderInSection:(NSInteger)section;
 - (BOOL)collectionView:(UICollectionView *)collectionView
                  layout:(UICollectionViewLayout *)layout
   isHeadingItemAtIndexPath:(NSIndexPath *)indexPath;
+
+/// Return YES for a leading section (e.g. the view's badge row) that spans the
+/// full content width above the columns instead of occupying a column. Only
+/// consulted for the first sections; laid out stacked, items at full width.
+- (BOOL)collectionView:(UICollectionView *)collectionView
+                layout:(UICollectionViewLayout *)layout
+    isFullWidthSection:(NSInteger)section;
+
+/// HA sections view column_span: how many columns this section covers
+/// (default 1). The layout clamps it to the columns on screen, and the
+/// section's items then pack on a 12 × span sub-grid, so
+/// gridColumnsForItemAtIndexPath may return up to 12 × span (anything larger
+/// is clamped to the section's width).
+- (NSInteger)collectionView:(UICollectionView *)collectionView
+                     layout:(UICollectionViewLayout *)layout
+       columnSpanForSection:(NSInteger)section;
 
 @end
 

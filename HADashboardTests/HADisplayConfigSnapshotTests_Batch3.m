@@ -64,6 +64,37 @@
     [self verifyView:cell identifier:nil];
 }
 
+#pragma mark - Entity-less Button Card (GitHub #26)
+
+/// The reporter's sections-view button: no entity, red robot-vacuum icon,
+/// name, perform-action tap. Full section width at the dashboard's height.
+- (void)testEntitylessButton_reporterCard {
+    HADashboardConfigItem *item = [[HADashboardConfigItem alloc] init];
+    item.cardType = @"button";
+    item.columnSpan = 12;
+    item.displayName = @"Arrêter Coco Marcel";
+    item.customProperties = @{
+        @"icon": @"mdi:robot-vacuum", @"color": @"red",
+        @"show_name": @YES, @"show_icon": @YES, @"show_state": @NO,
+        @"tap_action": @{@"action": @"perform-action", @"perform_action": @"vacuum.stop",
+                         @"target": @{@"entity_id": @[@"vacuum.valetudo_cocomarcel"]}},
+    };
+    UIView *cell = [self cellForEntity:nil cellClass:[HATileEntityCell class]
+        size:CGSizeMake(floor(kSubGridUnit * 12), kGenericCardHeight) configItem:item];
+    [self verifyView:cell identifier:nil];
+}
+
+/// HA's default button with its entity removed and only an icon kept.
+- (void)testEntitylessButton_iconOnly {
+    HADashboardConfigItem *item = [[HADashboardConfigItem alloc] init];
+    item.cardType = @"button";
+    item.columnSpan = 6;
+    item.customProperties = @{@"icon": @"mdi:lightbulb"};
+    UIView *cell = [self cellForEntity:nil cellClass:[HATileEntityCell class]
+        size:CGSizeMake(floor(kSubGridUnit * 6), kGenericCardHeight) configItem:item];
+    [self verifyView:cell identifier:nil];
+}
+
 #pragma mark - Humidifier Tile
 
 - (void)testHumidifierTile_default {

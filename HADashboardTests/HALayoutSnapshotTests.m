@@ -12,6 +12,56 @@
 #import "HASensorEntityCell.h"
 #import "HABaseEntityCell.h"
 #import "HAHeadingCell.h"
+#import "HAColumnarLayout.h"
+
+/// Feeds a parsed sections config to HAColumnarLayout with fixed per-card
+/// heights, so a snapshot shows exactly where the layout puts each card.
+@interface HAWireframeLayoutSource : NSObject <UICollectionViewDataSource, HAColumnarLayoutDelegate>
+@property (nonatomic, strong) HADashboardConfig *config;
+@end
+
+@implementation HAWireframeLayoutSource
+
+- (HADashboardConfigItem *)itemAt:(NSIndexPath *)indexPath {
+    return self.config.sections[indexPath.section].items[indexPath.item];
+}
+
+- (NSInteger)numberOfSectionsInCollectionView:(UICollectionView *)collectionView {
+    return (NSInteger)self.config.sections.count;
+}
+
+- (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section {
+    return (NSInteger)self.config.sections[section].items.count;
+}
+
+- (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath {
+    return [collectionView dequeueReusableCellWithReuseIdentifier:@"cell" forIndexPath:indexPath];
+}
+
+- (CGFloat)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout *)layout
+ heightForItemAtIndexPath:(NSIndexPath *)indexPath itemWidth:(CGFloat)itemWidth {
+    HADashboardConfigItem *item = [self itemAt:indexPath];
+    if (item.rowSpan > 0) return item.rowSpan * 56.0 + (item.rowSpan - 1) * 6.0;
+    if ([item.cardType isEqualToString:@"weather-forecast"]) return 110.0;
+    return 56.0;
+}
+
+- (CGFloat)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout *)layout
+ heightForHeaderInSection:(NSInteger)section {
+    return 0;
+}
+
+- (NSInteger)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout *)layout
+  gridColumnsForItemAtIndexPath:(NSIndexPath *)indexPath {
+    return [self itemAt:indexPath].columnSpan;
+}
+
+- (NSInteger)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout *)layout
+       columnSpanForSection:(NSInteger)section {
+    return MAX(self.config.sections[section].columnSpan, 1);
+}
+
+@end
 
 /// Integration tests that render full dashboard sections from Lovelace JSON configs
 /// and side-by-side cell compositions at various column ratios.
@@ -243,6 +293,73 @@
         }
     }
     XCTAssertTrue(hasThermostat, @"Living room config should include a climate entity");
+}
+
+#pragma mark - Test 8: Sections column_span wireframe (GitHub #25)
+
+/// The GitHub #25 reporter's view (max_columns 4; sections spanning 1, 2 and
+/// 1 columns) laid out by HAColumnarLayout at iPad landscape width with the
+/// dashboard's real insets and spacing. Each card is drawn as a labelled box
+/// (type and sub-grid span) inside its section's outline, so the reference
+/// shows the 1/4 + 1/2 + 1/4 section split and the card widths within them.
+- (void)testSectionsColumnSpan_reporterViewWireframe_1024 {
+    NSDictionary *dict = @{@"views": @[@{@"title": @"Home", @"type": @"sections", @"max_columns": @4, @"sections": @[
+        @{@"type": @"grid", @"column_span": @1, @"cards": @[
+            @{@"type": @"tile", @"entity": @"person.psolyca", @"grid_options": @{@"columns": @4, @"rows": @1}},
+            @{@"type": @"tile", @"entity": @"sensor.sun_next_rising", @"name": @" "}]},
+        @{@"type": @"grid", @"column_span": @2, @"cards": @[
+            @{@"type": @"vertical-stack", @"grid_options": @{@"columns": @33, @"rows": @"auto"}, @"cards": @[
+                @{@"type": @"clock", @"clock_size": @"large", @"grid_options": @{@"columns": @9, @"rows": @2}},
+                @{@"type": @"weather-forecast", @"entity": @"weather.forecast_maison", @"show_forecast": @NO},
+                @{@"type": @"weather-forecast", @"entity": @"weather.cleguer", @"show_current": @NO}]}]},
+        @{@"type": @"grid", @"column_span": @1, @"cards": @[
+            @{@"type": @"tile", @"entity": @"sensor.sun_next_setting", @"name": @" "},
+            @{@"type": @"tile", @"entity": @"person.solene"}]}]}]};
+    HALovelaceView *view = [HALovelaceParser parseDashboardFromDictionary:dict].views.firstObject;
+    HAWireframeLayoutSource *source = [[HAWireframeLayoutSource alloc] init];
+    source.config = [HALovelaceParser dashboardConfigFromView:view columns:3];
+
+    // Same geometry as HADashboardViewController -applyLayoutForSectionsView:
+    HAColumnarLayout *layout = [[HAColumnarLayout alloc] init];
+    layout.contentInsets = UIEdgeInsetsMake(4, 8, 8, 8);
+    layout.interColumnSpacing = 6;
+    layout.interItemSpacing = 6;
+    layout.maxColumns = view.maxColumns;
+    layout.delegate = source;
+    UICollectionView *cv = [[UICollectionView alloc] initWithFrame:CGRectMake(0, 0, 1024, 400) collectionViewLayout:layout];
+    cv.dataSource = source;
+    [cv registerClass:[UICollectionViewCell class] forCellWithReuseIdentifier:@"cell"];
+    [cv layoutIfNeeded];
+
+    CGSize content = layout.collectionViewContentSize;
+    UIView *canvas = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 1024, content.height)];
+    canvas.backgroundColor = [UIColor colorWithWhite:0.93 alpha:1.0];
+    for (NSInteger section = 0; section < (NSInteger)source.config.sections.count; section++) {
+        CGRect outline = CGRectNull;
+        NSInteger count = (NSInteger)source.config.sections[section].items.count;
+        for (NSInteger i = 0; i < count; i++) {
+            NSIndexPath *indexPath = [NSIndexPath indexPathForItem:i inSection:section];
+            outline = CGRectUnion(outline, [layout layoutAttributesForItemAtIndexPath:indexPath].frame);
+        }
+        UIView *sectionView = [[UIView alloc] initWithFrame:CGRectInset(outline, -2, -2)];
+        sectionView.layer.borderColor = [UIColor colorWithRed:0.20 green:0.45 blue:0.85 alpha:1.0].CGColor;
+        sectionView.layer.borderWidth = 2;
+        [canvas addSubview:sectionView];
+        for (NSInteger i = 0; i < count; i++) {
+            NSIndexPath *indexPath = [NSIndexPath indexPathForItem:i inSection:section];
+            HADashboardConfigItem *item = [source itemAt:indexPath];
+            UILabel *box = [[UILabel alloc] initWithFrame:[layout layoutAttributesForItemAtIndexPath:indexPath].frame];
+            box.backgroundColor = [UIColor whiteColor];
+            box.textColor = [UIColor blackColor];
+            box.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+            box.textAlignment = NSTextAlignmentCenter;
+            box.text = [NSString stringWithFormat:@"%@ · %ld/%ld", item.cardType, (long)item.columnSpan,
+                        (long)(12 * MAX(source.config.sections[section].columnSpan, 1))];
+            [canvas addSubview:box];
+        }
+    }
+
+    [self verifyView:canvas identifier:@"sections_column_span_reporter_1024"];
 }
 
 #pragma mark - Test 7: Minimal Section -- 2 Entities

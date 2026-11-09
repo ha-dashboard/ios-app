@@ -36,4 +36,8 @@ extern NSString *const HAActionTypeNone;
 /// Convenience: is this a no-op action?
 - (BOOL)isNone;
 
+/// HA hasAction(): YES when `config` is an action dictionary with an "action"
+/// string other than "none".
++ (BOOL)configHasAction:(id)config;
+
 @end

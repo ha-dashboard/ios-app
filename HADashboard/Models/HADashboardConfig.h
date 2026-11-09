@@ -42,6 +42,9 @@
 @property (nonatomic, copy) NSArray<NSString *> *entityIds; // All entity IDs for composite cards
 @property (nonatomic, copy) NSDictionary<NSString *, NSString *> *nameOverrides; // entity_id -> display name
 @property (nonatomic, copy) NSDictionary *customProperties; // Extra rendering hints (e.g. chipStyle)
+/// Sections view: the HA section's column_span (how many view columns it
+/// covers, before clamping to the columns available on screen). 0 = 1.
+@property (nonatomic, assign) NSInteger columnSpan;
 
 @end
 
@@ -52,6 +55,14 @@
 @property (nonatomic, copy) NSArray<HADashboardConfigItem *> *items;
 @property (nonatomic, copy) NSArray<HADashboardConfigSection *> *sections;
 @property (nonatomic, assign) NSInteger columns;      // grid columns, defaults to 3
+
+/// View-level badge row (the Lovelace view's "badges"), or nil when the view has
+/// none (or is a panel view, which HA renders without badges). cardType is
+/// "badges"; entityIds/nameOverrides list the badges in order, and
+/// customProperties[@"badgeConfigs"] holds the matching normalized badge
+/// configs (see +[HALovelaceParser normalizedViewBadgeConfigs:]). Kept apart
+/// from `sections` because it is laid out full width above every section/column.
+@property (nonatomic, strong) HADashboardConfigSection *viewBadges;
 
 /// Strategy-based dashboard: type string (e.g. "original-states", "home") or nil
 @property (nonatomic, copy) NSString *strategyType;

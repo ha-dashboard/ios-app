@@ -18,6 +18,14 @@
                      layout:(UICollectionViewLayout *)layout
   entityCountForItemAtIndexPath:(NSIndexPath *)indexPath;
 
+@optional
+/// Return YES for a leading item (e.g. the view's badge row) that spans the
+/// viewport above the columns, like HA's hui-view-badges. Only consulted for
+/// the first items of section 0.
+- (BOOL)collectionView:(UICollectionView *)collectionView
+                layout:(UICollectionViewLayout *)layout
+isFullWidthItemAtIndexPath:(NSIndexPath *)indexPath;
+
 @end
 
 /// Masonry (shortest-column-first) collection view layout matching HA's classic view.

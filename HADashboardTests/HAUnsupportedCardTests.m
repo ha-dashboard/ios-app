@@ -119,6 +119,120 @@
     XCTAssertNil([self firstUnsupportedItemIn:config], @"A valid entity-less button card must not placeholder");
 }
 
+#pragma mark - Entity-less button card (GitHub #26)
+
+/// The reporter's card: a sections-view button with no entity and a
+/// perform-action tap_action targeting a vacuum.
+- (NSDictionary *)reporterButtonCard {
+    return @{
+        @"type": @"button", @"show_name": @YES, @"show_icon": @YES, @"show_state": @NO,
+        @"icon": @"mdi:robot-vacuum", @"color": @"red", @"name": @"Arr\u00eater Coco Marcel",
+        @"tap_action": @{@"action": @"perform-action", @"perform_action": @"vacuum.stop",
+                         @"target": @{@"entity_id": @[@"vacuum.valetudo_cocomarcel"]}},
+        @"grid_options": @{@"columns": @"full"},
+    };
+}
+
+- (HADashboardConfig *)sectionsConfigForCards:(NSArray *)cards {
+    NSDictionary *dashDict = @{@"views": @[@{@"title": @"Test", @"type": @"sections",
+                                             @"sections": @[@{@"type": @"grid", @"cards": cards}]}]};
+    HALovelaceDashboard *dashboard = [HALovelaceParser parseDashboardFromDictionary:dashDict];
+    return [HALovelaceParser dashboardConfigFromView:dashboard.views.firstObject columns:3];
+}
+
+- (void)testEntitylessButton_reporterCard_becomesButtonItemWithConfig {
+    HADashboardConfig *config = [self sectionsConfigForCards:@[[self reporterButtonCard]]];
+
+    XCTAssertEqual(config.items.count, 1u, @"The entity-less button must render, not vanish");
+    HADashboardConfigItem *item = config.items.firstObject;
+    XCTAssertEqualObjects(item.cardType, @"button");
+    XCTAssertNil(item.entityId);
+    XCTAssertEqualObjects(item.displayName, @"Arr\u00eater Coco Marcel");
+    XCTAssertEqual(item.columnSpan, 12, @"columns: full spans the whole section");
+    XCTAssertEqual(item.rowSpan, 0);
+    NSDictionary *props = item.customProperties;
+    XCTAssertEqualObjects(props[@"icon"], @"mdi:robot-vacuum");
+    XCTAssertEqualObjects(props[@"color"], @"red");
+    XCTAssertEqualObjects(props[@"show_name"], @YES);
+    XCTAssertEqualObjects(props[@"show_icon"], @YES);
+    XCTAssertEqualObjects(props[@"show_state"], @NO);
+    XCTAssertEqualObjects(props[@"tap_action"], [self reporterButtonCard][@"tap_action"]);
+    XCTAssertNil(props[@"hold_action"], @"Unconfigured actions keep the dashboard defaults");
+    XCTAssertNil([self firstUnsupportedItemIn:config]);
+}
+
+- (void)testEntitylessButton_iconOnlyWithEntityRemoved_becomesButtonItem {
+    // HA's default button card with the entity deleted and only an icon kept;
+    // an empty entity string is the same thing.
+    for (NSDictionary *card in @[@{@"type": @"button", @"icon": @"mdi:lightbulb", @"icon_height": @"48px",
+                                   @"hold_action": @{@"action": @"navigate", @"navigation_path": @"/x"},
+                                   @"double_tap_action": @{@"action": @"url", @"url_path": @"https://example.com"}},
+                                 @{@"type": @"button", @"entity": @"", @"icon": @"mdi:lightbulb", @"icon_height": @"48px",
+                                   @"hold_action": @{@"action": @"navigate", @"navigation_path": @"/x"},
+                                   @"double_tap_action": @{@"action": @"url", @"url_path": @"https://example.com"}}]) {
+        HADashboardConfig *config = [self sectionsConfigForCards:@[card]];
+        XCTAssertEqual(config.items.count, 1u, @"%@", card);
+        HADashboardConfigItem *item = config.items.firstObject;
+        XCTAssertEqualObjects(item.cardType, @"button");
+        XCTAssertEqual(item.entityId.length, 0u);
+        XCTAssertNil(item.displayName, @"No configured name: HA shows an empty name");
+        XCTAssertEqual(item.columnSpan, 6, @"hui-button-card getGridOptions(): icon + name → 6 columns");
+        XCTAssertEqualObjects(item.customProperties[@"icon"], @"mdi:lightbulb");
+        XCTAssertEqualObjects(item.customProperties[@"icon_height"], @"48px");
+        XCTAssertEqualObjects(item.customProperties[@"hold_action"][@"navigation_path"], @"/x");
+        XCTAssertEqualObjects(item.customProperties[@"double_tap_action"][@"url_path"], @"https://example.com");
+    }
+}
+
+- (void)testEntitylessButton_sizingFollowsHAButtonGridOptions {
+    // show_name: false → 3 columns; below min_columns (2) widens, as for entity buttons.
+    HADashboardConfig *iconOnly = [self sectionsConfigForCards:@[@{@"type": @"button", @"icon": @"mdi:bell", @"show_name": @NO}]];
+    XCTAssertEqual(iconOnly.items.firstObject.columnSpan, 3);
+    HADashboardConfig *narrow = [self sectionsConfigForCards:@[@{@"type": @"button", @"icon": @"mdi:bell",
+                                                                 @"grid_options": @{@"columns": @1, @"rows": @1}}]];
+    XCTAssertEqual(narrow.items.firstObject.columnSpan, 2);
+    XCTAssertEqual(narrow.items.firstObject.rowSpan, 2, @"icon + name: min_rows 2");
+    // Masonry views: half width like entity buttons.
+    HADashboardConfig *masonry = [self configForCards:@[@{@"type": @"button", @"icon": @"mdi:bell"}]];
+    XCTAssertEqual(masonry.items.firstObject.columnSpan, 6);
+}
+
+- (void)testEntitylessButton_blankNameAndNameConfigObject {
+    HADashboardConfig *config = [self configForCards:@[@{@"type": @"button", @"icon": @"mdi:bell", @"name": @" "},
+                                                       @{@"type": @"button", @"icon": @"mdi:bell", @"name": @{@"type": @"area"}}]];
+    XCTAssertEqual(config.items.count, 2u);
+    XCTAssertEqualObjects(config.items[0].customProperties[@"name_blank"], @YES);
+    XCTAssertNil(config.items[0].displayName);
+    XCTAssertNil(config.items[1].displayName, @"A name-config object has no entity to resolve against");
+    XCTAssertNil(config.items[1].customProperties[@"name_blank"]);
+}
+
+- (void)testEntitylessButton_rendersEvenWithUnsupportedToggleOff {
+    [[NSUserDefaults standardUserDefaults] setBool:NO forKey:HAShowUnsupportedCardsDefaultsKey];
+    HADashboardConfig *config = [self configForCards:@[[self reporterButtonCard]]];
+    XCTAssertEqual(config.items.count, 1u);
+    XCTAssertEqualObjects(config.items.firstObject.cardType, @"button");
+}
+
+- (void)testEntitylessButton_underGridHeading_embedsHeading {
+    HADashboardConfig *config = [self configForCards:@[@{@"type": @"grid", @"grid_options": @{@"columns": @6}, @"cards": @[
+        @{@"type": @"heading", @"heading": @"Robots", @"icon": @"mdi:robot"},
+        [self reporterButtonCard]]}]];
+    HADashboardConfigItem *item = config.items.firstObject;
+    XCTAssertEqualObjects(item.cardType, @"button");
+    XCTAssertEqualObjects(item.displayName, @"Robots");
+    XCTAssertEqualObjects(item.customProperties[@"headingIcon"], @"mdi:robot");
+    XCTAssertEqualObjects(item.customProperties[@"nameOverride"], @"Arr\u00eater Coco Marcel");
+}
+
+- (void)testEntitylessNonButtonCard_stillPlaceholdered {
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:HAShowUnsupportedCardsDefaultsKey];
+    HADashboardConfig *config = [self configForCards:@[@{@"type": @"gauge", @"name": @"No entity"}]];
+    HADashboardConfigItem *placeholder = [self firstUnsupportedItemIn:config];
+    XCTAssertNotNil(placeholder, @"Only button cards gain an entity-less rendering");
+    XCTAssertEqualObjects(placeholder.customProperties[HAUnsupportedCardTypeKey], @"gauge");
+}
+
 - (void)testEmptyGridContainer_isNotPlaceholdered {
     HADashboardConfig *config = [self configForCards:@[@{
         @"type": @"grid",

@@ -13,6 +13,9 @@
 @interface HATileEntityCell ()
 @property (nonatomic, strong) UILabel *tileIconLabel;
 @property (nonatomic, strong) UILabel *tileNameLabel;
+@property (nonatomic, strong) NSLayoutConstraint *tileStateTopConstraint;
+/// Button card without icon_height: icon scales with the card like HA's (40% of width).
+@property (nonatomic, assign) BOOL scalesButtonIcon;
 @property (nonatomic, strong) UILabel *tileStateLabel;
 @property (nonatomic, strong) UIStackView *compactStack;
 /// Normal (tile) layout constraints
@@ -101,6 +104,7 @@
     // Pin to a fixed 72px top area so features below don't shift the content.
     CGFloat iconWidth = 32.0;
     CGFloat tileAreaCenterY = 72.0 / 2.0; // Center of the 72px tile content area
+    self.tileStateTopConstraint = [self.tileStateLabel.topAnchor constraintEqualToAnchor:self.tileNameLabel.bottomAnchor constant:2];
     self.normalConstraints = @[
         [self.tileIconLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:12],
         [self.tileIconLabel.centerYAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:tileAreaCenterY],
@@ -110,7 +114,7 @@
         [self.tileNameLabel.bottomAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:tileAreaCenterY - 1],
         [self.tileStateLabel.leadingAnchor constraintEqualToAnchor:self.tileNameLabel.leadingAnchor],
         [self.tileStateLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor constant:-padding],
-        [self.tileStateLabel.topAnchor constraintEqualToAnchor:self.tileNameLabel.bottomAnchor constant:2],
+        self.tileStateTopConstraint,
     ];
 
     // Compact layout: vertically centered stack (icon above name above state).
@@ -160,6 +164,18 @@
 
     // Body tap toggles via didSelectItemAtIndexPath.
     // Long-press opens detail via the collection view's long-press gesture.
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!self.scalesButtonIcon) return;
+    // HA sizes the button icon at 40% of the card width, capped so the name
+    // still fits below it.
+    CGSize size = self.contentView.bounds.size;
+    CGFloat iconSize = floor(MAX(28.0, MIN(96.0, MIN(size.width * 0.4, size.height * 0.5))));
+    if (fabs(self.tileIconLabel.font.pointSize - iconSize) > 0.5) {
+        self.tileIconLabel.font = [HAIconMapper mdiFontOfSize:iconSize];
+    }
 }
 
 - (void)applyCompactMode:(BOOL)compact {
@@ -231,14 +247,40 @@
     }
 }
 
+/// A button card configured without an entity (GitHub #26): HA renders it
+/// fully available with only its configured icon and name, never a state.
+static BOOL HAIsEntitylessButton(HAEntity *entity, HADashboardConfigItem *configItem) {
+    return !entity && configItem.entityId.length == 0 && [configItem.cardType isEqualToString:@"button"];
+}
+
+/// hui-button-card _computeColor() without a state object: a configured color
+/// applies as-is; "none", "state" (nothing to derive it from) and unknown
+/// values fall back to the default icon color.
+static UIColor *HAEntitylessButtonIconColor(NSDictionary *props) {
+    NSString *color = [props[@"color"] isKindOfClass:[NSString class]] ? props[@"color"] : nil;
+    UIColor *resolved = nil;
+    if (color.length > 0 && ![color isEqualToString:@"none"] && ![color isEqualToString:@"state"]) {
+        resolved = [HATheme colorFromStringOrNil:color];
+    }
+    return resolved ?: [HATheme secondaryTextColor];
+}
+
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
     [super configureWithEntity:entity configItem:configItem];
     self.nameLabel.hidden = YES;
     self.stateLabel.hidden = YES;
+    BOOL entityless = HAIsEntitylessButton(entity, configItem);
+    // The base cell dims a missing entity; an entity-less button has none to miss.
+    if (entityless) self.contentView.alpha = 1.0;
 
     // Determine if this is a compact button card (inside horizontal-stack)
     BOOL compact = [configItem.customProperties[@"compact"] boolValue];
-    BOOL vertical = [configItem.customProperties[@"vertical"] boolValue];
+    // HA's button card is always laid out vertically (icon centred above the
+    // name); `vertical` is only a tile-card option.
+    BOOL isButton = [configItem.cardType isEqualToString:@"button"];
+    BOOL vertical = isButton || [configItem.customProperties[@"vertical"] boolValue];
+    self.scalesButtonIcon = isButton && !compact &&
+        [configItem.customProperties[@"icon_height"] length] == 0;
 
     // Compact takes priority over vertical (both use the same stack)
     if (compact) {
@@ -272,8 +314,12 @@
         displayState = (attrVal && attrVal != [NSNull null]) ? [NSString stringWithFormat:@"%@", attrVal] : @"—";
     } else {
         // State: formatted state with human-readable text + unit
-        NSString *formattedState = [HAEntityDisplayHelper formattedStateForEntity:entity decimals:2];
-        displayState = [HAEntityDisplayHelper humanReadableState:formattedState];
+        NSString *formattedState = [HAEntityDisplayHelper formattedStateForEntity:entity
+                                                                         decimals:2
+                                                                       timeFormat:configItem.customProperties[@"time_format"]];
+        // Timestamps are already display-ready; title-casing would mangle them
+        BOOL isTimestamp = [HAEntityDisplayHelper isTimestampState:entity.state deviceClass:[entity deviceClass]];
+        displayState = isTimestamp ? formattedState : [HAEntityDisplayHelper humanReadableState:formattedState];
         NSString *unit = entity.unitOfMeasurement;
         // Append unit unless binary_sensor or duration (already includes units)
         if (unit.length > 0 &&
@@ -338,35 +384,11 @@
     }
 
     // state_content override: display last_changed, last_updated, or attribute values
-    id stateContent = configItem.customProperties[@"state_content"];
-    if (stateContent) {
-        NSArray *contentItems = [stateContent isKindOfClass:[NSArray class]]
-            ? (NSArray *)stateContent
-            : @[stateContent];
-        NSMutableArray *parts = [NSMutableArray arrayWithCapacity:contentItems.count];
-        for (id item in contentItems) {
-            NSString *key = [item isKindOfClass:[NSString class]] ? (NSString *)item : nil;
-            if (!key) continue;
-            NSString *value = nil;
-            if ([key isEqualToString:@"last_changed"] || [key isEqualToString:@"last-changed"]) {
-                value = [HAEntityDisplayHelper relativeTimeFromISO8601:entity.lastChanged];
-            } else if ([key isEqualToString:@"last_updated"] || [key isEqualToString:@"last-updated"]) {
-                value = [HAEntityDisplayHelper relativeTimeFromISO8601:entity.lastUpdated];
-            } else if ([key isEqualToString:@"state"]) {
-                value = displayState;
-            } else {
-                // Attribute name lookup
-                id attrVal = entity.attributes[key];
-                if (attrVal && attrVal != [NSNull null]) {
-                    value = [NSString stringWithFormat:@"%@", attrVal];
-                }
-            }
-            if (value.length > 0) [parts addObject:value];
-        }
-        if (parts.count > 0) {
-            displayState = [parts componentsJoinedByString:@" · "];
-        }
-    }
+    NSString *stateContentText = [HAEntityDisplayHelper stateContentText:configItem.customProperties[@"state_content"]
+                                                               forEntity:entity
+                                                               stateText:displayState
+                                                                    name:nil];
+    if (stateContentText) displayState = stateContentText;
 
     // Respect show_state / show_name / show_icon from card config.
     // HA button card defaults: show_name=YES, show_icon=YES, show_state=NO.
@@ -376,11 +398,18 @@
     BOOL defaultShowState = !isButtonCard; // button cards hide state by default
     BOOL hideState = [props[@"hide_state"] boolValue]; // tile-specific hide_state field
     BOOL showState = hideState ? NO : (props[@"show_state"] ? [props[@"show_state"] boolValue] : defaultShowState);
+    if (entityless) showState = NO; // HA: no state object, no state line
     BOOL showName  = props[@"show_name"]  ? [props[@"show_name"] boolValue]  : YES;
     BOOL showIcon  = props[@"show_icon"]  ? [props[@"show_icon"] boolValue]  : YES;
+    // A blank configured name (name: ' ') leaves no name line in HA, so the
+    // state sits centred on the icon. Compact/vertical stacks collapse the
+    // hidden name themselves; the normal layout needs the state re-anchored.
+    BOOL nameBlank = [props[@"name_blank"] boolValue];
     self.tileStateLabel.text = showState ? displayState : nil;
     self.tileStateLabel.hidden = !showState;
-    self.tileNameLabel.hidden = !showName;
+    self.tileNameLabel.hidden = !showName || nameBlank;
+    if (nameBlank) self.tileNameLabel.text = nil;
+    self.tileStateTopConstraint.constant = nameBlank ? -(ceil(self.tileStateLabel.font.lineHeight / 2.0) + 1) : 2;
     self.tileIconLabel.hidden = !showIcon;
 
     // Icon: from card config override, else centralized entity icon resolution
@@ -390,8 +419,13 @@
         if ([iconName hasPrefix:@"mdi:"]) iconName = [iconName substringFromIndex:4];
         glyph = [HAIconMapper glyphForIconName:iconName];
     }
-    if (!glyph) glyph = [HAEntityDisplayHelper iconGlyphForEntity:entity];
-    self.tileIconLabel.text = glyph ?: @"?";
+    if (entityless) {
+        // No entity to derive an icon from: HA leaves the icon slot empty.
+        self.tileIconLabel.text = glyph;
+    } else {
+        if (!glyph) glyph = [HAEntityDisplayHelper iconGlyphForEntity:entity];
+        self.tileIconLabel.text = glyph ?: @"?";
+    }
 
     // Entity picture: show circular image instead of icon when configured
     [self.pictureTask cancel];
@@ -439,7 +473,8 @@
     }
 
     // Color: domain+state-aware icon color from centralized helper
-    UIColor *iconColor = [HAEntityDisplayHelper iconColorForEntity:entity];
+    UIColor *iconColor = entityless ? HAEntitylessButtonIconColor(configItem.customProperties)
+                                    : [HAEntityDisplayHelper iconColorForEntity:entity];
     self.tileIconLabel.textColor = iconColor;
     // State label matches icon color when entity is active, secondary otherwise
     BOOL isActive = [entity isOn] ||
@@ -460,9 +495,9 @@
     }
     self.featureViews = nil;
 
-    // Create feature views from config (skip in compact mode)
+    // Create feature views from config (skip in compact mode; features act on an entity)
     NSArray *featuresConfig = configItem.customProperties[@"features"];
-    if (!compact && [featuresConfig isKindOfClass:[NSArray class]] && featuresConfig.count > 0) {
+    if (!compact && !entityless && [featuresConfig isKindOfClass:[NSArray class]] && featuresConfig.count > 0) {
         NSMutableArray *views = [NSMutableArray arrayWithCapacity:featuresConfig.count];
         for (NSDictionary *featureConfig in featuresConfig) {
             if (![featureConfig isKindOfClass:[NSDictionary class]]) continue;
@@ -537,6 +572,7 @@
     self.tileStateLabel.hidden = NO;
     // Force reset to normal mode — set flags to YES first so the guards
     // in apply*Mode: don't short-circuit when already NO.
+    self.scalesButtonIcon = NO;
     self.isVertical = YES;
     [self applyVerticalMode:NO];
     self.isCompact = YES;

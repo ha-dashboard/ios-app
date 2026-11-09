@@ -7,7 +7,48 @@
 #import "HAGlanceCardCell.h"
 #import "HATheme.h"
 
+/// FBSnapshotTestCase's own key-window lookup (Vendor UIApplication+KeyWindow),
+/// so the warm-up renders in the same window the snapshots are drawn in.
+@interface UIApplication (HASnapshotKeyWindow)
+- (UIWindow *)ub_keyWindow;
+@end
+
 @implementation HABaseSnapshotTestCase
+
++ (void)setUp {
+    [super setUp];
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        [self warmUpRoundedBlurRendering];
+    });
+}
+
+/// Render one corner-clipped frosted background, exactly the way
+/// FBSnapshotTestCase renders a snapshot, before any test runs.
+///
+/// The first time a test process draws a UIVisualEffectView whose layer is
+/// clipped to a corner radius (drawViewHierarchyInRect:afterScreenUpdates:YES
+/// from a view in the key window), the render server antialiases the rounded
+/// edge differently — 2/255 on the pill's outermost pixel at its vertical
+/// centre — from every later render. So a blurred pill (badge row, view
+/// badges) snapshot depended on whether another rounded blur had already
+/// been drawn: it failed when its class or test ran alone and passed in the
+/// full suite. One warm-up with any radius, size or blur style is enough
+/// (a rounded plain view, or an unclipped blur, is not), so do it once per
+/// process here rather than in individual tests.
++ (void)warmUpRoundedBlurRendering {
+    CGRect frame = CGRectMake(0, 0, 72, 36);
+    UIView *pill = [HATheme frostedBackgroundViewWithCornerRadius:frame.size.height / 2.0];
+    pill.frame = frame;
+    pill.clipsToBounds = YES;
+    UIWindow *window = [[UIApplication sharedApplication] ub_keyWindow];
+    if (!window) return;
+    [window addSubview:pill];
+    UIGraphicsBeginImageContextWithOptions(frame.size, NO, 0);
+    [pill drawViewHierarchyInRect:pill.bounds afterScreenUpdates:YES];
+    UIGraphicsEndImageContext();
+    [pill removeFromSuperview];
+}
 
 - (void)setUp {
     [super setUp];
@@ -139,6 +180,20 @@
 - (void)verifyView:(UIView *)view identifier:(NSString *)identifier {
     [self verifyView:view identifier:identifier inTheme:HAThemeModeDark gradient:YES];
     [self verifyView:view identifier:identifier inTheme:HAThemeModeLight];
+}
+
+#pragma mark - Deterministic Dates
+
+- (NSDate *)fixedTestDate {
+    NSDateComponents *components = [[NSDateComponents alloc] init];
+    components.year = 2026;
+    components.month = 1;
+    components.day = 15;
+    components.hour = 14;
+    components.minute = 30;
+    components.second = 0;
+    components.timeZone = [NSTimeZone timeZoneForSecondsFromGMT:0];
+    return [[NSCalendar calendarWithIdentifier:NSCalendarIdentifierGregorian] dateFromComponents:components];
 }
 
 @end

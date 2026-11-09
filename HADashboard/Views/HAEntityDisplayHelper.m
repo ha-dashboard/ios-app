@@ -14,6 +14,8 @@
                         configItem:(HADashboardConfigItem *)configItem
                       nameOverride:(NSString *)nameOverride {
     if (nameOverride.length > 0) return nameOverride;
+    // Explicit blank name (name: ' ') hides the name, as in HA
+    if ([configItem.customProperties[@"name_blank"] boolValue]) return @"";
     // Card-level name override stored in customProperties when a heading claims displayName
     NSString *cardNameOverride = configItem.customProperties[@"nameOverride"];
     if (cardNameOverride.length > 0) return cardNameOverride;
@@ -36,6 +38,15 @@
 #pragma mark - State Formatting
 
 + (NSString *)formattedStateForEntity:(HAEntity *)entity decimals:(NSInteger)decimals {
+    return [self formattedStateForEntity:entity decimals:decimals timeFormat:nil];
+}
+
++ (BOOL)isTimestampState:(NSString *)state deviceClass:(NSString *)deviceClass {
+    if ([deviceClass isEqualToString:@"timestamp"] || [deviceClass isEqualToString:@"uptime"]) return YES;
+    return (state.length >= 19 && [state characterAtIndex:4] == '-' && [state characterAtIndex:10] == 'T');
+}
+
++ (NSString *)formattedStateForEntity:(HAEntity *)entity decimals:(NSInteger)decimals timeFormat:(id)timeFormat {
     NSString *state = entity.state;
     if (!state) return @"--";
 
@@ -51,6 +62,18 @@
         return [self binarySensorStateForDeviceClass:[entity deviceClass] isOn:[entity isOn]];
     }
 
+    // ISO 8601 timestamps must be handled before the numeric check:
+    // -doubleValue reads the leading year, so "2026-10-12T06:28:21+00:00"
+    // would otherwise render as the number "2,026" (issue #22).
+    NSString *deviceClass = [entity deviceClass];
+    if ([self isTimestampState:state deviceClass:deviceClass]) {
+        // HA defaults: uptime sensors render as a total duration, every other
+        // timestamp as relative time; a card's time_format overrides both.
+        id format = timeFormat ?: ([deviceClass isEqualToString:@"uptime"] ? @"total" : @"relative");
+        NSString *formatted = [self formattedValue:state withFormat:format];
+        if (formatted.length > 0 && [HADateUtils dateFromISO8601String:state]) return formatted;
+    }
+
     double numVal = [state doubleValue];
     BOOL isNumeric = (numVal != 0.0 || [state isEqualToString:@"0"] || [state hasPrefix:@"0."]);
 
@@ -63,14 +86,6 @@
             return [self formattedDurationFromValue:numVal unit:unit];
         }
         return [self formattedNumberString:numVal decimals:decimals];
-    }
-
-    // Check for ISO 8601 timestamp
-    NSString *deviceClass = [entity deviceClass];
-    if (([deviceClass isEqualToString:@"timestamp"]) ||
-        (state.length >= 19 && [state characterAtIndex:4] == '-' && [state characterAtIndex:10] == 'T')) {
-        NSString *relative = [self relativeTimeFromISO8601:state];
-        if (relative) return relative;
     }
 
     // Every other non-numeric, non-timestamp state (lock, climate, cover,
@@ -241,7 +256,57 @@
     }
 }
 
++ (BOOL)isEntityStateActive:(HAEntity *)entity {
+    NSString *state = entity.state;
+    if (state.length == 0 || [state isEqualToString:@"unavailable"] ||
+        [state isEqualToString:@"unknown"] || [state isEqualToString:@"off"]) {
+        return NO;
+    }
+    NSString *domain = [entity domain];
+    if ([domain isEqualToString:@"cover"] || [domain isEqualToString:@"valve"]) return ![state isEqualToString:@"closed"];
+    if ([domain isEqualToString:@"lock"]) return ![state isEqualToString:@"locked"];
+    if ([domain isEqualToString:@"person"] || [domain isEqualToString:@"device_tracker"]) return ![state isEqualToString:@"not_home"];
+    if ([domain isEqualToString:@"media_player"]) return ![state isEqualToString:@"standby"] && ![state isEqualToString:@"idle"];
+    if ([domain isEqualToString:@"vacuum"]) return ![state isEqualToString:@"docked"];
+    if ([domain isEqualToString:@"alarm_control_panel"]) return ![state isEqualToString:@"disarmed"];
+    if ([domain isEqualToString:@"timer"]) return ![state isEqualToString:@"idle"];
+    return YES;
+}
+
 #pragma mark - Relative Time
+
++ (NSString *)stateContentText:(id)stateContent
+                     forEntity:(HAEntity *)entity
+                     stateText:(NSString *)stateText
+                          name:(NSString *)name {
+    if (!stateContent) return nil;
+    NSArray *contentItems = [stateContent isKindOfClass:[NSArray class]]
+        ? (NSArray *)stateContent
+        : @[stateContent];
+    NSMutableArray *parts = [NSMutableArray arrayWithCapacity:contentItems.count];
+    for (id item in contentItems) {
+        NSString *key = [item isKindOfClass:[NSString class]] ? (NSString *)item : nil;
+        if (!key) continue;
+        NSString *value = nil;
+        if ([key isEqualToString:@"last_changed"] || [key isEqualToString:@"last-changed"]) {
+            value = [self relativeTimeFromISO8601:entity.lastChanged];
+        } else if ([key isEqualToString:@"last_updated"] || [key isEqualToString:@"last-updated"]) {
+            value = [self relativeTimeFromISO8601:entity.lastUpdated];
+        } else if ([key isEqualToString:@"state"]) {
+            value = stateText;
+        } else if (name && [key isEqualToString:@"name"]) {
+            value = name;
+        } else {
+            // Attribute name lookup
+            id attrVal = entity.attributes[key];
+            if (attrVal && attrVal != [NSNull null]) {
+                value = [NSString stringWithFormat:@"%@", attrVal];
+            }
+        }
+        if (value.length > 0) [parts addObject:value];
+    }
+    return parts.count > 0 ? [parts componentsJoinedByString:@" · "] : nil;
+}
 
 + (NSString *)relativeTimeFromISO8601:(NSString *)isoString {
     if (!isoString || isoString.length < 19) return nil;
@@ -285,7 +350,19 @@
         : [NSString stringWithFormat:@"%@ ago", timeString];
 }
 
-+ (NSString *)formattedValue:(NSString *)value withFormat:(NSString *)format {
++ (NSString *)formattedValue:(NSString *)value withFormat:(id)timeFormat {
+    // HA's TimestampRenderingFormat: a plain type string, or
+    // {type: relative|total|date|time|datetime, style: short|long}.
+    NSString *format = nil;
+    NSString *style = nil;
+    if ([timeFormat isKindOfClass:[NSString class]]) {
+        format = timeFormat;
+    } else if ([timeFormat isKindOfClass:[NSDictionary class]]) {
+        id type = timeFormat[@"type"];
+        id styleValue = timeFormat[@"style"];
+        if ([type isKindOfClass:[NSString class]]) format = type;
+        if ([styleValue isKindOfClass:[NSString class]]) style = styleValue;
+    }
     if (!value || !format) return value;
 
     if ([format isEqualToString:@"relative"]) {
@@ -296,6 +373,41 @@
     // Parse ISO date for other formats
     NSDate *date = [HADateUtils dateFromISO8601String:value];
     if (!date) return value;
+
+    // Styles mirror hui-timestamp-display: date/datetime "short" are numeric,
+    // time "long" adds seconds. Any other style uses the default rendering.
+    if ([format isEqualToString:@"date"] && [style isEqualToString:@"short"]) {
+        static NSDateFormatter *numericDateFormatter = nil;
+        static dispatch_once_t numericDateOnce;
+        dispatch_once(&numericDateOnce, ^{
+            numericDateFormatter = [[NSDateFormatter alloc] init];
+            numericDateFormatter.dateStyle = NSDateFormatterShortStyle;
+            numericDateFormatter.timeStyle = NSDateFormatterNoStyle;
+        });
+        return [numericDateFormatter stringFromDate:date];
+    }
+
+    if ([format isEqualToString:@"datetime"] && [style isEqualToString:@"short"]) {
+        static NSDateFormatter *numericDateTimeFormatter = nil;
+        static dispatch_once_t numericDateTimeOnce;
+        dispatch_once(&numericDateTimeOnce, ^{
+            numericDateTimeFormatter = [[NSDateFormatter alloc] init];
+            numericDateTimeFormatter.dateStyle = NSDateFormatterShortStyle;
+            numericDateTimeFormatter.timeStyle = NSDateFormatterShortStyle;
+        });
+        return [numericDateTimeFormatter stringFromDate:date];
+    }
+
+    if ([format isEqualToString:@"time"] && [style isEqualToString:@"long"]) {
+        static NSDateFormatter *secondsTimeFormatter = nil;
+        static dispatch_once_t secondsTimeOnce;
+        dispatch_once(&secondsTimeOnce, ^{
+            secondsTimeFormatter = [[NSDateFormatter alloc] init];
+            secondsTimeFormatter.dateStyle = NSDateFormatterNoStyle;
+            secondsTimeFormatter.timeStyle = NSDateFormatterMediumStyle;
+        });
+        return [secondsTimeFormatter stringFromDate:date];
+    }
 
     if ([format isEqualToString:@"date"]) {
         static NSDateFormatter *dateFormatter = nil;
@@ -515,6 +627,10 @@
     // Input Boolean: toggle-switch vs toggle-switch-off
     if ([domain isEqualToString:HAEntityDomainInputBoolean]) {
         return [HAIconMapper glyphForIconName:isOn ? @"toggle-switch" : @"toggle-switch-off"];
+    }
+    // Sun: HA's sun domain icon (white-balance-sunny / weather-night)
+    if ([domain isEqualToString:@"sun"]) {
+        return [HAIconMapper glyphForIconName:[entity.state isEqualToString:@"below_horizon"] ? @"weather-night" : @"white-balance-sunny"];
     }
     // Lock: lock vs lock-open
     if ([domain isEqualToString:HAEntityDomainLock]) {

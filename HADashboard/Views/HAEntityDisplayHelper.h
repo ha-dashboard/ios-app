@@ -23,6 +23,14 @@
 /// @param decimals Number of decimal places (1 for badges, 2 for detail views)
 + (NSString *)formattedStateForEntity:(HAEntity *)entity decimals:(NSInteger)decimals;
 
+/// YES for device_class timestamp/uptime or an ISO 8601-shaped state string.
++ (BOOL)isTimestampState:(NSString *)state deviceClass:(NSString *)deviceClass;
+
+/// As above, rendering timestamp states (device_class timestamp/uptime or an
+/// ISO 8601 state) with a card's HA `time_format` (string or {type, style});
+/// nil uses HA's default (relative, or total for uptime).
++ (NSString *)formattedStateForEntity:(HAEntity *)entity decimals:(NSInteger)decimals timeFormat:(id)timeFormat;
+
 /// Format state + unit as a single string (e.g. "21.5 °C")
 + (NSString *)stateWithUnitForEntity:(HAEntity *)entity decimals:(NSInteger)decimals;
 
@@ -57,14 +65,31 @@
 /// E.g. "2026-02-11T10:15:30+00:00" → "5 minutes ago"
 + (NSString *)relativeTimeFromISO8601:(NSString *)isoString;
 
+/// Text for a Lovelace "state_content" option (a string or array of strings,
+/// as on tile cards and entity badges): each part is "state" (→ stateText),
+/// "name" (→ name, when non-nil), "last_changed"/"last-changed",
+/// "last_updated"/"last-updated" (relative time), or an attribute name.
+/// Non-empty parts are joined with " · ". Returns nil when nothing resolves,
+/// so the caller keeps its default state text.
++ (NSString *)stateContentText:(id)stateContent
+                     forEntity:(HAEntity *)entity
+                     stateText:(NSString *)stateText
+                          name:(NSString *)name;
+
+/// Approximation of HA's stateActive(): whether a badge's custom "color"
+/// applies (entity and heading badges only use it while the entity is active).
++ (BOOL)isEntityStateActive:(HAEntity *)entity;
+
 /// Check whether a string represents a numeric value.
 /// Returns NO for nil, empty, "unavailable", "unknown", "on", "off".
 + (BOOL)isNumericString:(NSString *)string;
 
 /// Format an ISO 8601 timestamp or state value per HA's format option.
 /// Supports: "relative" (e.g. "5 min ago"), "total" (duration since epoch),
-/// "date" (date only), "time" (time only), "datetime" (date + time).
+/// "date" (date only), "time" (time only), "datetime" (date + time), either as
+/// a string or as HA's {type, style} object (date/datetime "short" = numeric,
+/// time "long" = with seconds).
 /// Returns the original value if format is unknown or parsing fails.
-+ (NSString *)formattedValue:(NSString *)value withFormat:(NSString *)format;
++ (NSString *)formattedValue:(NSString *)value withFormat:(id)format;
 
 @end

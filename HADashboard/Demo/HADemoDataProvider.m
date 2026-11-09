@@ -1905,6 +1905,19 @@
             ]},
             @{@"title": @"Weather", @"cards": @[
                 @{@"type": @"weather-forecast", @"entity": @"weather.home", @"forecast_type": @"daily"}
+            ]},
+            // GitHub #20: weather-forecast's show_current/show_forecast toggles.
+            // Three variants for visual verification — both sections (HA default),
+            // current conditions only (show_forecast: false), and forecast only
+            // (show_current: false) — each using a weather entity with legacy
+            // forecast-attribute data so the cell renders synchronously.
+            @{@"title": @"Weather (show_current / show_forecast)", @"cards": @[
+                @{@"type": @"weather-forecast", @"entity": @"weather.demo_weather_south",
+                  @"name": @"Both sections (default)", @"forecast_type": @"daily"},
+                @{@"type": @"weather-forecast", @"entity": @"weather.demo_weather_south",
+                  @"name": @"Current only", @"forecast_type": @"daily", @"show_forecast": @NO},
+                @{@"type": @"weather-forecast", @"entity": @"weather.demo_weather_north",
+                  @"name": @"Forecast only", @"forecast_type": @"daily", @"show_current": @NO}
             ]}
         ]},
         // ── View 6: Inputs & Controls ──

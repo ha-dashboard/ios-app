@@ -4,11 +4,51 @@
 #import "HASafeDict.h"
 #import "HAEntityNameResolver.h"
 #import "HALog.h"
+#import "HAAction.h"
 
 NSString *const HAShowUnsupportedCardsDefaultsKey = @"HAShowUnsupportedCardsEnabled";
 NSString *const HAShowUnsupportedCardsDidChangeNotification = @"HAShowUnsupportedCardsDidChangeNotification";
 NSString *const HAUnsupportedCardType = @"__unsupported__";
 NSString *const HAUnsupportedCardTypeKey = @"unsupportedCardType";
+NSString *const HAHeadingBadgesKey = @"headingBadges";
+NSString *const HAHeadingTapActionKey = @"headingTapAction";
+
+#pragma mark - Sections grid helpers
+
+/// Card-grid columns per view column in a sections-view section
+/// (hui-grid-section --base-column-count): a section with column_span N has a
+/// 12 × N column grid. HA spans a card over min(columns, grid width), so
+/// anything wider — e.g. "columns: 33" — fills the section.
+static const NSInteger kHASectionGridColumns = 12;
+
+/// HA's legacy layout_options used a 4-column section grid; migrateLayoutToGridOptions
+/// multiplies its column values by GRID_COLUMN_MULTIPLIER (3).
+static const NSInteger kHALayoutOptionsColumnMultiplier = 3;
+
+/// A grid_options number (NSNumber, or a numeric string from a hand-edited
+/// config); 0 for "full", "auto" and anything malformed.
+static NSInteger HAGridIntegerValue(id value) {
+    if ([value isKindOfClass:[NSNumber class]] || [value isKindOfClass:[NSString class]]) {
+        return [value integerValue];
+    }
+    return 0;
+}
+
+/// HA conditionalClamp(): clamp only against the bounds that are defined.
+static NSInteger HAGridConditionalClamp(NSInteger value, id min, id max) {
+    if ([min isKindOfClass:[NSNumber class]]) value = MAX(value, [min integerValue]);
+    if ([max isKindOfClass:[NSNumber class]]) value = MIN(value, [max integerValue]);
+    return value;
+}
+
+/// HA computeCardFeatureRows(): features below the card, two per row when the
+/// first one sits inline.
+static NSInteger HACardFeatureRows(NSUInteger featureCount, NSString *position) {
+    if (![position isEqualToString:@"inline"]) return (NSInteger)featureCount;
+    NSInteger below = featureCount > 0 ? (NSInteger)featureCount - 1 : 0;
+    NSInteger columns = MAX(MIN(below, 2), 1);
+    return (below + columns - 1) / columns;
+}
 
 #pragma mark - HALovelaceView
 
@@ -50,15 +90,24 @@ NSString *const HAUnsupportedCardTypeKey = @"unsupportedCardType";
                         [allCards addObjectsFromArray:sectionCards];
 
                         NSString *sectionIcon = HASafeDictStringOrNil(section, @"icon");
+                        // HA DEFAULT_SECTION_COLUMN_SPAN is 1
+                        NSInteger columnSpan = MAX(1, HASafeDictInteger(section, @"column_span", 1));
                         [parsedSections addObject:@{
                             @"title": sectionTitle ?: @"",
                             @"icon": sectionIcon ?: @"",
-                            @"cards": sectionCards
+                            @"cards": sectionCards,
+                            @"column_span": @(columnSpan)
                         }];
                     }
                     view.rawSections = [parsedSections copy];
                 }
                 view.rawCards = [allCards copy];
+                // View-level badges (shown above the cards/sections in HA)
+                NSArray *rawBadges = HASafeDictArrayOrNil(vd, @"badges");
+                if (rawBadges.count > 0) {
+                    NSArray *badges = [HALovelaceParser normalizedViewBadgeConfigs:rawBadges];
+                    if (badges.count > 0) view.rawBadges = badges;
+                }
                 // Parse max_columns from HA view config (sections layout column cap)
                 NSNumber *maxColsNum = HASafeDictNumberOrNil(vd, @"max_columns");
                 if (maxColsNum) {
@@ -203,12 +252,24 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             if (haSectionTitle.length == 0) haSectionTitle = nil;
             // Icon from section-level config (HA 2024.12+)
             NSString *haSectionIcon = HASafeDictStringOrNil(rawSection, @"icon");
+            if (haSectionIcon.length == 0) haSectionIcon = nil; // stored as @"" when absent
             NSArray *sectionCards = rawSection[@"cards"];
 
-            // Look for heading cards to extract section title/icon (fallback)
-            for (NSDictionary *card in sectionCards) {
+            // A heading card that opens the section supplies the section
+            // header (title/icon fallback). Every other heading card is
+            // rendered in place as a full-width standalone heading item, so
+            // the cards after it start on a new row beneath it — HA lays a
+            // section's cards out in order on its grid and a heading card
+            // spans the full width ("columns": "full"). Previously every
+            // heading was consumed here: the first became the title and any
+            // later heading was dropped, leaving its neighbours packed side by
+            // side (GitHub #23).
+            NSUInteger titleHeadingIdx = NSNotFound;
+            for (NSUInteger i = 0; i < sectionCards.count; i++) {
+                NSDictionary *card = sectionCards[i];
                 if (![card isKindOfClass:[NSDictionary class]]) continue;
                 if ([HASafeDictStringOrNil(card, @"type") isEqualToString:@"heading"]) {
+                    titleHeadingIdx = i;
                     if (!haSectionTitle && [card[@"heading"] isKindOfClass:[NSString class]]) {
                         haSectionTitle = card[@"heading"];
                     }
@@ -216,7 +277,15 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                         haSectionIcon = card[@"icon"];
                     }
                 }
+                break; // only the first card can be the section header
             }
+
+            // The section's own card grid is 12 × column_span columns wide
+            // (hui-grid-section --grid-column-count); HA never spans a section
+            // over more view columns than max_columns allows.
+            NSInteger viewMaxColumns = (view.maxColumns > 0) ? view.maxColumns : 4; // HA DEFAULT_MAX_COLUMNS
+            NSInteger sectionColumnSpan = MIN(MAX(1, HASafeDictInteger(rawSection, @"column_span", 1)), viewMaxColumns);
+            NSInteger sectionGridColumns = kHASectionGridColumns * sectionColumnSpan;
 
             // Collect all items from all cards in this HA section into a single config section
             NSMutableArray<HADashboardConfigSection *> *cardSections = [NSMutableArray array];
@@ -224,10 +293,26 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             for (NSUInteger cardIdx = 0; cardIdx < sectionCards.count; cardIdx++) {
                 NSDictionary *card = sectionCards[cardIdx];
                 if (![card isKindOfClass:[NSDictionary class]]) continue;
-                if ([HASafeDictStringOrNil(card, @"type") isEqualToString:@"heading"]) continue;
+                if ([HASafeDictStringOrNil(card, @"type") isEqualToString:@"heading"]) {
+                    if (cardIdx != titleHeadingIdx) {
+                        NSInteger startSectionCount = cardSections.count;
+                        NSInteger startItemCount = cardItems.count;
+                        [self _appendStandaloneHeadingForCard:card
+                                                 columnSpan:sectionGridColumns
+                                                   sections:cardSections
+                                                   allItems:cardItems];
+                        [self _applyVisibilityOfCard:card
+                                          toSections:cardSections
+                                    fromSectionIndex:startSectionCount
+                                            allItems:cardItems
+                                       fromItemIndex:startItemCount];
+                    }
+                    continue;
+                }
 
-                // Sections view: scale grid_options.columns from HA's section grid to our 12-col sub-grid
-                NSInteger sectionGridMax = (view.maxColumns > 0) ? view.maxColumns : 4;
+                // Sections view: a non-zero sectionGridColumns marks the card as sitting on a
+                // section's 12 × column_span grid (12 columns per view column, like ours,
+                // so no scaling), which turns on HA's per-card grid sizing.
                 NSString *cardPath = [NSString stringWithFormat:@"%@/section[%lu]/card[%lu]",
                                        viewPathForLog, (unsigned long)sectionIdx, (unsigned long)cardIdx];
                 [self processCard:card
@@ -235,7 +320,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                       sectionIcon:nil
                           columns:config.columns
                       gridColumns:0
-                   sectionGridMax:sectionGridMax
+                   sectionGridColumns:sectionGridColumns
                          sections:cardSections
                          allItems:cardItems
                       nameContext:nameContext
@@ -246,6 +331,12 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             HADashboardConfigSection *columnSection = [[HADashboardConfigSection alloc] init];
             columnSection.title = haSectionTitle;
             columnSection.icon = haSectionIcon;
+            columnSection.columnSpan = sectionColumnSpan;
+            if (titleHeadingIdx != NSNotFound) {
+                // The opening heading's badges and tap_action ride on the section header
+                NSDictionary *extras = [self _headingExtrasForCard:sectionCards[titleHeadingIdx]];
+                if (extras.count > 0) columnSection.customProperties = extras;
+            }
 
             // Collect all items from sub-sections, preserving entities card structure
             NSMutableArray<HADashboardConfigItem *> *mergedItems = [NSMutableArray array];
@@ -301,6 +392,8 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             // (prevents "House Climate" appearing as both section header AND inline heading)
             if (haSectionTitle.length > 0) {
                 for (HADashboardConfigItem *item in mergedItems) {
+                    // A standalone heading item is a heading in its own right, never an inline duplicate
+                    if ([item.cardType isEqualToString:@"heading"]) continue;
                     if (item.displayName.length > 0 && [item.displayName isEqualToString:haSectionTitle]) {
                         if (item.customProperties[@"headingIcon"]) {
                             NSMutableDictionary *props = [item.customProperties mutableCopy];
@@ -337,7 +430,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                   sectionIcon:card[@"icon"]
                       columns:config.columns
                   gridColumns:0
-               sectionGridMax:0
+               sectionGridColumns:0
                      sections:sections
                      allItems:allItems
                   nameContext:nameContext
@@ -348,7 +441,175 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
     config.sections = [sections copy];
     config.items = [allItems copy];
 
+    // HA's panel view renders a single card and no badges; every other view
+    // type shows the view's badges in a centred row above its content.
+    if (view.rawBadges.count > 0 && ![view.viewType isEqualToString:@"panel"]) {
+        config.viewBadges = [self _viewBadgeSectionForBadges:view.rawBadges nameContext:nameContext];
+    }
+
     return config;
+}
+
+#pragma mark - View badges
+
++ (NSArray<NSDictionary *> *)normalizedViewBadgeConfigs:(NSArray *)rawBadges {
+    if (![rawBadges isKindOfClass:[NSArray class]]) return @[];
+    NSMutableArray<NSDictionary *> *result = [NSMutableArray arrayWithCapacity:rawBadges.count];
+    for (id raw in rawBadges) {
+        NSMutableDictionary *cfg = nil;
+        if ([raw isKindOfClass:[NSString class]]) {
+            // Legacy form: a bare entity id (HA ensureBadgeConfig: show_name true)
+            cfg = [@{@"type": @"entity", @"entity": raw, @"show_name": @YES} mutableCopy];
+        } else if ([raw isKindOfClass:[NSDictionary class]]) {
+            NSDictionary *dict = raw;
+            NSString *type = HASafeDictStringOrNil(dict, @"type");
+            if (type.length == 0 || [type isEqualToString:@"entity"]) {
+                cfg = [dict mutableCopy];
+                cfg[@"type"] = @"entity";
+                // Migrate the deprecated display_type (hui-entity-badge migrateLegacyEntityBadgeConfig)
+                NSString *displayType = HASafeDictStringOrNil(dict, @"display_type");
+                if (displayType) {
+                    if (!cfg[@"show_name"] && [displayType isEqualToString:@"complete"]) cfg[@"show_name"] = @YES;
+                    if (!cfg[@"show_state"] && [displayType isEqualToString:@"minimal"]) cfg[@"show_state"] = @NO;
+                    [cfg removeObjectForKey:@"display_type"];
+                }
+            } else if ([type isEqualToString:@"state-label"]) {
+                // hui-state-label-badge maps to an entity badge with only these keys
+                cfg = [NSMutableDictionary dictionary];
+                cfg[@"type"] = @"entity";
+                if (dict[@"entity"]) cfg[@"entity"] = dict[@"entity"];
+                if (dict[@"color"]) cfg[@"color"] = dict[@"color"];
+                cfg[@"show_name"] = [dict[@"show_name"] isKindOfClass:[NSNumber class]] ? dict[@"show_name"] : @YES;
+                if (dict[@"visibility"]) cfg[@"visibility"] = dict[@"visibility"];
+            } else {
+                if ([self _logUnsupportedCardTypeOnce:[@"badge:" stringByAppendingString:type]]) {
+                    HALogW(@"parser", @"Unsupported view badge type \"%@\" — skipped", type);
+                }
+                continue;
+            }
+        }
+        NSString *entityId = HASafeDictStringOrNil(cfg, @"entity");
+        if (entityId.length == 0) continue;
+        // HA entity badge defaults (hui-entity-badge DEFAULT_CONFIG)
+        for (NSString *key in @[@"show_name", @"show_state", @"show_icon"]) {
+            if (![cfg[key] isKindOfClass:[NSNumber class]]) {
+                cfg[key] = [key isEqualToString:@"show_name"] ? @NO : @YES;
+            }
+        }
+        [result addObject:[cfg copy]];
+    }
+    return [result copy];
+}
+
++ (HADashboardConfigSection *)_viewBadgeSectionForBadges:(NSArray<NSDictionary *> *)badges
+                                             nameContext:(HAEntityNameRegistryContext *)nameContext {
+    NSMutableArray<NSString *> *entityIds = [NSMutableArray arrayWithCapacity:badges.count];
+    NSMutableDictionary<NSString *, NSString *> *nameOverrides = [NSMutableDictionary dictionary];
+    for (NSDictionary *badge in badges) {
+        NSString *entityId = badge[@"entity"];
+        [entityIds addObject:entityId];
+        NSString *name = [HAEntityNameResolver resolveNameValue:badge[@"name"]
+                                                    forEntityId:entityId
+                                                        context:nameContext];
+        if (name.length > 0) nameOverrides[entityId] = name;
+    }
+    HADashboardConfigSection *section = [[HADashboardConfigSection alloc] init];
+    section.cardType = @"badges";
+    section.entityIds = [entityIds copy];
+    if (nameOverrides.count > 0) section.nameOverrides = [nameOverrides copy];
+    section.customProperties = @{@"badgeConfigs": badges, @"viewBadges": @YES};
+    return section;
+}
+
+#pragma mark - Heading badges
+
++ (NSArray<NSDictionary *> *)normalizedHeadingBadgeConfigs:(NSDictionary *)headingCard {
+    if (![headingCard isKindOfClass:[NSDictionary class]]) return @[];
+    // migrateHeadingCardConfig: legacy "entities" are appended to "badges"
+    NSMutableArray *rawBadges = [NSMutableArray array];
+    for (NSString *key in @[@"badges", @"entities"]) {
+        NSArray *list = headingCard[key];
+        if ([list isKindOfClass:[NSArray class]]) [rawBadges addObjectsFromArray:list];
+    }
+    NSMutableArray<NSDictionary *> *result = [NSMutableArray arrayWithCapacity:rawBadges.count];
+    for (id raw in rawBadges) {
+        NSMutableDictionary *cfg = nil;
+        if ([raw isKindOfClass:[NSString class]]) {
+            cfg = [@{@"type": @"entity", @"entity": raw} mutableCopy];
+        } else if ([raw isKindOfClass:[NSDictionary class]]) {
+            NSString *type = HASafeDictStringOrNil(raw, @"type");
+            if (type.length > 0 && ![type isEqualToString:@"entity"]) {
+                // "button" heading badges and custom types are not rendered
+                if ([self _logUnsupportedCardTypeOnce:[@"heading-badge:" stringByAppendingString:type]]) {
+                    HALogW(@"parser", @"Unsupported heading badge type \"%@\" — skipped", type);
+                }
+                continue;
+            }
+            cfg = [raw mutableCopy];
+            cfg[@"type"] = @"entity";
+        } else {
+            continue;
+        }
+        if (HASafeDictStringOrNil(cfg, @"entity").length == 0) continue;
+        // hui-entity-heading-badge DEFAULT_CONFIG + DEFAULT_ACTIONS
+        for (NSString *key in @[@"show_state", @"show_icon"]) {
+            if (![cfg[key] isKindOfClass:[NSNumber class]]) cfg[key] = @YES;
+        }
+        for (NSString *key in @[@"tap_action", @"hold_action", @"double_tap_action"]) {
+            if (![cfg[key] isKindOfClass:[NSDictionary class]]) cfg[key] = @{@"action": @"none"};
+        }
+        [result addObject:[cfg copy]];
+    }
+    return [result copy];
+}
+
+/// The heading card's badges (HAHeadingBadgesKey) and actionable tap_action
+/// (HAHeadingTapActionKey; hui-heading-card defaults it to "none"), or an
+/// empty dictionary.
++ (NSDictionary *)_headingExtrasForCard:(NSDictionary *)card {
+    NSMutableDictionary *extras = [NSMutableDictionary dictionary];
+    NSArray *badges = [self normalizedHeadingBadgeConfigs:card];
+    if (badges.count > 0) extras[HAHeadingBadgesKey] = badges;
+    NSDictionary *tap = card[@"tap_action"];
+    if ([tap isKindOfClass:[NSDictionary class]] && [HAAction configHasAction:tap]) {
+        extras[HAHeadingTapActionKey] = tap;
+    }
+    return [extras copy];
+}
+
+#pragma mark - Standalone headings
+
+/// Emit a heading card as a full-width standalone heading item (rendered by
+/// HAHeadingCell), in its own heading-typed config section. Used for every
+/// heading card in a sections-view section except the one that opens it (that
+/// one becomes the section header). Never used for headings nested in grid
+/// cards — those keep the embedded headingIcon mechanism (see CLAUDE.md).
++ (void)_appendStandaloneHeadingForCard:(NSDictionary *)card
+                             columnSpan:(NSInteger)columnSpan
+                               sections:(NSMutableArray<HADashboardConfigSection *> *)sections
+                               allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems {
+    NSString *heading = HASafeDictStringOrNil(card, @"heading");
+    NSString *icon = HASafeDictStringOrNil(card, @"icon");
+    NSDictionary *extras = [self _headingExtrasForCard:card];
+    if (heading.length == 0 && icon.length == 0 && !extras[HAHeadingBadgesKey]) return;
+
+    HADashboardConfigItem *headingItem = [[HADashboardConfigItem alloc] init];
+    headingItem.cardType = @"heading";
+    // hui-heading-card getGridOptions(): columns "full" — the whole section grid
+    headingItem.columnSpan = MAX(columnSpan, kHASectionGridColumns);
+    headingItem.rowSpan = 1;
+    headingItem.displayName = heading;
+    NSMutableDictionary *props = [NSMutableDictionary dictionaryWithDictionary:extras];
+    if (icon.length > 0) props[@"icon"] = icon;
+    NSString *style = HASafeDictStringOrNil(card, @"heading_style");
+    if ([style isEqualToString:@"subtitle"]) props[@"heading_style"] = style;
+    if (props.count > 0) headingItem.customProperties = [props copy];
+
+    HADashboardConfigSection *headingSection = [[HADashboardConfigSection alloc] init];
+    headingSection.cardType = @"heading";
+    headingSection.items = @[headingItem];
+    [sections addObject:headingSection];
+    [allItems addObject:headingItem];
 }
 
 + (BOOL)_markdownContentContainsTemplate:(NSString *)content {
@@ -378,14 +639,15 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
 
 /// Process a single Lovelace card into a config section with items.
 /// @param gridColumns If > 0, overrides the item's columnSpan (from a parent grid card's grid_options)
-/// @param sectionGridMax HA sections view grid max (typically 4). When > 0 and < 12,
-///        grid_options.columns values are scaled to our 12-column sub-grid. Pass 0 for non-sections views.
+/// @param sectionGridColumns Columns of the HA section grid the card sits on (12 × the
+///        section's column_span). > 0 marks a sections view, whose cards get HA's grid
+///        sizing and may span up to this many columns ("full"); pass 0 for non-sections views.
 + (void)processCard:(NSDictionary *)card
        sectionTitle:(NSString *)sectionTitle
         sectionIcon:(NSString *)sectionIcon
             columns:(NSInteger)maxColumns
         gridColumns:(NSInteger)gridColumns
-     sectionGridMax:(NSInteger)sectionGridMax
+     sectionGridColumns:(NSInteger)sectionGridColumns
            sections:(NSMutableArray<HADashboardConfigSection *> *)sections
            allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems
         nameContext:(HAEntityNameRegistryContext *)nameContext
@@ -399,12 +661,27 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
            sectionIcon:sectionIcon
                columns:maxColumns
            gridColumns:gridColumns
-        sectionGridMax:sectionGridMax
+        sectionGridColumns:sectionGridColumns
               sections:sections
               allItems:allItems
            nameContext:nameContext
               cardPath:cardPath];
 
+    [self _applyVisibilityOfCard:card
+                      toSections:sections
+                fromSectionIndex:startSectionCount
+                        allItems:allItems
+                   fromItemIndex:startItemCount];
+}
+
+/// Attach a card's "visibility" (or a conditional card's "conditions") to
+/// every item the card produced: the items added to `allItems` / `sections`
+/// at or after the given start indices.
++ (void)_applyVisibilityOfCard:(NSDictionary *)card
+                    toSections:(NSMutableArray<HADashboardConfigSection *> *)sections
+              fromSectionIndex:(NSInteger)startSectionCount
+                      allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems
+                 fromItemIndex:(NSInteger)startItemCount {
     NSArray *visibility = card[@"visibility"];
     if ([HASafeDictStringOrNil(card, @"type") isEqualToString:@"conditional"] && !visibility) {
         visibility = card[@"conditions"];
@@ -446,7 +723,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
          sectionIcon:(NSString *)sectionIcon
              columns:(NSInteger)maxColumns
          gridColumns:(NSInteger)gridColumns
-      sectionGridMax:(NSInteger)sectionGridMax
+      sectionGridColumns:(NSInteger)sectionGridColumns
             sections:(NSMutableArray<HADashboardConfigSection *> *)sections
             allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems
          nameContext:(HAEntityNameRegistryContext *)nameContext
@@ -522,7 +799,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                   sectionIcon:sectionIcon
                       columns:maxColumns
                   gridColumns:gridColumns
-               sectionGridMax:sectionGridMax
+               sectionGridColumns:sectionGridColumns
                      sections:innerSections
                      allItems:innerItems
                   nameContext:nameContext
@@ -545,20 +822,26 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             // "columns" on the grid card = number of columns in the grid layout.
             // Each child gets 12/columns sub-grid span (out of 12-column grid).
             NSInteger parentGridCols = gridColumns; // inherit from above if set
+            // The container's own width on the section grid: HA's default 12
+            // (stacks and grid cards have no getGridOptions()), or the whole
+            // section grid (12 × column_span) for "columns: full".
+            id containerColsValue = [self configGridOptionsForCard:card][@"columns"];
+            BOOL containerFull = sectionGridColumns > 0 && gridColumns <= 0 &&
+                                 [containerColsValue isKindOfClass:[NSString class]] &&
+                                 [[containerColsValue lowercaseString] isEqualToString:@"full"];
+            NSInteger containerWidth = containerFull ? sectionGridColumns : kHASectionGridColumns;
             NSInteger gridCardColumns = [card[@"columns"] integerValue];
             if (gridCardColumns > 1) {
-                parentGridCols = 12 / gridCardColumns; // e.g. columns:2 → each child gets 6
+                parentGridCols = MAX(1, containerWidth / gridCardColumns); // e.g. columns:2 → each child gets 6
+            } else if (containerFull) {
+                parentGridCols = sectionGridColumns; // a full-width stack's children fill the section
             }
-            NSDictionary *gridOptions = card[@"grid_options"];
-            if ([gridOptions isKindOfClass:[NSDictionary class]]) {
-                NSInteger cols = [gridOptions[@"columns"] integerValue];
-                if (cols > 0) parentGridCols = cols;
-            }
-            NSDictionary *layoutOptions = card[@"layout_options"];
-            if ([layoutOptions isKindOfClass:[NSDictionary class]]) {
-                NSInteger cols = [layoutOptions[@"grid_columns"] integerValue];
-                if (cols > 0) parentGridCols = cols;
-            }
+            // An explicit numeric width (grid_options, or legacy layout_options
+            // ×3). HA spans it over min(columns, section grid), so an
+            // oversized value such as 33 fills the section.
+            NSInteger containerCols = HAGridIntegerValue(containerColsValue);
+            NSInteger sectionGridLimit = sectionGridColumns > 0 ? sectionGridColumns : kHASectionGridColumns;
+            if (containerCols > 0) parentGridCols = MIN(containerCols, sectionGridLimit);
 
             // Check if first sub-card is a heading
             NSDictionary *first = subCards.firstObject;
@@ -582,13 +865,7 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             // (thermostat(9)+vacuum(3) side-by-side). If the grid has no explicit
             // column spec (like Printy), emit the heading as a standalone full-width
             // item — it won't conflict with packing.
-            BOOL gridHasExplicitCols = NO;
-            if ([gridOptions isKindOfClass:[NSDictionary class]] && [gridOptions[@"columns"] integerValue] > 0) {
-                gridHasExplicitCols = YES;
-            }
-            if ([layoutOptions isKindOfClass:[NSDictionary class]] && [layoutOptions[@"grid_columns"] integerValue] > 0) {
-                gridHasExplicitCols = YES;
-            }
+            BOOL gridHasExplicitCols = containerCols > 0;
             // Also treat inherited gridColumns from parent as explicit
             if (gridColumns > 0) gridHasExplicitCols = YES;
 
@@ -611,9 +888,9 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                 headingItem.columnSpan = 12;
                 headingItem.rowSpan = 1;
                 headingItem.displayName = gridTitle;
-                if (gridIcon) {
-                    headingItem.customProperties = @{@"icon": gridIcon};
-                }
+                NSMutableDictionary *headingProps = [NSMutableDictionary dictionaryWithDictionary:[self _headingExtrasForCard:first]];
+                if (gridIcon) headingProps[@"icon"] = gridIcon;
+                if (headingProps.count > 0) headingItem.customProperties = [headingProps copy];
                 HADashboardConfigSection *headingSection = [[HADashboardConfigSection alloc] init];
                 headingSection.cardType = @"heading";
                 headingSection.items = @[headingItem];
@@ -639,28 +916,45 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                     contentCount++;
                 }
                 if (contentCount > 1) {
-                    parentGridCols = MAX(1, 12 / (NSInteger)contentCount);
+                    parentGridCols = MAX(1, containerWidth / (NSInteger)contentCount);
                 }
             }
 
             // Track item count before recursion so we can flag new items from stacks
             NSUInteger itemCountBefore = allItems.count;
 
+            // Badges of a heading that stays embedded above the first content
+            // card (headingIcon mechanism) ride on that card's item.
+            NSArray *embeddedHeadingBadges = (startIdx > 0 && !emitHeadingAsItem && gridTitle)
+                ? [self _headingExtrasForCard:first][HAHeadingBadgesKey] : nil;
+
             for (NSUInteger i = startIdx; i < subCards.count; i++) {
                 NSDictionary *subCard = subCards[i];
                 if (![subCard isKindOfClass:[NSDictionary class]]) continue;
                 if ([HASafeDictStringOrNil(subCard, @"type") isEqualToString:@"heading"]) continue;
 
+                NSUInteger itemCountBeforeCard = allItems.count;
                 [self processCard:subCard
                      sectionTitle:emitHeadingAsItem ? nil : gridTitle
                       sectionIcon:emitHeadingAsItem ? nil : gridIcon
                           columns:maxColumns
                       gridColumns:parentGridCols
-                   sectionGridMax:sectionGridMax
+                   sectionGridColumns:sectionGridColumns
                          sections:sections
                          allItems:allItems
                       nameContext:nameContext
                          cardPath:[NSString stringWithFormat:@"%@/%@[%lu]", cardPath, cardType, (unsigned long)i]];
+                if (embeddedHeadingBadges) {
+                    for (NSUInteger idx = itemCountBeforeCard; idx < allItems.count; idx++) {
+                        HADashboardConfigItem *headed = allItems[idx];
+                        if (!headed.customProperties[@"headingIcon"]) continue;
+                        NSMutableDictionary *props = [headed.customProperties mutableCopy];
+                        props[HAHeadingBadgesKey] = embeddedHeadingBadges;
+                        headed.customProperties = [props copy];
+                        break;
+                    }
+                    embeddedHeadingBadges = nil;
+                }
                 // Only first sub-card gets the heading title
                 gridTitle = nil;
                 gridIcon = nil;
@@ -682,63 +976,53 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
         }
     }
 
+    // The grid heading (if any) before the card's own title is folded in below —
+    // the clock card renders its own title inside the card, not as a heading.
+    NSString *headingTitle = sectionTitle;
+
     // Use card title if no section title provided
     if (!sectionTitle) {
         sectionTitle = HASafeDictStringOrNil(card, @"title");
         if (!sectionTitle) sectionTitle = HASafeDictStringOrNil(card, @"heading");
     }
 
-    // Column span and row span from grid_options / layout_options
+    // Column span and row span from grid_options (or legacy layout_options,
+    // migrated to HA's 12-column grid). HA's sections grid is 12 columns per
+    // section, the same as our sub-grid, so the values need no scaling.
     NSInteger cardColumnSpan = gridColumns; // from parent grid card, or 0
     NSInteger cardRowSpan = 0; // 0 = auto (use per-card-type height)
     {
-        NSDictionary *gridOptions = card[@"grid_options"];
-        if ([gridOptions isKindOfClass:[NSDictionary class]]) {
-            if (cardColumnSpan <= 0) {
-                id colsValue = gridOptions[@"columns"];
-                NSInteger cols = 0;
-                if ([colsValue isKindOfClass:[NSNumber class]]) {
-                    cols = [colsValue integerValue];
-                } else if ([colsValue isKindOfClass:[NSString class]]) {
-                    if ([[colsValue lowercaseString] isEqualToString:@"full"]) {
-                        cols = 12; // full width in our sub-grid
-                    } else {
-                        cols = [colsValue integerValue];
-                    }
-                }
-                if (cols > 0) {
-                    // HA sections view uses a 12-column CSS grid natively.
-                    // grid_options.columns values are already in terms of 12 columns.
-                    cardColumnSpan = cols;
-                }
-            }
-            // rows: number = explicit row units, "auto" or missing = auto height
-            id rowsValue = gridOptions[@"rows"];
-            if ([rowsValue isKindOfClass:[NSNumber class]]) {
-                cardRowSpan = [rowsValue integerValue];
-            } else if ([rowsValue isKindOfClass:[NSString class]] &&
-                       ![[rowsValue lowercaseString] isEqualToString:@"auto"]) {
-                cardRowSpan = [rowsValue integerValue];
-            }
-        }
-        NSDictionary *layoutOptions = card[@"layout_options"];
-        if ([layoutOptions isKindOfClass:[NSDictionary class]]) {
-            if (cardColumnSpan <= 0) {
-                NSInteger cols = [layoutOptions[@"grid_columns"] integerValue];
+        NSDictionary *configGridOptions = [self configGridOptionsForCard:card];
+        if (cardColumnSpan <= 0) {
+            id colsValue = configGridOptions[@"columns"];
+            if ([colsValue isKindOfClass:[NSString class]] &&
+                [[colsValue lowercaseString] isEqualToString:@"full"]) {
+                // The whole section grid (12 × column_span in sections views)
+                cardColumnSpan = sectionGridColumns > 0 ? sectionGridColumns : kHASectionGridColumns;
+            } else {
+                NSInteger cols = HAGridIntegerValue(colsValue);
                 if (cols > 0) cardColumnSpan = cols;
             }
-            if (cardRowSpan <= 0) {
-                id rowsValue = layoutOptions[@"grid_rows"];
-                if ([rowsValue isKindOfClass:[NSNumber class]]) {
-                    cardRowSpan = [rowsValue integerValue];
-                }
-            }
+        }
+        // rows: number = explicit row units, "auto" or missing = auto height
+        NSInteger rows = HAGridIntegerValue(configGridOptions[@"rows"]);
+        if (rows > 0) cardRowSpan = rows;
+    }
+    // Default column span. Sections views use the card type's own HA default
+    // (getGridOptions() columns: e.g. tile/sensor/entity 6, an icon-only button
+    // 3, map "full"); cards HA gives no default span 12 — one view column's
+    // width, so half of a column_span 2 section. Cards inside grid cards
+    // already have gridColumns set by the parent and don't reach this.
+    if (cardColumnSpan <= 0 && sectionGridColumns > 0) {
+        id haColumns = [self haGridOptionsForCard:card][@"columns"];
+        if ([haColumns isKindOfClass:[NSString class]]) {
+            cardColumnSpan = sectionGridColumns; // "full"
+        } else {
+            NSInteger cols = HAGridIntegerValue(haColumns);
+            cardColumnSpan = cols > 0 ? cols : kHASectionGridColumns;
         }
     }
-    // Default column span: HA sections view defaults tile/button/sensor to 6 (half-width,
-    // two per row). Other card types (including standalone gauge) default to 12 (full width).
-    // Gauge cards inside grid cards already have gridColumns set by the parent, so they
-    // don't reach this default — only standalone gauges do, which should be full width.
+    // Masonry views: tile/button/sensor half width, everything else full.
     if (cardColumnSpan <= 0) {
         if ([cardType isEqualToString:@"tile"] ||
             [cardType isEqualToString:@"button"] ||
@@ -747,6 +1031,46 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
         } else {
             cardColumnSpan = 12;
         }
+    }
+
+    // Sections views: HA widens or narrows every card placed directly on a
+    // section grid to its card type's min/max size (computeCardGridSize), so
+    // e.g. a tile with "columns: 4" renders at 6 (GitHub #25). Children of a
+    // grid/stack card are sized by their parent there, not by their own
+    // grid_options, and masonry views ignore grid_options altogether.
+    if (sectionGridColumns > 0 && gridColumns <= 0) {
+        [self _clampSectionGridSizeForCard:card
+                               gridColumns:sectionGridColumns
+                                columnSpan:&cardColumnSpan
+                                   rowSpan:&cardRowSpan];
+    }
+
+    // HA built-in clock card: entity-less, rendered natively by HAClockCardCell.
+    // Exact match — "custom:clock-weather-card" is routed by containsString:
+    // "clock-weather" elsewhere and must never land here.
+    if ([cardType isEqualToString:@"clock"]) {
+        [self _addClockCard:card
+               headingTitle:headingTitle
+                sectionIcon:sectionIcon
+                 columnSpan:cardColumnSpan
+                    rowSpan:cardRowSpan
+             sectionGridColumns:sectionGridColumns
+                   sections:sections
+                   allItems:allItems];
+        return;
+    }
+
+    // HA button card without an entity (GitHub #26): a plain action button
+    // (icon/name + tap_action), rendered by HATileEntityCell with a nil entity.
+    if ([cardType isEqualToString:@"button"] && HASafeDictStringOrNil(card, @"entity").length == 0) {
+        [self _addEntitylessButtonCard:card
+                          headingTitle:headingTitle
+                           sectionIcon:sectionIcon
+                            columnSpan:cardColumnSpan
+                               rowSpan:cardRowSpan
+                              sections:sections
+                              allItems:allItems];
+        return;
     }
 
     // Parse view_layout.position for sidebar view support
@@ -1252,6 +1576,16 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             // Tile card: state_content (string or array of strings)
             id stateContent = card[@"state_content"];
             if (stateContent) props[@"state_content"] = stateContent;
+            // Timestamp rendering (HA TimestampRenderingFormat: string or {type, style})
+            if (card[@"time_format"]) props[@"time_format"] = card[@"time_format"];
+            // HA renders a configured string name verbatim, so a blank one
+            // (e.g. name: ' ') hides the name instead of falling back to the
+            // friendly name the resolver returns for it (issue #22).
+            id rawName = entry[@"name"] ?: card[@"name"];
+            if ([rawName isKindOfClass:[NSString class]] &&
+                [(NSString *)rawName stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]].length == 0) {
+                props[@"name_blank"] = @YES;
+            }
             // Tile/entity card: attribute display override
             if ([card[@"attribute"] isKindOfClass:[NSString class]]) props[@"attribute"] = card[@"attribute"];
             // Entity/statistic card: state_color, unit, stat_type
@@ -1267,6 +1601,21 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
                 if (card[@"time_format"])        props[@"time_format"]        = card[@"time_format"];
                 if (card[@"date_pattern"])       props[@"date_pattern"]       = card[@"date_pattern"];
                 if (card[@"locale"])             props[@"locale"]             = card[@"locale"];
+            }
+
+            // Weather-forecast card: show_current/show_forecast toggle which
+            // sections the cell renders (both default true in HA); forecast_type/
+            // forecast_slots/secondary_info_attribute/round_temperature are
+            // forwarded to the weather cell and its forecast fetch. Stored
+            // whenever present (including explicit false) so the cell can tell
+            // "unset" (default true) apart from "explicitly false".
+            if ([cardType isEqualToString:@"weather-forecast"]) {
+                if (card[@"show_current"] != nil) props[@"show_current"] = card[@"show_current"];
+                if (card[@"show_forecast"] != nil) props[@"show_forecast"] = card[@"show_forecast"];
+                if ([card[@"forecast_type"] isKindOfClass:[NSString class]]) props[@"forecast_type"] = card[@"forecast_type"];
+                if ([card[@"forecast_slots"] isKindOfClass:[NSNumber class]]) props[@"forecast_slots"] = card[@"forecast_slots"];
+                if ([card[@"secondary_info_attribute"] isKindOfClass:[NSString class]]) props[@"secondary_info_attribute"] = card[@"secondary_info_attribute"];
+                if ([card[@"round_temperature"] isKindOfClass:[NSNumber class]]) props[@"round_temperature"] = card[@"round_temperature"];
             }
 
             // Calendar card: extract initial_view configuration
@@ -1396,17 +1745,312 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
     [sections addObject:section];
 }
 
+#pragma mark - Sections Grid Sizing
+
++ (NSDictionary<NSString *, id> *)haGridOptionsForCard:(NSDictionary *)card {
+    if (![card isKindOfClass:[NSDictionary class]]) return @{};
+    NSString *type = HASafeDictStringOrNil(card, @"type");
+    if (type.length == 0) return @{};
+
+    // Each entry ports that card's getGridOptions() from home-assistant/frontend
+    // src/panels/lovelace/cards/hui-<type>-card.ts. Cards HA gives no
+    // getGridOptions() (gauge, glance, light, media-control, markdown, picture*,
+    // alarm-panel, plant-status, todo-list, stacks, grid, conditional, …) have
+    // no minimum or maximum size and fall through to the empty dictionary.
+    BOOL vertical = HASafeDictBool(card, @"vertical", NO);
+    NSUInteger featureCount = HASafeDictArrayOrNil(card, @"features").count;
+    NSString *featurePosition = vertical ? @"bottom" : (HASafeDictStringOrNil(card, @"features_position") ?: @"bottom");
+    BOOL inlineFeatures = featureCount > 0 && [featurePosition isEqualToString:@"inline"];
+
+    if ([type isEqualToString:@"tile"]) {
+        NSInteger minColumns = inlineFeatures ? 12 : 6;
+        NSInteger rows = 1 + (featureCount > 0 ? HACardFeatureRows(featureCount, featurePosition) : 0);
+        if (vertical) {
+            rows++;
+            minColumns = 3;
+        }
+        return @{@"columns": @6, @"rows": @(rows), @"min_columns": @(minColumns), @"min_rows": @(rows)};
+    }
+    if ([type isEqualToString:@"area"]) {
+        NSInteger columns = inlineFeatures ? 12 : 6;
+        NSInteger minColumns = columns;
+        NSInteger rows = 1 + (featureCount > 0 ? HACardFeatureRows(featureCount, featurePosition) : 0);
+        if (vertical) {
+            rows++;
+            minColumns = 3;
+        }
+        if (![HASafeDictStringOrNil(card, @"display_type") isEqualToString:@"compact"]) {
+            rows += inlineFeatures ? 3 : 2;
+        }
+        return @{@"columns": @(columns), @"rows": @(rows), @"min_columns": @(minColumns), @"min_rows": @(rows)};
+    }
+    if ([type isEqualToString:@"button"]) {
+        // hui-button-card setConfig defaults show_icon and show_name to true.
+        BOOL showIcon = HASafeDictBool(card, @"show_icon", YES);
+        BOOL showName = HASafeDictBool(card, @"show_name", YES);
+        BOOL showState = HASafeDictBool(card, @"show_state", NO);
+        if (showIcon && (showName || showState)) {
+            return @{@"columns": @6, @"rows": @2, @"min_columns": @2, @"min_rows": @2};
+        }
+        return @{@"columns": @3, @"rows": @1, @"min_columns": @2, @"min_rows": @1};
+    }
+    if ([type isEqualToString:@"entity"] || [type isEqualToString:@"sensor"] ||
+        [type isEqualToString:@"statistic"]) {
+        return @{@"columns": @6, @"rows": @2, @"min_columns": @6, @"min_rows": @2};
+    }
+    if ([type isEqualToString:@"entities"]) {
+        return @{@"columns": @12, @"rows": @"auto", @"min_columns": @3};
+    }
+    if ([type isEqualToString:@"thermostat"] || [type isEqualToString:@"humidifier"]) {
+        NSInteger featureHeight = (NSInteger)ceil(featureCount * 2.0 / 3.0);
+        return @{@"columns": @12, @"rows": @(5 + featureHeight), @"min_columns": @6, @"min_rows": @(2 + featureHeight)};
+    }
+    if ([type isEqualToString:@"weather-forecast"]) {
+        BOOL showCurrent = HASafeDictBool(card, @"show_current", YES);
+        BOOL showForecast = HASafeDictBool(card, @"show_forecast", YES);
+        NSInteger rows = 1, minRows = 1;
+        if (showCurrent) { rows++; minRows++; }
+        if (showForecast) {
+            rows++; minRows++;
+            if ([HASafeDictStringOrNil(card, @"forecast_type") isEqualToString:@"daily"]) rows++;
+        }
+        return @{@"columns": @12, @"rows": @(rows),
+                 @"min_columns": @(showCurrent && showForecast ? 5 : 4), @"min_rows": @(minRows)};
+    }
+    if ([type isEqualToString:@"clock"]) {
+        BOOL hasTitle = HASafeDictStringOrNil(card, @"title").length > 0;
+        NSString *size = HASafeDictStringOrNil(card, @"clock_size");
+        if ([HASafeDictStringOrNil(card, @"clock_style") isEqualToString:@"analog"]) {
+            if ([size isEqualToString:@"medium"]) {
+                return @{@"columns": @6, @"rows": @3, @"min_columns": @5, @"min_rows": @(hasTitle ? 4 : 3)};
+            }
+            if ([size isEqualToString:@"large"]) {
+                return @{@"columns": @6, @"rows": @4, @"min_columns": @6, @"min_rows": @(hasTitle ? 5 : 4)};
+            }
+            return @{@"columns": @6, @"rows": @2, @"min_columns": @2, @"min_rows": @(hasTitle ? 3 : 2)};
+        }
+        if ([size isEqualToString:@"medium"]) {
+            return @{@"columns": @6, @"rows": @2, @"min_columns": @4, @"min_rows": @(hasTitle ? 2 : 1), @"max_rows": @4};
+        }
+        if ([size isEqualToString:@"large"]) {
+            return @{@"columns": @6, @"rows": @2, @"min_columns": @6, @"min_rows": @2, @"max_rows": @4};
+        }
+        return @{@"columns": @6, @"rows": @1, @"min_columns": @3, @"min_rows": @1, @"max_rows": @4};
+    }
+    if ([type isEqualToString:@"heading"]) {
+        return @{@"columns": @"full", @"rows": @"auto", @"min_columns": @3};
+    }
+    if ([type isEqualToString:@"calendar"]) {
+        return @{@"columns": @12, @"rows": @6, @"min_columns": @4, @"min_rows": @4};
+    }
+    if ([type isEqualToString:@"logbook"]) {
+        BOOL hasTitle = HASafeDictStringOrNil(card, @"title").length > 0;
+        return @{@"columns": @12, @"rows": @6, @"min_columns": @6, @"min_rows": @(hasTitle ? 4 : 3)};
+    }
+    if ([type isEqualToString:@"history-graph"]) {
+        return @{@"columns": @12, @"min_columns": @6, @"min_rows": @2};
+    }
+    if ([type isEqualToString:@"statistics-graph"]) {
+        return @{@"columns": @12, @"min_columns": @6, @"min_rows": @3};
+    }
+    if ([type isEqualToString:@"map"]) {
+        return @{@"columns": @"full", @"rows": @4, @"min_columns": @6, @"min_rows": @2};
+    }
+    return @{};
+}
+
++ (NSDictionary<NSString *, id> *)configGridOptionsForCard:(NSDictionary *)card {
+    if (![card isKindOfClass:[NSDictionary class]]) return @{};
+    NSDictionary *gridOptions = HASafeDictDictOrNil(card, @"grid_options");
+    if (gridOptions) return gridOptions;
+    NSDictionary *layoutOptions = HASafeDictDictOrNil(card, @"layout_options");
+    if (!layoutOptions) return @{};
+
+    NSMutableDictionary *migrated = [NSMutableDictionary dictionary];
+    NSDictionary<NSString *, NSString *> *columnKeys = @{@"grid_columns": @"columns",
+                                                         @"grid_min_columns": @"min_columns",
+                                                         @"grid_max_columns": @"max_columns"};
+    for (NSString *legacyKey in columnKeys) {
+        id value = layoutOptions[legacyKey];
+        if ([value isKindOfClass:[NSNumber class]]) {
+            migrated[columnKeys[legacyKey]] = @([value integerValue] * kHALayoutOptionsColumnMultiplier);
+        } else if (value && value != [NSNull null]) {
+            migrated[columnKeys[legacyKey]] = value; // strings ("full") pass through unscaled
+        }
+    }
+    NSDictionary<NSString *, NSString *> *rowKeys = @{@"grid_rows": @"rows",
+                                                      @"grid_min_rows": @"min_rows",
+                                                      @"grid_max_rows": @"max_rows"};
+    for (NSString *legacyKey in rowKeys) {
+        id value = layoutOptions[legacyKey];
+        if (value && value != [NSNull null]) migrated[rowKeys[legacyKey]] = value;
+    }
+    return [migrated copy];
+}
+
+/// hui-card getGridOptions(): the card element's options overlaid with the
+/// card config's own (grid_options or migrated layout_options).
++ (NSDictionary<NSString *, id> *)_mergedGridOptionsForCard:(NSDictionary *)card {
+    NSMutableDictionary *merged = [[self haGridOptionsForCard:card] mutableCopy];
+    [merged addEntriesFromDictionary:[self configGridOptionsForCard:card]];
+    return merged;
+}
+
+/// HA computeCardGridSize() for a card placed directly on a sections-view
+/// section grid of `gridColumns` columns (12 × column_span): numeric columns
+/// clamp to [min_columns, max_columns] and then to the section grid; explicit
+/// rows clamp to [min_rows, max_rows]. "full" columns and auto rows (0) are
+/// left alone.
++ (void)_clampSectionGridSizeForCard:(NSDictionary *)card
+                         gridColumns:(NSInteger)gridColumns
+                          columnSpan:(NSInteger *)columnSpan
+                             rowSpan:(NSInteger *)rowSpan {
+    NSDictionary *merged = [self _mergedGridOptionsForCard:card];
+    id configuredColumns = [self configGridOptionsForCard:card][@"columns"];
+    BOOL fullWidth = [configuredColumns isKindOfClass:[NSString class]] &&
+                     [[configuredColumns lowercaseString] isEqualToString:@"full"];
+    if (!fullWidth && *columnSpan > 0) {
+        *columnSpan = HAGridConditionalClamp(*columnSpan, merged[@"min_columns"], merged[@"max_columns"]);
+    }
+    *columnSpan = MAX(1, MIN(*columnSpan, MAX(gridColumns, kHASectionGridColumns)));
+    if (*rowSpan > 0) {
+        *rowSpan = MAX(1, HAGridConditionalClamp(*rowSpan, merged[@"min_rows"], merged[@"max_rows"]));
+    }
+}
+
+#pragma mark - Clock Card
+
+/// Copies the built-in `clock` card's config onto a single entity-less item
+/// for HAClockCardCell, and applies hui-clock-card's getGridOptions() sizing
+/// in sections views.
++ (void)_addClockCard:(NSDictionary *)card
+         headingTitle:(NSString *)headingTitle
+          sectionIcon:(NSString *)sectionIcon
+           columnSpan:(NSInteger)columnSpan
+              rowSpan:(NSInteger)rowSpan
+       sectionGridColumns:(NSInteger)sectionGridColumns
+             sections:(NSMutableArray<HADashboardConfigSection *> *)sections
+             allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems {
+    NSMutableDictionary *props = [NSMutableDictionary dictionary];
+    for (NSString *key in @[@"clock_style", @"clock_size", @"seconds_motion", @"time_zone", @"ticks", @"face_style"]) {
+        if ([card[key] isKindOfClass:[NSString class]]) props[key] = card[key];
+    }
+    for (NSString *key in @[@"show_seconds", @"no_background", @"border"]) {
+        if ([card[key] isKindOfClass:[NSNumber class]]) props[key] = card[key];
+    }
+    // TimeFormat is "language" | "system" | "12" | "24"; YAML may hand us 12/24 as numbers.
+    if ([card[@"time_format"] isKindOfClass:[NSString class]] || [card[@"time_format"] isKindOfClass:[NSNumber class]]) {
+        props[@"time_format"] = card[@"time_format"];
+    }
+    if ([card[@"date_format"] isKindOfClass:[NSArray class]]) props[@"date_format"] = card[@"date_format"];
+    NSString *title = HASafeDictStringOrNil(card, @"title");
+    if (title) props[@"clock_title"] = title;
+
+    // A grid heading (not the clock's own title) uses the embedded headingIcon
+    // mechanism, exactly like the other card types.
+    BOOL isGridHeading = headingTitle.length > 0 && ![headingTitle isEqualToString:title];
+    HADashboardConfigItem *item = [[HADashboardConfigItem alloc] init];
+    item.cardType = @"clock";
+    if (isGridHeading && sectionIcon.length > 0) {
+        item.displayName = headingTitle;
+        props[@"headingIcon"] = sectionIcon;
+    }
+
+    item.columnSpan = columnSpan > 0 ? columnSpan : 12;
+    item.rowSpan = rowSpan;
+    if (sectionGridColumns > 0) {
+        // The clock has no intrinsic height: in sections views it takes
+        // hui-clock-card getGridOptions() rows when none are configured, and
+        // always clamps them to [min_rows, max_rows] — also inside a grid
+        // card. Columns were already clamped by the shared sections sizing.
+        // Classic (masonry) views size the clock to its content.
+        NSDictionary *gridOptions = [self _mergedGridOptionsForCard:card];
+        NSInteger rows = rowSpan > 0 ? rowSpan : HAGridIntegerValue(gridOptions[@"rows"]);
+        if (rows > 0) {
+            item.rowSpan = MAX(1, HAGridConditionalClamp(rows, gridOptions[@"min_rows"], gridOptions[@"max_rows"]));
+        }
+    }
+    item.customProperties = [props copy];
+
+    HADashboardConfigSection *section = [[HADashboardConfigSection alloc] init];
+    section.title = isGridHeading ? headingTitle : nil;
+    section.cardType = @"clock";
+    section.icon = sectionIcon;
+    section.entityIds = @[];
+    section.items = @[item];
+    [sections addObject:section];
+    [allItems addObject:item];
+}
+
+#pragma mark - Entity-less Button Card
+
+/// hui-button-card with no `entity`: copies its display and action config onto
+/// a single entity-less item (cardType "button"). Without an entity HA shows
+/// only a plain string `name` (a name-config object resolves against an empty
+/// state object to nothing), the configured icon (none → no icon) and never a
+/// state. Sizing was already resolved by the shared grid_options path, which
+/// includes hui-button-card's getGridOptions() in sections views.
++ (void)_addEntitylessButtonCard:(NSDictionary *)card
+                    headingTitle:(NSString *)headingTitle
+                     sectionIcon:(NSString *)sectionIcon
+                      columnSpan:(NSInteger)columnSpan
+                         rowSpan:(NSInteger)rowSpan
+                        sections:(NSMutableArray<HADashboardConfigSection *> *)sections
+                        allItems:(NSMutableArray<HADashboardConfigItem *> *)allItems {
+    NSMutableDictionary *props = [NSMutableDictionary dictionary];
+    for (NSString *key in @[@"icon", @"color", @"icon_height"]) {
+        if ([card[key] isKindOfClass:[NSString class]]) props[key] = card[key];
+    }
+    for (NSString *key in @[@"show_name", @"show_icon", @"show_state"]) {
+        if ([card[key] isKindOfClass:[NSNumber class]]) props[key] = card[key];
+    }
+    for (NSString *key in @[@"tap_action", @"hold_action", @"double_tap_action"]) {
+        if ([card[key] isKindOfClass:[NSDictionary class]]) props[key] = card[key];
+    }
+
+    NSString *name = [card[@"name"] isKindOfClass:[NSString class]] ? card[@"name"] : nil;
+    NSString *trimmedName = [name stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    // HA renders a configured string name verbatim, so a blank one hides it.
+    if (name && trimmedName.length == 0) props[@"name_blank"] = @YES;
+
+    HADashboardConfigItem *item = [[HADashboardConfigItem alloc] init];
+    item.cardType = @"button";
+    // A grid heading uses the embedded headingIcon mechanism, exactly like the
+    // entity cards: displayName carries the heading, the card name rides along.
+    BOOL isGridHeading = headingTitle.length > 0;
+    if (isGridHeading && sectionIcon.length > 0) {
+        item.displayName = headingTitle;
+        props[@"headingIcon"] = sectionIcon;
+        if (trimmedName.length > 0) props[@"nameOverride"] = trimmedName;
+    } else if (trimmedName.length > 0) {
+        item.displayName = trimmedName;
+    }
+    item.columnSpan = columnSpan > 0 ? columnSpan : 12;
+    item.rowSpan = rowSpan;
+    item.customProperties = [props copy];
+
+    HADashboardConfigSection *section = [[HADashboardConfigSection alloc] init];
+    section.title = isGridHeading ? headingTitle : nil;
+    section.cardType = @"button";
+    section.icon = sectionIcon;
+    section.entityIds = @[];
+    section.items = @[item];
+    [sections addObject:section];
+    [allItems addObject:item];
+}
+
 #pragma mark - Unsupported Card Placeholder
 
-/// HA built-in card types that are legitimately entity-less by design (a plain
-/// action button, a static image, a webpage embed, HA-managed list cards with
-/// their own internal state). Reaching the drop point with zero entities for
-/// one of these is normal configuration, not an unsupported card — stay silent
-/// exactly like before this feature existed.
+/// HA built-in card types that are legitimately entity-less by design (a static
+/// image, a webpage embed, HA-managed list cards with their own internal
+/// state). Reaching the drop point with zero entities for one of these is
+/// normal configuration, not an unsupported card — stay silent exactly like
+/// before this feature existed. (Entity-less button cards never get here:
+/// they render as their own item, see _addEntitylessButtonCard:.)
 + (NSSet<NSString *> *)_entityOptionalCardTypes {
     static NSSet<NSString *> *types = nil;
     if (!types) {
-        types = [NSSet setWithArray:@[@"button", @"picture", @"iframe",
+        types = [NSSet setWithArray:@[@"picture", @"iframe",
                                        @"shopping-list", @"todo-list"]];
     }
     return types;
